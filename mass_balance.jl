@@ -128,13 +128,13 @@ forcings = hcat(snowfall_toy, temperature_toy)
 MB_toy = toy_MB(α, μ, snowfall_toy, temperature_toy)
 
 # Plot the toy dataset 
-l = @layout [a b; c]
+l = @layout [a b; c; d]
 p1 = plot(1:500, snowfall_toy, label="Snowfall", color="midnightblue")
 p2 = plot(1:500, temperature_toy, label="Temperature", color="darkred")
 hline!(p2, [0], c="black", label="")
 p3 = plot(1:500, MB_toy, label="Mass balance")
 hline!(p3, [0], c="black", label="")
-plot(p1,p2,p3,layout=l)
+
 
 
 X = vcat(snowfall_toy', temperature_toy')
@@ -149,6 +149,12 @@ data = Flux.Data.DataLoader((X, Y), batchsize=batch_size)
 number_epochs = 4
 @epochs number_epochs hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
 
+mb_simulated = Up(snowfall_toy') - Ut(temperature_toy')
+
+p4 = plot(1:500, mb_simulated', label="Simulated mass balance")
+hline!(p3, [0], c="black", label="")
+
+plot(p1,p2,p3, p4,layout=l)
 
 #end
 
