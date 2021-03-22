@@ -149,8 +149,10 @@ data = Flux.Data.DataLoader((X, Y), batchsize=batch_size)
 number_epochs = 4
 @epochs number_epochs hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
 
+# Perform MB simulations with trained model
 mb_simulated = Up(snowfall_toy') - Ut(temperature_toy')
 
+# Plot comparison with toy data
 p4 = plot(1:500, mb_simulated', label="Simulated mass balance")
 hline!(p3, [0], c="black", label="")
 
