@@ -9,6 +9,7 @@ using Plots
 gr()
 using Statistics
 using DataDrivenDiffEq
+using ModelingToolkit
 using LinearAlgebra
 # Set a random seed for reproduceable behaviour
 using Random
@@ -213,18 +214,18 @@ hline!(p1₄, [0], c="black", label="")
 p1 = plot(p1₁,p1₂,p1₃, p1₄,layout=l1)
 
 l2 = @layout [a b;c d]
-p2₁ = plot(1:500, Ŷ_acc', label="Up")
-plot!(1:500, α(snowfall_toy')', label="α")
+p2₁ = plot(1:500, α(snowfall_toy')', label="α")
+plot!(1:500, Ŷ_acc', label="Up")
 hline!(p2₁, [0], c="black", label="")
-p2₂ = plot(1:500, Ŷ_acc'./snowfall_toy, label="Up/P")
-plot!(1:500, α(snowfall_toy')'./snowfall_toy, label="α/P")
+p2₂ = plot(1:500, α(snowfall_toy')'./snowfall_toy, label="α/P")
+plot!(1:500, Ŷ_acc'./snowfall_toy, label="Up/P")
 hline!(p2₂, [0], c="black", label="")
 
-p2₃ = plot(1:500, Ŷ_abl', label="Ut")
-plot!(1:500, μ(PDD_toy')', label="μ")
+p2₃ = plot(1:500, μ(PDD_toy')', label="μ", lw=2)
+plot!(1:500, Ŷ_abl', label="Ut", lw=2)
 hline!(p2₃, [0], c="black", label="")
-p2₄ = plot(1:500, Ŷ_abl'./PDD_toy, label="Ut/T")
-plot!(1:500, μ(PDD_toy')'./PDD_toy, label="μ/T")
+p2₄ = plot(1:500, μ(PDD_toy')'./PDD_toy, label="μ/T", lw=2)
+plot!(1:500, Ŷ_abl'./PDD_toy, label="Ut/T", lw=2)
 hline!(p2₄, [0], c="black", label="")
 
 p2 = plot(p2₁, p2₂, p2₃, p2₄, layout=l2)
@@ -235,9 +236,24 @@ end
 
 display(p1)
 display(p2)
-    
 savefig(p1,joinpath(pwd(),"plots","hybrid_MB_model.png"))
 savefig(p2,joinpath(pwd(),"plots","hybrid_acc_abl.png"))
+
+### Let's take a look at the raw learnt nn_dynamics
+X_raw = 1:50
+Ŷp_raw = Up(X_raw')
+Yp_raw = α(X_raw')
+Ŷt_raw = Ut(X_raw')
+Yt_raw = μ(X_raw')
+
+l3 = @layout [a b]
+p3₁ = plot(X_raw, Ŷp_raw', lw=3, xlabel="Snowfall (P)", ylabel="Accumulation (α(P))",label="Up (inferred function)")
+plot!(X_raw, Yp_raw', l2=3, lw=3, label="α (true function")
+p3₂ = plot(X_raw, Ŷt_raw', lw=3, xlabel="Temperature (T)", ylabel="Ablation (μ(T))",label="Ut (inferred function)")
+plot!(X_raw, Yt_raw', l2=3, lw=3, label="μ (true function")
+p3 = plot(p3₁, p3₂, layout=l3)
+display(p3)
+savefig(p3,joinpath(pwd(),"plots","recovered_functions.png"))
 
 ###################################################################
 ########################  SINDy    ################################
@@ -245,13 +261,13 @@ savefig(p2,joinpath(pwd(),"plots","hybrid_acc_abl.png"))
 
 ## Symbolic regression via sparse regression ( SINDy based )
 # Create a Basis
-Xp = snowfall_toy'
-Xt = temperature_toy'
+Xp = Float32.(copy(reshape(temperature_toy, (1,length((temperature_toy))))))
+Xt = max.(temperature_toy.-T_melt, 0)
 @variables X_P[1:1]
 
 # Generate the basis functions, multivariate polynomials up to deg 5
 # and sine
-b = [polynomial_basis(X_P, 5)]
+b = [polynomial_basis(X_P, 5);]
 basis_p = Basis(b, X_P)
 
 # Create an optimizer for the SINDy problem
@@ -260,10 +276,14 @@ opt = STRRidge(0.1)# Create the thresholds which should be used in the search pr
 # Test on ideal derivative data for unknown function ( not available )
 println("SINDy on partial ideal, unavailable data")
 
-Ψ = SINDy(Xp, Up(Xp), basis_p, opt, maxiter = 100, normalize = true)
+Ψ = SINDy(Xp, Up(snow_norm'), basis_p, opt, maxiter = 100, normalize = true)
+println(Ψ)
+print_equations(Ψ)
+p̂ = parameters(Ψ)
+println("First parameter guess : $(p̂)")
 
-
-
+println("Overall parameter guess : $(abs.([p̂; p_trained[1]]))")
+println("True paramter : $(p_[2:end])")
 
 
 # Ψ = SINDy(X̂, Ȳ, basis, λ, opt, g = g, maxiter = 10000) # Succeed
