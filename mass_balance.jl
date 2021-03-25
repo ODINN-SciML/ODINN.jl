@@ -7,6 +7,7 @@ using Flux: @epochs
 using Zygote
 using Plots
 gr()
+using Base: @kwdef
 using Statistics
 using DataDrivenDiffEq
 using ModelingToolkit
@@ -36,7 +37,7 @@ end
 
 # We determine the loss function
 function loss(batch)
-    l = 0.0f0
+    l, l_acc, l_abl = 0.0f0, 0.0f0, 0.0f0
     num = 0
     for (x, y) in batch
 
@@ -47,40 +48,22 @@ function loss(batch)
         Ŷp = Up(p_batch)
         Ŷt = Ut(pdd_batch)
         
-        # print("x: ", x, "\n \n")
-        # print("y: ", y, "\n \n")
-
-        # print("x[1,:]: ", x[1,:]', "\n \n")
-        # print("x[2,:]: ", x[2,:]', "\n \n")
-
-        #print("min.(Ŷp, 0.0)^2: ", sum(min.(Ŷp, 0.0).^2), "\n \n")
-
-        # We evaluate the MB as the combination of Accumulation - Ablation with L2
-        # We enforce accumulation and ablation >= 0
+        # We evaluate the MB as the combination of Accumulation - Ablation         
         w_pc=1000
-        #l += sqrt(Flux.Losses.mse(Up(x[1,:]') - Ut(x[2,:]'), y; agg=mean)) + sum(sqnorm, Flux.params(Up)) + sum(sqnorm, Flux.params(Ut))
         l_MB = sqrt(Flux.Losses.mse(MB(p_batch, t_batch, Up, Ut), y; agg=mean))
-        l_range_acc = sum(abs.(min.(Ŷp/p_batch.-1, 0)).*w_pc + abs.(max.((Ŷp/p_batch).-11, 0)).*w_pc)
-        l_range_abl = sum(max.((Ŷt/pdd_batch).-11, 0).*w_pc)
-
-        # l_range_acc = sum(abs.(max.((Ŷp).-30, 0)).*w_pc)
-        # l_range_abl = sum(max.((Ŷt).-35, 0).*w_pc)
-        
-        
-        print("l_MB: ", l_MB, "\n \n")
-        print("l_range_acc: ", l_range_acc, "\n \n")
-        print("l_range_abl: ", l_range_abl, "\n \n")
+        l_range_acc = sum((max.((Ŷp/p_batch).-110, 0)).*w_pc)
+        l_range_abl = sum((max.((Ŷt/pdd_batch).-110, 0)).*w_pc)
 
         #l += l_MB 
         l += l_MB + l_range_acc + l_range_abl
+        l_acc += l_range_acc
+        l_abl += l_range_abl
         num +=  size(x, 2)
 
-        # print("MSE: ", sqrt(Flux.Losses.mse(Up(x[1,:]') - Ut(x[2,:]'), y; agg=mean)), "\n \n")
-        # print("L2: ", sum(sqnorm, Flux.params(Up)) + sum(sqnorm, Flux.params(Ut)), "\n \n")
-        # print("l: ", l, "\n \n")
-    end
+        # println("Accumulation loss: ", l_range_acc)
+        # println("Ablation loss: ", l_range_abl)
 
-    #print("Full batch trained loss: ", l/num, "\n \n")
+    end
 
     return l/num
 end
@@ -122,6 +105,14 @@ function hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
   #########################################
   ##########################################
 
+  
+@kwdef mutable struct Hyperparameters
+    batchsize::Int = 500    # batch size
+    η::Float64 = 0.05    # learning rate
+    epochs::Int = 1000        # number of epochs
+    use_cuda::Bool = true   # use gpu (if cuda available)
+end
+
 ###############################################################
 ###########################  MAIN #############################
 ###############################################################
@@ -129,6 +120,9 @@ function hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
 #function main()
 
 ######### Define the network  ############
+# We determine the hyperameters for the training
+hyparams = Hyperparameters()
+
 # Leaky ReLu as activation function
 leakyrelu(x, a=0.01) = max(a*x, x)
 relu_acc(x) = min(max(0, x), 30)
@@ -155,14 +149,9 @@ Ut = Chain(
     Dense(5,1, relu, initb = Flux.zeros)
 )
 
-
-# # Get the initial parameters, first is linear decay
-# p_P = [rand(Float32); initial_params(Up)]
-# p_T = [rand(Float32); initial_params(Ut)]
-
 # We define an optimizer
-#opt = RMSProp(0.001, 0.95)
-opt = ADAM(0.05)
+#opt = RMSProp(hyparams.η, 0.95)
+opt = ADAM(hyparams.η)
 
 # We get the model parameters to be trained
 ps_Up = Flux.params(Up)
@@ -171,8 +160,8 @@ ps_Ut = Flux.params(Ut)
 sqnorm(x) = sum(abs2, x)
 
 #######  We generate toy data to train the model  ########
-snowfall_toy = rand(0.0f0:10.0f0, 500)
-temperature_toy = 10f0*sin.((1:500)./20)
+snowfall_toy = rand(0.0f0:100.0f0, 500)
+temperature_toy = 100f0*sin.((1:500)./20)
 forcings = hcat(snowfall_toy, temperature_toy)
 
 α(P) = P.^(2)
@@ -187,17 +176,15 @@ hline!(p1₂, [0], c="black", label="")
 p1₃ = plot(1:500, MB_toy, label="Mass balance")
 hline!(p1₃, [0], c="black", label="")
 
-# We normalize the training data
-#X = Flux.normalise(vcat(snowfall_toy', temperature_toy'), dims=2)
 X = vcat(snowfall_toy', temperature_toy')
 Y = collect(MB_toy')
 
-batch_size = 256
-data = Flux.Data.DataLoader((X, Y), batchsize=batch_size, (X, Y))
+# Very important:
+# Shuffle batches and use batchsize similar to dataset size for easy training
+data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=true)
 
 # We train the mass balance hybrid model
-number_epochs = 300
-@epochs number_epochs hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
+@epochs hyparams.epochs hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
 
 # Perform MB simulations with trained model
 T_melt = 0
@@ -239,8 +226,8 @@ display(p2)
 savefig(p1,joinpath(pwd(),"plots","hybrid_MB_model.png"))
 savefig(p2,joinpath(pwd(),"plots","hybrid_acc_abl.png"))
 
-### Let's take a look at the raw learnt nn_dynamics
-X_raw = 1:50
+### Let's take a look at the raw learnt dynamics
+X_raw = 1:100
 Ŷp_raw = Up(X_raw')
 Yp_raw = α(X_raw')
 Ŷt_raw = Ut(X_raw')
@@ -261,7 +248,7 @@ savefig(p3,joinpath(pwd(),"plots","recovered_functions.png"))
 
 ## Symbolic regression via sparse regression ( SINDy based )
 # Create a Basis
-Xp = Float32.(copy(reshape(temperature_toy, (1,length((temperature_toy))))))
+Xp = Float32.(copy(reshape(snowfall_toy, (1,length((snowfall_toy))))))
 Xt = max.(temperature_toy.-T_melt, 0)
 @variables X_P[1:1]
 
@@ -271,20 +258,30 @@ b = [polynomial_basis(X_P, 5);]
 basis_p = Basis(b, X_P)
 
 # Create an optimizer for the SINDy problem
-opt = STRRidge(0.1)# Create the thresholds which should be used in the search process
+#opt = STRRidge(0.1)# Create the thresholds which should be used in the search process
+
+# opt = SR3(Float32(1e-2), Float32(1e-2))
+# # Create the thresholds which should be used in the search process
+# λ = Float32.(exp10.(0:0.1:100))
+# # Target function to choose the results from; x = L0 of coefficients and L2-Error of the model
+# g(x) = x[1] < 1 ? Inf : norm(x, 2)
+
 
 # Test on ideal derivative data for unknown function ( not available )
-println("SINDy on partial ideal, unavailable data")
+println("SINDy on ideal data \n")
+#Ψ_true = SINDy(Xp, Float32.(α(snow_norm')), basis_p, λ, opt, g = g, maxiter = 10000) # Succeed
+Ψ_true = SINDy(Xp, Float32.(α(snow_norm')), basis_p, opt, maxiter = 100, normalize = true)
+println(Ψ_true)
+print_equations(Ψ_true)
+p̂_true = parameters(Ψ_true)
+println("Ψ_true Parameter guess : $(p̂_true) \n")
 
-Ψ = SINDy(Xp, Up(snow_norm'), basis_p, opt, maxiter = 100, normalize = true)
+println("SINDy on predicted data \n")
+Ψ = SINDy(Xp, Up(snow_norm'), basis_p, opt, maxiter = 100, normalize = true, denoise = true)
 println(Ψ)
 print_equations(Ψ)
 p̂ = parameters(Ψ)
-println("First parameter guess : $(p̂)")
-
-println("Overall parameter guess : $(abs.([p̂; p_trained[1]]))")
-println("True paramter : $(p_[2:end])")
-
+println("Ψ Parameter guess : $(p̂)")
 
 # Ψ = SINDy(X̂, Ȳ, basis, λ, opt, g = g, maxiter = 10000) # Succeed
 # println(Ψ)
