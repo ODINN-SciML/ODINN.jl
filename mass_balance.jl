@@ -1,3 +1,12 @@
+#= Glacier mass balance toy model
+
+Test with ideal data of a hybrid MB model based on neural networks
+for the ablation and accumulation components that respect a classic
+temperature-index model, mixed with model interpretation using 
+SINDy (Brunton et al., 2016).
+
+=#
+
 ## Environment and packages
 cd(@__DIR__)
 using Pkg; Pkg.activate("."); Pkg.instantiate()
@@ -21,8 +30,8 @@ using Random
 
 @kwdef mutable struct Hyperparameters
     batchsize::Int = 500    # batch size
-    η::Float64 = 0.7   # learning rate
-    epochs::Int = 200        # number of epochs
+    η::Float64 = 0.1   # learning rate
+    epochs::Int = 500        # number of epochs
     use_cuda::Bool = true   # use gpu (if cuda available)
 end
 
@@ -130,7 +139,7 @@ function train()
     relu_abl(x) = min(max(0, x), 35)
 
     # Define the networks 1->5->5->5->1
-    Up = Chain(
+    global Up = Chain(
         Dense(1,10,initb = Flux.zeros), 
         BatchNorm(10, leakyrelu),
         Dense(10,10,initb = Flux.zeros), 
@@ -140,7 +149,7 @@ function train()
         Dense(5,1, relu, initb = Flux.zeros)
     )
 
-    Ut = Chain(
+    global Ut = Chain(
         Dense(1,10,initb = Flux.zeros), 
         BatchNorm(10, leakyrelu),
         Dense(10,10,initb = Flux.zeros), 
@@ -226,7 +235,7 @@ function train()
     savefig(p2,joinpath(pwd(),"plots","hybrid_acc_abl.png"))
 
     ### Let's take a look at the raw learnt dynamics
-    X_raw = 1:100
+    X_raw = 1:150
     Ŷp_raw = Up(X_raw')
     Yp_raw = α(X_raw')
     Ŷt_raw = Ut(X_raw')
@@ -255,46 +264,66 @@ function sindy()
     @variables X_P[1:1]
 
     # Generate the basis functions, multivariate polynomials up to deg 5
-    # and sine
     b = [polynomial_basis(X_P, 5);]
     basis_p = Basis(b, X_P)
 
     # Create an optimizer for the SINDy problem
-    #λ, ρ = 9e-1, 2.0
-    #opt = ADMM(λ, ρ)
+    λ, ρ = 9999e-1, 5.0
+    opt = ADMM(λ, ρ)
 
     #opt = STRRidge(0.1)# Create the thresholds which should be used in the search process
 
-    opt = SR3(9e-1, 1.0)
-    λs = exp10.(-5:0.1:-1)
+    # opt = SR3(9e-1, 1.0)
+    # λs = exp10.(-5:0.1:-1)
 
-    # Test on ideal derivative data for unknown function ( not available )
+    # Test on ideal data
+    println("Accumulation:")
     println("SINDy on ideal data \n")
-    Ψ_true = SINDy(Xp, α(snow_norm'), basis_p, opt, maxiter = 1000) # Succeed
+    Ψ_p_true = SINDy(Xp, α(snow_norm'), basis_p, opt, maxiter = 1000) # Succeed
     #Ψ_true = SINDy(Float32.(reshape(X_raw, (1, length(X_raw)))), Float32.(Yp_raw), basis_p, opt, maxiter = 100, normalize = true)
-    println(Ψ_true)
-    print_equations(Ψ_true, show_parameter=true)
-    p̂_true = parameters(Ψ_true)
-    println("Ψ_true Parameter guess : $(p̂_true) \n")
+    println(Ψ_p_true)
+    print_equations(Ψ_p_true, show_parameter=true)
+    p̂_p_true = parameters(Ψ_p_true)
+    println("Ψ_true Parameter guess : $(p̂_p_true) \n")
+
+    println("SINDy on synthetic range predicted data \n")
+    syn_range = 1:100
+    Ψ_p_range = SINDy(Float64.(syn_range), Float64.(Up(syn_range')), basis_p, opt, p=[0], maxiter = 20000, denoise=true, normalize=true)
+    println(Ψ_p_range)
+    print_equations(Ψ_p_range)
+    p̂_p_range = parameters(Ψ_p_range)
+    println("Ψ First parameter guess : $(p̂_p_range)")
 
     println("SINDy on predicted data \n")
-    Ψ = SINDy(Xp, Float64.(Ŷ_acc), basis_p, opt, p=[0], maxiter = 20000, denoise=true, normalize=true)
-    println(Ψ)
-    print_equations(Ψ, show_parameter=true)
-    p̂ = parameters(Ψ)
-    println("Ψ First parameter guess : $(p̂)")
+    Ψ_p = SINDy(Xp, Float64.(Ŷ_acc), basis_p, opt, p=[0], maxiter = 200000, denoise=false, normalize=true, convergence_error = 1e-8)
+    println(Ψ_p)
+    print_equations(Ψ_p)
+    p̂_p = parameters(Ψ_p)
+    println("Ψ First parameter guess : $(p̂_p) \n \n")
 
-    # Just the equations
-    basis_p2 = Basis((X_P, p̂)->Ψ(X_P, [1.;1.;], t), X_P)
+    println("Ablation: ")
+    println("SINDy on ideal data \n")
+    Ψ_t_true = SINDy(Xt, μ(temp_norm'), basis_p, opt, maxiter = 1000) # Succeed
+    #Ψ_true = SINDy(Float32.(reshape(X_raw, (1, length(X_raw)))), Float32.(Yp_raw), basis_p, opt, maxiter = 100, normalize = true)
+    println(Ψ_t_true)
+    print_equations(Ψ_t_true, show_parameter=true)
+    p̂_t_true = parameters(Ψ_t_true)
+    println("Ψ_true Parameter guess : $(p̂_t_true) \n")
 
-    # Retune for better parameters -> we could also use DiffEqFlux or other parameter estimation tools here.
-    Ψf = SINDy(Xp, Float64.(Ŷ_acc), basis_p2, STRRidge(0.01), maxiter = 10000, convergence_error = 1e-8) # Succeed
-    println(Ψf)
-    print_equations(Ψf)
-    p̂f = parameters(Ψf)
-    println("Second parameter guess : $(p̂f)")
-    #println("Overall parameter guess : $(abs.([p̂f; p_trained[1]]))")
-    #println("True paramter : $(pf_[2:end])")
+    println("SINDy on synthetic range predicted data \n")
+    syn_range = 1:100
+    Ψ_t_range = SINDy(Float64.(syn_range), Float64.(Ut(syn_range')), basis_p, opt, p=[0], maxiter = 20000, denoise=true, normalize=true)
+    println(Ψ_t_range)
+    print_equations(Ψ_t_range)
+    p̂_t_range = parameters(Ψ_t_range)
+    println("Ψ First parameter guess : $(p̂_t_range)")
+
+    println("SINDy on predicted data \n")
+    Ψ_t = SINDy(Xt, Float64.(Ŷ_abl), basis_p, opt, p=[0], maxiter = 200000, denoise=false, normalize=true, convergence_error = 1e-8)
+    println(Ψ_t)
+    print_equations(Ψ_t)
+    p̂_t = parameters(Ψ_t)
+    println("Ψ First parameter guess : $(p̂_t) \n")
 end
 
 
