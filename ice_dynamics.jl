@@ -94,7 +94,8 @@ end
 ###############################################################
 
 # Load the HDF5 file with Harry's simulated data
-argentiere_f = h5open("/Users/Bolib001/Desktop/Jordi/Data/Toy ice dynamics/Argentiere_2003-2100_aflow2e-16_50mres.h5", "r")
+root_dir = pwd()
+argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres.h5"), "r")
 # Fill the Glacier structure with the retrieved data
 argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                     HDF5.read(argentiere_f["thick_hist"])[begin:end-2,:,:],
