@@ -120,16 +120,10 @@ p = (2e-16, 900, 9.81, 3) # A, ρ, g, n
 ####################################
 ##### Create staggered grid  #######
 ####################################
-# Bedrock
-bed_dn = Nodes(Dual,size(argentiere.bed))
-bed_dn .= argentiere.bed
-bed_de = Edges(Dual, bed_dn)
-bed_pn = Nodes(Primal, bed_dn)
 
 # Ice thickness
 thick_dn = Nodes(Dual,size(argentiere.thick[:,:,1]))
 thick_dn .= argentiere.thick[:,:,1]
-thick_de = Edges(Dual, thick_dn)
 thick_pn = Nodes(Primal, thick_dn)
 
 # DEM
@@ -137,6 +131,7 @@ dem_dn = Nodes(Dual,size(arg_dem))
 dem_dn .= arg_dem
 dem_pn = Nodes(Primal,dem_dn)
 
+# Forward model with Δt timestepping
 for t in 0:Δt:10
 
     #####################################################
@@ -177,11 +172,12 @@ for t in 0:Δt:10
     F_de.u .= D_de.u.*∇_S_de.u # F = D*∂S/∂x 
     F_de.v .= D_de.v.*∇_S_de.v # F = D*∂S/∂y
     # Computation of flux divergence on Dual Nodes
+    F_dn = Nodes(Dual, dem_dn)
     divergence!(F_dn, F_de)
 
     # Compute ice flux for Δt
     F_dn *= Δt
-    F_dn /= 1000
+    #F_dn /= 1000
     # Apply ice flux
     thick_dn +=F_dn
     dem_dn +=F_dn
@@ -189,13 +185,17 @@ for t in 0:Δt:10
     #vel_dn = Nodes(Dual, F_dn)
     vel_dn = F_dn.data./thick_dn.data
 
-    # Plot glacier evolution each year
+    ##################################################
+    ###### Plot glacier evolution for each year  #####
+    ##################################################
     if(t%1 == 0)
+    #if(true)
         println(t)
-        hm11 = heatmap(F_dn.data, title="Flux divergence")
+        hm11 = heatmap(dem_dn.data, c = :turku, title="DEM")
         hm12 = heatmap(thick_dn.data, c = :ice, title="Ice thickness")
-        hm13 = heatmap(vel_dn, c = :speed, title="Ice velocities")
-        hm1 = plot(hm11,hm12,hm13, layout=(3,1), aspect_ratio=:equal, size=(500,1000), plot_title=t)
+        hm13 = heatmap(F_dn.data, title="Flux divergence")
+        hm14 = heatmap(vel_dn, c = :speed, title="Ice velocities")
+        hm1 = plot(hm11,hm12,hm13,hm14, layout=4, aspect_ratio=:equal, size=(1000,600), plot_title=t)
         display(hm1)
     end
 
