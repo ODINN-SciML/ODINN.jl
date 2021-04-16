@@ -1,4 +1,7 @@
-# ODINN toy model
+# ODINN: toy version
+OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
+
+<img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_toy.png" width="300">
 
 Toy model with raw implementation of glacier mass balance and ice dynamics Universal Differential Equations (UDEs). 
 
