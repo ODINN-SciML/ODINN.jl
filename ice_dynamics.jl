@@ -47,6 +47,24 @@ end
 ############  FUNCTIONS   #####################
 ###############################################
 
+# Average of a matrix in the x direction with padding
+function avg_x(A)
+    A̅ = 0.5.*(A[1:end-1,:].+A[2:end,:])
+    A̅ = vcat(A̅, A̅[end,:]')
+    A̅_pn = Nodes(Primal, A)
+    A̅_pn .= A̅
+    return A̅_pn
+end
+
+# Average of a matrix in the y direction with padding
+function avg_y(A)
+    A̅ = 0.5.*(A[:,1:end-1].+A[:,2:end])
+    A̅ = hcat(A̅, A̅[:,end])
+    A̅_pn = Nodes(Primal, A)
+    A̅_pn .= A̅
+    return A̅_pn
+end
+
 # 4 point average of Dual Nodes to a single Primal Node
 function four_point_avg!(Nodes_4p_avg::Nodes{Primal}, dualNodes::Nodes{Dual}, i,j)
     Nodes_4p_avg[i,j] = (dualNodes[i,j] + dualNodes[i+1,j] + dualNodes[i,j+1] + dualNodes[i+1,j+1])/4
@@ -61,7 +79,7 @@ function dual2primal_4p_avg!(primalNodes::Nodes{Primal}, dualNodes::Nodes{Dual})
     end
 end
 
-# Squared norm of a gradient field
+# Norm of a gradient field
 function ∇_norm(gradEdges::Edges{Dual}, dualNodes::Nodes{Dual})
     ∇_norm = Nodes(Primal, dualNodes)
     for i in 1:size(∇_norm)[1]
@@ -69,7 +87,7 @@ function ∇_norm(gradEdges::Edges{Dual}, dualNodes::Nodes{Dual})
             # 2-point mean of gradients
             u̅ = mean([gradEdges.u[i,j], gradEdges.u[i,j+1]])
             v̅ = mean([gradEdges.v[i,j], gradEdges.v[i+1,j]])
-            # Squared norm
+            # Norm
             ∇_norm[i,j] = norm([u̅, v̅])
         end
     end
@@ -85,6 +103,7 @@ function diffusivity(vars, p, ref_dn)
     # println("∇S_norm: ",  ∇S_norm[100,100])
     D = ((2*A)/(n+2)).*((ρ*g.*H).^n).*(H.^2).*(∇S_norm.^(n-1))
     #println("((ρ*g.*H).^n).*(H.^2): ", ((ρ*g.*H).^n).*(H.^2)[100,100])
+    #println("max ∇S_norm: ", maximum(∇S_norm))
 
     #display(heatmap(((ρ*g.*H).^n), title="((ρ*g.*H).^n)"))
     #println("ρ*g: ", ρ*g)
@@ -123,8 +142,8 @@ function flow()
     arg_dem = copy(argentiere.bed) .+ copy(argentiere.thick[:,:,1]) 
     p = (2e-16, 900, 9.81, 3) # A, ρ, g, n
     # Spatial and temporal differentials
-    Δx = 50 #m
-    Δt = 0.05 #years
+    Δx = 50 #m (Δx = Δy)
+    Δt = 100 #years
 
     ####################################
     ##### Create staggered grid  #######
@@ -140,7 +159,7 @@ function flow()
     dem_dn .= arg_dem
 
     # Forward model with Δt timestepping
-    for t in 0:Δt:1
+    for t in 0:Δt:1000
 
         # display(heatmap(thick_dn.data, c = :ice, title="Ice thickness at t=$t"))
         # display(heatmap(dem_dn.data, c = :turku, title="DEM at t=$t"))
@@ -178,8 +197,8 @@ function flow()
 
         # 2.1: 2-point average of diffusivity from Primal Nodes to Dual Edges
         D_de = Edges(Dual, ∇_S_de)
-        grid_interpolate!(D_de.u, D_pn)
-        grid_interpolate!(D_de.v, D_pn)
+        grid_interpolate!(D_de.u, avg_x(D_pn))
+        grid_interpolate!(D_de.v, avg_y(D_pn))
 
         # 2.2: 2-point central estimate of surface gradient from Dual Nodes to Dual Edges
         ∇_S_de
@@ -189,7 +208,7 @@ function flow()
         F_de = Edges(Dual, D_de)
         F_de.u .= D_de.u.*∇_S_de.u # F = D*∂S/∂x 
         F_de.v .= D_de.v.*∇_S_de.v # F = D*∂S/∂y
-        # Computation of flux divergence on Dual Nodes
+     
         F_dn = Nodes(Dual, dem_dn)
         divergence!(F_dn, F_de/Δx) # ∂²F/∂x² + ∂²F/∂y²
     
@@ -206,8 +225,8 @@ function flow()
         ##################################################
         ###### Plot glacier evolution for each year  #####
         ##################################################
-        if(t%1 == 0)
-        #if(true)
+        #if(t%1 == 0)
+        if(true)
             println(t)
             hm11 = heatmap(dem_dn.data, c = :turku, title="DEM")
             hm12 = heatmap(thick_dn.data, c = :ice, title="Ice thickness")
