@@ -28,10 +28,10 @@ using HDF5
 #using CUDA
 #using Measures
 
-### Types  ###
-include("helpers/types.jl")
 ### Global parameters  ###
 include("helpers/parameters.jl")
+### Types  ###
+include("helpers/types.jl")
 ### Iceflow forward model  ###
 # (includes utils.jl as well)
 include("helpers/iceflow.jl")
@@ -57,9 +57,13 @@ void2nan!(MB_plot, argentiere.MB[1,1,1])
 # Interpolate mass balance to daily values
 #MB_weekly = interpolate(argentiere.MB/54, (NoInterp(), NoInterp(), BSpline(Linear())))
 
+# Get the annual ELAs based on the mass balance data
+ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
+
 # Domain size
 nx = size(argentiere.bed)[1]
 ny = size(argentiere.bed)[2];
+
 
 ###  Plot initial data  ###
 # Argentière bedrock
@@ -77,6 +81,17 @@ example = "Argentiere"
 #example = "Gaussian" # Fake
 
 if example == "Argentiere"
+
+    # Grid initialization
+    dSdx    = zeros(nx-1, ny  )
+    dSdy    = zeros(nx  , ny-1)
+    ∇S      = zeros(nx-1, ny-1)
+    D       = zeros(nx-1, ny-1)
+    Fx      = zeros(nx-1, ny-2)
+    Fy      = zeros(nx-2, ny-1)
+    F       = zeros(nx-2, ny-2)
+    dHdt    = zeros(nx-2, ny-2)
+    MB      = zeros(nx,   ny);
     
     B  = copy(argentiere.bed)
     H₀ = copy(argentiere.thick[:,:,1])
@@ -97,7 +112,7 @@ end
 
 ### We perform the simulations with an explicit forward model  ###
 # Gather simulation parameters
-p = (Δx, Δy, Γ, B, v, argentiere.MB) 
+p = (Δx, Δy, Γ, A, B, v, argentiere.MB, C, α) 
 H = copy(H₀)
 @time iceflow!(H,p,t,t₁)
 

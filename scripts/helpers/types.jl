@@ -22,15 +22,6 @@ mutable struct Glacier
     lon::Float32
 end
 
-# Grid initialization
-dSdx    = zeros(nx-1, ny  )
-dSdy    = zeros(nx  , ny-1)
-∇S      = zeros(nx-1, ny-1)
-D       = zeros(nx-1, ny-1)
-Fx      = zeros(nx-1, ny-2)
-Fy      = zeros(nx-2, ny-1)
-F       = zeros(nx-2, ny-2)
-dHdt    = zeros(nx-2, ny-2)
-MB      = zeros(nx, ny);
+
 
 
