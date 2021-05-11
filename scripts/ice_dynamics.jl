@@ -112,9 +112,9 @@ end
 
 ### We perform the simulations with an explicit forward model  ###
 # Gather simulation parameters
-p = (Δx, Δy, Γ, A, B, v, argentiere.MB, C, α) 
+p = (Δx, Δy, Γ, A, B, v, argentiere.MB, ELAs, C, α) 
 H = copy(H₀)
-@time iceflow!(H,p,t,t₁)
+@time iceflow_toy!(H,p,t,t₁)
 
 ###################################################################
 ########################  PLOTS    ################################
