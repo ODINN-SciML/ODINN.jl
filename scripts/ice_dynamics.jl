@@ -14,12 +14,15 @@ using Statistics
 using ModelingToolkit
 using LinearAlgebra
 using HDF5
+using JLD
+using Flux
+using Flux: @epochs
 #using BenchmarkTools
 #using PaddedViews
 #using Random
 #using Debugger
 # using Flux, DiffEqFlux, DataDrivenDiffEq
-# using Flux: @epochs
+
 # using Zygote
 #using DifferentialEquations
 #using ComponentArrays
@@ -114,7 +117,22 @@ end
 # Gather simulation parameters
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, ELAs, C, α) 
 H = copy(H₀)
-@time iceflow_toy!(H,p,t,t₁)
+
+if create_ref_dataset 
+    H_ref = Dict("H"=>[], "timestamps"=>[20,40,60])
+    @time iceflow_toy!(H,H_ref,p,t,t₁)
+end
+
+H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
+
+if train_UDE
+
+    hyparams, UA = create_NNs()
+
+    @time iceflow!(H,H_ref,UA,hyparams,p,t,t₁)
+end
+
+
 
 ###################################################################
 ########################  PLOTS    ################################

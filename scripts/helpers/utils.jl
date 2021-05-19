@@ -91,3 +91,48 @@ function get_annual_ELAs(MB, DEM)
     # Return average glacier altitude with MB = 0 as ELA
     return annual_ELAs
 end
+
+"""
+    closest_index(x, val)
+
+Return the index of the closest Array element
+"""
+function closest_index(x, val)
+    ibest = eachindex(x)[begin]
+    dxbest = abs(x[ibest]-val)
+    for I in eachindex(x)
+        dx = abs(x[I]-val)
+        if dx < dxbest
+            dxbest = dx
+            ibest = I
+        end
+    end
+    return ibest
+    end 
+
+"""
+    buffer_mean(A, i)
+
+Perform the mean of the last 5 elements of an Array
+"""
+function buffer_mean(A, i)
+    A_buffer = zeros(size(A[:,:,1]))
+
+    if(i-5 < 1)
+        j = 1
+    else
+        j = i-5
+    end
+    
+    for y in 1:size(A)[3]
+        for n in 1:size(A)[1]
+            for m in 1:size(A)[2]
+                A_buffer[n,m] = mean(A[n,m,j:i])
+            end
+        end
+    end
+
+    println("A_buffer: ", size(A_buffer))
+
+    return A_buffer
+end

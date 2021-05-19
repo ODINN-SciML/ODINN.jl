@@ -34,3 +34,7 @@ C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
 t = 0
 Δts = []
 t₁ = 80 # number of simulation years 
+
+### Workflow ###
+create_ref_dataset = false
+train_UDE = true
