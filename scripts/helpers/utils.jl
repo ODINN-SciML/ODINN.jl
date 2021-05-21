@@ -132,7 +132,7 @@ function buffer_mean(A, i)
         end
     end
 
-    println("A_buffer: ", size(A_buffer))
+    #println("A_buffer: ", size(A_buffer))
 
     return A_buffer
 end

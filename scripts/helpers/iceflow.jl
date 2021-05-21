@@ -82,17 +82,19 @@ function iceflow_toy!(H,H_ref, p,t,t₁)
 end
 
 """
-    iceflow!(H,p,t,t₁)
+    iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
 
-Hybrid forward ice flow model combining the SIA PDE and neural networks into 
+Hybrid ice flow model solving and optimizing the Shallow Ice Approximation (SIA) PDE using 
 Universal Differential Equations (UDEs)
 """
-function iceflow!(H, H_ref, UA, hyparams, p,t,t₁)
-
+function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     println("Running forward UDE ice flow model...\n")
-    # Retrieve input variables                    
-    Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-    ts_i = 1
+    # For now, train UDE only with the last timestamp with "observations"
+    # Use batchsize similar to dataset size for easy training
+    Y = vec(H_ref["H"][end]) # flatten matrix
+    X = p[7] # flattened MB matrix
+    println("Y: ", size(Y))
+    println("X: ", size(X))
 
     # We define an optimizer
     #opt = RMSProp(hyparams.η, 0.95)
@@ -100,6 +102,23 @@ function iceflow!(H, H_ref, UA, hyparams, p,t,t₁)
 
     # We get the model parameters to be trained
     ps_UA = Flux.params(UA)
+    #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
+    data = Dict("X"=>X, "Y"=>Y)
+    # Train the UDE for a given number of epochs
+    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
+end
+
+"""
+    iceflow!(H,p,t,t₁)
+
+Hybrid forward ice flow model combining the SIA PDE and neural networks with neural networks into an UDE
+"""
+function iceflow!(H, UA, p,t,t₁)
+
+    # Retrieve input variables                    
+    Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+    ts_i = 1
+    current_year = 0
 
     # Manual explicit forward scheme implementation
     while t < t₁
@@ -107,11 +126,16 @@ function iceflow!(H, H_ref, UA, hyparams, p,t,t₁)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
 
+        if(year != current_year)
+            println("Year ", year)
+            ŶA = UA(vec(buffer_mean(MB, year))')
+            current_year = year
+        end
+
+        #println("t: ", t)
+
         # Update glacier surface altimetry
         S = B .+ H
-
-        # Random mass balance year
-        y_rand = rand(1:97)
 
         # All grid variables computed in a staggered grid
         # Compute surface gradients on edges
@@ -123,9 +147,9 @@ function iceflow!(H, H_ref, UA, hyparams, p,t,t₁)
         #                                     ice creep  +  basal sliding
         #D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H) .+ (α*(n+2)*Uub)/(n-2)) 
         #println("MB buffer: ", buffer_mean(MB, year))
-        X = vec(buffer_mean(MB, year))'
+        
         #println("X: ", size(X))
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(UA(X), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(ŶA, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
 
         # Compute flux components
         dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
@@ -143,28 +167,31 @@ function iceflow!(H, H_ref, UA, hyparams, p,t,t₁)
         #  Update the glacier ice thickness
         # Only ice flux
         #dHdt = F .* Δt        
-        # Ice flux + random mass balance                      
+        # Ice flux + mass balance                    
         dHdt = (F .+ inn(MB[:,:,year])) .* Δt  
-        global H[2:end - 1,2:end - 1] .= max.(0.0, inn(H) .+ dHdt)
 
-        # Train UDE every time we encounter a timestamp with "observations"
-        # TODO: stop using the timestamps and move this to the end of the while loop
-        if ts_i < length(H_ref["timestamps"])+1
-            if H_ref["timestamps"][ts_i] >= t
-                # Use batchsize similar to dataset size for easy training
-                Y = vec(H_ref["H"][ts_i]) # flatten matrix
-                println("Y: ", size(Y))
-                println("X: ", size(X))
-                data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=true)
-                @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt)
-                ts_i += 1
-            end
-        end
+        # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
+        # TODO: Investigate how to correctly update H with Zygote.Buffer
+        # Option 1
+        H_buff = Zygote.Buffer(max.(0.0, inn(H) .+ dHdt))
+        println("H_buff: ", size(H_buff))
+        println("size(H_buff, 1): ", size(H_buff, 1))
+        H_buff .= vcat(H_buff, Zygote.Buffer(zeros(size(H_buff, 1))))
+        println("H_buff: ", size(H_buff))
+        println("size(H_buff, 2): ", size(H_buff, 2))
+        H_buff .= hcat(H_buff, Zygote.Buffer(zeros(size(H_buff, 2))))
+        println("H_b: ", size(H_b))
+        H = copy(H_buff)
+
+        # Option 2 (incorrect)
+        # H_buff = Zygote.Buffer(H)
+        # H_buff[2:end - 1,2:end - 1] .= max.(0.0, inn(H_buff) .+ dHdt)
+        # H = copy(H_buff)
         
         t += Δt
         # println("time: ", t)
         
-    end 
+    end     
 end
 
 """
@@ -222,11 +249,9 @@ function create_NNs()
     relu_acc(x) = min(max(0, x), 30)
     relu_abl(x) = min(max(0, x), 35)
 
-    # Define the networks 1->5->5->5->1
+    # Define the networks 1->5->5->1
     global UA = Chain(
         Dense(1,10,initb = Flux.zeros), 
-        BatchNorm(10, leakyrelu),
-        Dense(10,10,initb = Flux.zeros), 
         BatchNorm(10, leakyrelu),
         Dense(10,5,initb = Flux.zeros), 
         BatchNorm(5, leakyrelu),
@@ -242,29 +267,27 @@ end
 Computes the loss function for a specific batch.
 """
 # We determine the loss function
-function loss(batch)
+function loss(data, H, p, t, t₁)
     l_H, l_A = 0.0f0, 0.0f0
     num = 0
-    for (x, y) in batch
 
-        # Make NN predictions
-        ŶA = UA(x)
+    # Make NN predictions
+    w_pc=10e18
+    for y in 1:size(data["X"])[3]
+        ŶA = UA(vec(data["X"][:,:,y])')
         
-        # We evaluate the MB as the combination of Accumulation - Ablation         
-        w_pc=100
-        l_A= sum((max.(ŶA .- 1.3e-24, 0).*w_pc).^2) + sum((min.(ŶA .- 0.5e-24, 0).*w_pc).^2)
-
-        # TODO: compute l_H as the difference between the simulated H with UA(x) and H_ref
-        l += l_H + l_A
-
-        num +=  size(x, 2)
-
-        # println("Accumulation loss: ", l_range_acc)
-        # println("Ablation loss: ", l_range_abl)
-
+        # Constrain A parameter within physically plausible values        
+        l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
     end
 
-    return l/num
+    # Compute l_H as the difference between the simulated H with UA(x) and H_ref
+    iceflow!(H, UA, p,t,t₁)
+    l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
+    println("l_A: ", l_A)
+    println("l_H: ", l_H)
+    l = l_H + l_A
+
+    return l
 end
 
 # Container to track the losses
@@ -290,20 +313,18 @@ end
 Train hybrid ice flow model based on UDEs.
 """
 
-function hybrid_train!(loss, ps_UA, data, opt)
+function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
     # Retrieve model parameters
     ps_UA = Params(ps_UA)
 
-    for batch in data
-        # back is a method that computes the product of the gradient so far with its argument.
-        train_loss_UA, back_UA = Zygote.pullback(() -> loss(batch), ps_UA)
-        # Callback to track the training
-        callback(train_loss_UA)
-        # Apply back() to the correct type of 1.0 to get the gradient of loss.
-        gs_UA = back_UA(one(train_loss_UA))
-        # Insert what ever code you want here that needs gradient.
-        # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
-        Flux.update!(opt, ps_UA, gs_UA)
-        # Here you might like to check validation set accuracy, and break out to do early stopping.
-    end
+    # back is a method that computes the product of the gradient so far with its argument.
+    train_loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
+    # Callback to track the training
+    callback(train_loss_UA)
+    # Apply back() to the correct type of 1.0 to get the gradient of loss.
+    gs_UA = back_UA(one(train_loss_UA))
+    # Insert what ever code you want here that needs gradient.
+    # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
+    Flux.update!(opt, ps_UA, gs_UA)
+    # Here you might like to check validation set accuracy, and break out to do early stopping.
 end

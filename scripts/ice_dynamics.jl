@@ -118,6 +118,7 @@ end
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, ELAs, C, α) 
 H = copy(H₀)
 
+# We generate the reference dataset using fake know laws
 if create_ref_dataset 
     H_ref = Dict("H"=>[], "timestamps"=>[20,40,60])
     @time iceflow_toy!(H,H_ref,p,t,t₁)
@@ -125,11 +126,10 @@ end
 
 H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
 
+# We train an UDE in order to learn and infer the fake laws
 if train_UDE
-
     hyparams, UA = create_NNs()
-
-    @time iceflow!(H,H_ref,UA,hyparams,p,t,t₁)
+    iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
 end
 
 

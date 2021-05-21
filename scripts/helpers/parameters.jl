@@ -29,11 +29,12 @@ C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
 # Configuration of the forward model
 # Parameter that control the stepsize of the numerical method 
 # η < 1 is requiered for stability
-η = 0.2;
+η = 1
+#η = 0.2
 # Time 
 t = 0
 Δts = []
-t₁ = 80 # number of simulation years 
+t₁ = 2 # number of simulation years 
 
 ### Workflow ###
 create_ref_dataset = false
