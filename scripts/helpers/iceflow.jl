@@ -33,14 +33,17 @@ function iceflow_toy!(H,H_ref, p,t,t₁)
         ∇S .= sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
 
         # Compute diffusivity on secondary nodes
-        #                                     ice creep  +  basal sliding
-        #D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-
-        # Diffusivity with fake A function
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A_fake(buffer_mean(MB, year)) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        
-        #D .= (Γ * avg(H).^n.* ∇S.^(n-1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
-
+        #smodel = "standard"
+        if model == "stantard"
+            #                                     ice creep  +  basal sliding
+            D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        elseif model == "fake A"
+            # Diffusivity with fake A function
+            D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A_fake(buffer_mean(MB, year)) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        elseif model == "fake C"
+            # Diffusivity with fake C function
+            D .= (Γ * avg(H).^n.* ∇S.^(n-1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
+        end
         #println("C_fake max: ", maximum(C_fake(MB, ∇S)))
         #println("C_fake min: ", minimum(C_fake(MB, ∇S)))
 
@@ -51,10 +54,24 @@ function iceflow_toy!(H,H_ref, p,t,t₁)
         Fy .= .-avg_x(D) .* dSdy_edges
         #  Flux divergence
         F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
-            
-        # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
-        D_max = maximum(D)
-        Δt = η * ( Δx^2 / (2 * D_max ))
+        
+        # To do: include 'method' and Δt as parameters of the function. 
+        # Right now, this runs just as before.
+        #method = "explicit-adaptive"
+
+        if method == "explicit-adaptive"
+            # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
+            D_max = maximum(D)
+            Δt = η * ( Δx^2 / (2 * D_max ))
+        elseif method == "explicit"
+            Δt = 0.001
+            D_max = maximum(D)
+            if Δt / ( Δx^2 / (2 * D_max )) < 1 
+                println("Stability condition is not satisfied\n")
+            end
+        elseif method == "implicit"
+            println("Implicit method not yet implemented\n")
+        end
         append!(Δts, Δt)
 
         #  Update the glacier ice thickness
