@@ -27,15 +27,20 @@ C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
 
 ### Differential equations ###
 # Configuration of the forward model
+# Model 
+model = "standard" # options are: "standard", "fake A", "fake C" 
+# Method to solve the DE
+method = "explicit-adaptive"
 # Parameter that control the stepsize of the numerical method 
 # η < 1 is requiered for stability
 η = 1
 #η = 0.2
 # Time 
+#Δt = 0.001 # requiered for "explicit"
 t = 0
 Δts = []
-t₁ = 2 # number of simulation years 
+t₁ = 20 # number of simulation years 
 
 ### Workflow ###
-create_ref_dataset = false
+create_ref_dataset = true
 train_UDE = true
