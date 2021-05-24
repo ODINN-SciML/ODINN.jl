@@ -64,9 +64,10 @@ function iceflow_toy!(H,H_ref, p,t,t₁)
             D_max = maximum(D)
             Δt = η * ( Δx^2 / (2 * D_max ))
         elseif method == "explicit"
+            ## add this as parameter
             Δt = 0.001
             D_max = maximum(D)
-            if Δt / ( Δx^2 / (2 * D_max )) < 1 
+            if Δt / ( Δx^2 / (2 * D_max )) > 1 
                 println("Stability condition is not satisfied\n")
             end
         elseif method == "implicit"
@@ -95,6 +96,7 @@ function iceflow_toy!(H,H_ref, p,t,t₁)
         end
         
     end 
+    println("Saving reference data")
     save(joinpath(root_dir, "../../data/H_ref.jld"), "H_ref", H_ref)
 end
 
