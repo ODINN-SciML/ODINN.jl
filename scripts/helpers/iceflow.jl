@@ -3,6 +3,7 @@
 ###################################################################
 
 using Zygote
+using PaddedViews
 include("utils.jl")
 
 """
@@ -55,25 +56,8 @@ function iceflow_toy!(H,H_ref, p,t,t₁)
         #  Flux divergence
         F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
         
-        # To do: include 'method' and Δt as parameters of the function. 
-        # Right now, this runs just as before.
-        #method = "explicit-adaptive"
-
-        if method == "explicit-adaptive"
-            # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
-            D_max = maximum(D)
-            Δt = η * ( Δx^2 / (2 * D_max ))
-        elseif method == "explicit"
-            ## add this as parameter
-            Δt = 0.001
-            D_max = maximum(D)
-            if Δt / ( Δx^2 / (2 * D_max )) > 1 
-                println("Stability condition is not satisfied\n")
-            end
-        elseif method == "implicit"
-            println("Implicit method not yet implemented\n")
-        end
-        append!(Δts, Δt)
+        # Update or set time step for temporal discretization
+        Δt = timestep!(Δts, Δx, D, method)
 
         #  Update the glacier ice thickness
         # Only ice flux
@@ -84,14 +68,14 @@ function iceflow_toy!(H,H_ref, p,t,t₁)
         global H[2:end - 1,2:end - 1] .= max.(0.0, inn(H) .+ dHdt)
         
         t += Δt
-        # println("time: ", t)
+        #println("time: ", t)
 
         # Store timestamps to be used for training of the UDEs
         if ts_i < length(H_ref["timestamps"])+1
             if t >= H_ref["timestamps"][ts_i]
-            println("Saving H at year ", H_ref["timestamps"][ts_i])
-            push!(H_ref["H"], H)
-            ts_i += 1
+                println("Saving H at year ", H_ref["timestamps"][ts_i])
+                push!(H_ref["H"], H)
+                ts_i += 1
             end            
         end
         
@@ -124,7 +108,9 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
     data = Dict("X"=>X, "Y"=>Y)
     # Train the UDE for a given number of epochs
-    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
+    H_buff = Zygote.Buffer(H)
+    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H_buff, p, t, t₁)
+    H = copy(H_buff)  
 end
 
 """
@@ -134,9 +120,9 @@ Hybrid forward ice flow model combining the SIA PDE and neural networks with neu
 """
 function iceflow!(H, UA, p,t,t₁)
 
-    # Retrieve input variables                    
-    Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-    ts_i = 1
+    # # Retrieve input variables                    
+    # Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+    # ts_i = 1
     current_year = 0
 
     # Manual explicit forward scheme implementation
@@ -145,73 +131,178 @@ function iceflow!(H, UA, p,t,t₁)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
 
-        if(year != current_year)
-            println("Year ", year)
-            ŶA = UA(vec(buffer_mean(MB, year))')
-            current_year = year
-        end
+        H, Δt = update_H(H, UA, p, year, current_year)
 
-        #println("t: ", t)
+        # if(year != current_year)
+        #     println("Year ", year)
+        #     ŶA = UA(vec(buffer_mean(MB, year))')
+        #     current_year = year
+        # end
 
-        # Update glacier surface altimetry
-        S = B .+ H
+        # #println("t: ", t)
 
-        # All grid variables computed in a staggered grid
-        # Compute surface gradients on edges
-        dSdx  .= diff(S, dims=1) / Δx
-        dSdy  .= diff(S, dims=2) / Δy
-        ∇S .= sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
+        # # Update glacier surface altimetry
+        # S = B .+ H
 
-        # Compute diffusivity on secondary nodes
-        #                                     ice creep  +  basal sliding
-        #D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H) .+ (α*(n+2)*Uub)/(n-2)) 
-        #println("MB buffer: ", buffer_mean(MB, year))
+        # # All grid variables computed in a staggered grid
+        # # Compute surface gradients on edges
+        # dSdx  .= diff(S, dims=1) / Δx
+        # dSdy  .= diff(S, dims=2) / Δy
+        # ∇S .= sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
+
+        # # Compute diffusivity on secondary nodes
+        # #                                     ice creep  +  basal sliding
+        # #D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H) .+ (α*(n+2)*Uub)/(n-2)) 
+        # #println("MB buffer: ", buffer_mean(MB, year))
         
-        #println("X: ", size(X))
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(ŶA, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        # #println("X: ", size(X))
+        # D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(ŶA, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
 
-        # Compute flux components
-        dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
-        dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
-        Fx .= .-avg_y(D) .* dSdx_edges
-        Fy .= .-avg_x(D) .* dSdy_edges
-        #  Flux divergence
-        F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+        # # Compute flux components
+        # dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
+        # dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
+        # Fx .= .-avg_y(D) .* dSdx_edges
+        # Fy .= .-avg_x(D) .* dSdy_edges
+        # #  Flux divergence
+        # F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) 
             
-        # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
-        D_max = maximum(D)
-        Δt = η * ( Δx^2 / (2 * D_max ))
-        append!(Δts, Δt)
+        # # Update or set time step for temporal discretization
+        # Δt = timestep!(Δts, Δx, D, method)
 
-        #  Update the glacier ice thickness
-        # Only ice flux
-        #dHdt = F .* Δt        
-        # Ice flux + mass balance                    
-        dHdt = (F .+ inn(MB[:,:,year])) .* Δt  
+        # #  Update the glacier ice thickness
+        # # Only ice flux
+        # #dHdt = F .* Δt        
+        # # Ice flux + mass balance                    
+        # dHdt = (F .+ inn(MB[:,:,year])) .* Δt  
 
-        # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
-        # TODO: Investigate how to correctly update H with Zygote.Buffer
-        # Option 1
-        H_buff = Zygote.Buffer(max.(0.0, inn(H) .+ dHdt))
-        println("H_buff: ", size(H_buff))
-        println("size(H_buff, 1): ", size(H_buff, 1))
-        H_buff .= vcat(H_buff, Zygote.Buffer(zeros(size(H_buff, 1))))
-        println("H_buff: ", size(H_buff))
-        println("size(H_buff, 2): ", size(H_buff, 2))
-        H_buff .= hcat(H_buff, Zygote.Buffer(zeros(size(H_buff, 2))))
-        println("H_b: ", size(H_b))
-        H = copy(H_buff)
+        # # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
+        # # TODO: Investigate how to correctly update H with Zygote.Buffer
+        # # Option 1
+        # #dH = max.(0.0, inn(H) .+ dHdt)
+        # #println("size(dH): ", size(dH))
+        # #H = PaddedView(0.0, Zygote.Buffer(dH), size(H), (2,2))
+        # #println("size(H): ", size(H))
+        # # println("H: ", size(H))
+        # # println("size(H_buff_0, 1): ", size(H_buff_0, 1))
+        # # H_buff_1 = vcat(H_buff_0, Zygote.Buffer(zeros(size(H_buff_0, 1))))
+        # # println("size(H_buff_1): ", size(H_buff_1))
+        # # H_buff = hcat(H_buff_1, Zygote.Buffer(zeros(size(H_buff_1, 2))))
+        # # println("H_buff: ", size(H_buff))
+        # #H = copy(H_buffpad)
 
-        # Option 2 (incorrect)
-        # H_buff = Zygote.Buffer(H)
-        # H_buff[2:end - 1,2:end - 1] .= max.(0.0, inn(H_buff) .+ dHdt)
-        # H = copy(H_buff)
+        # # Option 2 (incorrect)
+        
+        # # println("H: ", size(H))
+        # # println("dHdt: ", size(dHdt))
+        # # for i in 1:size(dHdt,1)
+        # #     for j in 1:size(dHdt,2)
+        # #         H[i+1,j+1] = max(0.0, H[i+1,j+1] + dHdt[i,j])
+        # #     end
+        # # end
+
+
+        # H[2:end - 1,2:end - 1] .= max.(0.0, inn(H) .+ dHdt)
+        
         
         t += Δt
         # println("time: ", t)
         
-    end     
+    end   
 end
+
+function update_H(H, UA, p, year, current_year)
+
+     # Retrieve input variables                    
+     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+
+    if(year != current_year)
+        println("Year ", year)
+        ŶA = UA(vec(buffer_mean(MB, year))')
+        current_year = year
+    end
+
+    #println("t: ", t)
+
+    # Update glacier surface altimetry
+    S = B .+ H
+
+    # All grid variables computed in a staggered grid
+    # Compute surface gradients on edges
+    dSdx  .= diff(S, dims=1) / Δx
+    dSdy  .= diff(S, dims=2) / Δy
+    ∇S .= sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
+
+    # Compute diffusivity on secondary nodes
+    #                                     ice creep  +  basal sliding
+    #D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H) .+ (α*(n+2)*Uub)/(n-2)) 
+    #println("MB buffer: ", buffer_mean(MB, year))
+    
+    #println("X: ", size(X))
+    D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(ŶA, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+
+    # Compute flux components
+    dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
+    dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
+    Fx .= .-avg_y(D) .* dSdx_edges
+    Fy .= .-avg_x(D) .* dSdy_edges
+    #  Flux divergence
+    F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) 
+        
+    # Update or set time step for temporal discretization
+    Δt = timestep!(Δts, Δx, D, method)
+
+    #  Update the glacier ice thickness
+    # Only ice flux
+    #dHdt = F .* Δt        
+    # Ice flux + mass balance                    
+    dHdt = (F .+ inn(MB[:,:,year])) .* Δt  
+
+    # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
+    # TODO: Investigate how to correctly update H with Zygote.Buffer
+    # Option 1
+    #dH = max.(0.0, inn(H) .+ dHdt)
+    #println("size(dH): ", size(dH))
+    #H = PaddedView(0.0, Zygote.Buffer(dH), size(H), (2,2))
+    #println("size(H): ", size(H))
+    # println("H: ", size(H))
+    # println("size(H_buff_0, 1): ", size(H_buff_0, 1))
+    # H_buff_1 = vcat(H_buff_0, Zygote.Buffer(zeros(size(H_buff_0, 1))))
+    # println("size(H_buff_1): ", size(H_buff_1))
+    # H_buff = hcat(H_buff_1, Zygote.Buffer(zeros(size(H_buff_1, 2))))
+    # println("H_buff: ", size(H_buff))
+    #H = copy(H_buffpad)
+
+    # Option 2 (incorrect)
+    
+    # println("H: ", size(H))
+    # println("dHdt: ", size(dHdt))
+    # for i in 1:size(dHdt,1)
+    #     for j in 1:size(dHdt,2)
+    #         H[i+1,j+1] = max(0.0, H[i+1,j+1] + dHdt[i,j])
+    #     end
+    # end
+
+
+    H[2:end - 1,2:end - 1] .= max.(0.0, inn(H) .+ dHdt)
+    
+
+    return H, Δt
+end
+
+# function rrule(::typeof(update_H), H, UA, year, current_year)
+#     function update_pullback(H, UA)
+#         b̄ = zero(ā)
+#         for i in 1:length(a)
+#             for d in 0:m-1
+#                 if i-d > 0
+#                     b̄[i] += (m-d) * ā[i-d]
+#                 end
+#             end
+#         end
+#         return NO_FIELDS, b̄, DoesNotExist()
+#     end
+#     return updatestate(a, m), update_pullback
+# end;
 
 """
     C_fake(MB, ∇S)

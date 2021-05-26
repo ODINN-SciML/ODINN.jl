@@ -30,10 +30,11 @@ C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
 # Model 
 model = "standard" # options are: "standard", "fake A", "fake C" 
 # Method to solve the DE
-method = "explicit" #"explicit-adaptive"
+method = "explicit-adaptive" #"explicit"
+#method = "explicit" 
 # Parameter that control the stepsize of the numerical method 
 # η < 1 is requiered for stability
-η = 1
+η = 0.9
 #η = 0.2
 # Time 
 #Δt = 0.001 # requiered for "explicit" / It need to be added to p
@@ -42,5 +43,5 @@ t = 0
 t₁ = 2 # number of simulation years 
 
 ### Workflow ###
-create_ref_dataset = true
+create_ref_dataset = false
 train_UDE = true
