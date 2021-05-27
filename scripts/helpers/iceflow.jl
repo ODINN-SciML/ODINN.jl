@@ -121,7 +121,7 @@ create and store dataset to be used as a reference
 function update_store_H(H, H_ref, p, y, ts)
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA(H, p, y)
+    Δt, current_year = SIA!(H, p, y)
     t, ts_i = ts
     
     # Store timestamps to be used for training of the UDEs
@@ -144,25 +144,25 @@ Update the ice thickness by differentiating H based on the Shallow Ice Approxima
 """
 function update_H(H, p, y)
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA(H, p, y)
+    Δt, current_year = SIA!(H, p, y)
 
     return Δt, current_year
     
 end 
 
 """
-    SIA(H, p, y)
+    SIA!(H, p, y)
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
-function SIA(H, p, y)
+function SIA!(H, p, y)
     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
     year, current_year = y
 
     # Update glacier surface altimetry
     S = B .+ H
-    println("S: ", maximum(S)) # TODO: CODE CRASHES HERE IF THIS PRINT IS REMOVED
-                                # SOMETHING IS WRONG WITH THE DECLARATION OF 'S'
+    #println("S: ", maximum(S)) # TODO: CODE CRASHES HERE IF THIS PRINT IS REMOVED
+    #                            # SOMETHING IS WRONG WITH THE DECLARATION OF 'S'
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -171,10 +171,10 @@ function SIA(H, p, y)
     ∇S .= sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
 
     # println("∇S: ", maximum(∇S))
-    # println("model: ", model)
+    #println("model: ", model)
 
     # Compute diffusivity on secondary nodes
-    if model == "stantard"
+    if model == "standard"
         #                                     ice creep  +  basal sliding
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake A"
@@ -182,10 +182,16 @@ function SIA(H, p, y)
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
         # Diffusivity with fake C function
-        D .= (Γ * avg(H).^n.* ∇S.^(n-1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
+        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
     elseif model == "UDE_A"
+        #println("Size A: ",size(A))
+        #println("Size H: ",size(H))
+        # A here should have the same number of elements than H
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
         println("Dmax: ", maximum(D))
+    else 
+        println("ERROR: Model $model is incorrect")
+        #throw(DomainError())
     end
 
     # Compute flux components
