@@ -113,7 +113,7 @@ elseif example == "Gaussian"
     Δx = Δy = 50 #m (Δx = Δy)    
 end
 
-### We perform the simulations with an explicit forward model  ###
+### We perform the simulations with an explicit forward mo  ###
 # Gather simulation parameters
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, ELAs, C, α) 
 H = copy(H₀)
@@ -122,9 +122,10 @@ H = copy(H₀)
 if create_ref_dataset 
     H_ref = Dict("H"=>[], "timestamps"=>[1,2,3])
     @time iceflow!(H,H_ref,p,t,t₁)
+else 
+    H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
 end
 
-H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
