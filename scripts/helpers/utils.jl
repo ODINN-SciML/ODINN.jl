@@ -163,6 +163,7 @@ function timestep!(Δts, Δx, D, method)
     end
     # TODO: uncomment once a solution to "Mutating arrays" problem is found
     #append!(Δts, Δt)
+    #println("Δt: ", Δt)
 
     return Δt
 end

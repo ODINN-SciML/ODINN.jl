@@ -121,7 +121,7 @@ H = copy(H₀)
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     H_ref = Dict("H"=>[], "timestamps"=>[1,2,3])
-    @time iceflow_toy!(H,H_ref,p,t,t₁)
+    @time iceflow!(H,H_ref,p,t,t₁)
 end
 
 H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
