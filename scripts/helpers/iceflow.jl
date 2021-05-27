@@ -61,7 +61,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
-        H, H_ref, Δt, current_year, ts_i = update_store_H(H, H_ref, p, y, ts)
+        Δt, current_year, ts_i = update_store_H(H, H_ref, p, y, ts)
              
         t += Δt
         # println("Δt: ", Δt)
@@ -85,10 +85,12 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     let                  
     MB = p[7]
     current_year = 0
-    model = "UDE_A"
+    global model = "UDE_A"
 
     # Manual explicit forward scheme implementation
     while t < t₁
+
+        println("time: ", t)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -102,10 +104,9 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         end
         y = (year, current_year)
 
-        H, Δt, current_year = update_H(H, p, y)
+        Δt, current_year = update_H(H, p, y)
              
         t += Δt
-        #println("time: ", t)
         
     end   
     end
@@ -120,7 +121,7 @@ create and store dataset to be used as a reference
 function update_store_H(H, H_ref, p, y, ts)
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    H, Δt, current_year = SIA(H, p, y)
+    Δt, current_year = SIA(H, p, y)
     t, ts_i = ts
     
     # Store timestamps to be used for training of the UDEs
@@ -132,7 +133,7 @@ function update_store_H(H, H_ref, p, y, ts)
         end            
     end
 
-    return H, H_ref, Δt, current_year, ts_i
+    return Δt, current_year, ts_i
     
 end 
 
@@ -143,9 +144,9 @@ Update the ice thickness by differentiating H based on the Shallow Ice Approxima
 """
 function update_H(H, p, y)
     # Compute the Shallow Ice Approximation in a staggered grid
-    H, Δt, current_year = SIA(H, p, y)
+    Δt, current_year = SIA(H, p, y)
 
-    return H, Δt, current_year
+    return Δt, current_year
     
 end 
 
@@ -160,12 +161,17 @@ function SIA(H, p, y)
 
     # Update glacier surface altimetry
     S = B .+ H
+    println("S: ", maximum(S)) # TODO: CODE CRASHES HERE IF THIS PRINT IS REMOVED
+                                # SOMETHING IS WRONG WITH THE DECLARATION OF 'S'
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
     dSdx  .= diff(S, dims=1) / Δx
     dSdy  .= diff(S, dims=2) / Δy
     ∇S .= sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
+
+    # println("∇S: ", maximum(∇S))
+    # println("model: ", model)
 
     # Compute diffusivity on secondary nodes
     if model == "stantard"
@@ -179,6 +185,7 @@ function SIA(H, p, y)
         D .= (Γ * avg(H).^n.* ∇S.^(n-1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
     elseif model == "UDE_A"
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        println("Dmax: ", maximum(D))
     end
 
     # Compute flux components
@@ -222,7 +229,7 @@ function SIA(H, p, y)
 
     H[2:end - 1,2:end - 1] .= max.(0.0, inn(H) .+ dHdt)
     
-    return H, Δt, current_year
+    return Δt, current_year
 end
 
 # function rrule(::typeof(update_H), H, UA, year, current_year)
@@ -334,6 +341,7 @@ function loss(data, H, p, t, t₁)
 
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
     iceflow!(H, UA, p,t,t₁)
+    println("H: ", maximum(H))
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
     println("l_A: ", l_A)
     println("l_H: ", l_H)
