@@ -29,7 +29,7 @@ C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
 # Configuration of the forward model
 
 # Model 
-model = "fake A" # options are: "standard", "fake A", "fake C" 
+model = "standard" # options are: "standard", "fake A", "fake C" 
 # Method to solve the DE
 method = "explicit-adaptive" #"explicit"
 #method = "explicit" 
