@@ -4,6 +4,8 @@
 
 using Zygote
 using PaddedViews
+using Flux
+using Flux: @epochs
 include("utils.jl")
 
 """
@@ -32,6 +34,7 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     # Train the UDE for a given number of epochs
     H_buff = Zygote.Buffer(H)
     @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H_buff, p, t, t₁)
+
     H = copy(H_buff)  
 end
 
@@ -85,21 +88,23 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     let                  
     MB = p[7]
     current_year = 0
-    global model = "UDE_A"
+    # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
+    #global model = "UDE_A"
 
     # Manual explicit forward scheme implementation
     while t < t₁
 
-        println("time: ", t)
+        #println("time: ", t)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if(year != current_year)
             println("Year ", year)
-            ŶA = UA(vec(buffer_mean(MB, year))')
-            # Unpack and repack tuple with updated A value
-            Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-            p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
+            # TODO: uncomment once we're ready to train UDEs 
+            # ŶA = UA(vec(buffer_mean(MB, year))')
+            # # Unpack and repack tuple with updated A value
+            # Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+            # p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
             current_year = year
         end
         y = (year, current_year)
@@ -177,6 +182,8 @@ function SIA!(H, p, y)
     if model == "standard"
         #                                     ice creep  +  basal sliding
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        println("Dmax: ", maximum(D))
+        #@infiltrate # UNCOMMENT TO DEBUG
     elseif model == "fake A"
         # Diffusivity with fake A function
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
@@ -186,9 +193,8 @@ function SIA!(H, p, y)
     elseif model == "UDE_A"
         #println("Size A: ",size(A))
         #println("Size H: ",size(H))
-        # A here should have the same number of elements than H
+        # A here should have the same shape than H
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        println("Dmax: ", maximum(D))
     else 
         println("ERROR: Model $model is incorrect")
         #throw(DomainError())
@@ -348,6 +354,7 @@ function loss(data, H, p, t, t₁)
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
     iceflow!(H, UA, p,t,t₁)
     println("H: ", maximum(H))
+    @infiltrate
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
     println("l_A: ", l_A)
     println("l_H: ", l_H)

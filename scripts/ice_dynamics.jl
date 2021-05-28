@@ -15,8 +15,9 @@ using ModelingToolkit
 using LinearAlgebra
 using HDF5
 using JLD
-using Flux
-using Flux: @epochs
+using Infiltrator
+# using Flux
+# using Flux: @epochs
 #using BenchmarkTools
 #using PaddedViews
 #using Random
