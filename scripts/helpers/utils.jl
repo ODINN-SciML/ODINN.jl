@@ -9,30 +9,55 @@
 """
     avg(A)
 
-4-point average in a matrix
+4-point average in a matrix with border padding
 """
-@views avg(A)   = 0.25 * ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+function avg(A)
+    println("A in: ", size(A))
+    org_size = size(A)
+    @views A .= 0.25 * ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+    println("A after: ", size(A))
+    A .= PaddedView(0.0, A, org_size, (2,2))
+    println("A out: ", size(A))
+end
 
 """
     avg_x(A)
 
-2-point average on x-axis
+2-point average on x-axis with border padding
 """
-@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
+function avg_x(A)
+    org_size = size(A)
+    @views A .= 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
+    A .= PaddedView(0.0, A, org_size, (0,2))
+end
 
 """
     avg_y(A)
 
-2-point average on y-axis
+2-point average on y-axis with border padding 
 """
-@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
+function avg_y(A)
+    println("A in: ", size(A))
+    org_size = size(A)
+    @views A .= 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
+    println("A after: ", size(A))
+    A .= PaddedView(0.0, A, org_size, (0,2))
+    println("A out: ", size(A))
+end
+
 
 """
     inn(A)
 
 Access inner matrix 
 """
-@views inn(A)   = A[2:end-1,2:end-1];
+@views inn(A) = A[2:end-1,2:end-1];
+
+
+# function gradnorm(dAdx, dAdy)
+#     org_size = size(A)
+#     sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdyy).^2)
+# end
 
 """
     smooth!(A)
