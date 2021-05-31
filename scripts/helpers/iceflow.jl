@@ -6,6 +6,7 @@ using Zygote
 using PaddedViews
 using Flux
 using Flux: @epochs
+using DiffEqOperators
 include("utils.jl")
 
 """
@@ -32,8 +33,8 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
     data = Dict("X"=>X, "Y"=>Y)
     # Train the UDE for a given number of epochs
-    H_buff = Zygote.Buffer(H)
-    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H_buff, p, t, t₁)
+    #H_buff = Zygote.Buffer(H)
+    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
 
     H = copy(H_buff)  
 end
@@ -86,8 +87,15 @@ function iceflow!(H, UA::Chain, p,t,t₁)
 
     # # Retrieve input variables  
     let                  
-    MB = p[7]
     current_year = 0
+    Δx = convert(Float32, p[1])
+    ∂x = CenteredDifference{1}(1, 2, Δx, size(H,1))
+    ∂y = CenteredDifference{2}(1, 2, Δx, size(H,2))
+    ∂²x = CenteredDifference{1}(2, 2, Δx, size(H,1))
+    ∂²y = CenteredDifference{2}(2, 2, Δx, size(H,2))
+
+    Qx, Qy = MultiDimBC(Dirichlet0BC(eltype(H)), size(H))
+    deriv = (∂x,∂y,∂²x,∂²y,Qx,Qy)
     # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
     #global model = "UDE_A"
 
@@ -109,7 +117,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         end
         y = (year, current_year)
 
-        Δt, current_year = update_H(H, p, y)
+        Δt, current_year = update_H(H, p, y, deriv)
              
         t += Δt
         
@@ -123,10 +131,10 @@ end
 Update the ice thickness by differentiating H based on the Shallow Ice Approximation and
 create and store dataset to be used as a reference
 """
-function update_store_H(H, H_ref, p, y, ts)
+function update_store_H(H, H_ref, p, y, ts, deriv)
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y)
+    Δt, current_year = SIA!(H, p, y, deriv)
     t, ts_i = ts
     
     # Store timestamps to be used for training of the UDEs
@@ -143,13 +151,13 @@ function update_store_H(H, H_ref, p, y, ts)
 end 
 
 """
-    update_H(H, p, y)
+    update_H(H, p, y, Δ)
 
 Update the ice thickness by differentiating H based on the Shallow Ice Approximation 
 """
-function update_H(H, p, y)
+function update_H(H, p, y, deriv)
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y)
+    Δt, current_year = SIA!(H, p, y, deriv)
 
     return Δt, current_year
     
@@ -160,20 +168,23 @@ end
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
-function SIA!(H, p, y)
+function SIA!(H, p, y, deriv)
     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
     year, current_year = y
+    ∂x,∂y,∂²x,∂²y,Qx,Qy = deriv
 
     # Update glacier surface altimetry
     S = B .+ H
-    #println("S: ", maximum(S)) # TODO: CODE CRASHES HERE IF THIS PRINT IS REMOVED
-    #                            # SOMETHING IS WRONG WITH THE DECLARATION OF 'S'
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx  .= diff(S, dims=1) / Δx
-    dSdy  .= diff(S, dims=2) / Δy
-    ∇S .= sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
+    #dSdx  .= diff(S, dims=1) / Δx
+    #dSdx .= ∂x*S
+    #dSdy  .= diff(S, dims=2) / Δy
+    #dSdy .= ∂y*S
+    @infiltrate
+    ∇S .= sqrt.(avg_y(∂x*S*Qx).^2 .+ avg_x(∂y*S*Qy).^2)
+    println("∇S: ", size(∇S))
 
     # println("∇S: ", maximum(∇S))
     #println("model: ", model)
@@ -182,10 +193,9 @@ function SIA!(H, p, y)
     if model == "standard"
         #                                     ice creep  +  basal sliding
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        println("Dmax: ", maximum(D))
+        #println("Dmax: ", maximum(D))
         #@infiltrate # UNCOMMENT TO DEBUG
     elseif model == "fake A"
-        # Diffusivity with fake A function
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
         # Diffusivity with fake C function
@@ -206,7 +216,7 @@ function SIA!(H, p, y)
     Fx .= .-avg_y(D) .* dSdx_edges
     Fy .= .-avg_x(D) .* dSdy_edges
     #  Flux divergence
-    F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+    F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) 
     
     # Update or set time step for temporal discretization
     Δt = timestep!(Δts, Δx, D, method)
@@ -354,7 +364,7 @@ function loss(data, H, p, t, t₁)
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
     iceflow!(H, UA, p,t,t₁)
     println("H: ", maximum(H))
-    @infiltrate
+    #@infiltrate
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
     println("l_A: ", l_A)
     println("l_H: ", l_H)
