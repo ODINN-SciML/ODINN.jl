@@ -205,7 +205,7 @@ function timestep!(Δts, Δx, D, method)
         Δt = η * ( Δx^2 / (2 * D_max ))
     elseif method == "explicit"
         ## add this as parameter
-        Δt = 0.001
+        Δt = 0.01
         D_max = maximum(D)
         if Δt / ( Δx^2 / (2 * D_max )) > 1 
             println("Stability condition is not satisfied\n")

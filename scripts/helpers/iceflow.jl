@@ -33,8 +33,8 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
     data = Dict("X"=>X, "Y"=>Y)
     # Train the UDE for a given number of epochs
-    H_buff = Zygote.Buffer(H)
-    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H_buff, p, t, t₁)
+    #H_buff = Zygote.Buffer(H)
+    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
 
     H = copy(H_buff)  
 end
@@ -71,7 +71,8 @@ function loss(data, H, p, t, t₁)
     num = 0
 
     # Make NN predictions
-    w_pc=10e18
+    #w_pc=10e18
+    w_pc = 1
     for y in 1:size(data["X"])[3]
         ŶA = UA(vec(data["X"][:,:,y])')
         
@@ -122,6 +123,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         Δt, current_year, ts_i = update_store_H(H, H_ref, p, y, ts)
              
         t += Δt
+        #append!(Δts,t)
         # println("Δt: ", Δt)
         # println("time: ", t)
          
@@ -161,11 +163,14 @@ function iceflow!(H, UA::Chain, p,t,t₁)
             # p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
             current_year = year
         end
-        y = (year, current_year)
+        y = (year, current_year, step)
 
-        Δt, current_year = update_H(H, p, y)
-             
+        dHdt, Δt, current_year = update_H(H, p, y)
+        push!(Ht, dHdt)
+        
+        #@infiltrate
         t += Δt
+        #append!(Δts,t)
         
     end   
     end
@@ -192,7 +197,7 @@ function update_store_H(H, H_ref, p, y, ts)
         end            
     end
 
-    return Δt, current_year, ts_i
+    return dHdt, Δt, current_year, ts_i
     
 end 
 
@@ -203,9 +208,9 @@ Update the ice thickness by differentiating H based on the Shallow Ice Approxima
 """
 function update_H(H, p, y)
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y)
+    dHdt, Δt, current_year = SIA!(H, p, y)
 
-    return Δt, current_year
+    return dHdt, Δt, current_year
     
 end 
 
@@ -216,23 +221,21 @@ Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 function SIA!(H, p, y)
     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-    year, current_year = y
+    year, current_year, step = y
 
     # Update glacier surface altimetry
     S = B .+ H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx  .= diff(padx(S), dims=1) / Δx
-    dSdy  .= diff(pady(S), dims=2) / Δy
-    ∇S .= sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
-
-    #@infiltrate
+    dSdx  = diff(padx(S), dims=1) / Δx
+    dSdy  = diff(pady(S), dims=2) / Δy
+    ∇S = sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
 
     # Compute diffusivity on secondary nodes
     if model == "standard"
         #                                     ice creep  +  basal sliding
-        D .= (Γ * avg(pad(copy(H))).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(copy(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake A"
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
@@ -247,16 +250,16 @@ function SIA!(H, p, y)
     end
 
     # Compute flux components
-    Fx .= .-avg_y(pady(D)) .* dSdx
-    Fy .= .-avg_x(padx(D)) .* dSdy
+    Fx = .-avg_y(pady(D)) .* dSdx
+    Fy = .-avg_x(padx(D)) .* dSdy
     #  Flux divergence
-    F .= .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy) 
+    F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy) 
     
     # Update or set time step for temporal discretization
     Δt = timestep!(Δts, Δx, D, method)
 
-    #  Update the glacier ice thickness          
-    dHdt .= (F .+ MB[:,:,year]) .* Δt  
+    #  Update the glacier ice thickness      
+    dHdt = sparse((F .+ MB[:,:,year]) .* Δt)  
 
     # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
     # TODO: Investigate how to correctly update H with Zygote.Buffer
@@ -283,9 +286,15 @@ function SIA!(H, p, y)
     #     end
     # end
 
-    H .= max.(0.0, H .+ dHdt)
+    # We store each timestep as a Sparse Matrix
+    # push!(Ht, sparse(max.(0.0, H .+ dHdt)))
+    # if(length(Ht)%100 == 0)
+    #     println("Ht: ", length(Ht))
+    # end
+
+    #H .= max.(0.0, H .+ dHdt)
     
-    return Δt, current_year
+    return dHdt, Δt, current_year
 end
 
 # function rrule(::typeof(update_H), H, UA, year, current_year)

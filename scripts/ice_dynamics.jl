@@ -10,6 +10,7 @@ SINDy (Brunton et al., 2016).
 cd(@__DIR__)
 using Pkg; Pkg.activate("../."); Pkg.instantiate()
 using Plots; gr()
+using SparseArrays
 using Statistics
 using ModelingToolkit
 using LinearAlgebra
@@ -87,17 +88,18 @@ example = "Argentiere"
 if example == "Argentiere"
 
     # Grid initialization
-    dSdx       = zeros(nx, ny)
-    dSdy       = zeros(nx ,ny)
-    dSdx_edges = zeros(nx ,ny)
-    dSdy_edges = zeros(nx ,ny)
-    ∇S         = zeros(nx, ny)
-    D          = zeros(nx, ny)
-    Fx         = zeros(nx, ny)
-    Fy         = zeros(nx, ny)
-    F          = zeros(nx, ny)
-    dHdt       = zeros(nx, ny)
-    MB         = zeros(nx, ny);
+    dSdx       = Zygote.Buffer(zeros(nx, ny))
+    dSdy       = Zygote.Buffer(zeros(nx ,ny))
+    dSdx_edges = Zygote.Buffer(zeros(nx ,ny))
+    dSdy_edges = Zygote.Buffer(zeros(nx ,ny))
+    ∇S         = Zygote.Buffer(zeros(nx, ny))
+    D          = Zygote.Buffer(zeros(nx, ny))
+    Fx         = Zygote.Buffer(zeros(nx, ny))
+    Fy         = Zygote.Buffer(zeros(nx, ny))
+    F          = Zygote.Buffer(zeros(nx, ny))
+    dHdt       = Zygote.Buffer(zeros(nx, ny))
+    MB         = Zygote.Buffer(zeros(nx, ny))
+    Ht         = Zygote.Buffer([])
     
     B  = copy(argentiere.bed)
     H₀ = copy(argentiere.thick[:,:,1])
@@ -128,7 +130,6 @@ if create_ref_dataset
 else 
     H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
 end
-
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE

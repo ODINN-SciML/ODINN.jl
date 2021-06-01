@@ -40,7 +40,6 @@ method = "explicit"
 #η = 0.2   
 
 # Time 
-#Δt = 0.001 # requiered for "explicit" / It need to be added to p
 t = 0
 Δts = []
 t₁ = 2.01 # number of simulation years 
