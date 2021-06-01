@@ -88,14 +88,6 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     # # Retrieve input variables  
     let                  
     current_year = 0
-    Δx = convert(Float32, p[1])
-    ∂x = CenteredDifference{1}(1, 2, Δx, size(H,1))
-    ∂y = CenteredDifference{2}(1, 2, Δx, size(H,2))
-    ∂²x = CenteredDifference{1}(2, 2, Δx, size(H,1))
-    ∂²y = CenteredDifference{2}(2, 2, Δx, size(H,2))
-
-    Qx, Qy = MultiDimBC(Dirichlet0BC(eltype(H)), size(H))
-    deriv = (∂x,∂y,∂²x,∂²y,Qx,Qy)
     # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
     #global model = "UDE_A"
 
@@ -117,7 +109,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         end
         y = (year, current_year)
 
-        Δt, current_year = update_H(H, p, y, deriv)
+        Δt, current_year = update_H(H, p, y)
              
         t += Δt
         
@@ -155,9 +147,9 @@ end
 
 Update the ice thickness by differentiating H based on the Shallow Ice Approximation 
 """
-function update_H(H, p, y, deriv)
+function update_H(H, p, y)
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y, deriv)
+    Δt, current_year = SIA!(H, p, y)
 
     return Δt, current_year
     
@@ -168,23 +160,20 @@ end
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
-function SIA!(H, p, y, deriv)
+function SIA!(H, p, y)
     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
     year, current_year = y
-    ∂x,∂y,∂²x,∂²y,Qx,Qy = deriv
 
     # Update glacier surface altimetry
     S = B .+ H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    #dSdx  .= diff(S, dims=1) / Δx
-    #dSdx .= ∂x*S
-    #dSdy  .= diff(S, dims=2) / Δy
-    #dSdy .= ∂y*S
-    @infiltrate
-    ∇S .= sqrt.(avg_y(∂x*S*Qx).^2 .+ avg_x(∂y*S*Qy).^2)
-    println("∇S: ", size(∇S))
+    println("S: ", size(S))
+    dSdx  .= diff(padx(S), dims=1) / Δx
+    dSdy  .= diff(pady(S), dims=2) / Δy
+    println("dSdx: ", size(dSdx))
+    ∇S .= sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
 
     # println("∇S: ", maximum(∇S))
     #println("model: ", model)
@@ -192,7 +181,7 @@ function SIA!(H, p, y, deriv)
     # Compute diffusivity on secondary nodes
     if model == "standard"
         #                                     ice creep  +  basal sliding
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D .= (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
         #println("Dmax: ", maximum(D))
         #@infiltrate # UNCOMMENT TO DEBUG
     elseif model == "fake A"
@@ -211,18 +200,16 @@ function SIA!(H, p, y, deriv)
     end
 
     # Compute flux components
-    dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
-    dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
-    Fx .= .-avg_y(D) .* dSdx_edges
-    Fy .= .-avg_x(D) .* dSdy_edges
+    Fx .= .-avg_y(pady(D)) .* dSdx
+    Fy .= .-avg_x(padx(D)) .* dSdy
     #  Flux divergence
-    F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) 
+    F .= .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy) 
     
     # Update or set time step for temporal discretization
     Δt = timestep!(Δts, Δx, D, method)
 
     #  Update the glacier ice thickness          
-    dHdt = (F .+ inn(MB[:,:,year])) .* Δt  
+    dHdt .= (F .+ MB[:,:,year]) .* Δt  
 
     # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
     # TODO: Investigate how to correctly update H with Zygote.Buffer
@@ -249,7 +236,7 @@ function SIA!(H, p, y, deriv)
     #     end
     # end
 
-    H[2:end - 1,2:end - 1] .= max.(0.0, inn(H) .+ dHdt)
+    H .= max.(0.0, H .+ dHdt)
     
     return Δt, current_year
 end
