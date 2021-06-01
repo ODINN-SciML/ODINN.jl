@@ -9,41 +9,68 @@
 """
     avg(A)
 
-4-point average in a matrix with border padding
+4-point average in a matrix 
 """
-function avg(A)
-    println("A in: ", size(A))
-    org_size = size(A)
-    @views A .= 0.25 * ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
-    println("A after: ", size(A))
-    A .= PaddedView(0.0, A, org_size, (2,2))
-    println("A out: ", size(A))
-end
+@views avg(A) = 0.25 * ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
 
 """
     avg_x(A)
 
-2-point average on x-axis with border padding
+2-point average on x-axis 
 """
-function avg_x(A)
-    org_size = size(A)
-    @views A .= 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
-    A .= PaddedView(0.0, A, org_size, (0,2))
-end
+@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
 
-"""
+ """
     avg_y(A)
 
-2-point average on y-axis with border padding 
+2-point average on y-axis 
 """
-function avg_y(A)
-    println("A in: ", size(A))
-    org_size = size(A)
-    @views A .= 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
-    println("A after: ", size(A))
-    A .= PaddedView(0.0, A, org_size, (0,2))
-    println("A out: ", size(A))
-end
+@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
+
+"""
+    pad(A, s) 
+
+Zero padding around a matrix A
+"""
+@views pad(A) = PaddedView(0.0, A, (size(A,1)+1,size(A,2)+1), (2,2))
+
+"""
+    pad_x(A, s) 
+
+Zero padding around a matrix A on x-axis
+"""
+@views padx(A, pad=1) = PaddedView(0.0, A, (size(A,1)+pad,size(A,2)), (2,0))
+
+"""
+    pad_y(A, s) 
+
+Zero padding around a matrix A on y-axis 
+"""
+@views pady(A, pad=1) = PaddedView(0.0, A, (size(A,1),size(A,2)+pad), (0,2))
+
+# """
+#     avgg_x(A)
+
+# 2-point average of gradients on x-axis with border padding
+# """
+# function avgg_x(A)
+#     org_size = (size(A,1), size(A,2)+1)
+#     @views A = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
+#     @views A = PaddedView(0.0, A, org_size, (0,2))
+#     return A
+# end
+
+# """
+#     avgg_y(A)
+
+# 2-point average of gradients on y-axis with border padding 
+# """
+# function avgg_y(A)
+#     org_size = (size(A,1)+1, size(A,2))
+#     @views A = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
+#     @views A = PaddedView(0.0, A, org_size, (0,2))
+#     return A
+# end
 
 
 """

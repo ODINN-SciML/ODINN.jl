@@ -87,15 +87,17 @@ example = "Argentiere"
 if example == "Argentiere"
 
     # Grid initialization
-    dSdx    = zeros(nx-1, ny  )
-    dSdy    = zeros(nx  , ny-1)
-    ∇S      = zeros(nx-1, ny-1)
-    D       = zeros(nx-1, ny-1)
-    Fx      = zeros(nx-1, ny-2)
-    Fy      = zeros(nx-2, ny-1)
-    F       = zeros(nx-2, ny-2)
-    dHdt    = zeros(nx-2, ny-2)
-    MB      = zeros(nx,   ny);
+    dSdx       = zeros(nx, ny)
+    dSdy       = zeros(nx ,ny)
+    dSdx_edges = zeros(nx ,ny)
+    dSdy_edges = zeros(nx ,ny)
+    ∇S         = zeros(nx, ny)
+    D          = zeros(nx, ny)
+    Fx         = zeros(nx, ny)
+    Fy         = zeros(nx, ny)
+    F          = zeros(nx, ny)
+    dHdt       = zeros(nx, ny)
+    MB         = zeros(nx, ny);
     
     B  = copy(argentiere.bed)
     H₀ = copy(argentiere.thick[:,:,1])
