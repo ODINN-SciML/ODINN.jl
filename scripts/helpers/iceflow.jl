@@ -33,11 +33,65 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
     data = Dict("X"=>X, "Y"=>Y)
     # Train the UDE for a given number of epochs
-    #H_buff = Zygote.Buffer(H)
-    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
+    H_buff = Zygote.Buffer(H)
+    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H_buff, p, t, t₁)
 
     H = copy(H_buff)  
 end
+
+"""
+    hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
+
+Train hybrid ice flow model based on UDEs.
+"""
+function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
+    # Retrieve model parameters
+    ps_UA = Params(ps_UA)
+
+    # back is a method that computes the product of the gradient so far with its argument.
+    train_loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
+    # Callback to track the training
+    callback(train_loss_UA)
+    # Apply back() to the correct type of 1.0 to get the gradient of loss.
+    gs_UA = back_UA(one(train_loss_UA))
+    # Insert what ever code you want here that needs gradient.
+    # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
+    Flux.update!(opt, ps_UA, gs_UA)
+    # Here you might like to check validation set accuracy, and break out to do early stopping.
+end
+
+"""
+    loss(batch)
+
+Computes the loss function for a specific batch.
+"""
+# We determine the loss function
+function loss(data, H, p, t, t₁)
+    l_H, l_A = 0.0f0, 0.0f0
+    num = 0
+
+    # Make NN predictions
+    w_pc=10e18
+    for y in 1:size(data["X"])[3]
+        ŶA = UA(vec(data["X"][:,:,y])')
+        
+        # Constrain A parameter within physically plausible values        
+        l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
+    end
+
+    # Compute l_H as the difference between the simulated H with UA(x) and H_ref
+    println("Forward pass")
+    iceflow!(H, UA, p,t,t₁)
+    #println("H: ", maximum(H))
+    #@infiltrate
+    l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
+    println("l_A: ", l_A)
+    println("l_H: ", l_H)
+    l = l_H + l_A
+
+    return l
+end
+
 
 """
     iceflow!(H,p,t,t₁)
@@ -123,10 +177,10 @@ end
 Update the ice thickness by differentiating H based on the Shallow Ice Approximation and
 create and store dataset to be used as a reference
 """
-function update_store_H(H, H_ref, p, y, ts, deriv)
+function update_store_H(H, H_ref, p, y, ts)
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y, deriv)
+    Δt, current_year = SIA!(H, p, y)
     t, ts_i = ts
     
     # Store timestamps to be used for training of the UDEs
@@ -169,29 +223,22 @@ function SIA!(H, p, y)
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    println("S: ", size(S))
     dSdx  .= diff(padx(S), dims=1) / Δx
     dSdy  .= diff(pady(S), dims=2) / Δy
-    println("dSdx: ", size(dSdx))
     ∇S .= sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
 
-    # println("∇S: ", maximum(∇S))
-    #println("model: ", model)
+    #@infiltrate
 
     # Compute diffusivity on secondary nodes
     if model == "standard"
         #                                     ice creep  +  basal sliding
-        D .= (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        #println("Dmax: ", maximum(D))
-        #@infiltrate # UNCOMMENT TO DEBUG
+        D .= (Γ * avg(pad(copy(H))).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(copy(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake A"
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
         # Diffusivity with fake C function
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
     elseif model == "UDE_A"
-        #println("Size A: ",size(A))
-        #println("Size H: ",size(H))
         # A here should have the same shape than H
         D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     else 
@@ -329,37 +376,6 @@ function create_NNs()
     return hyparams, UA
 end
 
-"""
-    loss(batch)
-
-Computes the loss function for a specific batch.
-"""
-# We determine the loss function
-function loss(data, H, p, t, t₁)
-    l_H, l_A = 0.0f0, 0.0f0
-    num = 0
-
-    # Make NN predictions
-    w_pc=10e18
-    for y in 1:size(data["X"])[3]
-        ŶA = UA(vec(data["X"][:,:,y])')
-        
-        # Constrain A parameter within physically plausible values        
-        l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
-    end
-
-    # Compute l_H as the difference between the simulated H with UA(x) and H_ref
-    iceflow!(H, UA, p,t,t₁)
-    println("H: ", maximum(H))
-    #@infiltrate
-    l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
-    println("l_A: ", l_A)
-    println("l_H: ", l_H)
-    l = l_H + l_A
-
-    return l
-end
-
 # Container to track the losses
 losses = Float32[]
 
@@ -377,23 +393,3 @@ callback(l) = begin
     false
 end
 
-"""
-    hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
-
-Train hybrid ice flow model based on UDEs.
-"""
-function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
-    # Retrieve model parameters
-    ps_UA = Params(ps_UA)
-
-    # back is a method that computes the product of the gradient so far with its argument.
-    train_loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
-    # Callback to track the training
-    callback(train_loss_UA)
-    # Apply back() to the correct type of 1.0 to get the gradient of loss.
-    gs_UA = back_UA(one(train_loss_UA))
-    # Insert what ever code you want here that needs gradient.
-    # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
-    Flux.update!(opt, ps_UA, gs_UA)
-    # Here you might like to check validation set accuracy, and break out to do early stopping.
-end
