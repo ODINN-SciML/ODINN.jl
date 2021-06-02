@@ -48,31 +48,6 @@ Zero padding around a matrix A on y-axis
 """
 @views pady(A, pad=1) = PaddedView(0.0, A, (size(A,1),size(A,2)+pad), (0,2))
 
-# """
-#     avgg_x(A)
-
-# 2-point average of gradients on x-axis with border padding
-# """
-# function avgg_x(A)
-#     org_size = (size(A,1), size(A,2)+1)
-#     @views A = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
-#     @views A = PaddedView(0.0, A, org_size, (0,2))
-#     return A
-# end
-
-# """
-#     avgg_y(A)
-
-# 2-point average of gradients on y-axis with border padding 
-# """
-# function avgg_y(A)
-#     org_size = (size(A,1)+1, size(A,2))
-#     @views A = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
-#     @views A = PaddedView(0.0, A, org_size, (0,2))
-#     return A
-# end
-
-
 """
     inn(A)
 
@@ -205,10 +180,10 @@ function timestep!(Δts, Δx, D, method)
         Δt = η * ( Δx^2 / (2 * D_max ))
     elseif method == "explicit"
         ## add this as parameter
-        Δt = 0.01
+        Δt = 0.001
         D_max = maximum(D)
         if Δt / ( Δx^2 / (2 * D_max )) > 1 
-            println("Stability condition is not satisfied\n")
+            #println("Stability condition is not satisfied\n")
         end
     elseif method == "implicit"
         println("Implicit method not yet implemented\n")

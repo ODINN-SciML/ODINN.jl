@@ -79,7 +79,7 @@ hm02 = heatmap(argentiere.thick[:,:,1], c = :ice, title="Ice thickness")
 hm03 = heatmap(argentiere.vel[:,:,15], c =:speed, title="Ice velocities")
 hm04 = heatmap(MB_plot[:,:,90], c = cgrad(:balance,rev=true), clim=(-12,12), title="Mass balance")
 hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
-display(hm0)
+#display(hm0)
 
 #### Choose the example to run  #####
 example = "Argentiere"

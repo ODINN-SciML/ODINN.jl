@@ -7,6 +7,7 @@ using PaddedViews
 using Flux
 using Flux: @epochs
 using DiffEqOperators
+using Tullio
 include("utils.jl")
 
 """
@@ -56,7 +57,8 @@ function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
     gs_UA = back_UA(one(train_loss_UA))
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
-    Flux.update!(opt, ps_UA, gs_UA)
+    #@infiltrate
+    #Flux.update!(opt, ps_UA, gs_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
 end
 
@@ -89,6 +91,8 @@ function loss(data, H, p, t, t₁)
     println("l_A: ", l_A)
     println("l_H: ", l_H)
     l = l_H + l_A
+
+    println("Backpropagation")
 
     return l
 end
@@ -144,8 +148,9 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     # # Retrieve input variables  
     let                  
     current_year = 0
+    MB = p[7]
     # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
-    #global model = "UDE_A"
+    # global model = "UDE_A"
 
     # Manual explicit forward scheme implementation
     while t < t₁
@@ -156,7 +161,8 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         year = floor(Int, t) + 1
         if(year != current_year)
             println("Year ", year)
-            # TODO: uncomment once we're ready to train UDEs 
+            # # TODO: uncomment once we're ready to train UDEs 
+            # @infiltrate
             # ŶA = UA(vec(buffer_mean(MB, year))')
             # # Unpack and repack tuple with updated A value
             # Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
@@ -165,8 +171,10 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         end
         y = (year, current_year, step)
 
-        dHdt, Δt, current_year = update_H(H, p, y)
-        push!(Ht, dHdt)
+        dHdt, Δt, current_year = dH(H, p, y)
+        H_ = copy(H)
+        @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j])
+        #push!(Ht, dHdt)
         
         #@infiltrate
         t += Δt
@@ -206,7 +214,7 @@ end
 
 Update the ice thickness by differentiating H based on the Shallow Ice Approximation 
 """
-function update_H(H, p, y)
+function dH(H, p, y)
     # Compute the Shallow Ice Approximation in a staggered grid
     dHdt, Δt, current_year = SIA!(H, p, y)
 
@@ -237,13 +245,13 @@ function SIA!(H, p, y)
         #                                     ice creep  +  basal sliding
         D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake A"
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D = (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
         # Diffusivity with fake C function
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
+        D = (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
     elseif model == "UDE_A"
         # A here should have the same shape than H
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (avg(pad(reshape(A, size(H)))) .* avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     else 
         println("ERROR: Model $model is incorrect")
         #throw(DomainError())
@@ -253,13 +261,14 @@ function SIA!(H, p, y)
     Fx = .-avg_y(pady(D)) .* dSdx
     Fy = .-avg_x(padx(D)) .* dSdy
     #  Flux divergence
-    F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy) 
+    F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy)
     
     # Update or set time step for temporal discretization
     Δt = timestep!(Δts, Δx, D, method)
 
     #  Update the glacier ice thickness      
-    dHdt = sparse((F .+ MB[:,:,year]) .* Δt)  
+    #dHdt = sparse((F .+ Zygote.Buffer(MB[:,:,year])) .* Δt)  
+    @tullio dHdt[i,j] := (F[i,j] + MB[i,j,year]) * Δt
 
     # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
     # TODO: Investigate how to correctly update H with Zygote.Buffer
@@ -296,21 +305,6 @@ function SIA!(H, p, y)
     
     return dHdt, Δt, current_year
 end
-
-# function rrule(::typeof(update_H), H, UA, year, current_year)
-#     function update_pullback(H, UA)
-#         b̄ = zero(ā)
-#         for i in 1:length(a)
-#             for d in 0:m-1
-#                 if i-d > 0
-#                     b̄[i] += (m-d) * ā[i-d]
-#                 end
-#             end
-#         end
-#         return NO_FIELDS, b̄, DoesNotExist()
-#     end
-#     return updatestate(a, m), update_pullback
-# end;
 
 """
     C_fake(MB, ∇S)
