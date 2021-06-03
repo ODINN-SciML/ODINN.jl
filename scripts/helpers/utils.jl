@@ -143,7 +143,7 @@ function closest_index(x, val)
 Perform the mean of the last 5 elements of an Array
 """
 function buffer_mean(A, i)
-    A_buffer = zeros(size(A[:,:,1]))
+    A_buffer = Zygote.Buffer(zeros(size(A[:,:,1])))
 
     if(i-5 < 1)
         j = 1
@@ -161,7 +161,7 @@ function buffer_mean(A, i)
 
     #println("A_buffer: ", size(A_buffer))
 
-    return A_buffer
+    return copy(A_buffer)
 end
 
 """

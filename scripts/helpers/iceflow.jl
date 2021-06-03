@@ -37,7 +37,7 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     #H_buff = Zygote.Buffer(H)
     @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
 
-    H = copy(H_buff)  
+    #H = copy(H_buff)  
 end
 
 """
@@ -50,15 +50,17 @@ function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
     ps_UA = Params(ps_UA)
 
     # back is a method that computes the product of the gradient so far with its argument.
+    println("Forward pass")
     train_loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
     # Callback to track the training
     callback(train_loss_UA)
     # Apply back() to the correct type of 1.0 to get the gradient of loss.
-    gs_UA = back_UA(one(train_loss_UA))
+    println("Backpropagation")
+    @time gs_UA = back_UA(one(train_loss_UA))
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
-    #@infiltrate
-    #Flux.update!(opt, ps_UA, gs_UA)
+    @infiltrate
+    Flux.update!(opt, ps_UA, gs_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
 end
 
@@ -83,7 +85,6 @@ function loss(data, H, p, t, t₁)
     end
 
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
-    println("Forward pass")
     iceflow!(H, UA, p,t,t₁)
     #println("H: ", maximum(H))
     #@infiltrate
@@ -91,8 +92,6 @@ function loss(data, H, p, t, t₁)
     println("l_A: ", l_A)
     println("l_H: ", l_H)
     l = l_H + l_A
-
-    println("Backpropagation")
 
     return l
 end
@@ -149,8 +148,9 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     let                  
     current_year = 0
     MB = p[7]
+    dHdt_ = zeros(nx, ny)
     # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
-    # global model = "UDE_A"
+    global model = "UDE_A"
 
     # Manual explicit forward scheme implementation
     while t < t₁
@@ -161,19 +161,28 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         year = floor(Int, t) + 1
         if(year != current_year)
             println("Year ", year)
-            # # TODO: uncomment once we're ready to train UDEs 
-            # @infiltrate
-            # ŶA = UA(vec(buffer_mean(MB, year))')
-            # # Unpack and repack tuple with updated A value
-            # Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-            # p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
+            # Predict A with the NN
+            ŶA = UA(vec(buffer_mean(MB, year))')
+            # Unpack and repack tuple with updated A value
+            Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
             current_year = year
         end
-        y = (year, current_year, step)
+        y = (year, current_year)
 
-        dHdt, Δt, current_year = dH(H, p, y)
+        # Compute ice flux following the Shallow Ice Approximation PDE
+        F, dτ, current_year = SIA(H, p, y)
+
+        # Compute the residual ice thickness for the inertia
+        @infiltrate
+        @tullio ResH := -(H[i,j] - H_[i,j])/Δt + F[i,j] + MB[i,j,year]
+        @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+
+        println("dHdt: ", maximum(dHdt))
+        dHdt_ = copy(dHdt)
         H_ = copy(H)
-        @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j])
+        # Update the ice thickness
+        @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j]*dτ)
         #push!(Ht, dHdt)
         
         #@infiltrate
@@ -193,7 +202,7 @@ create and store dataset to be used as a reference
 function update_store_H(H, H_ref, p, y, ts)
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y)
+    Δt, current_year = SIA(H, p, y)
     t, ts_i = ts
     
     # Store timestamps to be used for training of the UDEs
@@ -216,7 +225,7 @@ Update the ice thickness by differentiating H based on the Shallow Ice Approxima
 """
 function dH(H, p, y)
     # Compute the Shallow Ice Approximation in a staggered grid
-    dHdt, Δt, current_year = SIA!(H, p, y)
+    dHdt, Δt, current_year = SIA(H, p, y)
 
     return dHdt, Δt, current_year
     
@@ -227,9 +236,9 @@ end
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
-function SIA!(H, p, y)
+function SIA(H, p, y)
     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-    year, current_year, step = y
+    year, current_year = y
 
     # Update glacier surface altimetry
     S = B .+ H
@@ -264,11 +273,11 @@ function SIA!(H, p, y)
     F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy)
     
     # Update or set time step for temporal discretization
-    Δt = timestep!(Δts, Δx, D, method)
+    #Δt = timestep!(Δts, Δx, D, method)
+    dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))
 
     #  Update the glacier ice thickness      
-    #dHdt = sparse((F .+ Zygote.Buffer(MB[:,:,year])) .* Δt)  
-    @tullio dHdt[i,j] := (F[i,j] + MB[i,j,year]) * Δt
+    #@tullio dHdt[i,j] := (F[i,j] + MB[i,j,year]) * Δt
 
     # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
     # TODO: Investigate how to correctly update H with Zygote.Buffer
@@ -303,7 +312,7 @@ function SIA!(H, p, y)
 
     #H .= max.(0.0, H .+ dHdt)
     
-    return dHdt, Δt, current_year
+    return F, dτ, current_year
 end
 
 """
