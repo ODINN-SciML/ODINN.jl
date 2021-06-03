@@ -48,31 +48,6 @@ Zero padding around a matrix A on y-axis
 """
 @views pady(A, pad=1) = PaddedView(0.0, A, (size(A,1),size(A,2)+pad), (0,2))
 
-# """
-#     avgg_x(A)
-
-# 2-point average of gradients on x-axis with border padding
-# """
-# function avgg_x(A)
-#     org_size = (size(A,1), size(A,2)+1)
-#     @views A = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
-#     @views A = PaddedView(0.0, A, org_size, (0,2))
-#     return A
-# end
-
-# """
-#     avgg_y(A)
-
-# 2-point average of gradients on y-axis with border padding 
-# """
-# function avgg_y(A)
-#     org_size = (size(A,1)+1, size(A,2))
-#     @views A = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
-#     @views A = PaddedView(0.0, A, org_size, (0,2))
-#     return A
-# end
-
-
 """
     inn(A)
 
@@ -168,7 +143,7 @@ function closest_index(x, val)
 Perform the mean of the last 5 elements of an Array
 """
 function buffer_mean(A, i)
-    A_buffer = zeros(size(A[:,:,1]))
+    A_buffer = Zygote.Buffer(zeros(size(A[:,:,1])))
 
     if(i-5 < 1)
         j = 1
@@ -186,7 +161,7 @@ function buffer_mean(A, i)
 
     #println("A_buffer: ", size(A_buffer))
 
-    return A_buffer
+    return copy(A_buffer)
 end
 
 """
@@ -208,7 +183,7 @@ function timestep!(Δts, Δx, D, method)
         Δt = 0.001
         D_max = maximum(D)
         if Δt / ( Δx^2 / (2 * D_max )) > 1 
-            println("Stability condition is not satisfied\n")
+            #println("Stability condition is not satisfied\n")
         end
     elseif method == "implicit"
         println("Implicit method not yet implemented\n")

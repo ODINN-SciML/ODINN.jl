@@ -7,6 +7,7 @@ using PaddedViews
 using Flux
 using Flux: @epochs
 using DiffEqOperators
+using Tullio
 include("utils.jl")
 
 """
@@ -36,8 +37,65 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     #H_buff = Zygote.Buffer(H)
     @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
 
-    H = copy(H_buff)  
+    #H = copy(H_buff)  
 end
+
+"""
+    hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
+
+Train hybrid ice flow model based on UDEs.
+"""
+function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
+    # Retrieve model parameters
+    ps_UA = Params(ps_UA)
+
+    # back is a method that computes the product of the gradient so far with its argument.
+    println("Forward pass")
+    train_loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
+    # Callback to track the training
+    callback(train_loss_UA)
+    # Apply back() to the correct type of 1.0 to get the gradient of loss.
+    println("Backpropagation")
+    @time gs_UA = back_UA(one(train_loss_UA))
+    # Insert what ever code you want here that needs gradient.
+    # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
+    @infiltrate
+    Flux.update!(opt, ps_UA, gs_UA)
+    # Here you might like to check validation set accuracy, and break out to do early stopping.
+end
+
+"""
+    loss(batch)
+
+Computes the loss function for a specific batch.
+"""
+# We determine the loss function
+function loss(data, H, p, t, t₁)
+    l_H, l_A = 0.0f0, 0.0f0
+    num = 0
+
+    # Make NN predictions
+    #w_pc=10e18
+    w_pc = 1
+    for y in 1:size(data["X"])[3]
+        ŶA = UA(vec(data["X"][:,:,y])')
+        
+        # Constrain A parameter within physically plausible values        
+        l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
+    end
+
+    # Compute l_H as the difference between the simulated H with UA(x) and H_ref
+    iceflow!(H, UA, p,t,t₁)
+    #println("H: ", maximum(H))
+    #@infiltrate
+    l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
+    println("l_A: ", l_A)
+    println("l_H: ", l_H)
+    l = l_H + l_A
+
+    return l
+end
+
 
 """
     iceflow!(H,p,t,t₁)
@@ -68,6 +126,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         Δt, current_year, ts_i = update_store_H(H, H_ref, p, y, ts)
              
         t += Δt
+        #append!(Δts,t)
         # println("Δt: ", Δt)
         # println("time: ", t)
          
@@ -88,8 +147,10 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     # # Retrieve input variables  
     let                  
     current_year = 0
+    MB = p[7]
+    dHdt_ = zeros(nx, ny)
     # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
-    #global model = "UDE_A"
+    global model = "UDE_A"
 
     # Manual explicit forward scheme implementation
     while t < t₁
@@ -100,18 +161,33 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         year = floor(Int, t) + 1
         if(year != current_year)
             println("Year ", year)
-            # TODO: uncomment once we're ready to train UDEs 
-            # ŶA = UA(vec(buffer_mean(MB, year))')
-            # # Unpack and repack tuple with updated A value
-            # Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-            # p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
+            # Predict A with the NN
+            ŶA = UA(vec(buffer_mean(MB, year))')
+            # Unpack and repack tuple with updated A value
+            Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
             current_year = year
         end
         y = (year, current_year)
 
-        Δt, current_year = update_H(H, p, y)
-             
+        # Compute ice flux following the Shallow Ice Approximation PDE
+        F, dτ, current_year = SIA(H, p, y)
+
+        # Compute the residual ice thickness for the inertia
+        @infiltrate
+        @tullio ResH := -(H[i,j] - H_[i,j])/Δt + F[i,j] + MB[i,j,year]
+        @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+
+        println("dHdt: ", maximum(dHdt))
+        dHdt_ = copy(dHdt)
+        H_ = copy(H)
+        # Update the ice thickness
+        @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j]*dτ)
+        #push!(Ht, dHdt)
+        
+        #@infiltrate
         t += Δt
+        #append!(Δts,t)
         
     end   
     end
@@ -123,10 +199,10 @@ end
 Update the ice thickness by differentiating H based on the Shallow Ice Approximation and
 create and store dataset to be used as a reference
 """
-function update_store_H(H, H_ref, p, y, ts, deriv)
+function update_store_H(H, H_ref, p, y, ts)
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y, deriv)
+    Δt, current_year = SIA(H, p, y)
     t, ts_i = ts
     
     # Store timestamps to be used for training of the UDEs
@@ -138,7 +214,7 @@ function update_store_H(H, H_ref, p, y, ts, deriv)
         end            
     end
 
-    return Δt, current_year, ts_i
+    return dHdt, Δt, current_year, ts_i
     
 end 
 
@@ -147,11 +223,11 @@ end
 
 Update the ice thickness by differentiating H based on the Shallow Ice Approximation 
 """
-function update_H(H, p, y)
+function dH(H, p, y)
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA!(H, p, y)
+    dHdt, Δt, current_year = SIA(H, p, y)
 
-    return Δt, current_year
+    return dHdt, Δt, current_year
     
 end 
 
@@ -160,7 +236,7 @@ end
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
-function SIA!(H, p, y)
+function SIA(H, p, y)
     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
     year, current_year = y
 
@@ -169,47 +245,39 @@ function SIA!(H, p, y)
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    println("S: ", size(S))
-    dSdx  .= diff(padx(S), dims=1) / Δx
-    dSdy  .= diff(pady(S), dims=2) / Δy
-    println("dSdx: ", size(dSdx))
-    ∇S .= sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
-
-    # println("∇S: ", maximum(∇S))
-    #println("model: ", model)
+    dSdx  = diff(padx(S), dims=1) / Δx
+    dSdy  = diff(pady(S), dims=2) / Δy
+    ∇S = sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
 
     # Compute diffusivity on secondary nodes
     if model == "standard"
         #                                     ice creep  +  basal sliding
-        D .= (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        #println("Dmax: ", maximum(D))
-        #@infiltrate # UNCOMMENT TO DEBUG
+        D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake A"
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D = (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
         # Diffusivity with fake C function
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
+        D = (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
     elseif model == "UDE_A"
-        #println("Size A: ",size(A))
-        #println("Size H: ",size(H))
         # A here should have the same shape than H
-        D .= (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (avg(pad(reshape(A, size(H)))) .* avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     else 
         println("ERROR: Model $model is incorrect")
         #throw(DomainError())
     end
 
     # Compute flux components
-    Fx .= .-avg_y(pady(D)) .* dSdx
-    Fy .= .-avg_x(padx(D)) .* dSdy
+    Fx = .-avg_y(pady(D)) .* dSdx
+    Fy = .-avg_x(padx(D)) .* dSdy
     #  Flux divergence
-    F .= .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy) 
+    F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy)
     
     # Update or set time step for temporal discretization
-    Δt = timestep!(Δts, Δx, D, method)
+    #Δt = timestep!(Δts, Δx, D, method)
+    dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))
 
-    #  Update the glacier ice thickness          
-    dHdt .= (F .+ MB[:,:,year]) .* Δt  
+    #  Update the glacier ice thickness      
+    #@tullio dHdt[i,j] := (F[i,j] + MB[i,j,year]) * Δt
 
     # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
     # TODO: Investigate how to correctly update H with Zygote.Buffer
@@ -236,25 +304,16 @@ function SIA!(H, p, y)
     #     end
     # end
 
-    H .= max.(0.0, H .+ dHdt)
-    
-    return Δt, current_year
-end
+    # We store each timestep as a Sparse Matrix
+    # push!(Ht, sparse(max.(0.0, H .+ dHdt)))
+    # if(length(Ht)%100 == 0)
+    #     println("Ht: ", length(Ht))
+    # end
 
-# function rrule(::typeof(update_H), H, UA, year, current_year)
-#     function update_pullback(H, UA)
-#         b̄ = zero(ā)
-#         for i in 1:length(a)
-#             for d in 0:m-1
-#                 if i-d > 0
-#                     b̄[i] += (m-d) * ā[i-d]
-#                 end
-#             end
-#         end
-#         return NO_FIELDS, b̄, DoesNotExist()
-#     end
-#     return updatestate(a, m), update_pullback
-# end;
+    #H .= max.(0.0, H .+ dHdt)
+    
+    return F, dτ, current_year
+end
 
 """
     C_fake(MB, ∇S)
@@ -329,37 +388,6 @@ function create_NNs()
     return hyparams, UA
 end
 
-"""
-    loss(batch)
-
-Computes the loss function for a specific batch.
-"""
-# We determine the loss function
-function loss(data, H, p, t, t₁)
-    l_H, l_A = 0.0f0, 0.0f0
-    num = 0
-
-    # Make NN predictions
-    w_pc=10e18
-    for y in 1:size(data["X"])[3]
-        ŶA = UA(vec(data["X"][:,:,y])')
-        
-        # Constrain A parameter within physically plausible values        
-        l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
-    end
-
-    # Compute l_H as the difference between the simulated H with UA(x) and H_ref
-    iceflow!(H, UA, p,t,t₁)
-    println("H: ", maximum(H))
-    #@infiltrate
-    l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
-    println("l_A: ", l_A)
-    println("l_H: ", l_H)
-    l = l_H + l_A
-
-    return l
-end
-
 # Container to track the losses
 losses = Float32[]
 
@@ -377,23 +405,3 @@ callback(l) = begin
     false
 end
 
-"""
-    hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
-
-Train hybrid ice flow model based on UDEs.
-"""
-function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
-    # Retrieve model parameters
-    ps_UA = Params(ps_UA)
-
-    # back is a method that computes the product of the gradient so far with its argument.
-    train_loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
-    # Callback to track the training
-    callback(train_loss_UA)
-    # Apply back() to the correct type of 1.0 to get the gradient of loss.
-    gs_UA = back_UA(one(train_loss_UA))
-    # Insert what ever code you want here that needs gradient.
-    # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
-    Flux.update!(opt, ps_UA, gs_UA)
-    # Here you might like to check validation set accuracy, and break out to do early stopping.
-end
