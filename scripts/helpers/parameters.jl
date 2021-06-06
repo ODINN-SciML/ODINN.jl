@@ -38,18 +38,21 @@ method = "explicit-adaptive" #"explicit"
 # η < 1 is requiered for stability
 η = 0.9
 #η = 0.2   
-damp = 0.85
-dτsc   = 1.0/3.0         # iterative dtau scaling
+#damp = 0.85
+damp = 0.15
+#       # iterative dtau scaling
+dτsc   = 1.0/100.0  
 ϵ     = 1e-4            # small number
 Δx = Δy = 50 #m (Δx = Δy)
 cfl      = max(Δx^2,Δy^2)/4.1
 
 # Time 
 t = 0
-Δt = 1.0/12.0
+#Δt = 1.0/12.0
+Δt = 0.01
 Δts = []
-t₁ = 2.01 # number of simulation years 
+t₁ = 20.01 # number of simulation years 
 
 ### Workflow ###
-create_ref_dataset = false
-train_UDE = true
+create_ref_dataset = true
+train_UDE = false

@@ -107,13 +107,14 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
     println("Running forward PDE ice flow model...\n")
     # Instantiate variables
     let             
-    Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p    
+    MB = p[7]  
     current_year = 0
     ts_i = 1
 
     # Manual explicit forward scheme implementation
     while t < t₁
 
+        H_ = copy(H)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if(year != current_year)
@@ -123,7 +124,23 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
-        Δt, current_year, ts_i = update_store_H(H, H_ref, p, y, ts)
+        F, dτ, current_year, ts_i = update_store_H(H, H_ref, p, y, ts)
+        # Differentiate H via a Picard iteration method
+        ResH .= .-(H .- H_)./Δt .+ F .+ MB[:,:,year]
+        dHdt .= (dHdt.*damp .+ ResH).*dτ
+
+        println("F: ", maximum(F))
+        println("ResH: ", maximum(ResH))
+        println("dτ: ", maximum(dτ))
+        println("dHdt: ", maximum(dHdt))
+        println("H: ", maximum(H))
+
+        # Update the ice thickness
+        #@infiltrate
+        H .= max.(0.0, H .+ dHdt)
+
+        # hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
+        # display(hm3)
              
         t += Δt
         #append!(Δts,t)
@@ -149,6 +166,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     current_year = 0
     MB = p[7]
     dHdt_ = zeros(nx, ny)
+    H_ = zeros(nx, ny)
     # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
     global model = "UDE_A"
 
@@ -177,12 +195,12 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         @infiltrate
         @tullio ResH := -(H[i,j] - H_[i,j])/Δt + F[i,j] + MB[i,j,year]
         @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+        dHdt_ = copy(dHdt)
 
         println("dHdt: ", maximum(dHdt))
-        dHdt_ = copy(dHdt)
-        H_ = copy(H)
         # Update the ice thickness
         @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j]*dτ)
+        H_ = copy(H)
         #push!(Ht, dHdt)
         
         #@infiltrate
@@ -202,7 +220,7 @@ create and store dataset to be used as a reference
 function update_store_H(H, H_ref, p, y, ts)
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    Δt, current_year = SIA(H, p, y)
+    dHdt, Δt, current_year = SIA(H, p, y)
     t, ts_i = ts
     
     # Store timestamps to be used for training of the UDEs
@@ -215,19 +233,6 @@ function update_store_H(H, H_ref, p, y, ts)
     end
 
     return dHdt, Δt, current_year, ts_i
-    
-end 
-
-"""
-    update_H(H, p, y, Δ)
-
-Update the ice thickness by differentiating H based on the Shallow Ice Approximation 
-"""
-function dH(H, p, y)
-    # Compute the Shallow Ice Approximation in a staggered grid
-    dHdt, Δt, current_year = SIA(H, p, y)
-
-    return dHdt, Δt, current_year
     
 end 
 
@@ -273,45 +278,12 @@ function SIA(H, p, y)
     F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy)
     
     # Update or set time step for temporal discretization
-    #Δt = timestep!(Δts, Δx, D, method)
-    dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))
+    #Δt = timestep!(Δts, Δx, D, method)  # explicit-adaptive timestep
+    dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))  # semi-implicit timestep with damping
 
     #  Update the glacier ice thickness      
     #@tullio dHdt[i,j] := (F[i,j] + MB[i,j,year]) * Δt
-
-    # Use Zygote.Buffer in order to mutate matrix while being able to compute gradients
-    # TODO: Investigate how to correctly update H with Zygote.Buffer
-    # Option 1
-    #dH = max.(0.0, inn(H) .+ dHdt)
-    #println("size(dH): ", size(dH))
-    #H = PaddedView(0.0, Zygote.Buffer(dH), size(H), (2,2))
-    #println("size(H): ", size(H))
-    # println("H: ", size(H))
-    # println("size(H_buff_0, 1): ", size(H_buff_0, 1))
-    # H_buff_1 = vcat(H_buff_0, Zygote.Buffer(zeros(size(H_buff_0, 1))))
-    # println("size(H_buff_1): ", size(H_buff_1))
-    # H_buff = hcat(H_buff_1, Zygote.Buffer(zeros(size(H_buff_1, 2))))
-    # println("H_buff: ", size(H_buff))
-    #H = copy(H_buffpad)
-
-    # Option 2 (incorrect)
-    
-    # println("H: ", size(H))
-    # println("dHdt: ", size(dHdt))
-    # for i in 1:size(dHdt,1)
-    #     for j in 1:size(dHdt,2)
-    #         H[i+1,j+1] = max(0.0, H[i+1,j+1] + dHdt[i,j])
-    #     end
-    # end
-
-    # We store each timestep as a Sparse Matrix
-    # push!(Ht, sparse(max.(0.0, H .+ dHdt)))
-    # if(length(Ht)%100 == 0)
-    #     println("Ht: ", length(Ht))
-    # end
-
-    #H .= max.(0.0, H .+ dHdt)
-    
+   
     return F, dτ, current_year
 end
 
