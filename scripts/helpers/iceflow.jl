@@ -109,12 +109,16 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
     let             
     MB = p[7]  
     current_year = 0
+    total_iter = 0
     ts_i = 1
 
     # Manual explicit forward scheme implementation
     while t < t₁
-
+        let
+        iter = 1
+        err = 2 * tolnl
         H_ = copy(H)
+
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if(year != current_year)
@@ -124,33 +128,72 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
-        F, dτ, current_year, ts_i = update_store_H(H, H_ref, p, y, ts)
-        # Differentiate H via a Picard iteration method
-        ResH .= .-(H .- H_)./Δt .+ F .+ MB[:,:,year]
-        dHdt .= (dHdt.*damp .+ ResH).*dτ
+        while err > tolnl && iter < itMax
+        
+            Err = copy(H)
 
-        println("F: ", maximum(F))
-        println("ResH: ", maximum(ResH))
-        println("dτ: ", maximum(dτ))
-        println("dHdt: ", maximum(dHdt))
-        println("H: ", maximum(H))
+            # Compute the Shallow Ice Approximation in a staggered grid
+            F, dτ, current_year = SIA(H, p, y)
+            
+            # Implicit method
+            # Differentiate H via a Picard iteration method
+            ResH = .-(H .- H_)./Δt .+ F .+ MB[:,:,year] # TODO: remove MB
+            dHdt = (dHdt.*damp .+ ResH).*dτ
 
-        # Update the ice thickness
-        #@infiltrate
-        H .= max.(0.0, H .+ dHdt)
+            # println("F: ", maximum(F))
+            # println("ResH: ", maximum(ResH))
+            # println("dτ: ", maximum(dτ))
+            # println("dHdt: ", maximum(dHdt))
+            # println("H: ", maximum(H))
+
+            # Update the ice thickness
+            #@infiltrate
+            H .= max.(0.0, H .+ dHdt)
+
+            if mod(iter, nout) == 0
+                # Compute error for implicit method with damping
+                err = computeErr!(Err, H)
+                println(" iter = $iter, error = $err \n")
+                if isnan(err)
+                    error("""NaNs encountered.  Try a combination of:
+                                 decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                end
+            end
+          
+            iter += 1
+            total_iter += 1
+        end
+        end
+
+        # Store timestamps to be used for training of the UDEs
+        if ts_i < length(H_ref["timestamps"])+1
+            if t >= H_ref["timestamps"][ts_i]
+                println("Saving H at year ", H_ref["timestamps"][ts_i])
+                push!(H_ref["H"], H)
+                ts_i += 1
+
+                hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
+                display(hm3)  
+            end          
+        end
 
         # hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
-        # display(hm3)
+        # display(hm3)  
              
         t += Δt
         #append!(Δts,t)
         # println("Δt: ", Δt)
         # println("time: ", t)
+
+        #@infiltrate
          
     end 
+
+    println("Total Number of iterartions: ", total_iter)
+    end
+    
     println("Saving reference data")
     save(joinpath(root_dir, "../../data/H_ref.jld"), "H_ref", H_ref)
-    end
 end
 
 
@@ -211,33 +254,16 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     end
 end
 
-"""
-    update_store_H(H, H_ref, p, y, ts_i)
+function computeErr!(Err, H)
+    Err .= Err .- H # Telescopic sum: always equal to H_now - H_last
+    #err = norm(Err) / length(Err) # cuadratic error
+    err = maximum(Err) # Maximum error
 
-Update the ice thickness by differentiating H based on the Shallow Ice Approximation and
-create and store dataset to be used as a reference
-"""
-function update_store_H(H, H_ref, p, y, ts)
-
-    # Compute the Shallow Ice Approximation in a staggered grid
-    dHdt, Δt, current_year = SIA(H, p, y)
-    t, ts_i = ts
-    
-    # Store timestamps to be used for training of the UDEs
-    if ts_i < length(H_ref["timestamps"])+1
-        if t >= H_ref["timestamps"][ts_i]
-            println("Saving H at year ", H_ref["timestamps"][ts_i])
-            push!(H_ref["H"], H)
-            ts_i += 1
-        end            
-    end
-
-    return dHdt, Δt, current_year, ts_i
-    
-end 
+    return err
+end
 
 """
-    SIA!(H, p, y)
+    SIA(H, p, y)
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """

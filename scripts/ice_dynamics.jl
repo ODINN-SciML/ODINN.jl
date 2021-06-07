@@ -88,20 +88,18 @@ example = "Argentiere"
 if example == "Argentiere"
 
     # Grid initialization
-    dSdx       = zeros(nx, ny)
-    dSdy       = zeros(nx ,ny)
-    dSdx_edges = zeros(nx ,ny)
-    dSdy_edges = zeros(nx ,ny)
-    ∇S         = zeros(nx, ny)
-    D          = zeros(nx, ny)
-    Fx         = zeros(nx, ny)
-    Fy         = zeros(nx, ny)
-    F          = zeros(nx, ny)
-    dHdt       = zeros(nx, ny)
-    ResH       = zeros(nx, ny)
-    MB         = zeros(nx, ny)
+    # dSdx       = zeros(nx, ny)
+    # dSdy       = zeros(nx ,ny)
+    # ∇S         = zeros(nx, ny)
+    # D          = zeros(nx, ny)
+    # Fx         = zeros(nx, ny)
+    # Fy         = zeros(nx, ny)
+    # F          = zeros(nx, ny)
+    # dHdt       = zeros(nx, ny)
+    # ResH       = zeros(nx, ny)
+    # MB         = zeros(nx, ny)
     # Ht         = []
-    
+  
     B  = copy(argentiere.bed)
     H₀ = copy(argentiere.thick[:,:,1])
     v = zeros(size(argentiere.thick)) # surface velocities

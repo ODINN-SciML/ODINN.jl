@@ -38,20 +38,22 @@ method = "explicit-adaptive" #"explicit"
 # η < 1 is requiered for stability
 η = 0.9
 #η = 0.2   
-#damp = 0.85
-damp = 0.15
+damp = 0.85
+itMax    = 1e5             # number of iteration (max)
+nout     = 100             # error check frequency
+tolnl    = 1e-6  # non-linear tolerance (what is a good value for this?)
 #       # iterative dtau scaling
-dτsc   = 1.0/100.0  
+dτsc   = 1.0/3.0
 ϵ     = 1e-4            # small number
 Δx = Δy = 50 #m (Δx = Δy)
-cfl      = max(Δx^2,Δy^2)/4.1
+cfl  = max(Δx^2,Δy^2)/4.1
 
 # Time 
 t = 0
 #Δt = 1.0/12.0
-Δt = 0.01
+Δt = 0.1
 Δts = []
-t₁ = 20.01 # number of simulation years 
+t₁ = 10 # number of simulation years 
 
 ### Workflow ###
 create_ref_dataset = true
