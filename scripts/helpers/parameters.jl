@@ -20,10 +20,11 @@ g = 9.81 # m / s^2
 n = 3
 
 # Weertman-type basal sliding (Weertman, 1964, 1972) 
-α = 1   # 1 -> sliding / 0 -> no sliding
+α = 0   # 1 -> sliding / 0 -> no sliding
 C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
 
 Γ = (n-1) * (ρ * g)^n / (n+2) # 1 / m^3 s
+#Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook
 
 ### Differential equations ###
 # Configuration of the forward model
@@ -36,12 +37,12 @@ method = "explicit-adaptive" #"explicit"
 
 # Parameter that control the stepsize of the numerical method 
 # η < 1 is requiered for stability
-η = 0.9
+η = 0.3
 #η = 0.2   
 damp = 0.85
 itMax    = 1e5             # number of iteration (max)
-nout     = 100             # error check frequency
-tolnl    = 1e-6  # non-linear tolerance (what is a good value for this?)
+nout     = 5               # error check frequency
+tolnl    = 1e-1            # non-linear tolerance (what is a good value for this?)
 #       # iterative dtau scaling
 dτsc   = 1.0/3.0
 ϵ     = 1e-4            # small number
@@ -53,7 +54,7 @@ t = 0
 #Δt = 1.0/12.0
 Δt = 0.1
 Δts = []
-t₁ = 10 # number of simulation years 
+t₁ = 3 # number of simulation years 
 
 ### Workflow ###
 create_ref_dataset = true
