@@ -30,21 +30,21 @@
 """
     pad(A, s) 
 
-Zero padding around a matrix A
+Zero padding around a matrix `A`
 """
 @views pad(A) = PaddedView(0.0, A, (size(A,1)+1,size(A,2)+1), (2,2))
 
 """
     pad_x(A, s) 
 
-Zero padding around a matrix A on x-axis
+Zero padding around a matrix `A` on x-axis
 """
 @views padx(A, pad=1) = PaddedView(0.0, A, (size(A,1)+pad,size(A,2)), (2,0))
 
 """
     pad_y(A, s) 
 
-Zero padding around a matrix A on y-axis 
+Zero padding around a matrix `A` on y-axis 
 """
 @views pady(A, pad=1) = PaddedView(0.0, A, (size(A,1),size(A,2)+pad), (0,2))
 

@@ -137,11 +137,11 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
             #Δt_exp = minimum(dτ) # This doesn't work becuase of zeros in d\tau
             Δt_exp = 0.0001 # Hardcoded. Based on the JupyterNotebook, this value should give stable results
             H .= max.(0.0, H .+ Δt_exp * F)
-            println("Fmax: ", maximum(abs.(F)))
+            #println("Fmax: ", maximum(abs.(F)))
             t += Δt_exp
             total_iter += 1 
 
-            if total_iter == 50
+            if total_iter == 100
                 println("Break!!!")
                 break
             end
@@ -158,7 +158,6 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 # Implicit method
                 # Differentiate H via a Picard iteration method
                 ResH = .-(H .- H_)./Δt .+ F #.+ MB[:,:,year] # TODO: remove MB
-                #dHdt = (dHdt.*damp .+ ResH)#.*dτ # dτ shouln'd be here, becuase here updates the value of dHdt
                 dHdt = damp .* dHdt .+ ResH
                 
                 println("F: ", maximum(F))
@@ -304,18 +303,17 @@ function SIA(H, p, y)
     # Compute diffusivity on secondary nodes
     if model == "standard"
         #                                     ice creep  +  basal sliding
-        D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        #D = Γ * avg(pad(H)).^(n+2) .* ∇S.^(n - 1)
+        D = (Γ * avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake A"
-        D = (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
         # Diffusivity with fake C function
-        D = (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
+        D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
     elseif model == "UDE_A"
         # A here should have the same shape than H
-        D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (avg(pad(reshape(A, size(H)))) .* avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        D = (Γ * avg(pad(H)).^n .* ∇S.^(n - 1)) .* (avg(pad(reshape(A, size(H)))) .* avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     else 
-        println("ERROR: Model $model is incorrect")
+        error("Model $model is incorrect")
         #throw(DomainError())
     end
 
@@ -328,9 +326,6 @@ function SIA(H, p, y)
     # Update or set time step for temporal discretization
     #Δt = timestep!(Δts, Δx, D, method)  # explicit-adaptive timestep
     dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))  # semi-implicit timestep with damping
-
-    #  Update the glacier ice thickness      
-    #@tullio dHdt[i,j] := (F[i,j] + MB[i,j,year]) * Δt
    
     return F, dτ, current_year
 end
