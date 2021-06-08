@@ -118,6 +118,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         iter = 1
         err = 2 * tolnl
         H_ = copy(H)
+        dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -128,40 +129,66 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
-        while err > tolnl && iter < itMax
-        
-            Err = copy(H)
+        my_method = "explicit" # This is here for now so we can run both models
 
-            # Compute the Shallow Ice Approximation in a staggered grid
+        if my_method == "explicit"
+
             F, dτ, current_year = SIA(H, p, y)
-            
-            # Implicit method
-            # Differentiate H via a Picard iteration method
-            ResH = .-(H .- H_)./Δt .+ F .+ MB[:,:,year] # TODO: remove MB
-            dHdt = (dHdt.*damp .+ ResH).*dτ
+            #Δt_exp = minimum(dτ) # This doesn't work becuase of zeros in d\tau
+            Δt_exp = 0.0001 # Hardcoded. Based on the JupyterNotebook, this value should give stable results
+            H .= max.(0.0, H .+ Δt_exp * F)
+            println("Fmax: ", maximum(abs.(F)))
+            t += Δt_exp
+            total_iter += 1 
 
-            # println("F: ", maximum(F))
-            # println("ResH: ", maximum(ResH))
-            # println("dτ: ", maximum(dτ))
-            # println("dHdt: ", maximum(dHdt))
-            # println("H: ", maximum(H))
-
-            # Update the ice thickness
-            #@infiltrate
-            H .= max.(0.0, H .+ dHdt)
-
-            if mod(iter, nout) == 0
-                # Compute error for implicit method with damping
-                err = computeErr!(Err, H)
-                println(" iter = $iter, error = $err \n")
-                if isnan(err)
-                    error("""NaNs encountered.  Try a combination of:
-                                 decreasing `damp` and/or `dtausc`, more smoothing steps""")
-                end
+            if total_iter == 50
+                println("Break!!!")
+                break
             end
-          
-            iter += 1
-            total_iter += 1
+
+        elseif my_method == "implicit"
+
+            while err > tolnl && iter < itMax
+            
+                Err = copy(H)
+
+                # Compute the Shallow Ice Approximation in a staggered grid
+                F, dτ, current_year = SIA(H, p, y)
+                
+                # Implicit method
+                # Differentiate H via a Picard iteration method
+                ResH = .-(H .- H_)./Δt .+ F #.+ MB[:,:,year] # TODO: remove MB
+                #dHdt = (dHdt.*damp .+ ResH)#.*dτ # dτ shouln'd be here, becuase here updates the value of dHdt
+                dHdt = damp .* dHdt .+ ResH
+                
+                println("F: ", maximum(F))
+                println("ResH: ", maximum(ResH))
+                println("dτ: ", maximum(dτ))
+                println("dHdt: ", maximum(dHdt))
+                println("H: ", maximum(H))
+
+                # Update the ice thickness
+                #@infiltrate
+                H .= max.(0.0, H .+ dτ .* dHdt)
+                
+                #println(maximum(dτ))
+                
+                if mod(iter, nout) == 0
+                    # Compute error for implicit method with damping
+                    err = computeErr!(Err, H)
+                    println(" iter = $iter, error = $err \n")
+                    if isnan(err)
+                        error("""NaNs encountered.  Try a combination of:
+                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                    end
+                end
+            
+                iter += 1
+                total_iter += 1
+            end
+
+            t += Δt
+
         end
         end
 
@@ -172,20 +199,14 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 push!(H_ref["H"], H)
                 ts_i += 1
 
-                hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
-                display(hm3)  
+                #hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
+                #display(hm3)  
             end          
         end
 
-        # hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
-        # display(hm3)  
-             
-        t += Δt
-        #append!(Δts,t)
-        # println("Δt: ", Δt)
-        # println("time: ", t)
+        #hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
+        #display(hm3)  
 
-        #@infiltrate
          
     end 
 
@@ -284,6 +305,7 @@ function SIA(H, p, y)
     if model == "standard"
         #                                     ice creep  +  basal sliding
         D = (Γ * avg(pad(H)).^n.* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        #D = Γ * avg(pad(H)).^(n+2) .* ∇S.^(n - 1)
     elseif model == "fake A"
         D = (Γ * avg(H).^n.* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
