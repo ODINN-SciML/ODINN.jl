@@ -129,22 +129,22 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
-        my_method = "explicit" # This is here for now so we can run both models
+        my_method = "implicit" # This is here for now so we can run both models
 
         if my_method == "explicit"
 
-            F, dτ, current_year = SIA(H, p, y)
-            #Δt_exp = minimum(dτ) # This doesn't work becuase of zeros in d\tau
+            F, dτ, current_year = SIA_old(H, p, y)
             Δt_exp = 0.0001 # Hardcoded. Based on the JupyterNotebook, this value should give stable results
-            H .= max.(0.0, H .+ Δt_exp * F)
+            inn(H) .= max.(0.0, inn(H) .+ Δt_exp * F)
+            # H .= max.(0.0, H .+ Δt_exp * F)
             #println("Fmax: ", maximum(abs.(F)))
             t += Δt_exp
             total_iter += 1 
 
-            if total_iter == 100
-                println("Break!!!")
-                break
-            end
+            # if total_iter == 50
+            #     println("Break!!!")
+            #     break
+            # end
 
         elseif my_method == "implicit"
 
@@ -160,11 +160,11 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 ResH = .-(H .- H_)./Δt .+ F #.+ MB[:,:,year] # TODO: remove MB
                 dHdt = damp .* dHdt .+ ResH
                 
-                println("F: ", maximum(F))
-                println("ResH: ", maximum(ResH))
-                println("dτ: ", maximum(dτ))
-                println("dHdt: ", maximum(dHdt))
-                println("H: ", maximum(H))
+                # println("F: ", maximum(F))
+                # println("ResH: ", maximum(ResH))
+                # println("dτ: ", maximum(dτ))
+                # println("dHdt: ", maximum(dHdt))
+                # println("H: ", maximum(H))
 
                 # Update the ice thickness
                 #@infiltrate
@@ -302,8 +302,11 @@ function SIA(H, p, y)
 
     # Compute diffusivity on secondary nodes
     if model == "standard"
+        # TODO: investigate instabilities on too large D numbers
         #                                     ice creep  +  basal sliding
-        D = (Γ * avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook
+        D = Γ * avg(pad(H)).^(n + 2) .* ∇S.^(n - 1)
     elseif model == "fake A"
         D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
@@ -328,6 +331,47 @@ function SIA(H, p, y)
     dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))  # semi-implicit timestep with damping
    
     return F, dτ, current_year
+end
+
+
+function SIA_old(H, p, y)
+    Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+    year, current_year = y
+
+    # Update glacier surface altimetry
+    S = B .+ H
+
+    # All grid variables computed in a staggered grid
+    # Compute surface gradients on edges
+    dSdx  = diff(S, dims=1) / Δx
+    dSdy  = diff(S, dims=2) / Δy
+    ∇S = sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
+
+    # Compute diffusivity on secondary nodes
+    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook
+    D = Γ * avg(H).^(n + 2) .* ∇S.^(n - 1)
+    #println(maximum(D))
+
+    # Compute flux components
+    dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
+    dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
+    Fx = .-avg_y(D) .* dSdx_edges
+    Fy = .-avg_x(D) .* dSdy_edges
+    
+
+    #  Flux divergence
+    F = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+    
+    # hmf = heatmap(∇S.^(n - 1))
+    # display(hmf)
+
+    # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
+    #D_max = maximum(D)
+    #Δτ = η * ( Δx^2 / (2 * D_max ))
+    dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
+
+    return F, dτ, current_year
+
 end
 
 """

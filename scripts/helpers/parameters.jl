@@ -4,13 +4,13 @@
 
 ### Physics  ###
 # Ice diffusivity factor
-#A = 2e-16   # varying factor (0.125 - 10)
+A = 2e-16   # varying factor (0.125 - 10)
 
 # A ranging from 0.125 to 5
 #A = 0.5e-24 #2e-16  1 / Pa^3 s
-A = 5e-24 #2e-16  1 / Pa^3 s
+#A = 5e-24 #2e-16  1 / Pa^3 s
 # A = 1.3e-24 #2e-16  1 / Pa^3 s
-A *= 60 * 60 * 24 * 365.25 # 1 / Pa^3 yr
+#A *= 60 * 60 * 24 * 365.25 # 1 / Pa^3 yr
 
 # Ice density
 ρ = 900 # kg / m^3
@@ -54,7 +54,7 @@ t = 0
 #Δt = 1.0/12.0
 Δt = 0.1
 Δts = []
-t₁ = 10 # number of simulation years 
+t₁ = 20 # number of simulation years 
 
 ### Workflow ###
 create_ref_dataset = true
