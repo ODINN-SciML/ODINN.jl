@@ -130,20 +130,17 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
-        my_method = "implicit" # To do: move this to parameters.jl
-        #my_method = "explicit"
-
-        if my_method == "explicit"
+         if method == "explicit"
 
             F, dτ, current_year = SIA_old(H, p, y)
-            Δt_exp = 0.0001 # Hardcoded. Based on the JupyterNotebook, this value should give stable results
-            inn(H) .= max.(0.0, inn(H) .+ Δt_exp * F)
+            #Δt_exp = 0.0001 # Hardcoded. Based on the JupyterNotebook, this value should give stable results
+            inn(H) .= max.(0.0, inn(H) .+ Δt * F)
             # H .= max.(0.0, H .+ Δt_exp * F)
             #println("Fmax: ", maximum(abs.(F)))
             t += Δt_exp
             total_iter += 1 
 
-        elseif my_method == "implicit"
+        elseif method == "implicit"
 
             while err > tolnl && iter < itMax
             
@@ -191,7 +188,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                     err = maximum(Err)
                     #err = computeErr!(Err, H)
 
-                    println(" iter = $iter, error = $err \n")
+                    #println(" iter = $iter, error = $err \n")
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
                                     decreasing `damp` and/or `dtausc`, more smoothing steps""")
@@ -201,14 +198,12 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 iter += 1
                 total_iter += 1
 
-                if total_iter == 50
-                    println("Break!!!")
-                    #break #REMOVE
-                end
+                # if total_iter == 50
+                #     println("Break!!!")
+                #     #break #REMOVE
+                # end
 
             end
-
-            #break#REMOVE
 
             t += Δt
 
@@ -252,15 +247,18 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     let                  
     current_year = 0
     MB = p[7]
-    dHdt_ = zeros(nx, ny)
-    H_ = zeros(nx, ny)
-    # TODO: uncomment this once we have the pullbacks working and we're ready to train an UDE
-    global model = "UDE_A"
+    total_iter = 0
+    #global model = "UDE_A"
 
     # Manual explicit forward scheme implementation
     while t < t₁
-
-        #println("time: ", t)
+        let
+        iter = 1
+        err = 2 * tolnl
+        H_ = copy(H)
+        #dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
+        dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
+        dHdt_ = zeros(nx, ny)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -269,42 +267,76 @@ function iceflow!(H, UA::Chain, p,t,t₁)
             # Predict A with the NN
             ŶA = UA(vec(buffer_mean(MB, year))')
             # Unpack and repack tuple with updated A value
-            Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-            p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
+            # TODO: uncomment in order to use A value from NN
+            # Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+            # p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
             current_year = year
         end
         y = (year, current_year)
 
-        # Compute ice flux following the Shallow Ice Approximation PDE
-        F, dτ, current_year = SIA(H, p, y)
+        if method == "implicit"
+            
+            while err > tolnl && iter < itMax
+            
+                Err = copy(H)
 
-        # Compute the residual ice thickness for the inertia
-        @infiltrate
-        @tullio ResH := -(H[i,j] - H_[i,j])/Δt + F[i,j] + MB[i,j,year]
-        @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-        dHdt_ = copy(dHdt)
+                # Compute the Shallow Ice Approximation in a staggered grid
+                F, dτ, current_year = SIA_old(H, p, y)
 
-        println("dHdt: ", maximum(dHdt))
-        # Update the ice thickness
-        @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j]*dτ)
-        H_ = copy(H)
-        #push!(Ht, dHdt)
-        
-        #@infiltrate
-        t += Δt
-        #append!(Δts,t)
-        
+                #@infiltrate
+
+                # Compute the residual ice thickness for the inertia
+                #@tullio ResH := -(inn(H)[i,j] - inn(H_)[i,j])/Δt + F[i,j] + MB[i,j,year]
+                @tullio ResH := -(H[i,j] - H_[i,j])/Δt + F[i,j] 
+                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+
+                # ResH = .-(H .-H_)./Δt .+ F
+                # dHdt = dHdt_.*damp .+ ResH
+
+
+                dHdt_ = copy(dHdt)
+
+                #println("dHdt: ", maximum(dHdt))
+                # Update the ice thickness
+                @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j]*dτ)
+
+                # H = max.(0.0, H_ .+ dHdt.*dτ)
+                H_ = copy(H)
+                
+                if mod(iter, nout) == 0
+                    # Compute error for implicit method with damping
+                    # There is no need to use a function for this, since Err is redefined inside the second while
+                    Err = Err .- H
+                    err = maximum(Err)
+                    #err = computeErr!(Err, H)
+
+                    #println(" iter = $iter, error = $err \n")
+                    if isnan(err)
+                        error("""NaNs encountered.  Try a combination of:
+                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                    end
+                end
+            
+                iter += 1
+                total_iter += 1
+
+            end
+            
+            t += Δt
+            #append!(Δts,t)
+        end
+        end # let
     end   
-    end
+    end # let
 end
 
-function computeErr!(Err, H)
-    Err .= Err .- H # Telescopic sum: always equal to H_now - H_last
-    #err = norm(Err) / length(Err) # cuadratic error
-    err = maximum(Err) # Maximum error
+# function computeErr!(Err, H)
+#     Err .= Err .- H # Telescopic sum: always equal to H_now - H_last
+#     #err = norm(Err) / length(Err) # cuadratic error
+#     err = maximum(Err) # Maximum error
 
-    return err
-end
+#     return err
+# end
 
 """
     SIA(H, p, y)
@@ -361,7 +393,7 @@ function SIA(H, p, y)
     Fy = .-padx(avg_x(D)) .* dSdy
     #  Flux divergence
     F = .-(padx(diff(Fx, dims=1)) / Δx .+ pady(diff(Fy, dims=2)) / Δy)
-    
+ 
     # Update or set time step for temporal discretization
     #Δt = timestep!(Δts, Δx, D, method)  # explicit-adaptive timestep
     # Swich padding and average:
@@ -386,9 +418,20 @@ function SIA_old(H, p, y)
     ∇S = sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
 
     # Compute diffusivity on secondary nodes
-    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook
-    D = Γ * avg(H).^(n + 2) .* ∇S.^(n - 1)
-    #println(maximum(D))
+    if model == "standard"
+        # TODO: investigate instabilities on too large D numbers
+        #                                     ice creep  +  basal sliding
+        #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        # Swich order of padding and average:
+        #D = Γ * avg(pad(H)).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
+        D = Γ * avg(H).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
+    elseif model == "UDE_A"
+        # A here should have the same shape than H
+        D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)
+    else 
+        error("Model $model is incorrect")
+    end
 
     # Compute flux components
     dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
@@ -396,19 +439,19 @@ function SIA_old(H, p, y)
     Fx = .-avg_y(D) .* dSdx_edges
     Fy = .-avg_x(D) .* dSdy_edges
     
-
     #  Flux divergence
     F = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
     
-    # hmf = heatmap(∇S.^(n - 1))
-    # display(hmf)
+    #display(heatmap(F))
+
+    #@infiltrate
 
     # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
     #D_max = maximum(D)
     #Δτ = η * ( Δx^2 / (2 * D_max ))
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
-    return F, dτ, current_year
+    return pad(F,2), pad(dτ,2), current_year
 
 end
 

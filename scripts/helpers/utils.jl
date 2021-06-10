@@ -32,7 +32,7 @@
 
 Zero padding around a matrix `A`
 """
-@views pad(A) = PaddedView(0.0, A, (size(A,1)+1,size(A,2)+1), (2,2))
+@views pad(A, pad=1) = PaddedView(0.0, A, (size(A,1)+pad,size(A,2)+pad), (2,2))
 
 """
     pad_x(A, s) 
