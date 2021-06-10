@@ -118,7 +118,8 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         iter = 1
         err = 2 * tolnl
         H_ = copy(H)
-        dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
+        #dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
+        dHdt = zeros(nx-2, ny-2) # we need to define dHdt for iter = 1
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -129,7 +130,8 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
-        my_method = "implicit" # This is here for now so we can run both models
+        my_method = "implicit" # To do: move this to parameters.jl
+        #my_method = "explicit"
 
         if my_method == "explicit"
 
@@ -141,11 +143,6 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
             t += Δt_exp
             total_iter += 1 
 
-            # if total_iter == 50
-            #     println("Break!!!")
-            #     break
-            # end
-
         elseif my_method == "implicit"
 
             while err > tolnl && iter < itMax
@@ -153,28 +150,47 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, p, y)
+                #F, dτ, current_year = SIA(H, p, y)
+                F, dτ, current_year = SIA_old(H, p, y)
                 
                 # Implicit method
                 # Differentiate H via a Picard iteration method
-                ResH = .-(H .- H_)./Δt .+ F #.+ MB[:,:,year] # TODO: remove MB
+                # Change update rule for SIA_old:
+                #ResH = -(H .- H_)/Δt .+ F 
+                #dHdt = damp .* dHdt .+ ResH
+                ResH = -(inn(H) .- inn(H_))/Δt .+ F 
                 dHdt = damp .* dHdt .+ ResH
+
+                # Assert that dHdt has zeros on the borders
+                #for i in 1:nx
+                #    if dHdt[i, 1] != 0 || dHdt[i,ny] != 0
+                #        println("Error: border of dHdt must be zero for boundary condition")
+                #    end
+                #end
+                #for j in 1:ny
+                #    if dHdt[1, j] != 0 || dHdt[nx, j] != 0
+                #        println("Error: border of dHdt must be zero for boundary condition")
+                #    end
+                #end
                 
                 # println("F: ", maximum(F))
                 # println("ResH: ", maximum(ResH))
-                # println("dτ: ", maximum(dτ))
+                #println("dτ min: ", minimum(dτ))
+                #println("dτ max: ", maximum(dτ))
                 # println("dHdt: ", maximum(dHdt))
                 # println("H: ", maximum(H))
 
                 # Update the ice thickness
-                #@infiltrate
-                H .= max.(0.0, H .+ dτ .* dHdt)
-                
-                #println(maximum(dτ))
+                #H .= max.(0.0, H .+ dτ .* dHdt)
+                inn(H) .= max.(0.0, inn(H) .+ dτ .* dHdt)
                 
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
-                    err = computeErr!(Err, H)
+                    # There is no need to use a function for this, since Err is redefined inside the second while
+                    Err = Err .- H
+                    err = maximum(Err)
+                    #err = computeErr!(Err, H)
+
                     println(" iter = $iter, error = $err \n")
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
@@ -184,7 +200,15 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
             
                 iter += 1
                 total_iter += 1
+
+                if total_iter == 50
+                    println("Break!!!")
+                    #break #REMOVE
+                end
+
             end
+
+            #break#REMOVE
 
             t += Δt
 
@@ -296,17 +320,24 @@ function SIA(H, p, y)
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx  = diff(padx(S), dims=1) / Δx
-    dSdy  = diff(pady(S), dims=2) / Δy
-    ∇S = sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
+    #dSdx  = diff(padx(S), dims=1) / Δx
+    #dSdy  = diff(pady(S), dims=2) / Δy
+    #∇S = sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
+    # Swich order of padding and diff:
+    dSdx  = padx(diff(S, dims=1)) / Δx
+    dSdy  = pady(diff(S, dims=2)) / Δy
+    ∇S = sqrt.(pady(avg_y(dSdx)).^2 .+ padx(avg_x(dSdy)).^2)
 
     # Compute diffusivity on secondary nodes
     if model == "standard"
         # TODO: investigate instabilities on too large D numbers
         #                                     ice creep  +  basal sliding
         #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook
-        D = Γ * avg(pad(H)).^(n + 2) .* ∇S.^(n - 1)
+        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        # Swich order of padding and average:
+        #D = Γ * avg(pad(H)).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
+        D = Γ * pad(avg(H)).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
+    
     elseif model == "fake A"
         D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     elseif model == "fake C"
@@ -321,15 +352,22 @@ function SIA(H, p, y)
     end
 
     # Compute flux components
-    Fx = .-avg_y(pady(D)) .* dSdx
-    Fy = .-avg_x(padx(D)) .* dSdy
+    #Fx = .-avg_y(pady(D)) .* dSdx
+    #Fy = .-avg_x(padx(D)) .* dSdy
     #  Flux divergence
-    F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy)
+    #F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy)
+    # Swich the order of padding and average:
+    Fx = .-pady(avg_y(D)) .* dSdx
+    Fy = .-padx(avg_x(D)) .* dSdy
+    #  Flux divergence
+    F = .-(padx(diff(Fx, dims=1)) / Δx .+ pady(diff(Fy, dims=2)) / Δy)
     
     # Update or set time step for temporal discretization
     #Δt = timestep!(Δts, Δx, D, method)  # explicit-adaptive timestep
-    dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))  # semi-implicit timestep with damping
-   
+    # Swich padding and average:
+    #dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))  # semi-implicit timestep with damping
+    dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ pad(avg(D))))))  # semi-implicit timestep with damping
+
     return F, dτ, current_year
 end
 
