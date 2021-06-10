@@ -54,7 +54,7 @@ t = 0
 #Δt = 1.0/12.0
 Δt = 0.1
 Δts = []
-t₁ = 20 # number of simulation years 
+t₁ = 3 # number of simulation years 
 
 ### Workflow ###
 create_ref_dataset = true
