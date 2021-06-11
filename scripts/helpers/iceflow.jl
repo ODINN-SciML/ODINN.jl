@@ -76,24 +76,28 @@ function loss(data, H, p, t, t₁)
 
     # Make NN predictions
     #w_pc=10e18
-    w_pc = 1
-    for y in 1:size(data["X"])[3]
-        ŶA = UA(vec(data["X"][:,:,y])')
+    # w_pc = 1
+    # for y in 1:size(data["X"])[3]
+    #     ŶA = UA(vec(data["X"][:,:,y])')
         
-        # Constrain A parameter within physically plausible values        
-        l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
-    end
+    #     # Constrain A parameter within physically plausible values        
+    #     l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
+    # end
 
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
     iceflow!(H, UA, p,t,t₁)
     #println("H: ", maximum(H))
-    #@infiltrate
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
-    println("l_A: ", l_A)
+    # println("l_A: ", l_A)
     println("l_H: ", l_H)
-    l = l_H + l_A
+    # l = l_H + l_A
 
-    return l
+    Zygote.ignore() do
+        hml = heatmap(H_ref["H"][end] .- H, title="Loss")
+        display(hml)
+    end
+
+    return l_H
 end
 
 
@@ -118,7 +122,6 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         iter = 1
         err = 2 * tolnl
         H_ = copy(H)
-        #dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
         dHdt = zeros(nx-2, ny-2) # we need to define dHdt for iter = 1
 
         # Get current year for MB and ELA
@@ -130,13 +133,12 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         y = (year, current_year)
         ts = (t, ts_i)
 
+        println("t: ", t)
+
          if method == "explicit"
 
-            F, dτ, current_year = SIA_old(H, p, y)
-            #Δt_exp = 0.0001 # Hardcoded. Based on the JupyterNotebook, this value should give stable results
+            F, dτ, current_year = SIA(H, p, y)
             inn(H) .= max.(0.0, inn(H) .+ Δt * F)
-            # H .= max.(0.0, H .+ Δt_exp * F)
-            #println("Fmax: ", maximum(abs.(F)))
             t += Δt_exp
             total_iter += 1 
 
@@ -147,48 +149,21 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                #F, dτ, current_year = SIA(H, p, y)
-                F, dτ, current_year = SIA_old(H, p, y)
+                F, dτ, current_year = SIA(H, p, y)
                 
                 # Implicit method
                 # Differentiate H via a Picard iteration method
-                # Change update rule for SIA_old:
-                #ResH = -(H .- H_)/Δt .+ F 
-                #dHdt = damp .* dHdt .+ ResH
                 ResH = -(inn(H) .- inn(H_))/Δt .+ F 
                 dHdt = damp .* dHdt .+ ResH
 
-                # Assert that dHdt has zeros on the borders
-                #for i in 1:nx
-                #    if dHdt[i, 1] != 0 || dHdt[i,ny] != 0
-                #        println("Error: border of dHdt must be zero for boundary condition")
-                #    end
-                #end
-                #for j in 1:ny
-                #    if dHdt[1, j] != 0 || dHdt[nx, j] != 0
-                #        println("Error: border of dHdt must be zero for boundary condition")
-                #    end
-                #end
-                
-                # println("F: ", maximum(F))
-                # println("ResH: ", maximum(ResH))
-                #println("dτ min: ", minimum(dτ))
-                #println("dτ max: ", maximum(dτ))
-                # println("dHdt: ", maximum(dHdt))
-                # println("H: ", maximum(H))
-
                 # Update the ice thickness
-                #H .= max.(0.0, H .+ dτ .* dHdt)
                 inn(H) .= max.(0.0, inn(H) .+ dτ .* dHdt)
-                
+             
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
-                    # There is no need to use a function for this, since Err is redefined inside the second while
                     Err = Err .- H
                     err = maximum(Err)
-                    #err = computeErr!(Err, H)
 
-                    #println(" iter = $iter, error = $err \n")
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
                                     decreasing `damp` and/or `dtausc`, more smoothing steps""")
@@ -197,12 +172,6 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
             
                 iter += 1
                 total_iter += 1
-
-                # if total_iter == 50
-                #     println("Break!!!")
-                #     #break #REMOVE
-                # end
-
             end
 
             t += Δt
@@ -216,16 +185,8 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 println("Saving H at year ", H_ref["timestamps"][ts_i])
                 push!(H_ref["H"], H)
                 ts_i += 1
-
-                #hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
-                #display(hm3)  
             end          
-        end
-
-        #hm3 = heatmap(H, c = :ice, title="Ice thickness (t=$t)")
-        #display(hm3)  
-
-         
+        end        
     end 
 
     println("Total Number of iterartions: ", total_iter)
@@ -243,34 +204,35 @@ Hybrid forward ice flow model combining the SIA PDE and neural networks with neu
 """
 function iceflow!(H, UA::Chain, p,t,t₁)
 
-    # # Retrieve input variables  
+    # Retrieve input variables  
     let                  
     current_year = 0
     MB = p[7]
     total_iter = 0
-    #global model = "UDE_A"
+    global model = "UDE_A"
 
-    # Manual explicit forward scheme implementation
+    # Forward scheme implementation
     while t < t₁
         let
         iter = 1
         err = 2 * tolnl
         H_ = copy(H)
-        #dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
-        dHdt = zeros(nx, ny) # we need to define dHdt for iter = 1
         dHdt_ = zeros(nx, ny)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if(year != current_year)
-            println("Year ", year)
             # Predict A with the NN
             ŶA = UA(vec(buffer_mean(MB, year))')
+            if(year == 1)
+                println("ŶA max: ", maximum(ŶA))
+                println("ŶA min: ", minimum(ŶA))
+            end
             # Unpack and repack tuple with updated A value
-            # TODO: uncomment in order to use A value from NN
-            # Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-            # p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
+            Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
             current_year = year
+            println("Year ", year)
         end
         y = (year, current_year)
 
@@ -281,36 +243,28 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA_old(H, p, y)
-
-                #@infiltrate
+                F, dτ, current_year = SIA(H, p, y)
 
                 # Compute the residual ice thickness for the inertia
-                #@tullio ResH := -(inn(H)[i,j] - inn(H_)[i,j])/Δt + F[i,j] + MB[i,j,year]
-                @tullio ResH := -(H[i,j] - H_[i,j])/Δt + F[i,j] 
+                @tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + pad(F,2)[i,j] 
                 @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-
-                # ResH = .-(H .-H_)./Δt .+ F
-                # dHdt = dHdt_.*damp .+ ResH
-
-
+                #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + pad(F,2)[i,j] + MB[i,j,year]
+                #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)]
+                
+                # Update previous dHdt
                 dHdt_ = copy(dHdt)
 
-                #println("dHdt: ", maximum(dHdt))
                 # Update the ice thickness
-                @tullio H[i,j] := max.(0.0, H_[i,j] .+ dHdt[i,j]*dτ)
+                @tullio H[i,j] := max.(0.0, H_[i,j] + dHdt[i,j]*pad(dτ,2)[i,j])
 
-                # H = max.(0.0, H_ .+ dHdt.*dτ)
+                # Update previous ice thickness matrix
                 H_ = copy(H)
                 
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
-                    # There is no need to use a function for this, since Err is redefined inside the second while
                     Err = Err .- H
                     err = maximum(Err)
-                    #err = computeErr!(Err, H)
 
-                    #println(" iter = $iter, error = $err \n")
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
                                     decreasing `damp` and/or `dtausc`, more smoothing steps""")
@@ -323,88 +277,19 @@ function iceflow!(H, UA::Chain, p,t,t₁)
             end
             
             t += Δt
-            #append!(Δts,t)
         end
         end # let
     end   
     end # let
 end
 
-# function computeErr!(Err, H)
-#     Err .= Err .- H # Telescopic sum: always equal to H_now - H_last
-#     #err = norm(Err) / length(Err) # cuadratic error
-#     err = maximum(Err) # Maximum error
-
-#     return err
-# end
-
 """
     SIA(H, p, y)
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
+
 function SIA(H, p, y)
-    Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-    year, current_year = y
-
-    # Update glacier surface altimetry
-    S = B .+ H
-
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
-    #dSdx  = diff(padx(S), dims=1) / Δx
-    #dSdy  = diff(pady(S), dims=2) / Δy
-    #∇S = sqrt.(avg_y(pady(dSdx)).^2 .+ avg_x(padx(dSdy)).^2)
-    # Swich order of padding and diff:
-    dSdx  = padx(diff(S, dims=1)) / Δx
-    dSdy  = pady(diff(S, dims=2)) / Δy
-    ∇S = sqrt.(pady(avg_y(dSdx)).^2 .+ padx(avg_x(dSdy)).^2)
-
-    # Compute diffusivity on secondary nodes
-    if model == "standard"
-        # TODO: investigate instabilities on too large D numbers
-        #                                     ice creep  +  basal sliding
-        #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-        # Swich order of padding and average:
-        #D = Γ * avg(pad(H)).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
-        D = Γ * pad(avg(H)).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
-    
-    elseif model == "fake A"
-        D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(A_fake(buffer_mean(MB, year), size(H))) .* avg(H).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-    elseif model == "fake C"
-        # Diffusivity with fake C function
-        D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (A.*avg(H).^(n-1) .+ (α*(n+2).*C_fake(MB[:,:,year],∇S))./(n-1)) 
-    elseif model == "UDE_A"
-        # A here should have the same shape than H
-        D = (Γ * avg(pad(H)).^n .* ∇S.^(n - 1)) .* (avg(pad(reshape(A, size(H)))) .* avg(pad(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-    else 
-        error("Model $model is incorrect")
-        #throw(DomainError())
-    end
-
-    # Compute flux components
-    #Fx = .-avg_y(pady(D)) .* dSdx
-    #Fy = .-avg_x(padx(D)) .* dSdy
-    #  Flux divergence
-    #F = .-(diff(padx(Fx), dims=1) / Δx .+ diff(pady(Fy), dims=2) / Δy)
-    # Swich the order of padding and average:
-    Fx = .-pady(avg_y(D)) .* dSdx
-    Fy = .-padx(avg_x(D)) .* dSdy
-    #  Flux divergence
-    F = .-(padx(diff(Fx, dims=1)) / Δx .+ pady(diff(Fy, dims=2)) / Δy)
- 
-    # Update or set time step for temporal discretization
-    #Δt = timestep!(Δts, Δx, D, method)  # explicit-adaptive timestep
-    # Swich padding and average:
-    #dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(pad(D))))))  # semi-implicit timestep with damping
-    dτ = dτsc.*min.(10.0, 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ pad(avg(D))))))  # semi-implicit timestep with damping
-
-    return F, dτ, current_year
-end
-
-
-function SIA_old(H, p, y)
     Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
     year, current_year = y
 
@@ -419,15 +304,12 @@ function SIA_old(H, p, y)
 
     # Compute diffusivity on secondary nodes
     if model == "standard"
-        # TODO: investigate instabilities on too large D numbers
         #                                     ice creep  +  basal sliding
         #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
         Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-        # Swich order of padding and average:
-        #D = Γ * avg(pad(H)).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
-        D = Γ * avg(H).^(n + 2) .* ∇S.^(n - 1) # PROBLEM WITH ORDIN OF PADDING + AVg?
+        D = Γ * avg(H).^(n + 2) .* ∇S.^(n - 1) 
     elseif model == "UDE_A"
-        # A here should have the same shape than H
+        # A here should have the same shape as H
         D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)
     else 
         error("Model $model is incorrect")
@@ -441,17 +323,11 @@ function SIA_old(H, p, y)
     
     #  Flux divergence
     F = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
-    
-    #display(heatmap(F))
 
-    #@infiltrate
-
-    # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
-    #D_max = maximum(D)
-    #Δτ = η * ( Δx^2 / (2 * D_max ))
+    # Compute dτ for the implicit method
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
-    return pad(F,2), pad(dτ,2), current_year
+    return F, dτ, current_year
 
 end
 
@@ -513,8 +389,9 @@ function create_NNs()
 
     # Leaky ReLu as activation function
     leakyrelu(x, a=0.01) = max(a*x, x)
-    relu_acc(x) = min(max(0, x), 30)
-    relu_abl(x) = min(max(0, x), 35)
+
+    # Constraints A within physically plausible values
+    relu_A(x) = min(max(1.58e-17, x), 1.58e-16)
 
     # Define the networks 1->5->5->1
     global UA = Chain(
@@ -522,7 +399,7 @@ function create_NNs()
         BatchNorm(10, leakyrelu),
         Dense(10,5,initb = Flux.zeros), 
         BatchNorm(5, leakyrelu),
-        Dense(5,1, relu, initb = Flux.zeros)
+        Dense(5,1, relu_A, initb = Flux.zeros) 
     )
 
     return hyparams, UA
