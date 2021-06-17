@@ -32,10 +32,9 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     # We get the model parameters to be trained
     ps_UA = Flux.params(UA)
     #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
-    data = Dict("X"=>X, "Y"=>Y)
     # Train the UDE for a given number of epochs
     #H_buff = Zygote.Buffer(H)
-    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
+    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
 
     #H = copy(H_buff)  
 end
@@ -45,22 +44,33 @@ end
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(loss, ps_UA, data, opt, H, p, t, t₁)
+function hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
     # Retrieve model parameters
-    ps_UA = Params(ps_UA)
+    #ps_UA = Params(ps_UA)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    train_loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
+    # loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
+    loss_UA, back_UA = Zygote._pullback(() -> loss(H, p, t, t₁), ps_UA)
+    #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), ps_UA)
     # Callback to track the training
-    callback(train_loss_UA)
+    #callback(train_loss_UA)
     # Apply back() to the correct type of 1.0 to get the gradient of loss.
     println("Backpropagation")
-    @time gs_UA = back_UA(one(train_loss_UA))
+    #@infiltrate
+    #@time ∇_UA = back_UA(one(loss_UA))
+    ∇_UA = back_UA(one(loss_UA))
+    #@code_typed back_UA(one(loss_UA))
+    #back_UA(1)
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
-    @infiltrate
-    Flux.update!(opt, ps_UA, gs_UA)
+    #@infiltrate
+    println("Updating NN weights")
+    #@infiltrate
+    # for p in ps_UA
+    #     p .*= 3
+    # end
+    Flux.update!(opt, ps_UA, ∇_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
 end
 
@@ -70,20 +80,9 @@ end
 Computes the loss function for a specific batch.
 """
 # We determine the loss function
-function loss(data, H, p, t, t₁)
+function loss(H, p, t, t₁)
     l_H, l_A = 0.0f0, 0.0f0
-    num = 0
-
-    # Make NN predictions
-    #w_pc=10e18
-    # w_pc = 1
-    # for y in 1:size(data["X"])[3]
-    #     ŶA = UA(vec(data["X"][:,:,y])')
-        
-    #     # Constrain A parameter within physically plausible values        
-    #     l_A += sum(abs.(max.(ŶA .- 1.3e-24, 0).*w_pc)) + sum(abs.(min.(ŶA .- 0.5e-24, 0).*w_pc))
-    # end
-
+   
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
     iceflow!(H, UA, p,t,t₁)
     #println("H: ", maximum(H))
@@ -224,6 +223,10 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         if(year != current_year)
             # Predict A with the NN
             ŶA = UA(vec(buffer_mean(MB, year))')
+
+            Zygote.ignore() do
+                println("Current params: ", params(UA))
+            end
             if(year == 1)
                 println("ŶA max: ", maximum(ŶA))
                 println("ŶA min: ", minimum(ŶA))
@@ -328,6 +331,9 @@ function SIA(H, p, y)
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
     return F, dτ, current_year
+
+    println(nestlevel(), " levels of nesting")
+    println("Is deriving: ", isderiving())
 
 end
 
