@@ -46,12 +46,12 @@ Train hybrid ice flow model based on UDEs.
 """
 function hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
     # Retrieve model parameters
-    #ps_UA = Params(ps_UA)
+    ps_UA = Params(ps_UA)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    # loss_UA, back_UA = Zygote.pullback(() -> loss(data, H, p, t, t₁), ps_UA)
-    loss_UA, back_UA = Zygote._pullback(() -> loss(H, p, t, t₁), ps_UA)
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, p, t, t₁), ps_UA)
+    # loss_UA, back_UA = Zygote._pullback(() -> loss(H, p, t, t₁), ps_UA)
     #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), ps_UA)
     # Callback to track the training
     #callback(train_loss_UA)
@@ -60,16 +60,9 @@ function hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
     #@infiltrate
     #@time ∇_UA = back_UA(one(loss_UA))
     ∇_UA = back_UA(one(loss_UA))
-    #@code_typed back_UA(one(loss_UA))
-    #back_UA(1)
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
-    #@infiltrate
     println("Updating NN weights")
-    #@infiltrate
-    # for p in ps_UA
-    #     p .*= 3
-    # end
     Flux.update!(opt, ps_UA, ∇_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
 end
@@ -206,7 +199,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     # Retrieve input variables  
     let                  
     current_year = 0
-    MB = p[7]
+    MB_avg = p[8]  
     total_iter = 0
     global model = "UDE_A"
 
@@ -220,20 +213,22 @@ function iceflow!(H, UA::Chain, p,t,t₁)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
-        if(year != current_year)
+        if(year != current_year && model == "UDE_A")
             # Predict A with the NN
-            ŶA = UA(vec(buffer_mean(MB, year))')
+            ŶA = UA(vec(MB_avg[year])')
 
             Zygote.ignore() do
                 println("Current params: ", params(UA))
+
+                if(year == 1)
+                    println("ŶA max: ", maximum(ŶA))
+                    println("ŶA min: ", minimum(ŶA))
+                end
             end
-            if(year == 1)
-                println("ŶA max: ", maximum(ŶA))
-                println("ŶA min: ", minimum(ŶA))
-            end
+        
             # Unpack and repack tuple with updated A value
-            Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
-            p = (Δx, Δy, Γ, ŶA, B, v, MB, ELAs, C, α)
+            Δx, Δy, Γ, A, B, v, MB, MB_avg, ELAs, C, α = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, ELAs, C, α)
             current_year = year
             println("Year ", year)
         end
@@ -293,7 +288,7 @@ Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
 function SIA(H, p, y)
-    Δx, Δy, Γ, A, B, v, MB, ELAs, C, α = p
+    Δx, Δy, Γ, A, B, v, MB, MB_avg, ELAs, C, α = p
     year, current_year = y
 
     # Update glacier surface altimetry
@@ -331,9 +326,6 @@ function SIA(H, p, y)
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
     return F, dτ, current_year
-
-    println(nestlevel(), " levels of nesting")
-    println("Is deriving: ", isderiving())
 
 end
 

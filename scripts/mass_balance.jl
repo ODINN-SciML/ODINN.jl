@@ -9,7 +9,7 @@ SINDy (Brunton et al., 2016).
 
 ## Environment and packages
 cd(@__DIR__)
-using Pkg; Pkg.activate("."); Pkg.instantiate()
+using Pkg; Pkg.activate("../."); Pkg.instantiate()
 using Infiltrator
 using Debugger
 
@@ -331,6 +331,6 @@ end
 ###########################  MAIN #############################
 ###############################################################
 
-#train()
+train()
 
 #sindy()

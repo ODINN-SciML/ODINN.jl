@@ -87,25 +87,20 @@ example = "Argentiere"
 
 if example == "Argentiere"
 
-    # Grid initialization
-    # dSdx       = zeros(nx, ny)
-    # dSdy       = zeros(nx ,ny)
-    # ∇S         = zeros(nx, ny)
-    # D          = zeros(nx, ny)
-    # Fx         = zeros(nx, ny)
-    # Fy         = zeros(nx, ny)
-    # F          = zeros(nx, ny)
-    # dHdt       = zeros(nx, ny)
-    # ResH       = zeros(nx, ny)
-    # MB         = zeros(nx, ny)
-    # Ht         = []
-  
     B  = copy(argentiere.bed)
     H₀ = copy(argentiere.thick[:,:,1])
     v = zeros(size(argentiere.thick)) # surface velocities
  
     # Spatial and temporal differentials
     Δx = Δy = 50 #m (Δx = Δy)
+
+    MB_avg = []
+    for year in 1:length(argentiere.MB[1,1,:])
+        
+        push!(MB_avg, buffer_mean(argentiere.MB, year))
+    end
+
+    
     
 elseif example == "Gaussian"
     
@@ -115,11 +110,12 @@ elseif example == "Gaussian"
     
     # Spatial and temporal differentials
     Δx = Δy = 50 #m (Δx = Δy)    
+
 end
 
 ### We perform the simulations with an explicit forward mo  ###
 # Gather simulation parameters
-p = (Δx, Δy, Γ, A, B, v, argentiere.MB, ELAs, C, α) 
+p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, ELAs, C, α) 
 H = copy(H₀)
 
 # We generate the reference dataset using fake know laws
