@@ -63,7 +63,7 @@ void2nan!(MB_plot, argentiere.MB[1,1,1])
 #MB_weekly = interpolate(argentiere.MB/54, (NoInterp(), NoInterp(), BSpline(Linear())))
 
 # Get the annual ELAs based on the mass balance data
-ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
+#ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
 
 # Domain size
 nx = size(argentiere.bed)[1]
@@ -115,7 +115,7 @@ end
 
 ### We perform the simulations with an explicit forward mo  ###
 # Gather simulation parameters
-p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, ELAs, C, α) 
+p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α) 
 H = copy(H₀)
 
 # We generate the reference dataset using fake know laws

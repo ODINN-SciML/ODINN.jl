@@ -57,14 +57,21 @@ function hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
     #callback(train_loss_UA)
     # Apply back() to the correct type of 1.0 to get the gradient of loss.
     println("Backpropagation")
-    #@infiltrate
     #@time ∇_UA = back_UA(one(loss_UA))
     ∇_UA = back_UA(one(loss_UA))
+    #@infiltrate
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
     println("Updating NN weights")
     Flux.update!(opt, ps_UA, ∇_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
+    
+    lim = maximum( abs.(H .- H₀) )
+    hmz = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
+        xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
+        title="Variation in ice thickness")
+    display(hmz)
+
 end
 
 """
@@ -103,8 +110,8 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
     println("Running forward PDE ice flow model...\n")
     # Instantiate variables
     let             
-    MB = p[7]  
     current_year = 0
+    MB_avg = p[8]  
     total_iter = 0
     ts_i = 1
 
@@ -119,15 +126,26 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if(year != current_year)
-            println("Year ", year)
+            
+            # Predict A with the fake A law
+            ŶA = A_fake(MB_avg[year], size(H))
+
+            Zygote.ignore() do
+                if(year == 1)
+                    println("ŶA max: ", maximum(ŶA))
+                    println("ŶA min: ", minimum(ŶA))
+                end
+            end
+        
+            # Unpack and repack tuple with updated A value
+            Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
             current_year = year
+            println("Year ", year)
         end
         y = (year, current_year)
-        ts = (t, ts_i)
 
-        println("t: ", t)
-
-         if method == "explicit"
+        if method == "explicit"
 
             F, dτ, current_year = SIA(H, p, y)
             inn(H) .= max.(0.0, inn(H) .+ Δt * F)
@@ -214,6 +232,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if(year != current_year && model == "UDE_A")
+            
             # Predict A with the NN
             ŶA = UA(vec(MB_avg[year])')
 
@@ -227,8 +246,8 @@ function iceflow!(H, UA::Chain, p,t,t₁)
             end
         
             # Unpack and repack tuple with updated A value
-            Δx, Δy, Γ, A, B, v, MB, MB_avg, ELAs, C, α = p
-            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, ELAs, C, α)
+            Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
             current_year = year
             println("Year ", year)
         end
@@ -237,6 +256,8 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         if method == "implicit"
             
             while err > tolnl && iter < itMax
+
+                println("iter: ", iter)
             
                 Err = copy(H)
 
@@ -244,20 +265,19 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                 F, dτ, current_year = SIA(H, p, y)
 
                 # Compute the residual ice thickness for the inertia
-                @tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + pad(F,2)[i,j] 
+                #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + padxy(F,2)[i,j] + MB[i,j,year]
+                
+                @tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
                 @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + pad(F,2)[i,j] + MB[i,j,year]
-                #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)]
                 
                 # Update previous dHdt
                 dHdt_ = copy(dHdt)
 
                 # Update the ice thickness
-                @tullio H[i,j] := max.(0.0, H_[i,j] + dHdt[i,j]*pad(dτ,2)[i,j])
-
-                # Update previous ice thickness matrix
-                H_ = copy(H)
-                
+                #@infiltrate
+                @tullio H[i,j] = max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
+                #@infiltrate
+              
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
                     Err = Err .- H
@@ -273,12 +293,15 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                 total_iter += 1
 
             end
-            
+
+            println("t: ", t)
+          
             t += Δt
         end
         end # let
     end   
     end # let
+
 end
 
 """
@@ -288,7 +311,7 @@ Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
 function SIA(H, p, y)
-    Δx, Δy, Γ, A, B, v, MB, MB_avg, ELAs, C, α = p
+    Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
     year, current_year = y
 
     # Update glacier surface altimetry
@@ -301,17 +324,19 @@ function SIA(H, p, y)
     ∇S = sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
 
     # Compute diffusivity on secondary nodes
-    if model == "standard"
-        #                                     ice creep  +  basal sliding
-        #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-        D = Γ * avg(H).^(n + 2) .* ∇S.^(n - 1) 
-    elseif model == "UDE_A"
-        # A here should have the same shape as H
-        D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)
-    else 
-        error("Model $model is incorrect")
+    # A here should have the same shape as H
+    #                                     ice creep  +  basal sliding
+    #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
+    # Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+    if(model == "standard")
+        Γ = 2 * avg(A) * (ρ * g)^n / (n+2)
+    elseif(model == "UDE_A")
+        Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
     end
+    D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
+  
+
+    #D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)
 
     # Compute flux components
     dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
