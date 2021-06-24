@@ -63,6 +63,7 @@ function hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
     println("Updating NN weights")
+    @infiltrate
     Flux.update!(opt, ps_UA, ∇_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
     
@@ -84,7 +85,7 @@ function loss(H, p, t, t₁)
     l_H, l_A = 0.0f0, 0.0f0
    
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
-    iceflow!(H, UA, p,t,t₁)
+    H = iceflow!(H, UA, p,t,t₁)
     #println("H: ", maximum(H))
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
     # println("l_A: ", l_A)
@@ -219,6 +220,8 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     current_year = 0
     MB_avg = p[8]  
     total_iter = 0
+    dHdt_ = zeros(nx, ny)
+    H_ = copy(H)
     global model = "UDE_A"
 
     # Forward scheme implementation
@@ -226,8 +229,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        H_ = copy(H)
-        dHdt_ = zeros(nx, ny)
+        Hold = copy(H)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -257,7 +259,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
             
             while err > tolnl && iter < itMax
 
-                println("iter: ", iter)
+                #println("iter: ", iter)
             
                 Err = copy(H)
 
@@ -267,21 +269,25 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                 # Compute the residual ice thickness for the inertia
                 #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + padxy(F,2)[i,j] + MB[i,j,year]
                 
-                @tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
+                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
                 @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
                 
                 # Update previous dHdt
                 dHdt_ = copy(dHdt)
 
                 # Update the ice thickness
+                # @infiltrate
+                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
                 #@infiltrate
-                @tullio H[i,j] = max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
-                #@infiltrate
+                # Update previous H
+                H_ = copy(H)
               
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
                     Err = Err .- H
                     err = maximum(Err)
+                    #println("err: ", err)
+                    #@infiltrate
 
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
@@ -301,6 +307,8 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         end # let
     end   
     end # let
+
+    return H
 
 end
 
