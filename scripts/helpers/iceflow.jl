@@ -121,7 +121,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        H_ = copy(H)
+        H_ = copy(H) # hold value of H for the other iteration in the implicit method
         dHdt = zeros(nx-2, ny-2) # we need to define dHdt for iter = 1
 
         # Get current year for MB and ELA
@@ -220,8 +220,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     current_year = 0
     MB_avg = p[8]  
     total_iter = 0
-    dHdt_ = zeros(nx, ny)
-    H_ = copy(H)
+    #H_ = copy(H) # why is this here?
     global model = "UDE_A"
 
     # Forward scheme implementation
@@ -229,8 +228,9 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        Hold = copy(H)
-
+        #Hold = copy(H)
+        H_ = copy(H)
+        dHdt_ = zeros(nx, ny)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if(year != current_year && model == "UDE_A")
@@ -268,19 +268,21 @@ function iceflow!(H, UA::Chain, p,t,t₁)
 
                 # Compute the residual ice thickness for the inertia
                 #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + padxy(F,2)[i,j] + MB[i,j,year]
-                
-                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
-                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                
-                # Update previous dHdt
-                dHdt_ = copy(dHdt)
 
+                @tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
+                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+                #println("maximum dHdt: ", maximum(dHdt_))
+                
+                # We keep local copies for tullio
+                H_hold = copy(H)
+                dHdt_ = copy(dHdt)
+                
                 # Update the ice thickness
                 # @infiltrate
-                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
-                #@infiltrate
-                # Update previous H
-                H_ = copy(H)
+                @tullio H[i,j] := max(0.0, H_hold[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
+                #println("maximum H: ",maximum(H))
+                #println("maximum H on borders: ", maximum([maximum(H[1,:]), maximum(H[:,1]), maximum(H[nx,:]), maximum(H[:,ny])]))
+
               
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
