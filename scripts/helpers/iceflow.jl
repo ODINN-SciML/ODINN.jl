@@ -121,7 +121,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        H_ = copy(H) # hold value of H for the other iteration in the implicit method
+        Hold = copy(H) # hold value of H for the other iteration in the implicit method
         dHdt = zeros(nx-2, ny-2) # we need to define dHdt for iter = 1
 
         # Get current year for MB and ELA
@@ -136,6 +136,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                     println("ŶA max: ", maximum(ŶA))
                     println("ŶA min: ", minimum(ŶA))
                 end
+
             end
         
             # Unpack and repack tuple with updated A value
@@ -164,7 +165,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 
                 # Implicit method
                 # Differentiate H via a Picard iteration method
-                ResH = -(inn(H) .- inn(H_))/Δt .+ F 
+                ResH = -(inn(H) .- inn(Hold))/Δt .+ F 
                 dHdt = damp .* dHdt .+ ResH
 
                 # Update the ice thickness
@@ -220,7 +221,6 @@ function iceflow!(H, UA::Chain, p,t,t₁)
     current_year = 0
     MB_avg = p[8]  
     total_iter = 0
-    #H_ = copy(H) # why is this here?
     global model = "UDE_A"
 
     # Forward scheme implementation
@@ -228,12 +228,12 @@ function iceflow!(H, UA::Chain, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        #Hold = copy(H)
-        H_ = copy(H)
-        dHdt_ = zeros(nx, ny)
+        Hold = copy(H)
+        dHdt = zeros(nx, ny)
+
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
-        if(year != current_year && model == "UDE_A")
+        if(year != current_year)
             
             # Predict A with the NN
             ŶA = UA(vec(MB_avg[year])')
@@ -245,11 +245,13 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                     println("ŶA max: ", maximum(ŶA))
                     println("ŶA min: ", minimum(ŶA))
                 end
+
+                display(heatmap(MB_avg[year], title="MB"))
             end
         
             # Unpack and repack tuple with updated A value
-            Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
-            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
+            # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
+            # p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
             current_year = year
             println("Year ", year)
         end
@@ -266,20 +268,24 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                 # Compute the Shallow Ice Approximation in a staggered grid
                 F, dτ, current_year = SIA(H, p, y)
 
+                Zygote.ignore() do
+                    display(heatmap(F, title="F at t=$t"))
+                end
+
+
+                dHdt_ = copy(dHdt)
                 # Compute the residual ice thickness for the inertia
                 #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + padxy(F,2)[i,j] + MB[i,j,year]
 
-                @tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
+                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
                 @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                #println("maximum dHdt: ", maximum(dHdt_))
                 
                 # We keep local copies for tullio
-                H_hold = copy(H)
-                dHdt_ = copy(dHdt)
+                H_ = copy(H)
                 
                 # Update the ice thickness
                 # @infiltrate
-                @tullio H[i,j] := max(0.0, H_hold[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
+                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
                 #println("maximum H: ",maximum(H))
                 #println("maximum H on borders: ", maximum([maximum(H[1,:]), maximum(H[:,1]), maximum(H[nx,:]), maximum(H[:,ny])]))
 
@@ -289,7 +295,6 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                     Err = Err .- H
                     err = maximum(Err)
                     println("error: ", err)
-                    #println("err: ", err)
                     #@infiltrate
 
                     if isnan(err)
@@ -342,7 +347,11 @@ function SIA(H, p, y)
     if(model == "standard")
         Γ = 2 * avg(A) * (ρ * g)^n / (n+2)
     elseif(model == "UDE_A")
-        Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        # Zygote.ignore() do
+        #     display(heatmap(avg(reshape(A, size(H)))))
+        # end
+        # Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        Γ = 2 * A * (ρ * g)^n / (n+2)
     end
     D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
   

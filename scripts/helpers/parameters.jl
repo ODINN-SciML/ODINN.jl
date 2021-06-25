@@ -39,7 +39,7 @@ method = "implicit" #"explicit"
 # η < 1 is requiered for stability
 η = 0.3
 #η = 0.2   
-damp = 0.85
+damp = 0.25
 itMax    = 1e5             # number of iteration (max)
 nout     = 5               # error check frequency
 tolnl    = 1e-1            # non-linear tolerance (what is a good value for this?)

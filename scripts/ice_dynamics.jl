@@ -96,8 +96,9 @@ if example == "Argentiere"
 
     MB_avg = []
     for year in 1:length(argentiere.MB[1,1,:])
-        
-        push!(MB_avg, buffer_mean(argentiere.MB, year))
+        MB_buff = buffer_mean(argentiere.MB, year)
+        void2nan!(MB_buff, MB_buff[1,1])
+        push!(MB_avg, MB_buff)
     end
 
     
