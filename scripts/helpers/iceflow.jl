@@ -286,6 +286,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                     # Compute error for implicit method with damping
                     Err = Err .- H
                     err = maximum(Err)
+                    println("error: ", err)
                     #println("err: ", err)
                     #@infiltrate
 
