@@ -17,6 +17,7 @@ using LinearAlgebra
 using HDF5
 using JLD
 using Infiltrator
+#using Test
 # using Flux
 # using Flux: @epochs
 #using BenchmarkTools
@@ -122,7 +123,7 @@ H = copy(H₀)
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     H_ref = Dict("H"=>[], "timestamps"=>[1,2,3])
-    @time iceflow!(H,H_ref,p,t,t₁)
+    @time H = iceflow!(H,H_ref,p,t,t₁)
 else 
     H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
 end
@@ -153,3 +154,19 @@ hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
       xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
       title="Variation in ice thickness")
 display(hm2)
+
+
+#M1 = ones((4,5,6))
+#M2 = zeros((4,5,6))
+
+#@tullio M[i,j,k] = M1[i,j,k] * M2[i,j,k] + M1[i,j,k]
+
+#A = [abs2(i - 11) for i in 1:21]
+#@tullio M[i+_,j] := A[pad(i+j, 3)]  (j in 1:15) 
+
+#A = ones((5,6))
+#B = ones((7,8))
+#A_pad = zeros((7,8))
+#@tullio A_pad[i,j] := A[pad(i,1,1), pad(j,1,1)]
+#@tullio M[i,j] := A[pad(i,1,1),pad(j,1,1)] 
+#A_pad[0,0]

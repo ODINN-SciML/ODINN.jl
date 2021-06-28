@@ -122,7 +122,9 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         iter = 1
         err = 2 * tolnl
         Hold = copy(H) # hold value of H for the other iteration in the implicit method
-        dHdt = zeros(nx-2, ny-2) # we need to define dHdt for iter = 1
+        # we need to define dHdt for iter = 1
+        #dHdt = zeros(nx-2, ny-2) # with broadcasting
+        dHdt = zeros(nx, ny) # with Tullio
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -162,19 +164,31 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
                 F, dτ, current_year = SIA(H, p, y)
-                
-                # Implicit method
-                # Differentiate H via a Picard iteration method
-                ResH = -(inn(H) .- inn(Hold))/Δt .+ F 
-                dHdt = damp .* dHdt .+ ResH
 
+                # Implicit method with broadcasting
+                # Differentiate H via a Picard iteration method
+                #ResH = -(inn(H) .- inn(Hold))/Δt .+ F  # with broadcasting
+                #dHdt = damp .* dHdt .+ ResH # with broadcasting
                 # Update the ice thickness
-                inn(H) .= max.(0.0, inn(H) .+ dτ .* dHdt)
-             
+                #inn(H) .= max.(0.0, inn(H) .+ dτ .* dHdt) # with broadcasting 
+
+                # implicit method with Tullio
+                @tullio F_pad[i,j] := F[pad(i,1,1),pad(j,1,1)]
+                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F_pad[i-1,j-1]
+                
+                dHdt_ = copy(dHdt)
+                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+                
+                H_ = copy(H)
+                @tullio dτ_pad[i,j] := dτ[pad(i,1,1),pad(j,1,1)]
+                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ_pad[i-1,j-1])
+                
+
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
                     Err = Err .- H
                     err = maximum(Err)
+                    println("error at iter ", iter, ": ", err)
 
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
@@ -206,6 +220,8 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
     
     println("Saving reference data")
     save(joinpath(root_dir, "../../data/H_ref.jld"), "H_ref", H_ref)
+
+    return H
 end
 
 
@@ -273,19 +289,23 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                 end
 
 
+                @tullio F_pad[i,j] := F[pad(i,1,1),pad(j,1,1)]
+                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F_pad[i-1,j-1]
+
                 dHdt_ = copy(dHdt)
+                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+                
                 # Compute the residual ice thickness for the inertia
                 #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + padxy(F,2)[i,j] + MB[i,j,year]
-
-                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
-                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+                #@tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
+                #@tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
                 
                 # We keep local copies for tullio
                 H_ = copy(H)
                 
                 # Update the ice thickness
-                # @infiltrate
-                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i,0,2),pad(j,0,2)])
+                @tullio dτ_pad[i,j] := dτ[pad(i,1,1),pad(j,1,1)]
+                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ_pad[i-1,j-1])
                 #println("maximum H: ",maximum(H))
                 #println("maximum H on borders: ", maximum([maximum(H[1,:]), maximum(H[:,1]), maximum(H[nx,:]), maximum(H[:,ny])]))
 
