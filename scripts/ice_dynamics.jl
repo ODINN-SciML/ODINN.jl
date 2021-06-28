@@ -59,7 +59,7 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
 
 # Update mass balance data with NaNs
 MB_plot = copy(argentiere.MB)
-void2nan!(MB_plot, argentiere.MB[1,1,1])
+voidfill!(MB_plot, argentiere.MB[1,1,1])
 # Interpolate mass balance to daily values
 #MB_weekly = interpolate(argentiere.MB/54, (NoInterp(), NoInterp(), BSpline(Linear())))
 
@@ -98,9 +98,12 @@ if example == "Argentiere"
     MB_avg = []
     for year in 1:length(argentiere.MB[1,1,:])
         MB_buff = buffer_mean(argentiere.MB, year)
-        void2nan!(MB_buff, MB_buff[1,1])
+        voidfill!(MB_buff, MB_buff[1,1], 0)
         push!(MB_avg, MB_buff)
     end
+
+    # isderiving() = false  # https://fluxml.ai/Zygote.jl/latest/adjoints/#Gradient-Reflection-1
+    # Zygote.@adjoint isderiving() = true, _ -> nothing
 
     
     
@@ -156,17 +159,3 @@ hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
 display(hm2)
 
 
-#M1 = ones((4,5,6))
-#M2 = zeros((4,5,6))
-
-#@tullio M[i,j,k] = M1[i,j,k] * M2[i,j,k] + M1[i,j,k]
-
-#A = [abs2(i - 11) for i in 1:21]
-#@tullio M[i+_,j] := A[pad(i+j, 3)]  (j in 1:15) 
-
-#A = ones((5,6))
-#B = ones((7,8))
-#A_pad = zeros((7,8))
-#@tullio A_pad[i,j] := A[pad(i,1,1), pad(j,1,1)]
-#@tullio M[i,j] := A[pad(i,1,1),pad(j,1,1)] 
-#A_pad[0,0]

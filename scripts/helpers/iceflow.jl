@@ -29,12 +29,10 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     #opt = RMSProp(hyparams.η, 0.95)
     opt = ADAM(hyparams.η)
 
-    # We get the model parameters to be trained
-    ps_UA = Flux.params(UA)
     #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
     # Train the UDE for a given number of epochs
     #H_buff = Zygote.Buffer(H)
-    @epochs hyparams.epochs hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
+    @epochs hyparams.epochs hybrid_train!(loss, UA, opt, H, p, t, t₁)
 
     #H = copy(H_buff)  
 end
@@ -44,14 +42,18 @@ end
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
+function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     # Retrieve model parameters
-    ps_UA = Params(ps_UA)
+    # We get the model parameters to be trained
+    ps_UA = Flux.params(UA)
+    # ps_UA = Params(ps_UA)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    loss_UA, back_UA = Zygote.pullback(() -> loss(H, p, t, t₁), ps_UA)
-    # loss_UA, back_UA = Zygote._pullback(() -> loss(H, p, t, t₁), ps_UA)
+    #loss_UA, back_UA = Zygote.pullback(() -> loss(H, p, t, t₁), ps_UA)
+    loss_UA, back_UA = Zygote._pullback(UA -> loss(H, UA, p, t, t₁), UA)
+    #grad_UA = Zygote.jacobian(UA -> iceflow!(H, UA, p,t,t₁), UA)
+    #loss_UA, back_UA = Zygote._pullback(UA -> SIA(H, p, y), UA)
     #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), ps_UA)
     # Callback to track the training
     #callback(train_loss_UA)
@@ -59,7 +61,6 @@ function hybrid_train!(loss, ps_UA, opt, H, p, t, t₁)
     println("Backpropagation")
     #@time ∇_UA = back_UA(one(loss_UA))
     ∇_UA = back_UA(one(loss_UA))
-    #@infiltrate
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
     println("Updating NN weights")
@@ -81,7 +82,7 @@ end
 Computes the loss function for a specific batch.
 """
 # We determine the loss function
-function loss(H, p, t, t₁)
+function loss(H, UA, p, t, t₁)
     l_H, l_A = 0.0f0, 0.0f0
    
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
@@ -151,7 +152,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
 
         if method == "explicit"
 
-            F, dτ, current_year = SIA(H, p, y)
+            F, dτ, current_year = SIA(H, A, p, y)
             inn(H) .= max.(0.0, inn(H) .+ Δt * F)
             t += Δt_exp
             total_iter += 1 
@@ -163,7 +164,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, p, y)
+                F, dτ, current_year = SIA(H, A, p, y)
 
                 # Implicit method with broadcasting
                 # Differentiate H via a Picard iteration method
@@ -172,16 +173,14 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 # Update the ice thickness
                 #inn(H) .= max.(0.0, inn(H) .+ dτ .* dHdt) # with broadcasting 
 
-                # implicit method with Tullio
-                @tullio F_pad[i,j] := F[pad(i,1,1),pad(j,1,1)]
-                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F_pad[i-1,j-1]
+                # implicit method with Tullio  
+                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
                 
                 dHdt_ = copy(dHdt)
                 @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
                 
                 H_ = copy(H)
-                @tullio dτ_pad[i,j] := dτ[pad(i,1,1),pad(j,1,1)]
-                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ_pad[i-1,j-1])
+                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
                 
 
                 if mod(iter, nout) == 0
@@ -230,7 +229,7 @@ end
 
 Hybrid forward ice flow model combining the SIA PDE and neural networks with neural networks into an UDE
 """
-function iceflow!(H, UA::Chain, p,t,t₁)
+function iceflow!(H, UA, p,t,t₁)
 
     # Retrieve input variables  
     let                  
@@ -249,20 +248,22 @@ function iceflow!(H, UA::Chain, p,t,t₁)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
+        # ŶA = UA(vec(MB_avg[year])')
+
         if(year != current_year)
             
             # Predict A with the NN
-            ŶA = UA(vec(MB_avg[year])')
+            # ŶA = UA(vec(MB_avg[year])')
 
             Zygote.ignore() do
                 println("Current params: ", params(UA))
 
-                if(year == 1)
-                    println("ŶA max: ", maximum(ŶA))
-                    println("ŶA min: ", minimum(ŶA))
-                end
+                # if(year == 1)
+                #     println("ŶA max: ", maximum(ŶA))
+                #     println("ŶA min: ", minimum(ŶA))
+                # end
 
-                display(heatmap(MB_avg[year], title="MB"))
+                # display(heatmap(MB_avg[year], title="MB"))
             end
         
             # Unpack and repack tuple with updated A value
@@ -282,39 +283,30 @@ function iceflow!(H, UA::Chain, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, p, y)
+                F, dτ, current_year = SIA(H, UA, p, y)
 
-                Zygote.ignore() do
-                    display(heatmap(F, title="F at t=$t"))
-                end
-
-
-                @tullio F_pad[i,j] := F[pad(i,1,1),pad(j,1,1)]
-                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F_pad[i-1,j-1]
+                # Compute the residual ice thickness for the inertia
+                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
 
                 dHdt_ = copy(dHdt)
                 @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                
-                # Compute the residual ice thickness for the inertia
-                #@tullio ResH[i,j] := -(H[i,j] - H_[i,j])/Δt + padxy(F,2)[i,j] + MB[i,j,year]
-                #@tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i,0,2),pad(j,0,2)] 
-                #@tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                
+                              
                 # We keep local copies for tullio
                 H_ = copy(H)
                 
                 # Update the ice thickness
-                @tullio dτ_pad[i,j] := dτ[pad(i,1,1),pad(j,1,1)]
-                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ_pad[i-1,j-1])
+                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+
                 #println("maximum H: ",maximum(H))
                 #println("maximum H on borders: ", maximum([maximum(H[1,:]), maximum(H[:,1]), maximum(H[nx,:]), maximum(H[:,ny])]))
 
+                #@show isderiving()
               
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
                     Err = Err .- H
                     err = maximum(Err)
-                    println("error: ", err)
+                    # println("error: ", err)
                     #@infiltrate
 
                     if isnan(err)
@@ -328,7 +320,7 @@ function iceflow!(H, UA::Chain, p,t,t₁)
 
             end
 
-            println("t: ", t)
+            #println("t: ", t)
           
             t += Δt
         end
@@ -346,7 +338,7 @@ end
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
-function SIA(H, p, y)
+function SIA(H, UA, p, y)
     Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
     year, current_year = y
 
@@ -370,8 +362,10 @@ function SIA(H, p, y)
         # Zygote.ignore() do
         #     display(heatmap(avg(reshape(A, size(H)))))
         # end
+        ŶA = UA(vec(MB_avg[year])')
+        Γ = 2 * avg(reshape(ŶA, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
         # Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-        Γ = 2 * A * (ρ * g)^n / (n+2)
+       #Γ = 2 * A * (ρ * g)^n / (n+2)
     end
     D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
   
@@ -456,7 +450,7 @@ function create_NNs()
     # Constraints A within physically plausible values
     relu_A(x) = min(max(1.58e-17, x), 1.58e-16)
 
-    # Define the networks 1->5->5->1
+    # Define the networks 1->10->5->1
     global UA = Chain(
         Dense(1,10,initb = Flux.zeros), 
         BatchNorm(10, leakyrelu),

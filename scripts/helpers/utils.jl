@@ -77,9 +77,9 @@ end
 
 Convert empty matrix grid cells into NaNs
 """
-function void2nan!(x, void)
+function voidfill!(x, void, fill=NaN)
     for i in eachindex(x)
-        @inbounds x[i] = ifelse(x[i]==void, NaN, x[i])
+        @inbounds x[i] = ifelse(x[i]==void, fill, x[i])
     end
 end
 
