@@ -50,8 +50,10 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    #loss_UA, back_UA = Zygote.pullback(() -> loss(H, p, t, t₁), ps_UA)
-    loss_UA, back_UA = Zygote._pullback(UA -> loss(H, UA, p, t, t₁), UA)
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), ps_UA)
+    #loss_UA, back_UA = Zygote._pullback(UA -> loss(H, UA, p, t, t₁), UA)
+    #loss_UA, back_UA = Zygote._pullback(ps_UA -> loss(H, UA, p, t, t₁), ps_UA)
+    #loss_UA, back_UA = Zygote._pullback(UA -> iceflow!(H, UA, p,t,t₁), UA)
     #grad_UA = Zygote.jacobian(UA -> iceflow!(H, UA, p,t,t₁), UA)
     #loss_UA, back_UA = Zygote._pullback(UA -> SIA(H, p, y), UA)
     #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), ps_UA)
@@ -328,6 +330,7 @@ function iceflow!(H, UA, p,t,t₁)
     end   
     end # let
 
+    # return sum(H)
     return H
 
 end
@@ -376,8 +379,7 @@ function SIA(H, UA, p, y)
     dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
     dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
     Fx = .-avg_y(D) .* dSdx_edges
-    Fy = .-avg_x(D) .* dSdy_edges
-    
+    Fy = .-avg_x(D) .* dSdy_edges    
     #  Flux divergence
     F = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
 
@@ -385,6 +387,7 @@ function SIA(H, UA, p, y)
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
     return F, dτ, current_year
+    #return sum(F)
 
 end
 
