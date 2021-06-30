@@ -50,8 +50,8 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), ps_UA)
-    #loss_UA, back_UA = Zygote._pullback(UA -> loss(H, UA, p, t, t₁), UA)
+    #loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), ps_UA)
+    loss_UA, back_UA = Zygote.pullback(UA -> loss(H, UA, p, t, t₁), UA)
     #loss_UA, back_UA = Zygote._pullback(ps_UA -> loss(H, UA, p, t, t₁), ps_UA)
     #loss_UA, back_UA = Zygote._pullback(UA -> iceflow!(H, UA, p,t,t₁), UA)
     #grad_UA = Zygote.jacobian(UA -> iceflow!(H, UA, p,t,t₁), UA)
@@ -66,7 +66,7 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
     println("Updating NN weights")
-    @infiltrate
+    #@infiltrate
     Flux.update!(opt, ps_UA, ∇_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
     
@@ -143,7 +143,6 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 end
 
             end
-        
             # Unpack and repack tuple with updated A value
             Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
             p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
@@ -154,7 +153,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
 
         if method == "explicit"
 
-            F, dτ, current_year = SIA(H, A, p, y)
+            F, dτ, current_year = SIA(H, p, y)
             inn(H) .= max.(0.0, inn(H) .+ Δt * F)
             t += Δt_exp
             total_iter += 1 
@@ -166,7 +165,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, A, p, y)
+                F, dτ, current_year = SIA(H, p, y)
 
                 # Implicit method with broadcasting
                 # Differentiate H via a Picard iteration method
@@ -250,12 +249,11 @@ function iceflow!(H, UA, p,t,t₁)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
-        # ŶA = UA(vec(MB_avg[year])')
 
         if(year != current_year)
             
             # Predict A with the NN
-            # ŶA = UA(vec(MB_avg[year])')
+            ŶA = UA(vec(MB_avg[year])')
 
             Zygote.ignore() do
                 println("Current params: ", params(UA))
@@ -269,8 +267,8 @@ function iceflow!(H, UA, p,t,t₁)
             end
         
             # Unpack and repack tuple with updated A value
-            # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
-            # p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
+            Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
             current_year = year
             println("Year ", year)
         end
@@ -285,7 +283,7 @@ function iceflow!(H, UA, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, UA, p, y)
+                F, dτ, current_year = SIA(H, p, y)
 
                 # Compute the residual ice thickness for the inertia
                 @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
@@ -341,7 +339,7 @@ end
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
-function SIA(H, UA, p, y)
+function SIA(H, p, y)
     Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
     year, current_year = y
 
@@ -365,8 +363,7 @@ function SIA(H, UA, p, y)
         # Zygote.ignore() do
         #     display(heatmap(avg(reshape(A, size(H)))))
         # end
-        ŶA = UA(vec(MB_avg[year])')
-        Γ = 2 * avg(reshape(ŶA, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
         # Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
        #Γ = 2 * A * (ρ * g)^n / (n+2)
     end
@@ -454,7 +451,7 @@ function create_NNs()
     relu_A(x) = min(max(1.58e-17, x), 1.58e-16)
 
     # Define the networks 1->10->5->1
-    global UA = Chain(
+    UA = Chain(
         Dense(1,10,initb = Flux.zeros), 
         BatchNorm(10, leakyrelu),
         Dense(10,5,initb = Flux.zeros), 
