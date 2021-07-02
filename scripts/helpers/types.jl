@@ -14,12 +14,12 @@ end
 
 
 mutable struct Glacier
-    bed::Array{Float32}    # bedrock height
-    thick::Array{Float32}  # ice thickness
-    vel::Array{Float32}    # surface velocities
-    MB::Array{Float32}     # surface mass balance
-    lat::Float32
-    lon::Float32
+    bed::Array{Float64}    # bedrock height
+    thick::Array{Float64}  # ice thickness
+    vel::Array{Float64}    # surface velocities
+    MB::Array{Float64}     # surface mass balance
+    lat::Float64
+    lon::Float64
 end
 
 

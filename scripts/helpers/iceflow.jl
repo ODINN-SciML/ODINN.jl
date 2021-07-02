@@ -10,6 +10,9 @@ using DiffEqOperators
 using Tullio
 include("utils.jl")
 
+# Patch for updating NN parameters. Issue pending for Zygote
+Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
+
 """
     iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
 
@@ -46,31 +49,22 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     # Retrieve model parameters
     # We get the model parameters to be trained
     ps_UA = Flux.params(UA)
-    # ps_UA = Params(ps_UA)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    #loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), ps_UA)
-    loss_UA, back_UA = Zygote.pullback(UA -> loss(H, UA, p, t, t₁), UA)
-    #loss_UA, back_UA = Zygote._pullback(ps_UA -> loss(H, UA, p, t, t₁), ps_UA)
-    #loss_UA, back_UA = Zygote._pullback(UA -> iceflow!(H, UA, p,t,t₁), UA)
-    #grad_UA = Zygote.jacobian(UA -> iceflow!(H, UA, p,t,t₁), UA)
-    #loss_UA, back_UA = Zygote._pullback(UA -> SIA(H, p, y), UA)
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), ps_UA)
+
     #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), ps_UA)
     # Callback to track the training
     #callback(train_loss_UA)
     # Apply back() to the correct type of 1.0 to get the gradient of loss.
+    
     println("Backpropagation")
-    #@time ∇_UA = back_UA(one(loss_UA))
     ∇_UA = back_UA(one(loss_UA))
-    # Insert what ever code you want here that needs gradient.
-    # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
+    
     println("Updating NN weights")
-    @infiltrate
-    for p in ps_UA
-        @show p, ∇_UA[p]
-    end
-    Flux.update!(opt, ps_UA, ∇_UA)
+    Flux.Optimise.update!(opt, ps_UA, ∇_UA)
+    
     # Here you might like to check validation set accuracy, and break out to do early stopping.
     
     lim = maximum( abs.(H .- H₀) )
@@ -88,7 +82,7 @@ Computes the loss function for a specific batch.
 """
 # We determine the loss function
 function loss(H, UA, p, t, t₁)
-    l_H, l_A = 0.0f0, 0.0f0
+    l_H, l_A = 0.0, 0.0
    
     # Compute l_H as the difference between the simulated H with UA(x) and H_ref
     H = iceflow!(H, UA, p,t,t₁)
@@ -460,15 +454,15 @@ function create_NNs()
         BatchNorm(10, leakyrelu),
         Dense(10,5,initb = Flux.zeros), 
         BatchNorm(5, leakyrelu),
-        #Dense(5,1, relu_A, initb = Flux.zeros) 
-        Dense(5,1, sigmoid_A, initb = Flux.zeros) 
+        Dense(5,1, relu_A, initb = Flux.zeros) 
+        #Dense(5,1, sigmoid_A, initb = Flux.zeros) 
     )
 
     return hyparams, UA
 end
 
 # Container to track the losses
-losses = Float32[]
+losses = Float64[]
 
 """
     callback(l)
