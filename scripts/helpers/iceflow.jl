@@ -66,7 +66,10 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     # Insert what ever code you want here that needs gradient.
     # E.g. logging with TensorBoardLogger.jl as histogram so you can see if it is becoming huge.
     println("Updating NN weights")
-    #@infiltrate
+    @infiltrate
+    for p in ps_UA
+        @show p, ∇_UA[p]
+    end
     Flux.update!(opt, ps_UA, ∇_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
     
@@ -95,10 +98,10 @@ function loss(H, UA, p, t, t₁)
     println("l_H: ", l_H)
     # l = l_H + l_A
 
-    Zygote.ignore() do
-        hml = heatmap(H_ref["H"][end] .- H, title="Loss")
-        display(hml)
-    end
+    #Zygote.ignore() do
+    #    hml = heatmap(H_ref["H"][end] .- H, title="Loss")
+    #    display(hml)
+    #end
 
     return l_H
 end
@@ -259,8 +262,8 @@ function iceflow!(H, UA, p,t,t₁)
                 println("Current params: ", params(UA))
 
                 # if(year == 1)
-                #     println("ŶA max: ", maximum(ŶA))
-                #     println("ŶA min: ", minimum(ŶA))
+                println("ŶA max: ", maximum(ŶA))
+                println("ŶA min: ", minimum(ŶA))
                 # end
 
                 # display(heatmap(MB_avg[year], title="MB"))
@@ -449,6 +452,7 @@ function create_NNs()
 
     # Constraints A within physically plausible values
     relu_A(x) = min(max(1.58e-17, x), 1.58e-16)
+    sigmoid_A(x) = 1.58e-17 + (1.58e-16 - 1.58e-17) / ( 1 + exp(-x) )
 
     # Define the networks 1->10->5->1
     UA = Chain(
@@ -456,7 +460,8 @@ function create_NNs()
         BatchNorm(10, leakyrelu),
         Dense(10,5,initb = Flux.zeros), 
         BatchNorm(5, leakyrelu),
-        Dense(5,1, relu_A, initb = Flux.zeros) 
+        #Dense(5,1, relu_A, initb = Flux.zeros) 
+        Dense(5,1, sigmoid_A, initb = Flux.zeros) 
     )
 
     return hyparams, UA
