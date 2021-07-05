@@ -11,6 +11,8 @@
 #A = 5e-24 #2e-16  1 / Pa^3 s
 A = 1.3e-24 #2e-16  1 / Pa^3 s
 A *= 60 * 60 * 24 * 365.25 # 1 / Pa^3 yr
+minA = 1.58e-17
+maxA = 1.58e-16
 
 # Ice density
 ρ = 900 # kg / m^3
@@ -40,7 +42,7 @@ method = "implicit" #"explicit"
 η = 0.3
 #η = 0.2   
 damp = 0.25
-itMax    = 1e5             # number of iteration (max)
+itMax    = 5             # number of iteration (max)
 nout     = 5               # error check frequency
 tolnl    = 1e-1            # non-linear tolerance (what is a good value for this?)
 #       # iterative dtau scaling

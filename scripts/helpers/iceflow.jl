@@ -157,7 +157,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
 
         elseif method == "implicit"
 
-            while err > tolnl && iter < itMax
+            while err > tolnl && iter < itMax + 1
             
                 Err = copy(H)
 
@@ -258,9 +258,10 @@ function iceflow!(H, UA, p,t,t₁)
                 # if(year == 1)
                 println("ŶA max: ", maximum(ŶA))
                 println("ŶA min: ", minimum(ŶA))
+                println("ŶA total elements: ", length(unique(ŶA)))
                 # end
 
-                # display(heatmap(MB_avg[year], title="MB"))
+                #display(heatmap(MB_avg[year], title="MB"))
             end
         
             # Unpack and repack tuple with updated A value
@@ -273,7 +274,8 @@ function iceflow!(H, UA, p,t,t₁)
 
         if method == "implicit"
             
-            while err > tolnl && iter < itMax
+            #while err > tolnl && iter < itMax+1
+            while iter < itMax + 1
 
                 #println("iter: ", iter)
             
@@ -299,19 +301,21 @@ function iceflow!(H, UA, p,t,t₁)
 
                 #@show isderiving()
               
-                if mod(iter, nout) == 0
-                    # Compute error for implicit method with damping
-                    Err = Err .- H
-                    err = maximum(Err)
-                    # println("error: ", err)
-                    #@infiltrate
+                Zygote.ignore() do
+                    if mod(iter, nout) == 0
+                        # Compute error for implicit method with damping
+                        Err = Err .- H
+                        err = maximum(Err)
+                        # println("error: ", err)
+                        #@infiltrate
 
-                    if isnan(err)
-                        error("""NaNs encountered.  Try a combination of:
-                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                        if isnan(err)
+                            error("""NaNs encountered.  Try a combination of:
+                                        decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                        end
                     end
                 end
-            
+
                 iter += 1
                 total_iter += 1
 
@@ -445,17 +449,23 @@ function create_NNs()
     leakyrelu(x, a=0.01) = max(a*x, x)
 
     # Constraints A within physically plausible values
-    relu_A(x) = min(max(1.58e-17, x), 1.58e-16)
-    sigmoid_A(x) = 1.58e-17 + (1.58e-16 - 1.58e-17) / ( 1 + exp(-x) )
+    #relu_A(x) = min(max(minA, x), maxA)
+    #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
+    sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
 
     # Define the networks 1->10->5->1
+    #UA = Chain(
+    #    Dense(1,10,initb = Flux.zeros), 
+    #    BatchNorm(10, leakyrelu),
+    #    Dense(10,5,initb = Flux.zeros), 
+    #    BatchNorm(5, leakyrelu),
+        #Dense(5,1, relu_A, initb = Flux.zeros) 
+    #    Dense(5,1, sigmoid_A, initb = Flux.zeros) 
+    #)
     UA = Chain(
-        Dense(1,10,initb = Flux.zeros), 
-        BatchNorm(10, leakyrelu),
-        Dense(10,5,initb = Flux.zeros), 
-        BatchNorm(5, leakyrelu),
-        Dense(5,1, relu_A, initb = Flux.zeros) 
-        #Dense(5,1, sigmoid_A, initb = Flux.zeros) 
+        Dense(1,1, sigmoid_A, initb = Flux.zeros) 
+        #Dense(1,1, leakyrelu, initb = Flux.zeros) 
+        #Dense(1,1, relu_A, initb = Flux.zeros) 
     )
 
     return hyparams, UA

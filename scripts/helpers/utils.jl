@@ -204,3 +204,14 @@ function timestep!(Δts, Δx, D, method)
 
     return Δt
 end
+
+function view_∇(ps_UA, ∇_UA)
+    for ps in ps_UA
+        @show ps, ∇_UA[ps]
+        println("size ps: ", size(ps))
+        println("size ∇_UA[p]: ", size(∇_UA[ps]))
+
+        println("type ps: ", typeof(ps))
+        println("type ∇_UA[p]: ", typeof(∇_UA[ps]))
+    end
+end
