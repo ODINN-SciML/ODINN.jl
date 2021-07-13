@@ -64,7 +64,6 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     
     println("Updating NN weights")
     Flux.Optimise.update!(opt, ps_UA, ∇_UA)
-    
     # Here you might like to check validation set accuracy, and break out to do early stopping.
     
     lim = maximum( abs.(H .- H₀) )
@@ -250,7 +249,7 @@ function iceflow!(H, UA, p,t,t₁)
         if(year != current_year)
             
             # Predict A with the NN
-            ŶA = UA(vec(MB_avg[year])')
+            ŶA = UA(vec(MB_avg[year])') .* 1e-17 # Adding units outside the NN
 
             Zygote.ignore() do
                 println("Current params: ", params(UA))

@@ -11,8 +11,10 @@
 #A = 5e-24 #2e-16  1 / Pa^3 s
 A = 1.3e-24 #2e-16  1 / Pa^3 s
 A *= 60 * 60 * 24 * 365.25 # 1 / Pa^3 yr
-minA = 1.58e-17
-maxA = 1.58e-16
+# minA = 1.58e-17
+# maxA = 1.58e-16
+minA = 1.58 # units changed to avoid numerical issues
+maxA = 15.8 # to be multiplied by e-17 at the end
 
 # Ice density
 ρ = 900 # kg / m^3
