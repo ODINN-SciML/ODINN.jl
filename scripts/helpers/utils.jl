@@ -21,7 +21,7 @@
 
 2-point average on x-axis 
 """
- @views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
+@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
 # function avg_x(A)
 #     A_avg = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
 #     return A_avg
