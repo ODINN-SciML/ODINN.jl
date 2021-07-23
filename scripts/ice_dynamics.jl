@@ -7,12 +7,11 @@ SINDy (Brunton et al., 2016).
 =#
 
 ## Environment and packages
-cd(@__DIR__)
-using Pkg; Pkg.activate("../."); Pkg.instantiate()
+# cd(@__DIR__)
+# using Pkg; Pkg.activate("../."); Pkg.instantiate()
 using Plots; gr()
 using SparseArrays
 using Statistics
-using ModelingToolkit
 using LinearAlgebra
 using HDF5
 using JLD

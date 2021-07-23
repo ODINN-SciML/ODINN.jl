@@ -29,13 +29,14 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     # println("X: ", size(X))
 
     # We define an optimizer
-    #opt = RMSProp(hyparams.η, 0.95)
-    opt = ADAM(hyparams.η)
+    opt = RMSProp(0.0001)
+    # opt = ADAM(hyparams.η)
 
     #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
     # Train the UDE for a given number of epochs
     #H_buff = Zygote.Buffer(H)
-    @epochs hyparams.epochs hybrid_train!(loss, UA, opt, H, p, t, t₁)
+    θ = Flux.params(UA)
+    @epochs hyparams.epochs hybrid_train!(loss, UA, θ, opt, H, p, t, t₁)
 
     #H = copy(H_buff)  
 end
@@ -45,16 +46,16 @@ end
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(loss, UA, opt, H, p, t, t₁)
+function hybrid_train!(loss, UA, θ, opt, H, p, t, t₁)
     # Retrieve model parameters
     # We get the model parameters to be trained
-    ps_UA = Flux.params(UA)
+    # θ = Flux.params(UA)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), ps_UA)
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), θ)
 
-    #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), ps_UA)
+    #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), θ)
     # Callback to track the training
     #callback(train_loss_UA)
     # Apply back() to the correct type of 1.0 to get the gradient of loss.
@@ -63,9 +64,15 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     ∇_UA = back_UA(one(loss_UA))
     
     println("Updating NN weights")
-    Flux.Optimise.update!(opt, ps_UA, ∇_UA)
+
+    for ps in θ
+       println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
+    end
+    # println("θ BEFORE: ", θ)
+    Flux.Optimise.update!(opt, θ, ∇_UA)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
-    
+    # println("θ AFTER: ", θ)
+
     lim = maximum( abs.(H .- H₀) )
     hmz = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
         xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
@@ -73,6 +80,10 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     display(hmz)
 
 end
+
+# Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
+Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
+
 
 """
     loss(batch)
@@ -249,19 +260,21 @@ function iceflow!(H, UA, p,t,t₁)
         if(year != current_year)
             
             # Predict A with the NN
-            ŶA = UA(vec(MB_avg[year])') .* 1e-17 # Adding units outside the NN
+            # ŶA = UA(vec(MB_avg[year])') .* 1e-17 # Adding units outside the NN
+            # Scalar version
+            ŶA = UA([mean(vec(MB_avg[year])')])[1] .* 1e-17 # Adding units outside the NN
 
-            Zygote.ignore() do
-                println("Current params: ", params(UA))
+            # Zygote.ignore() do
+            #     # println("Current params: ", Flux.params(UA))
 
-                # if(year == 1)
-                println("ŶA max: ", maximum(ŶA))
-                println("ŶA min: ", minimum(ŶA))
-                println("ŶA total elements: ", length(unique(ŶA)))
-                # end
+            #     # if(year == 1)
+            #     println("ŶA max: ", maximum(ŶA))
+            #     println("ŶA min: ", minimum(ŶA))
+            #     # println("ŶA total elements: ", length(unique(ŶA)))
+            #     # end
 
-                #display(heatmap(MB_avg[year], title="MB"))
-            end
+            #     #display(heatmap(MB_avg[year], title="MB"))
+            # end
         
             # Unpack and repack tuple with updated A value
             Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
@@ -360,12 +373,16 @@ function SIA(H, p, y)
     if(model == "standard")
         Γ = 2 * avg(A) * (ρ * g)^n / (n+2)
     elseif(model == "UDE_A")
-        # Zygote.ignore() do
-        #     display(heatmap(avg(reshape(A, size(H)))))
-        # end
-        Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        # Matrix version
+        # Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        
+        
         # Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
        #Γ = 2 * A * (ρ * g)^n / (n+2)
+
+       # Scalar version
+       Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+
     end
     D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
   
@@ -452,20 +469,18 @@ function create_NNs()
     #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
     sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
 
-    # Define the networks 1->10->5->1
-    #UA = Chain(
-    #    Dense(1,10,initb = Flux.zeros), 
-    #    BatchNorm(10, leakyrelu),
-    #    Dense(10,5,initb = Flux.zeros), 
-    #    BatchNorm(5, leakyrelu),
-        #Dense(5,1, relu_A, initb = Flux.zeros) 
-    #    Dense(5,1, sigmoid_A, initb = Flux.zeros) 
-    #)
     UA = Chain(
-        Dense(1,1, sigmoid_A, initb = Flux.zeros) 
-        #Dense(1,1, leakyrelu, initb = Flux.zeros) 
-        #Dense(1,1, relu_A, initb = Flux.zeros) 
+        Dense(1,10), 
+        Dense(10,10, x->tanh.(x), initb = Flux.glorot_normal), 
+        Dense(10,5, x->tanh.(x), initb = Flux.glorot_normal), 
+        Dense(5,1) 
     )
+
+    # UA = Chain(
+    #     Dense(1,1, sigmoid_A, initb = Flux.zeros) 
+    #     #Dense(1,1, leakyrelu, initb = Flux.zeros) 
+    #     #Dense(1,1, relu_A, initb = Flux.zeros) 
+    # )
 
     return hyparams, UA
 end
