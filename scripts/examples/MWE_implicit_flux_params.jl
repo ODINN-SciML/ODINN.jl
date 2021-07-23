@@ -130,9 +130,9 @@ function heatflow_nonlinear(T, p, fake, tol=Inf)
         
     end
 
-    if(!fake)
-        println("Values of UA in heatflow_nonlinear: ", UA([0., .5, 1.]')) # Simulations here are correct
-    end
+    # if(!fake)
+    #     println("Values of UA in heatflow_nonlinear: ", UA([0., .5, 1.]')) # Simulations here are correct
+    # end
     
     return T
     
@@ -141,11 +141,11 @@ end
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
 Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
-function train(loss, p)
+function train(loss, UA, p)
     
-    @epochs 10 hybrid_train_NN!(loss, UA, p, opt, losses)
+    @epochs 5 hybrid_train_NN!(loss, UA, p, opt, losses)
     
-    println("Values of UA in train(): ", UA([0., .5, 1.]'))
+    # println("Values of UA in train(): ", UA([0., .5, 1.]'))
     
     return UA, losses
     
@@ -155,18 +155,20 @@ function hybrid_train_NN!(loss, UA, p, opt, losses)
     
     T = T₀
     θ = Flux.params(UA)
-    println("Values of UA in hybrid_train BEFORE: ", UA([0., .5, 1.]'))
+    # println("Values of UA in hybrid_train BEFORE: ", UA([0., .5, 1.]'))
     loss_UA, back_UA = Zygote.pullback(() -> loss(T, p), θ)
     push!(losses, loss_UA)
    
     ∇_UA = back_UA(one(loss_UA))
 
-    for ps in θ
-       println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
-    end
+    println("Loss: ", loss_UA)
+
+    # for ps in θ
+    #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
+    # end
     
-    println("θ: ", θ) # parameters are NOT NaNs
-    println("Values of UA in hybrid_train AFTER: ", UA([0., .5, 1.]')) # Simulations here are all NaNs
+    # println("θ: ", θ) # parameters are NOT NaNs
+    # println("Values of UA in hybrid_train AFTER: ", UA([0., .5, 1.]')) # Simulations here are all NaNs
     
     Flux.Optimise.update!(opt, θ, ∇_UA)
     
@@ -178,7 +180,7 @@ function loss_NN(T, p, λ=1)
     T = heatflow_nonlinear(T, p, false)
 
     Zygote.ignore() do
-        println("Values of UA in loss_NN: ", UA([0., .5, 1.]')) # Simulations here are all NaNs
+        # println("Values of UA in loss_NN: ", UA([0., .5, 1.]')) # Simulations here are all NaNs
         display(heatmap(T - T_ref, clim=(0, maximum(T₀)), title="Error"))
     end
     l_cost = sqrt(Flux.Losses.mse(T, T_ref; agg=mean))
@@ -203,15 +205,20 @@ leakyrelu(x, a=0.01) = max(a*x, x)
 relu(x) = max(0, x)
 
 UA = Chain(
-    Dense(1,10,initb = Flux.glorot_normal), 
-    BatchNorm(10, leakyrelu),
-    Dense(10,5,initb = Flux.glorot_normal), 
-    BatchNorm(5, leakyrelu),
-    Dense(5,1, relu, initb = Flux.glorot_normal) 
+    Dense(1,10), 
+    Dense(10,10, leakyrelu, initb = Flux.glorot_normal), 
+    Dense(10,5, leakyrelu, initb = Flux.glorot_normal), 
+    Dense(5,1) 
 )
 
 opt = RMSProp()
 losses = []
 
 # Train heat equation UDE
-UA_trained, losses = train(loss_NN, p)  
+UA_trained, losses = train(loss_NN, UA, p) 
+
+
+all_times = LinRange(0, t₁, 1000)
+# println("UD(all_times')': ",  UD_trained(all_times')')
+plot(all_times, UA_trained(all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
+plot!(fakeA, 0, t₁, label="fake")
