@@ -174,36 +174,6 @@ function buffer_mean(A, i)
     return copy(A_buffer)
 end
 
-"""
-    timestep!(Δts, Δx, D, method)
-
-Computes or updates the time step for temporal discretization of a differential equation
-"""
-function timestep!(Δts, Δx, D, method)
-    # To do: include 'method' and Δt as parameters of the function. 
-    # Right now, this runs just as before.
-    #method = "explicit-adaptive"
-
-    if method == "explicit-adaptive"
-        # Compute the maximum diffusivity in order to pick a temporal step that garantees estability 
-        D_max = maximum(D)
-        Δt = η * ( Δx^2 / (2 * D_max ))
-    elseif method == "explicit"
-        ## add this as parameter
-        Δt = 0.001
-        D_max = maximum(D)
-        if Δt / ( Δx^2 / (2 * D_max )) > 1 
-            #println("Stability condition is not satisfied\n")
-        end
-    elseif method == "implicit"
-        println("Implicit method not yet implemented\n")
-    end
-    # TODO: uncomment once a solution to "Mutating arrays" problem is found
-    #append!(Δts, Δt)
-    #println("Δt: ", Δt)
-
-    return Δt
-end
 
 function view_∇(ps_UA, ∇_UA)
     for ps in ps_UA

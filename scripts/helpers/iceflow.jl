@@ -23,20 +23,15 @@ function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     println("Running forward UDE ice flow model...\n")
     # For now, train UDE only with the last timestamp with "observations"
     # Use batchsize similar to dataset size for easy training
-    Y = vec(H_ref["H"][end]) # flatten matrix
-    X = p[7] # flattened MB matrix
-    # println("Y: ", size(Y))
-    # println("X: ", size(X))
 
     # We define an optimizer
-    opt = RMSProp(0.0001)
+    opt = RMSProp(0.01)
     # opt = ADAM(hyparams.η)
 
-    #data = Flux.Data.DataLoader((X, Y), batchsize=hyparams.batchsize, (X, Y), shuffle=false)
     # Train the UDE for a given number of epochs
-    #H_buff = Zygote.Buffer(H)
-    θ = Flux.params(UA)
-    @epochs hyparams.epochs hybrid_train!(loss, UA, θ, opt, H, p, t, t₁)
+    # θ = Flux.params(UA)
+    H_o = Zygote.Buffer(H)
+    @epochs hyparams.epochs hybrid_train!(loss, UA, opt, H, H_o, p, t, t₁)
 
     #H = copy(H_buff)  
 end
@@ -46,14 +41,23 @@ end
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(loss, UA, θ, opt, H, p, t, t₁)
+function hybrid_train!(loss, UA, opt, H, H_o, p, t, t₁)
     # Retrieve model parameters
     # We get the model parameters to be trained
-    # θ = Flux.params(UA)
+    θ = Flux.params(UA)
 
     # back is a method that computes the product of the gradient so far with its argument.
     println("Forward pass")
-    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), θ)
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, H_o, UA, p, t, t₁), θ)
+
+    Zygote.ignore() do
+        lim = maximum( abs.(H .- H₀) )
+        hmh0 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
+            xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
+            title="Variation in ice thickness at epoch")
+        hmh = heatmap(H, title="H")
+        display(plot(hmh0, hmh, aspect_ratio=:equal))
+    end
 
     #@code_typed Zygote._pullback(() -> loss(data, H, p, t, t₁), θ)
     # Callback to track the training
@@ -73,11 +77,7 @@ function hybrid_train!(loss, UA, θ, opt, H, p, t, t₁)
     # Here you might like to check validation set accuracy, and break out to do early stopping.
     # println("θ AFTER: ", θ)
 
-    lim = maximum( abs.(H .- H₀) )
-    hmz = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
-        xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
-        title="Variation in ice thickness")
-    display(hmz)
+
 
 end
 
@@ -91,21 +91,25 @@ Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimis
 Computes the loss function for a specific batch.
 """
 # We determine the loss function
-function loss(H, UA, p, t, t₁)
-    l_H, l_A = 0.0, 0.0
+function loss(H, H_o, UA, p, t, t₁)
+    l_H, l_A  = 0.0, 0.0
    
-    # Compute l_H as the difference between the simulated H with UA(x) and H_ref
     H = iceflow!(H, UA, p,t,t₁)
-    #println("H: ", maximum(H))
+    H_o .= H
+
+    # A = p[4]
+    # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
+
     # println("l_A: ", l_A)
     println("l_H: ", l_H)
-    # l = l_H + l_A
 
-    #Zygote.ignore() do
-    #    hml = heatmap(H_ref["H"][end] .- H, title="Loss")
-    #    display(hml)
-    #end
+    # l = l_A + l_H
+
+    Zygote.ignore() do
+       hml = heatmap(H_ref["H"][end] .- H, title="Loss error")
+       display(hml)
+    end
 
     return l_H
 end
@@ -226,7 +230,7 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
     end
     
     println("Saving reference data")
-    save(joinpath(root_dir, "../../data/H_ref.jld"), "H_ref", H_ref)
+    save(joinpath(root_dir, "data/H_ref.jld"), "H", H_ref)
 
     return H
 end
@@ -264,17 +268,13 @@ function iceflow!(H, UA, p,t,t₁)
             # Scalar version
             ŶA = UA([mean(vec(MB_avg[year])')])[1] .* 1e-17 # Adding units outside the NN
 
-            # Zygote.ignore() do
-            #     # println("Current params: ", Flux.params(UA))
+            Zygote.ignore() do
+                # println("Current params: ", Flux.params(UA))
 
-            #     # if(year == 1)
-            #     println("ŶA max: ", maximum(ŶA))
-            #     println("ŶA min: ", minimum(ŶA))
-            #     # println("ŶA total elements: ", length(unique(ŶA)))
-            #     # end
+                println("ŶA: ", ŶA )
 
-            #     #display(heatmap(MB_avg[year], title="MB"))
-            # end
+                #display(heatmap(MB_avg[year], title="MB"))
+            end
         
             # Unpack and repack tuple with updated A value
             Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
@@ -341,7 +341,6 @@ function iceflow!(H, UA, p,t,t₁)
     end   
     end # let
 
-    # return sum(H)
     return H
 
 end
@@ -465,7 +464,9 @@ function create_NNs()
     leakyrelu(x, a=0.01) = max(a*x, x)
 
     # Constraints A within physically plausible values
-    #relu_A(x) = min(max(minA, x), maxA)
+    minA = 1.5
+    maxA = 30
+    relu_A(x) = min(max(minA, x), maxA)
     #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
     sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
 
@@ -473,7 +474,7 @@ function create_NNs()
         Dense(1,10), 
         Dense(10,10, x->tanh.(x), initb = Flux.glorot_normal), 
         Dense(10,5, x->tanh.(x), initb = Flux.glorot_normal), 
-        Dense(5,1) 
+        Dense(5,1, relu_A) 
     )
 
     # UA = Chain(

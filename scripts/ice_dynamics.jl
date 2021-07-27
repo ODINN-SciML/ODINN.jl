@@ -7,8 +7,9 @@ SINDy (Brunton et al., 2016).
 =#
 
 ## Environment and packages
-# cd(@__DIR__)
-# using Pkg; Pkg.activate("../."); Pkg.instantiate()
+cd(@__DIR__)
+using Pkg; Pkg.activate("../."); 
+# Pkg.instantiate()
 using Plots; gr()
 using SparseArrays
 using Statistics
@@ -46,8 +47,8 @@ include("helpers/iceflow.jl")
 ###############################################################
 
 # Load the HDF5 file with Harry's simulated data
-root_dir = pwd()
-argentiere_f = h5open(joinpath(root_dir, "../data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
+root_dir = cd(pwd, "..")
+argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
 
 # Fill the Glacier structure with the retrieved data
 argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
@@ -99,12 +100,7 @@ if example == "Argentiere"
         MB_buff = buffer_mean(argentiere.MB, year)
         voidfill!(MB_buff, MB_buff[1,1], 0)
         push!(MB_avg, MB_buff)
-    end
-
-    # isderiving() = false  # https://fluxml.ai/Zygote.jl/latest/adjoints/#Gradient-Reflection-1
-    # Zygote.@adjoint isderiving() = true, _ -> nothing
-
-    
+    end 
     
 elseif example == "Gaussian"
     
@@ -127,7 +123,7 @@ if create_ref_dataset
     H_ref = Dict("H"=>[], "timestamps"=>[1,2,3])
     @time H = iceflow!(H,H_ref,p,t,t₁)
 else 
-    H_ref = load(joinpath(root_dir, "../../data/H_ref.jld"))["H_ref"]
+    H_ref = load(joinpath(root_dir, "data/H_ref.jld"))["H"]
 end
 
 # We train an UDE in order to learn and infer the fake laws
