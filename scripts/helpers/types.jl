@@ -8,7 +8,7 @@ using Base: @kwdef
 @kwdef mutable struct Hyperparameters
     batchsize::Int = 500     # batch size
     η::Float64 = 0.1         # learning rate
-    epochs::Int = 20        # number of epochs
+    epochs::Int = 4        # number of epochs
     use_cuda::Bool = true    # use gpu (if cuda available)
 end
 

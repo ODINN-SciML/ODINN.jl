@@ -168,7 +168,7 @@ function hybrid_train_NN!(loss, UA, p, opt, losses)
     # end
     
     # println("θ: ", θ) # parameters are NOT NaNs
-    # println("Values of UA in hybrid_train AFTER: ", UA([0., .5, 1.]')) # Simulations here are all NaNs
+    println("Values of UA in hybrid_train AFTER: ", UA([0., .5, 1.]')) # Simulations here are all NaNs
     
     Flux.Optimise.update!(opt, θ, ∇_UA)
     
@@ -219,6 +219,6 @@ UA_trained, losses = train(loss_NN, UA, p)
 
 
 all_times = LinRange(0, t₁, 1000)
-# println("UD(all_times')': ",  UD_trained(all_times')')
+# println("UA_trained(all_times')': ",  UA_trained(all_times')')
 plot(all_times, UA_trained(all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
 plot!(fakeA, 0, t₁, label="fake")
