@@ -47,18 +47,19 @@ function Heat_nonlinear(T, A, p)
    
     Δx, Δy, Δt, t₁, ρ, g, n = p
     
-    #### NEW CODE TO BREAK
+    #### NEW CODE TO BREAK  ########
+
     dTdx = diff(T, dims=1) / Δx
     dTdy = diff(T, dims=2) / Δy
     ∇T = sqrt.(avg_y(dTdx).^2 .+ avg_x(dTdy).^2)
 
-    D = A .* avg(T) .* ∇T
+    D = A * avg(T) .* ∇T # breaking
     # D = A
 
     dTdx_edges = diff(T[:,2:end - 1], dims=1) / Δx
     dTdy_edges = diff(T[2:end - 1,:], dims=2) / Δy
    
-    Fx = -avg_y(D) .* dTdx_edges
+    Fx = -avg_y(D) .* dTdx_edges # breaking
     Fy = -avg_x(D) .* dTdy_edges 
     
     # Fx = -D * dTdx_edges
@@ -68,15 +69,18 @@ function Heat_nonlinear(T, A, p)
 
     # dτ = dτsc * min( 10.0 , 1.0/(1.0/Δt + 1.0/(cfl/(ϵ + D))))
 
-    dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
+    dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D))))) # breaking
+
+    #########################
     
     return F, dτ
  
 end
 
 # Fake law to create reference dataset and to be learnt by the NN
-fakeA(t) = A₀ * exp(2t)
+# fakeA(t) = A₀ * exp(2t)
 # fakeA(t) = 0.1 * (2 + t^5 / t₁^4)
+fakeA(t) = t + t^2
 
 ### Heat equation based on a fake A parameter function to compute the diffusivity
 function heatflow_nonlinear(T, p, fake, tol=Inf)
@@ -102,7 +106,7 @@ function heatflow_nonlinear(T, p, fake, tol=Inf)
                 A = fakeA(t)  # compute the fake A value involved in the nonlinear diffusivity
             else
                 # Compute A with the NN once per time step
-                A = UA([t]')[1]  # compute A parameter involved in the diffusivity
+                A = predict_A(UA, [t]')[1]  # compute A parameter involved in the diffusivity
             end
             
             F, dτ = Heat_nonlinear(T, A, p)
@@ -114,7 +118,7 @@ function heatflow_nonlinear(T, p, fake, tol=Inf)
 
             T_ = copy(T)
             # @tullio T[i,j] := max(0.0, T_[i,j] + dτ * dTdt[i,j])
-            @tullio T[i,j] := max(0.0, T_[i,j] + dTdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            @tullio T[i,j] := max(0.0, T_[i,j] + dTdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])  # breaking
             
             Zygote.ignore() do
                 Err .= Err .- T
@@ -143,7 +147,7 @@ Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimis
 
 function train(loss, UA, p)
     
-    @epochs 5 hybrid_train_NN!(loss, UA, p, opt, losses)
+    @epochs 25 hybrid_train_NN!(loss, UA, p, opt, losses)
     
     # println("Values of UA in train(): ", UA([0., .5, 1.]'))
     
@@ -168,7 +172,7 @@ function hybrid_train_NN!(loss, UA, p, opt, losses)
     # end
     
     # println("θ: ", θ) # parameters are NOT NaNs
-    println("Values of UA in hybrid_train AFTER: ", UA([0., .5, 1.]')) # Simulations here are all NaNs
+    println("Values of predict_A in hybrid_train AFTER: ", predict_A(UA, [1,2,3,4,5]')) # Simulations here are all NaNs
     
     Flux.Optimise.update!(opt, θ, ∇_UA)
     
@@ -188,6 +192,9 @@ function loss_NN(T, p, λ=1)
     return l_cost 
 end
 
+predict_A(UA, t) = 0 .+ UA(t) # For the base value I've been trying 
+                              # either the avg value or the initial (t=0) value
+
 #######################
 
 ########################################
@@ -204,14 +211,21 @@ T_ref = heatflow_nonlinear(T₂, p, true, 1e-1)
 leakyrelu(x, a=0.01) = max(a*x, x)
 relu(x) = max(0, x)
 
+# UA = Chain(
+#     Dense(1,10), 
+#     Dense(10,10, leakyrelu, init = Flux.glorot_normal), 
+#     Dense(10,5, leakyrelu, init = Flux.glorot_normal), 
+#     Dense(5,1) 
+# )
+
 UA = Chain(
     Dense(1,10), 
-    Dense(10,10, leakyrelu, initb = Flux.glorot_normal), 
-    Dense(10,5, leakyrelu, initb = Flux.glorot_normal), 
+    Dense(10,10, leakyrelu, init = Flux.kaiming_normal(gain=5)), 
+    Dense(10,5, leakyrelu, init = Flux.kaiming_normal(gain=5)), 
     Dense(5,1) 
 )
 
-opt = RMSProp()
+opt = RMSProp(0.01)
 losses = []
 
 # Train heat equation UDE
@@ -220,5 +234,5 @@ UA_trained, losses = train(loss_NN, UA, p)
 
 all_times = LinRange(0, t₁, 1000)
 # println("UA_trained(all_times')': ",  UA_trained(all_times')')
-plot(all_times, UA_trained(all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
+plot(all_times, predict_A(UA_trained, all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
 plot!(fakeA, 0, t₁, label="fake")

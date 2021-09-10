@@ -205,7 +205,7 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
     return H
 end
 
-function iceflow!(H, UA, p,t,t₁, inverse)
+function iceflow!(H, UA, A, p,t,t₁, inverse)
 
     # Retrieve input variables  
     let                  
@@ -234,7 +234,7 @@ function iceflow!(H, UA, p,t,t₁, inverse)
                 ## Predict A with the NN
                 # ŶA = UA(vec(MB_avg[year])') .* 1e-17 # Adding units outside the NN
                 ## Scalar version            
-                YA = UA([mean(vec(MB_avg[year])')])[1] .* 1e-17 # Adding units outside the NN
+                YA = predict_UA([mean(vec(MB_avg[year])')])
 
                 Zygote.ignore() do
                     # println("Current params: ", Flux.params(UA))
@@ -247,9 +247,7 @@ function iceflow!(H, UA, p,t,t₁, inverse)
                 ## Unpack and repack tuple with updated A value
                 Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
                 p = (Δx, Δy, Γ, YA, B, v, MB, MB_avg, C, α)
-            
-            else
-                A = UA
+        
             end
         end
         y = (year, current_year)
@@ -379,23 +377,23 @@ end
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
 Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
-function loss(H, UA, p, t, t₁, inverse)
+function loss(H, UA, A, p, t, t₁, inverse)
     l_H, l_A  = 0.0, 0.0
    
-    H = iceflow!(H, UA, p,t,t₁, inverse)
+    H = iceflow!(H, UA, A, p,t,t₁, inverse)
 
     # A = p[4]
     # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
 
     # println("l_A: ", l_A)
-    println("l_H: ", l_H)
+    #println("l_H: ", l_H)
 
     # l = l_A + l_H
 
     Zygote.ignore() do
         if(!inverse)
-            println("Values of UA in loss(): ", UA([0., .5, 1.]'))
+            println("Values of predict_UA in loss(): ", predict_UA([0, 1, 2, 3, 4]'))
         end
 
        hml = heatmap(H_ref["H"][end] .- H, title="Loss error")
@@ -409,30 +407,31 @@ function hybrid_train_NN!(loss, UA, p, opt, losses, inverse)
     
     H = H₀
     θ = Flux.params(UA)
-    # println("Values of UA in hybrid_train BEFORE: ", UA([0., .5, 1.]'))
+    # println("Values of UA in hybrid_train BEFORE: ", predict_UA([0, 1, 2, 3, 4]'))
 
     if inverse
-        loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁, inverse), A) # inverse problem
+        A = p[4]
+        loss_UA, back_UA = Zygote.pullback(A -> loss(H, UA, A, p, t, t₁, inverse), A) # inverse problem
     else
-        loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁, inverse), θ) # with UA
+        loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, A, p, t, t₁, inverse), θ) # with UA
     end
 
     push!(losses, loss_UA)
-
-    # @infiltrate
    
     ∇_UA = back_UA(one(loss_UA))
 
     println("Loss: ", loss_UA)
 
-    for ps in θ
-       println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
-    end
+    # @infiltrate
+
+    # for ps in θ
+    #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
+    # end
     
-    # println("θ: ", θ) # parameters are NOT NaNs
+    println("θ: ", θ) # parameters are NOT NaNs
     
     Flux.Optimise.update!(opt, θ, ∇_UA)
-    println("Values of UA in hybrid_train in hybrid_train(): ", UA([0., .5, 1.]')) # Simulations here are all NaNs
+    println("Values of predict_UA in hybrid_train in hybrid_train(): ", predict_UA([0, 1, 2, 3, 4]')) # Simulations here are all NaNs
 
 end
 
@@ -446,9 +445,11 @@ function train(loss, UA, p, inverse)
     
     @epochs 5 hybrid_train_NN!(loss, UA, p, opt, losses, inverse)
     
-    println("Values of UA in train(): ", UA([0., .5, 1.]'))
+    println("Values of predict_UA in train(): ", predict_UA([0, 1, 2, 3, 4]'))
     
 end
+
+predict_A(UA, t) = 2e-16 .+ UA(t)
 
 
 
@@ -474,12 +475,13 @@ relu(x) = max(0, x)
 
 UA = Chain(
     Dense(1,10), 
-    Dense(10,10, leakyrelu, initb = Flux.glorot_normal), 
-    Dense(10,5, leakyrelu, initb = Flux.glorot_normal), 
+    Dense(10,10, leakyrelu, init = Flux.kaiming_normal(gain=1e-18)), 
+    Dense(10,5, leakyrelu, init = Flux.kaiming_normal(gain=1e-18)), 
     Dense(5,1) 
 )
 
-opt = RMSProp()
+
+opt = RMSProp(0.01)
 losses = []
 
 # Train iceflow UDE
@@ -488,7 +490,7 @@ A = 5e-16
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α) 
 train(loss, UA, p, inverse) 
 
-all_times = LinRange(0, t₁, 1000)
+all_times = LinRange(0, t₁, 100)
 # println("UD(all_times')': ",  UD_trained(all_times')')
 plot(fakeA, 0, t₁, label="fake")
-plot!(all_times, UA(all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
+plot!(all_times, predict_UA(all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
