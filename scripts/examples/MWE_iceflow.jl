@@ -110,6 +110,9 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
+
+        A = fakeA(t)
+
         # if(year != current_year)
             
         #     # Predict A with the fake A law
@@ -234,7 +237,9 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
                 ## Predict A with the NN
                 # ŶA = UA(vec(MB_avg[year])') .* 1e-17 # Adding units outside the NN
                 ## Scalar version            
-                YA = predict_UA([mean(vec(MB_avg[year])')])
+                # YA = predict_A(UA, [mean(vec(MB_avg[year])')])[1]
+
+                YA = predict_A(UA, [t])
 
                 Zygote.ignore() do
                     # println("Current params: ", Flux.params(UA))
@@ -254,15 +259,15 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
 
         if method == "implicit"
             
-            #while err > tolnl && iter < itMax+1
-            while iter < itMax + 1
+            while err > tolnl && iter < itMax+1
+            # while iter < itMax + 1
 
                 #println("iter: ", iter)
             
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, A, p, y)
+                F, dτ, current_year = SIA(H, p, y)
 
                 # Compute the residual ice thickness for the inertia
                 @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
@@ -282,18 +287,18 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
                 #@show isderiving()
               
                 Zygote.ignore() do
-                    if mod(iter, nout) == 0
-                        # Compute error for implicit method with damping
-                        Err = Err .- H
-                        err = maximum(Err)
-                        # println("error: ", err)
-                        #@infiltrate
+                    # if mod(iter, nout) == 0
+                    # Compute error for implicit method with damping
+                    Err = Err .- H
+                    err = maximum(Err)
+                    # println("error: ", err)
+                    #@infiltrate
 
-                        if isnan(err)
-                            error("""NaNs encountered.  Try a combination of:
-                                        decreasing `damp` and/or `dtausc`, more smoothing steps""")
-                        end
+                    if isnan(err)
+                        error("""NaNs encountered.  Try a combination of:
+                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
                     end
+                    # end
                 end
 
                 iter += 1
@@ -314,13 +319,12 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
 
 end
 
-function SIA(H, A, p, y)
-    Δx, Δy, Γ, A_def, B, v, argentiere.MB, MB_avg, C, α = p
+function SIA(H, p, y)
+    Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α = p
     year, current_year = y
 
     # Update glacier surface altimetry
-    # S = B .+ H
-    S = H
+    S = B .+ H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -375,7 +379,7 @@ function SIA(H, A, p, y)
 end
 
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
-Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
+# Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
 function loss(H, UA, A, p, t, t₁, inverse)
     l_H, l_A  = 0.0, 0.0
@@ -393,7 +397,7 @@ function loss(H, UA, A, p, t, t₁, inverse)
 
     Zygote.ignore() do
         if(!inverse)
-            println("Values of predict_UA in loss(): ", predict_UA([0, 1, 2, 3, 4]'))
+            println("Values of predict_A in loss(): ", predict_A(UA, [0, 1, 2, 3, 4]'))
         end
 
        hml = heatmap(H_ref["H"][end] .- H, title="Loss error")
@@ -403,14 +407,14 @@ function loss(H, UA, A, p, t, t₁, inverse)
     return l_H
 end
 
-function hybrid_train_NN!(loss, UA, p, opt, losses, inverse)
+function hybrid_train_NN!(UA, p, opt, losses, inverse)
     
     H = H₀
+    A = p[4]
     θ = Flux.params(UA)
-    # println("Values of UA in hybrid_train BEFORE: ", predict_UA([0, 1, 2, 3, 4]'))
+    # println("Values of UA in hybrid_train BEFORE: ", predict_A(UA, [0, 1, 2, 3, 4]'))
 
     if inverse
-        A = p[4]
         loss_UA, back_UA = Zygote.pullback(A -> loss(H, UA, A, p, t, t₁, inverse), A) # inverse problem
     else
         loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, A, p, t, t₁, inverse), θ) # with UA
@@ -428,14 +432,14 @@ function hybrid_train_NN!(loss, UA, p, opt, losses, inverse)
     #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
     # end
     
-    println("θ: ", θ) # parameters are NOT NaNs
+    # println("θ: ", θ) # parameters are NOT NaNs
     
     Flux.Optimise.update!(opt, θ, ∇_UA)
-    println("Values of predict_UA in hybrid_train in hybrid_train(): ", predict_UA([0, 1, 2, 3, 4]')) # Simulations here are all NaNs
+    println("Values of predict_A in hybrid_train in hybrid_train(): ", predict_A(UA, [0, 1, 2, 3, 4]')) # Simulations here are all NaNs
 
 end
 
-function train(loss, UA, p, inverse)
+function train(UA, p, inverse)
 
     if inverse
         println("Running inverse problem")
@@ -443,15 +447,15 @@ function train(loss, UA, p, inverse)
         println("Running UDE problem")
     end
     
-    @epochs 5 hybrid_train_NN!(loss, UA, p, opt, losses, inverse)
+    @epochs 5 hybrid_train_NN!(UA, p, opt, losses, inverse)
     
-    println("Values of predict_UA in train(): ", predict_UA([0, 1, 2, 3, 4]'))
+    println("Values of predict_A in train(): ", predict_A(UA, [0, 1, 2, 3, 4]'))
     
 end
 
-predict_A(UA, t) = 2e-16 .+ UA(t)
+predict_A(UA, t) = (2 .+ UA(t)).*1e-16
 
-
+fakeA(t) = (1 + t^1.7)*1e-17
 
 #######################
 
@@ -473,24 +477,32 @@ H_ref = load(joinpath(root_dir, "data/H_ref.jld"))["H"]
 leakyrelu(x, a=0.01) = max(a*x, x)
 relu(x) = max(0, x)
 
+# UA = Chain(
+#     Dense(1,10), 
+#     Dense(10,10, leakyrelu, init = Flux.kaiming_normal(gain=1e-3)), 
+#     Dense(10,5, leakyrelu, init = Flux.kaiming_normal(gain=1e-3)), 
+#     Dense(5,1) 
+# )
+
 UA = Chain(
     Dense(1,10), 
-    Dense(10,10, leakyrelu, init = Flux.kaiming_normal(gain=1e-18)), 
-    Dense(10,5, leakyrelu, init = Flux.kaiming_normal(gain=1e-18)), 
+    Dense(10,10, leakyrelu, init = Flux.glorot_normal), 
+    Dense(10,5, leakyrelu, init = Flux.glorot_normal), 
     Dense(5,1) 
 )
+
 
 
 opt = RMSProp(0.01)
 losses = []
 
 # Train iceflow UDE
-inverse = true
-A = 5e-16
+inverse = false
+A = 2e-16
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α) 
-train(loss, UA, p, inverse) 
+train(UA, p, inverse) 
 
-all_times = LinRange(0, t₁, 100)
+all_times = LinRange(0, t₁, 50)
 # println("UD(all_times')': ",  UD_trained(all_times')')
 plot(fakeA, 0, t₁, label="fake")
 plot!(all_times, predict_UA(all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
