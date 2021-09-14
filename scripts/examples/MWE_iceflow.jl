@@ -22,7 +22,7 @@ nx, ny = 100, 100 # Size of the grid
 Δx, Δy = 1, 1
 Δt = 1.0/12.0
 t = 0
-t₁ = 2
+t₁ = 5
 
 D₀ = 1
 tolnl = 1e-4
@@ -58,10 +58,12 @@ voidfill!(MB_plot, argentiere.MB[1,1,1])
 
 # Domain size
 nx = size(argentiere.bed)[1]
-ny = size(argentiere.bed)[2];
+ny = size(argentiere.bed)[2]
 
 B  = copy(argentiere.bed)
 H₀ = copy(argentiere.thick[:,:,1])
+# TEST TO MIX H DATASETS, TO PRODUCE CONDITIONS THAT WORK 
+# H₀ = [ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / 300 ) for i in 1:nx, j in 1:ny ] # test
 v = zeros(size(argentiere.thick)) # surface velocities
 
 # Spatial and temporal differentials
@@ -149,7 +151,7 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
                 
-                F, dτ, current_year = SIA(H, p, y)
+                F, dτ = SIA(H, p, y)
 
                 # Implicit method with broadcasting
                 # Differentiate H via a Picard iteration method
@@ -216,6 +218,7 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
     total_iter = 0
     global model = "UDE_A"
     MB_avg = p[8] 
+    t = 0
 
     # Forward scheme implementation
     while t < t₁
@@ -267,7 +270,7 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, p, y)
+                F, dτ = SIA(H, p, y)
 
                 # Compute the residual ice thickness for the inertia
                 @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
@@ -305,15 +308,12 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
                 total_iter += 1
 
             end
-
-            #println("t: ", t)
           
             t += Δt
         end
         end # let
     end   
     end # let
-
 
     return H
 
@@ -325,6 +325,7 @@ function SIA(H, p, y)
 
     # Update glacier surface altimetry
     S = B .+ H
+    # S = H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -351,6 +352,7 @@ function SIA(H, p, y)
     #    Zygote.ignore() do
     #         @infiltrate
     #    end
+
        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
 
     end
@@ -369,25 +371,26 @@ function SIA(H, p, y)
     # Compute dτ for the implicit method
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
+    # Zygote.ignore() do
+    # @infiltrate
+    # end
+
     # Compute velocities
     # Vx = -D./(av(H) .+ epsi).*av_ya(dSdx)
     # Vy = -D./(av(H) .+ epsi).*av_xa(dSdy)
 
-    return F, dτ, current_year
+    return F, dτ
     #return sum(F)
 
 end
 
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
-# Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
+Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
 function loss(H, UA, A, p, t, t₁, inverse)
-    l_H, l_A  = 0.0, 0.0
    
     H = iceflow!(H, UA, A, p,t,t₁, inverse)
 
-    # A = p[4]
-    # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
     l_H = sqrt(Flux.Losses.mse(H, H_ref["H"][end]; agg=mean))
 
     # println("l_A: ", l_A)
@@ -414,6 +417,7 @@ function hybrid_train_NN!(UA, p, opt, losses, inverse)
     θ = Flux.params(UA)
     # println("Values of UA in hybrid_train BEFORE: ", predict_A(UA, [0, 1, 2, 3, 4]'))
 
+    
     if inverse
         loss_UA, back_UA = Zygote.pullback(A -> loss(H, UA, A, p, t, t₁, inverse), A) # inverse problem
     else
@@ -466,6 +470,7 @@ fakeA(t) = (1 + t^1.7)*1e-17
 A = 2e-16
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α) 
 ## Reference temperature dataset
+## UNCOMMENT TO GENERATE REFERENCE DATASET
 # H_ref = Dict("H"=>[], "timestamps"=>[1,2,3])
 # H = iceflow!(H₀,H_ref,A,p,t,t₁)
 
@@ -493,7 +498,7 @@ UA = Chain(
 
 
 
-opt = RMSProp(0.01)
+opt = RMSProp(0.001)
 losses = []
 
 # Train iceflow UDE
@@ -505,4 +510,4 @@ train(UA, p, inverse)
 all_times = LinRange(0, t₁, 50)
 # println("UD(all_times')': ",  UD_trained(all_times')')
 plot(fakeA, 0, t₁, label="fake")
-plot!(all_times, predict_UA(all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
+plot!(all_times, predict_A(UA, all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
