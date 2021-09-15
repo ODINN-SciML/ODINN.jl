@@ -22,7 +22,7 @@ nx, ny = 100, 100 # Size of the grid
 Δx, Δy = 1, 1
 Δt = 1.0/12.0
 t = 0
-t₁ = 5
+t₁ = 3
 
 D₀ = 1
 tolnl = 1e-4
@@ -61,9 +61,9 @@ nx = size(argentiere.bed)[1]
 ny = size(argentiere.bed)[2]
 
 B  = copy(argentiere.bed)
-H₀ = copy(argentiere.thick[:,:,1])
+# H₀ = copy(argentiere.thick[:,:,1])
 # TEST TO MIX H DATASETS, TO PRODUCE CONDITIONS THAT WORK 
-# H₀ = [ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / 300 ) for i in 1:nx, j in 1:ny ] # test
+H₀ = [ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / 300 ) for i in 1:nx, j in 1:ny ] # test
 v = zeros(size(argentiere.thick)) # surface velocities
 
 # Spatial and temporal differentials
@@ -144,8 +144,8 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
 
         elseif method == "implicit"
 
-            #while err > tolnl && iter < itMax+1
-            while iter < itMax + 1
+            while err > tolnl && iter < itMax+1
+            # while iter < itMax + 1
             
                 Err = copy(H)
 
@@ -227,6 +227,7 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
         err = 2 * tolnl
         Hold = copy(H)
         dHdt = zeros(nx, ny)
+        err = Inf 
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -244,13 +245,13 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
 
                 YA = predict_A(UA, [t])
 
-                Zygote.ignore() do
-                    # println("Current params: ", Flux.params(UA))
+                # Zygote.ignore() do
+                #     # println("Current params: ", Flux.params(UA))
 
-                    println("YA: ", YA )
+                #     println("YA: ", YA )
 
-                    #display(heatmap(MB_avg[year], title="MB"))
-                end
+                #     #display(heatmap(MB_avg[year], title="MB"))
+                # end
             
                 ## Unpack and repack tuple with updated A value
                 Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
@@ -287,21 +288,20 @@ function iceflow!(H, UA, A, p,t,t₁, inverse)
                 #println("maximum H: ",maximum(H))
                 #println("maximum H on borders: ", maximum([maximum(H[1,:]), maximum(H[:,1]), maximum(H[nx,:]), maximum(H[:,ny])]))
 
-                #@show isderiving()
               
                 Zygote.ignore() do
-                    # if mod(iter, nout) == 0
-                    # Compute error for implicit method with damping
-                    Err = Err .- H
-                    err = maximum(Err)
-                    # println("error: ", err)
-                    #@infiltrate
+                    if mod(iter, nout) == 0
+                        # Compute error for implicit method with damping
+                        Err = Err .- H
+                        err = maximum(Err)
+                        # println("error: ", err)
+                        #@infiltrate
 
-                    if isnan(err)
-                        error("""NaNs encountered.  Try a combination of:
-                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                        if isnan(err)
+                            error("""NaNs encountered.  Try a combination of:
+                                        decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                        end
                     end
-                    # end
                 end
 
                 iter += 1
@@ -324,8 +324,8 @@ function SIA(H, p, y)
     year, current_year = y
 
     # Update glacier surface altimetry
-    S = B .+ H
-    # S = H
+    # S = B .+ H
+    S = H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -410,25 +410,28 @@ function loss(H, UA, A, p, t, t₁, inverse)
     return l_H
 end
 
-function hybrid_train_NN!(UA, p, opt, losses, inverse)
+function hybrid_train_NN!(UA, A, p, opt, losses, inverse)
     
     H = H₀
-    A = p[4]
-    θ = Flux.params(UA)
     # println("Values of UA in hybrid_train BEFORE: ", predict_A(UA, [0, 1, 2, 3, 4]'))
 
-    
     if inverse
-        loss_UA, back_UA = Zygote.pullback(A -> loss(H, UA, A, p, t, t₁, inverse), A) # inverse problem
+        loss_A, back_A = Zygote.pullback(A -> loss(H, UA, A, p, t, t₁, inverse), A) # inverse problem
+
+        A = back_A(one(loss_A))
+        println("Updated A: ", A)
+        println("Loss: ", loss_A)
     else
+        θ = Flux.params(UA)
         loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, A, p, t, t₁, inverse), θ) # with UA
+
+        ∇_UA = back_UA(one(loss_UA))
+        Flux.Optimise.update!(opt, θ, ∇_UA)
+        push!(losses, loss_UA)
+        println("Loss: ", loss_UA)
+        println("Values of predict_A in hybrid_train in hybrid_train(): ", predict_A(UA, [0, 1, 2, 3, 4]')) # Simulations here are all NaNs
+
     end
-
-    push!(losses, loss_UA)
-   
-    ∇_UA = back_UA(one(loss_UA))
-
-    println("Loss: ", loss_UA)
 
     # @infiltrate
 
@@ -437,13 +440,11 @@ function hybrid_train_NN!(UA, p, opt, losses, inverse)
     # end
     
     # println("θ: ", θ) # parameters are NOT NaNs
-    
-    Flux.Optimise.update!(opt, θ, ∇_UA)
-    println("Values of predict_A in hybrid_train in hybrid_train(): ", predict_A(UA, [0, 1, 2, 3, 4]')) # Simulations here are all NaNs
+
 
 end
 
-function train(UA, p, inverse)
+function train(UA, A, p, inverse)
 
     if inverse
         println("Running inverse problem")
@@ -451,7 +452,7 @@ function train(UA, p, inverse)
         println("Running UDE problem")
     end
     
-    @epochs 5 hybrid_train_NN!(UA, p, opt, losses, inverse)
+    @epochs 5 hybrid_train_NN!(UA, A, p, opt, losses, inverse)
     
     println("Values of predict_A in train(): ", predict_A(UA, [0, 1, 2, 3, 4]'))
     
@@ -496,16 +497,14 @@ UA = Chain(
     Dense(5,1) 
 )
 
-
-
 opt = RMSProp(0.001)
 losses = []
 
 # Train iceflow UDE
 inverse = false
-A = 2e-16
+A = 5e-16
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α) 
-train(UA, p, inverse) 
+train(UA, A, p, inverse) 
 
 all_times = LinRange(0, t₁, 50)
 # println("UD(all_times')': ",  UD_trained(all_times')')
