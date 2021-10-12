@@ -17,22 +17,6 @@ using LinearAlgebra
 using HDF5
 using JLD
 using Infiltrator
-#using Test
-# using Flux
-# using Flux: @epochs
-#using BenchmarkTools
-#using PaddedViews
-#using Random
-#using Debugger
-# using Flux, DiffEqFlux, DataDrivenDiffEq
-
-# using Zygote
-#using DifferentialEquations
-#using ComponentArrays
-#using Parameters: @unpack
-#using Interpolations
-#using CUDA
-#using Measures
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -41,6 +25,7 @@ include("helpers/types.jl")
 ### Iceflow forward model  ###
 # (includes utils.jl as well)
 include("helpers/iceflow.jl")
+
 
 ###############################################################
 ###########################  MAIN #############################
@@ -84,7 +69,7 @@ hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
 
 #### Choose the example to run  #####
 example = "Argentiere"
-#example = "Gaussian" # Fake
+# example = "Gaussian" # Fake
 
 if example == "Argentiere"
 
@@ -115,13 +100,13 @@ end
 
 ### We perform the simulations with an explicit forward mo  ###
 # Gather simulation parameters
-p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α) 
+p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α, var_format) 
 H = copy(H₀)
 
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     H_ref = Dict("H"=>[], "timestamps"=>[1,2,3])
-    @time H = iceflow!(H,H_ref,p,t,t₁)
+    H = iceflow!(H,H_ref,p,t,t₁)
 else 
     H_ref = load(joinpath(root_dir, "data/H_ref.jld"))["H"]
 end
@@ -129,6 +114,24 @@ end
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     hyparams, UA = create_NNs()
+
+    # all_times = LinRange(0, t₁, 50)
+    # println("UD(all_times')': ",  UD_trained(all_times')')
+    period = length(MB_avg)
+    ŶA = []
+    MB_nan = deepcopy(MB_avg)
+    for i in 1:period
+        MB_nan[i][MB_nan[i] .== 0] .= NaN
+        append!(ŶA, A_fake(MB_nan[i], size(H), "scalar"))
+    end
+    plot(ŶA, yaxis="A", xaxis="Year", label="fake A")
+    # plot(fakeA, 0, t₁, label="fake")
+    initial_NN = []
+    for i in 1:period
+        append!(initial_NN, predict_A(UA, MB_nan, i, "scalar"))
+    end
+    display(plot!(initial_NN, label="initial NN"))
+
     iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
 end
 

@@ -21,18 +21,13 @@ Universal Differential Equations (UDEs)
 function iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
     println("Running forward UDE ice flow model...\n")
     # For now, train UDE only with the last timestamp with "observations"
-    # Use batchsize similar to dataset size for easy training
 
     # We define an optimizer
     # opt = RMSProp(0.0001)
-    opt = ADAM(10e-4)
-    A = 2e-16
+    opt = ADAM(10e-2)
 
     # Train the UDE for a given number of epochs
-    # θ = Flux.params(UA)
-    @epochs hyparams.epochs hybrid_train!(loss, A, opt, H, p, t, t₁)
-
-    #H = copy(H_buff)  
+    @epochs hyparams.epochs hybrid_train!(loss, UA, opt, H, p, t, t₁)
 end
 
 """
@@ -40,16 +35,14 @@ end
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(loss, A, opt, H, p, t, t₁)
+function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     # Retrieve model parameters
-    # We get the model parameters to be trained
-    # θ = Flux.params(UA)
+    θ = Flux.params(UA)
 
-    # back is a method that computes the product of the gradient so far with its argument.
-    println("Forward pass")
-    # loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), θ) # with UA
+    # println("Forward pass")
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), θ) # with UA
 
-    loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem
+    # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem
 
     Zygote.ignore() do
         lim = maximum( abs.(H .- H₀) )
@@ -64,30 +57,26 @@ function hybrid_train!(loss, A, opt, H, p, t, t₁)
     #callback(train_loss_UA)
     # Apply back() to the correct type of 1.0 to get the gradient of loss.
     
-    println("Backpropagation")
-    # ∇_UA = back_UA(one(loss_UA)) # with UA
+    # println("Backpropagation")
+    ∇_UA = back_UA(one(loss_UA)) # with UA
 
-    ∇_UA = back_UA(one(loss_UA))[1] # inverse problem
+    # ∇_UA = back_UA(one(loss_UA))[1] # inverse problem
     
-    println("Updating NN weights")
+    # println("Updating NN weights")
 
     # for ps in θ
     #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
     # end
-    println("Gradients ∇_UA: ", ∇_UA)
+    # println("Gradients ∇_UA: ", ∇_UA)
     # println("θ BEFORE: ", θ)
 
-    # Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+    Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
 
-    Flux.Optimise.update!(opt, A, ∇_UA) # inverse problem
-    Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p # unpack
-    p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α) # repack
+    # Flux.Optimise.update!(opt, A, ∇_UA) # inverse problem
+    # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p # unpack
+    # p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format) # repack
 
-    # Here you might like to check validation set accuracy, and break out to do early stopping.
     # println("θ AFTER: ", θ)
-
-
-
 end
 
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
@@ -100,10 +89,10 @@ Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimis
 Computes the loss function for a specific batch.
 """
 # We determine the loss function
-function loss(H, A, p, t, t₁)
+function loss(H, UA, p, t, t₁)
     l_H, l_A  = 0.0, 0.0
    
-    H = iceflow!(H, A, p,t,t₁)
+    H = iceflow!(H, UA, p,t,t₁)
 
     # A = p[4]
     # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
@@ -119,7 +108,7 @@ function loss(H, A, p, t, t₁)
        display(hml)
     end
 
-    println("loss->A: ", A)
+    # println("loss->A: ", A)
 
     return l_H
 end
@@ -130,13 +119,14 @@ end
 
 Forward ice flow model solving the Shallow Ice Approximation PDE 
 """
-function iceflow!(H,H_ref::Dict, A, p,t,t₁)
+function iceflow!(H,H_ref::Dict, p,t,t₁)
 
     println("Running forward PDE ice flow model...\n")
     # Instantiate variables
     let             
     current_year = 0
     MB_avg = p[8]  
+    var_format = p[11]
     total_iter = 0
     ts_i = 1
 
@@ -152,29 +142,27 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
-        # if(year != current_year)
+        if year != current_year
             
-        #     # Predict A with the fake A law
-        #     ŶA = A_fake(MB_avg[year], size(H))
+            # Predict A with the fake A law
+            ŶA = A_fake(MB_avg[year], size(H), var_format)
 
-        #     Zygote.ignore() do
-        #         if(year == 1)
-        #             println("ŶA max: ", maximum(ŶA))
-        #             println("ŶA min: ", minimum(ŶA))
-        #         end
+            # Zygote.ignore() do
+            #     if(year == 1)
+            #         println("ŶA max: ", maximum(ŶA))
+            #         println("ŶA min: ", minimum(ŶA))
+            #     end
 
-        #     end
-        #     # Unpack and repack tuple with updated A value
-        #     Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
-        #     p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
-        #     current_year = year
-        #     println("Year ", year)
-        # end
-        y = (year, current_year)
+            # end
+            # Unpack and repack tuple with updated A value
+            Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format)
+            current_year = year
+        end
 
         if method == "explicit"
 
-            F, dτ, current_year = SIA(H, A, p, y)
+            F, dτ = SIA(H, p)
             inn(H) .= max.(0.0, inn(H) .+ Δt * F)
             t += Δt_exp
             total_iter += 1 
@@ -187,7 +175,7 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
                 
-                F, dτ, current_year = SIA(H, A, p, y)
+                F, dτ = SIA(H, p)
 
                 # Implicit method with broadcasting
                 # Differentiate H via a Picard iteration method
@@ -210,7 +198,7 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
                     # Compute error for implicit method with damping
                     Err = Err .- H
                     err = maximum(Err)
-                    println("error at iter ", iter, ": ", err)
+                    # println("error at iter ", iter, ": ", err)
 
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
@@ -225,7 +213,7 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
             t += Δt
 
         end
-        end
+        end # let
 
         # Store timestamps to be used for training of the UDEs
         if ts_i < length(H_ref["timestamps"])+1
@@ -235,16 +223,39 @@ function iceflow!(H,H_ref::Dict, A, p,t,t₁)
                 ts_i += 1
             end          
         end        
-    end 
-
-    println("Total Number of iterartions: ", total_iter)
-    end
+    end   
+    end # let
     
     println("Saving reference data")
     save(joinpath(root_dir, "data/H_ref.jld"), "H", H_ref)
 
     return H
+end  
+
+
+predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1e-16 # Adding units outside the NN
+
+predict_A̅(UA, MB_avg, year) = UA([nanmean(vec(MB_avg[year])')])[1] .* 1e-16 # Adding units outside the NN
+
+"""
+    predict_A(UA, MB_avg, var_format)
+
+Make a prediction of `A` using the `UA` neural network for either scalar or matrix format. 
+"""
+function predict_A(UA, MB_avg, year, var_format)
+    @assert any(var_format .== ["matrix","scalar"]) "Wrong variable format! Needs to be `matrix` or `scalar`"
+    ## Predict A with the NN
+    if var_format == "matrix"
+        # Matrix version
+        ŶA = predict_Â(UA, MB_avg, year)
+    elseif var_format == "scalar"
+        ## Scalar version
+        ŶA = predict_A̅(UA, MB_avg, year)
+    end
+
+    return ŶA
 end
+
 
 
 """
@@ -252,14 +263,14 @@ end
 
 Hybrid forward ice flow model combining the SIA PDE and neural networks with neural networks into an UDE
 """
-function iceflow!(H, A, p,t,t₁)
+function iceflow!(H, UA, p,t,t₁)
 
     # Retrieve input variables  
     let                  
     current_year = 0
-    MB_avg = p[8]  
+    MB_avg = p[8] 
+    var_format = p[11] 
     total_iter = 0
-    global model = "UDE_A"
 
     # Forward scheme implementation
     while t < t₁
@@ -272,28 +283,25 @@ function iceflow!(H, A, p,t,t₁)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
 
-        # if(year != current_year)
-            
-            # Predict A with the NN
-            # ŶA = UA(vec(MB_avg[year])') .* 1e-17 # Adding units outside the NN
-            # Scalar version
-            # ŶA = UA([mean(vec(MB_avg[year])')])[1] .* 1e-17 # Adding units outside the NN
+        if(year != current_year)
+        
+            # Predict value of `A`
+            @infiltrate
+            ŶA = predict_A(UA, MB_avg, var_format, year)
 
             # Zygote.ignore() do
-            #     # println("Current params: ", Flux.params(UA))
+            #     println("Current params: ", Flux.params(UA))
 
             #     println("ŶA: ", ŶA )
 
-            #     #display(heatmap(MB_avg[year], title="MB"))
+            #     display(heatmap(MB_avg[year], title="MB"))
             # end
         
-            # Unpack and repack tuple with updated A value
-            # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
-            # p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α)
+            ## Unpack and repack tuple with updated A value
+            Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p
+            p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format)
             current_year = year
-            println("Year ", year)
-        # end
-        y = (year, current_year)
+        end
 
         if method == "implicit"
             
@@ -305,7 +313,7 @@ function iceflow!(H, A, p,t,t₁)
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ, current_year = SIA(H, A, p, y)
+                F, dτ = SIA(H, p)
 
                 # Compute the residual ice thickness for the inertia
                 @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
@@ -352,21 +360,18 @@ function iceflow!(H, A, p,t,t₁)
     end   
     end # let
 
-    println("iceflow->A: ", A)
-
     return H
 
 end
 
 """
-    SIA(H, p, y)
+    SIA(H, p)
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
-function SIA(H, A, p, y)
-    Δx, Δy, Γ, A_default, B, v, MB, MB_avg, C, α = p
-    year, current_year = y
+function SIA(H, p)
+    Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α = p
 
     # Update glacier surface altimetry
     S = B .+ H
@@ -375,29 +380,23 @@ function SIA(H, A, p, y)
     # Compute surface gradients on edges
     dSdx  = diff(S, dims=1) / Δx
     dSdy  = diff(S, dims=2) / Δy
-    ∇S = sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2)
+    # ∇S = sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2) # this does not work
+    ∇S² = avg_y(dSdx).^2 .+ avg_x(dSdy).^2
 
     # Compute diffusivity on secondary nodes
     # A here should have the same shape as H
     #                                     ice creep  +  basal sliding
     #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     # Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-    if(model == "standard")
-        # Γ = 2 * avg(A) * (ρ * g)^n / (n+2)
-        Γ = 2 * A * (ρ * g)^n / (n+2)
-    elseif(model == "UDE_A")
-        # Matrix version
-        # Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-        
-        
-        # Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-       #Γ = 2 * A * (ρ * g)^n / (n+2)
 
-       # Scalar version
-       Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+    # Matrix version
+    Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
 
-    end
-    D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
+    # Scalar version
+    #    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+
+    D = Γ .* avg(H).^(n + 2) .* ∇S².^((n - 1)/2)
+    # D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
   
     #D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)
 
@@ -412,13 +411,11 @@ function SIA(H, A, p, y)
     # Compute dτ for the implicit method
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
-    println("SIA->A: ", A)
-
     # Compute velocities
     # Vx = -D./(av(H) .+ epsi).*av_ya(dSdx)
     # Vy = -D./(av(H) .+ epsi).*av_xa(dSdy)
 
-    return F, dτ, current_year
+    return F, dτ
     #return sum(F)
 
 end
@@ -446,18 +443,31 @@ end
 
 Fake law to determine A in the SIA
 """
-function A_fake(MB_buffer, shape)
+function A_fake(MB_buffer, shape, var_format)
     # Matching point MB values to A values
-    MB_range = -15:0.5:10
-    A_step = (1.57e-16-1.57e-17)/length(MB_range)
-    A_range = 1.57e-17:A_step:1.57e-16
+    maxA = 5e-16
+    minA = 1e-17
 
-    A = []
-    for MB_i in MB_buffer
-        push!(A, A_range[closest_index(MB_range, MB_i)])
+    if var_format == "matrix"
+        MB_range = reverse(-15:0.01:8)
+    elseif var_format == "scalar"
+        MB_range = reverse(-2:0.01:2)
+    end
+
+    A_step = (maxA-minA)/length(MB_range)
+    A_range = minA:A_step:maxA
+
+    if var_format == "matrix"
+        A = []
+        for MB_i in MB_buffer
+            push!(A, A_range[closest_index(MB_range, MB_i)])
+        end
+        A = reshape(A, shape)
+    elseif var_format == "scalar"
+        A = A_range[closest_index(MB_range, nansum(MB_buffer))]
     end
     
-    return reshape(A, shape)
+    return A
 end
 
 # function A_fake(ELA)
@@ -483,28 +493,24 @@ function create_NNs()
     leakyrelu(x, a=0.01) = max(a*x, x)
 
     # Constraints A within physically plausible values
-    minA = 2
-    maxA = 10
+    minA = 1
+    maxA = 5
     relu_A(x) = min(max(minA, x), maxA)
     #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
     sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
 
-    # UA = Chain(
-    #     Dense(1,10), 
-    #     Dense(10,10, x->tanh.(x), initb = Flux.glorot_normal), 
-    #     Dense(10,5, x->tanh.(x), initb = Flux.glorot_normal), 
-    #     Dense(5,1, relu_A) 
-    # )
+    UA = Chain(
+        Dense(1,10), 
+        Dense(10,10, x->tanh.(x), initb = Flux.glorot_normal), 
+        Dense(10,5, x->tanh.(x), initb = Flux.glorot_normal), 
+        Dense(5,1, relu_A) 
+    )
 
     # UA = Chain(
     #     Dense(1,1, sigmoid_A, initb = Flux.zeros) 
     #     #Dense(1,1, leakyrelu, initb = Flux.zeros) 
     #     #Dense(1,1, relu_A, initb = Flux.zeros) 
     # )
-
-        UA = Chain(
-        Dense(1,1), 
-    )
 
     return hyparams, UA
 end
