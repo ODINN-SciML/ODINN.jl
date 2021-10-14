@@ -175,3 +175,7 @@ function view_∇(ps_UA, ∇_UA)
         println("type ∇_UA[p]: ", typeof(∇_UA[ps]))
     end
 end
+
+# nanmean(x) = mean(filter(!isnan,x))
+
+nansum(x) = sum(filter(!isnan,x))

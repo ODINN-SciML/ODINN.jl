@@ -36,16 +36,16 @@ C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
 # Model 
 model = "standard" # options are: "standard", "fake A", "fake C" 
 # Method to solve the DE
-method = "implicit" #"explicit"
+method = "implicit" 
 #method = "explicit" 
 
 # Parameter that control the stepsize of the numerical method 
 # η < 1 is requiered for stability
 η = 0.3
 #η = 0.2   
-damp = 0.25
-itMax    = 5             # number of iteration (max)
-nout     = 5               # error check frequency
+damp = 0.85
+itMax    = 100            # number of iteration (max)
+nout     = 25              # error check frequency
 tolnl    = 1e-1            # non-linear tolerance (what is a good value for this?)
 #       # iterative dtau scaling
 dτsc   = 1.0/3.0
@@ -58,8 +58,10 @@ t = 0
 Δt = 1.0/12.0
 #Δt = 0.01
 Δts = []
-t₁ = 1.1 # number of simulation years 
+t₁ = 5 # number of simulation years 
 
 ### Workflow ###
+# var_format = "scalar" # data format for the parameter to be learnt
+var_format = "matrix"
 create_ref_dataset = false
 train_UDE = true

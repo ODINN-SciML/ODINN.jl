@@ -33,6 +33,7 @@ include("helpers/iceflow.jl")
 
 # Load the HDF5 file with Harry's simulated data
 root_dir = cd(pwd, "..")
+res = 50 # m
 argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
 
 # Fill the Glacier structure with the retrieved data
@@ -86,6 +87,9 @@ if example == "Argentiere"
         voidfill!(MB_buff, MB_buff[1,1], 0)
         push!(MB_avg, MB_buff)
     end 
+
+    # Fill areas outside the glacier with NaN values for scalar training
+    voidfill!(MB_avg, argentiere.MB[1,1,1])
     
 elseif example == "Gaussian"
     
@@ -105,8 +109,9 @@ H = copy(H₀)
 
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
-    H_ref = Dict("H"=>[], "timestamps"=>[1,2,3])
-    H = iceflow!(H,H_ref,p,t,t₁)
+    ts = collect(1:t₁)
+    H_ref = Dict("H"=>[], "timestamps"=>ts)
+    @time H = iceflow!(H,H_ref,p,t,t₁)
 else 
     H_ref = load(joinpath(root_dir, "data/H_ref.jld"))["H"]
 end
@@ -115,8 +120,7 @@ end
 if train_UDE
     hyparams, UA = create_NNs()
 
-    # all_times = LinRange(0, t₁, 50)
-    # println("UD(all_times')': ",  UD_trained(all_times')')
+
     period = length(MB_avg)
     ŶA = []
     MB_nan = deepcopy(MB_avg)
@@ -132,7 +136,10 @@ if train_UDE
     end
     display(plot!(initial_NN, label="initial NN"))
 
+
+    # Train iceflow UDE
     iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
+
 end
 
 
@@ -140,6 +147,13 @@ end
 ###################################################################
 ########################  PLOTS    ################################
 ###################################################################
+
+final_NN = []
+for i in 1:period
+    append!(final_NN, predict_A(UA, MB_nan, i, "scalar"))
+end
+plot(ŶA, yaxis="A", xaxis="Year", label="fake A")
+display(plot!(final_NN, label="final NN"))
 
 ### Glacier ice thickness evolution  ###
 hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")

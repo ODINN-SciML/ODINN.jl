@@ -143,6 +143,8 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
         if year != current_year
+
+            println("Year: ", year)
             
             # Predict A with the fake A law
             ŶA = A_fake(MB_avg[year], size(H), var_format)
@@ -233,9 +235,11 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
 end  
 
 
-predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1e-16 # Adding units outside the NN
+predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1f-16 # Adding units outside the NN
 
-predict_A̅(UA, MB_avg, year) = UA([nanmean(vec(MB_avg[year])')])[1] .* 1e-16 # Adding units outside the NN
+nanmean(x) = mean(filter(!isnan,x))
+
+predict_A̅(UA, MB_avg, year) = UA([nanmean(MB_avg[year])])[1] .* 1f-16 # Adding units outside the NN
 
 """
     predict_A(UA, MB_avg, var_format)
@@ -243,11 +247,12 @@ predict_A̅(UA, MB_avg, year) = UA([nanmean(vec(MB_avg[year])')])[1] .* 1e-16 # 
 Make a prediction of `A` using the `UA` neural network for either scalar or matrix format. 
 """
 function predict_A(UA, MB_avg, year, var_format)
-    @assert any(var_format .== ["matrix","scalar"]) "Wrong variable format! Needs to be `matrix` or `scalar`"
+    @assert any(var_format .== ["matrix","scalar"]) "Wrong variable format $var_format ! Needs to be `matrix` or `scalar`"
     ## Predict A with the NN
     if var_format == "matrix"
         # Matrix version
-        ŶA = predict_Â(UA, MB_avg, year)
+        ŶA = reshape(predict_Â(UA, MB_avg, year), size(MB_avg[year]))
+
     elseif var_format == "scalar"
         ## Scalar version
         ŶA = predict_A̅(UA, MB_avg, year)
@@ -284,10 +289,11 @@ function iceflow!(H, UA, p,t,t₁)
         year = floor(Int, t) + 1
 
         if(year != current_year)
+
+            println("Year: ", year)
         
             # Predict value of `A`
-            @infiltrate
-            ŶA = predict_A(UA, MB_avg, var_format, year)
+            ŶA = predict_A(UA, MB_avg, year, var_format)
 
             # Zygote.ignore() do
             #     println("Current params: ", Flux.params(UA))
@@ -389,11 +395,13 @@ function SIA(H, p)
     #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
     # Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
 
+    if var_format == "matrix"
     # Matrix version
-    Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-
-    # Scalar version
-    #    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+        Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+    elseif var_format == "scalar"
+        # Scalar version
+        Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
+    end
 
     D = Γ .* avg(H).^(n + 2) .* ∇S².^((n - 1)/2)
     # D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
@@ -445,17 +453,17 @@ Fake law to determine A in the SIA
 """
 function A_fake(MB_buffer, shape, var_format)
     # Matching point MB values to A values
-    maxA = 5e-16
+    maxA = 3e-16
     minA = 1e-17
 
     if var_format == "matrix"
         MB_range = reverse(-15:0.01:8)
     elseif var_format == "scalar"
-        MB_range = reverse(-2:0.01:2)
+        MB_range = reverse(-3:0.01:0)
     end
 
     A_step = (maxA-minA)/length(MB_range)
-    A_range = minA:A_step:maxA
+    A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*2.5f11).*5f-16 # add nonlinear relationship
 
     if var_format == "matrix"
         A = []
@@ -464,9 +472,9 @@ function A_fake(MB_buffer, shape, var_format)
         end
         A = reshape(A, shape)
     elseif var_format == "scalar"
-        A = A_range[closest_index(MB_range, nansum(MB_buffer))]
+        A = A_range[closest_index(MB_range, nanmean(MB_buffer))]
     end
-    
+
     return A
 end
 
@@ -493,24 +501,23 @@ function create_NNs()
     leakyrelu(x, a=0.01) = max(a*x, x)
 
     # Constraints A within physically plausible values
-    minA = 1
+    minA = 0.1
     maxA = 5
+    rangeA = minA:1f-3:maxA
+    stdA = std(rangeA)*2
     relu_A(x) = min(max(minA, x), maxA)
     #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
     sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
 
+    A_init(custom_std, dims...) = randn(Float32, dims...) .* custom_std
+    A_init(custom_std) = (dims...) -> A_init(custom_std, dims...)
+
     UA = Chain(
         Dense(1,10), 
-        Dense(10,10, x->tanh.(x), initb = Flux.glorot_normal), 
-        Dense(10,5, x->tanh.(x), initb = Flux.glorot_normal), 
-        Dense(5,1, relu_A) 
+        Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
+        Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
+        Dense(5,1, sigmoid_A) 
     )
-
-    # UA = Chain(
-    #     Dense(1,1, sigmoid_A, initb = Flux.zeros) 
-    #     #Dense(1,1, leakyrelu, initb = Flux.zeros) 
-    #     #Dense(1,1, relu_A, initb = Flux.zeros) 
-    # )
 
     return hyparams, UA
 end
