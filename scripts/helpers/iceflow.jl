@@ -122,6 +122,7 @@ Forward ice flow model solving the Shallow Ice Approximation PDE
 function iceflow!(H,H_ref::Dict, p,t,t₁)
 
     println("Running forward PDE ice flow model...\n")
+
     # Instantiate variables
     let             
     current_year = 0
@@ -135,10 +136,8 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        Hold = copy(H) # hold value of H for the other iteration in the implicit method
-        # we need to define dHdt for iter = 1
-        #dHdt = zeros(nx-2, ny-2) # with broadcasting
-        dHdt = zeros(nx, ny) # with Tullio
+        Hold = copy(H)         # hold value of H for the other iteration in the implicit method
+        dHdt = zeros(nx, ny)   # we need to define dHdt for iter = 1 for Tullio
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -149,13 +148,6 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
             # Predict A with the fake A law
             ŶA = A_fake(MB_avg[year], size(H), var_format)
 
-            # Zygote.ignore() do
-            #     if(year == 1)
-            #         println("ŶA max: ", maximum(ŶA))
-            #         println("ŶA min: ", minimum(ŶA))
-            #     end
-
-            # end
             # Unpack and repack tuple with updated A value
             Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p
             p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format)
@@ -171,30 +163,22 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
 
         elseif method == "implicit"
 
-            while err > tolnl && iter < itMax + 1
+            while err > tolnl_ref && iter < itMax_ref + 1
             
                 Err = copy(H)
 
                 # Compute the Shallow Ice Approximation in a staggered grid
-                
                 F, dτ = SIA(H, p)
 
-                # Implicit method with broadcasting
                 # Differentiate H via a Picard iteration method
-                #ResH = -(inn(H) .- inn(Hold))/Δt .+ F  # with broadcasting
-                #dHdt = damp .* dHdt .+ ResH # with broadcasting
-                # Update the ice thickness
-                #inn(H) .= max.(0.0, inn(H) .+ dτ .* dHdt) # with broadcasting 
-
-                # implicit method with Tullio  
                 @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
                 
                 dHdt_ = copy(dHdt)
                 @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
                 
+                # Update the ice thickness
                 H_ = copy(H)
                 @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
-                
 
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
@@ -309,62 +293,57 @@ function iceflow!(H, UA, p,t,t₁)
             current_year = year
         end
 
-        if method == "implicit"
+        #if method == "implicit"
             
-            #while err > tolnl && iter < itMax+1
-            while iter < itMax + 1
+        #while err > tolnl && iter < itMax+1
+        while iter < itMax + 1
 
-                #println("iter: ", iter)
+            #println("iter: ", iter)
+        
+            Err = copy(H)
+
+            # Compute the Shallow Ice Approximation in a staggered grid
+            F, dτ = SIA(H, p)
+
+            # Compute the residual ice thickness for the inertia
+            @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
+
+            dHdt_ = copy(dHdt)
+            @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+                            
+            # We keep local copies for tullio
+            H_ = copy(H)
             
-                Err = copy(H)
+            # Update the ice thickness
+            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
 
-                # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ = SIA(H, p)
+            #@show isderiving()
+            
+            Zygote.ignore() do
+                if mod(iter, nout) == 0
+                    # Compute error for implicit method with damping
+                    Err = Err .- H
+                    err = maximum(Err)
+                    # println("error: ", err)
+                    #@infiltrate
 
-                # Compute the residual ice thickness for the inertia
-                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
-
-                dHdt_ = copy(dHdt)
-                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                              
-                # We keep local copies for tullio
-                H_ = copy(H)
-                
-                # Update the ice thickness
-                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
-
-                #println("maximum H: ",maximum(H))
-                #println("maximum H on borders: ", maximum([maximum(H[1,:]), maximum(H[:,1]), maximum(H[nx,:]), maximum(H[:,ny])]))
-
-                #@show isderiving()
-              
-                Zygote.ignore() do
-                    if mod(iter, nout) == 0
-                        # Compute error for implicit method with damping
-                        Err = Err .- H
-                        err = maximum(Err)
-                        # println("error: ", err)
-                        #@infiltrate
-
-                        if isnan(err)
-                            error("""NaNs encountered.  Try a combination of:
-                                        decreasing `damp` and/or `dtausc`, more smoothing steps""")
-                        end
+                    if isnan(err)
+                        error("""NaNs encountered.  Try a combination of:
+                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
                     end
                 end
-
-                iter += 1
-                total_iter += 1
-
             end
 
-            #println("t: ", t)
-          
-            t += Δt
+            iter += 1
+            total_iter += 1
+
         end
-        end # let
+          
+        t += Δt
+        #end
+        end 
     end   
-    end # let
+    end 
 
     return H
 
@@ -386,17 +365,10 @@ function SIA(H, p)
     # Compute surface gradients on edges
     dSdx  = diff(S, dims=1) / Δx
     dSdy  = diff(S, dims=2) / Δy
-    # ∇S = sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdy).^2) # this does not work
     ∇S² = avg_y(dSdx).^2 .+ avg_x(dSdy).^2
 
-    # Compute diffusivity on secondary nodes
-    # A here should have the same shape as H
-    #                                     ice creep  +  basal sliding
-    #D = (avg(pad(H)).^n .* ∇S.^(n - 1)) .* (A.*(avg(pad(H))).^(n-1) .+ (α*(n+2)*C)/(n-2)) 
-    # Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-
     if var_format == "matrix"
-    # Matrix version
+        # Matrix version
         Γ = 2 * avg(reshape(A, size(H))) * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
     elseif var_format == "scalar"
         # Scalar version
@@ -404,9 +376,6 @@ function SIA(H, p)
     end
 
     D = Γ .* avg(H).^(n + 2) .* ∇S².^((n - 1)/2)
-    # D = Γ .* avg(H).^(n + 2) .* ∇S.^(n - 1) 
-  
-    #D = (Γ * avg(H).^n .* ∇S.^(n - 1)) .* (avg(reshape(A, size(H))) .* avg(H)).^(n-1) .+ (α*(n+2)*C)/(n-2)
 
     # Compute flux components
     dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx

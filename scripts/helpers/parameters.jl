@@ -10,58 +10,51 @@
 #A = 0.5e-24 #2e-16  1 / Pa^3 s
 #A = 5e-24 #2e-16  1 / Pa^3 s
 A = 1.3e-24 #2e-16  1 / Pa^3 s
-A *= 60 * 60 * 24 * 365.25 # 1 / Pa^3 yr
+A *= 60 * 60 * 24 * 365.25 # [1 / Pa^3 yr]
 # minA = 1.58e-17
 # maxA = 1.58e-16
 minA = 1.58 # units changed to avoid numerical issues
 maxA = 15.8 # to be multiplied by e-17 at the end
 
-# Ice density
-ρ = 900 # kg / m^3
-# Gravitational acceleration
-g = 9.81 # m / s^2
-# Glen's flow law exponent
-n = 3
+# 
+ρ = 900                     # Ice density [kg / m^3]
+g = 9.81                    # Gravitational acceleration [m / s^2]
+n = 3                       # Glen's flow law exponent
 
-# Weertman-type basal sliding (Weertman, 1964, 1972) 
-α = 0   # 1 -> sliding / 0 -> no sliding
-C = 15e-14 # m⁸ N⁻³ a⁻¹   Sliding factor, between (0 - 25)
+α = 0                       # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
+C = 15e-14                  # Sliding factor, between (0 - 25) [m⁸ N⁻³ a⁻¹]
 
 Γ = (n-1) * (ρ * g)^n / (n+2) # 1 / m^3 s
-#Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook
 
 ### Differential equations ###
 # Configuration of the forward model
 
 # Model 
-model = "standard" # options are: "standard", "fake A", "fake C" 
+model = "standard"         # options: "standard", "fake A", "fake C" 
 # Method to solve the DE
-method = "implicit" 
-#method = "explicit" 
+method = "implicit"        # options: implicit, explicit
 
-# Parameter that control the stepsize of the numerical method 
-# η < 1 is requiered for stability
-η = 0.3
-#η = 0.2   
+
+η = 0.3                    # Parameter that control the stepsize of the numerical method. eta must be < 1
 damp = 0.85
-itMax    = 100            # number of iteration (max)
-nout     = 25              # error check frequency
-tolnl    = 1e-1            # non-linear tolerance (what is a good value for this?)
-#       # iterative dtau scaling
-dτsc   = 1.0/3.0
-ϵ     = 1e-4            # small number
-Δx = Δy = 50 #m (Δx = Δy)
+itMax = 100                # maximum number of iterations used in non-adaptive semi-implicit method
+itMax_ref = 300            # maximum number of iterations used for genereting reference dataset
+nout = 5                   # error check frequency
+tolnl = 1e-1               # tolerance of semi-implicit method 
+tolnl_ref  = 1e-3          # tolerance of semi-implicit method used to generate reference dataset
+dτsc   = 1.0/3.0           # iterative dtau scaling
+ϵ     = 1e-4               # small number
+Δx = Δy = 50               # [m]
 cfl  = max(Δx^2,Δy^2)/4.1
 
 # Time 
-t = 0
-Δt = 1.0/12.0
-#Δt = 0.01
+t = 0                      # initial time
+Δt = 1.0/12.0              # time step [yr]
 Δts = []
-t₁ = 5 # number of simulation years 
+t₁ = 3                     # number of simulation years 
 
 ### Workflow ###
-# var_format = "scalar" # data format for the parameter to be learnt
+# var_format = "scalar"    # data format for the parameter to be learnt
 var_format = "matrix"
 create_ref_dataset = false
 train_UDE = true
