@@ -176,6 +176,6 @@ function view_∇(ps_UA, ∇_UA)
     end
 end
 
-# nanmean(x) = mean(filter(!isnan,x))
-
 nansum(x) = sum(filter(!isnan,x))
+
+nanmean(x) = mean(filter(!isnan,x))

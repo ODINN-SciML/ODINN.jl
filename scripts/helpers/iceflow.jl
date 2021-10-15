@@ -9,8 +9,8 @@ using Flux: @epochs
 using Tullio
 include("utils.jl")
 
-# Patch for updating NN parameters. Issue pending for Zygote
-# Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
+# Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
+Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
 """
     iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
@@ -44,18 +44,17 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
 
     # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem
 
-    Zygote.ignore() do
-        lim = maximum( abs.(H .- H₀) )
-        hmh0 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
-            xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
-            title="Variation in ice thickness at epoch")
-        hmh = heatmap(H, title="H")
-        display(plot(hmh0, hmh, aspect_ratio=:equal))
-    end
+    # Zygote.ignore() do
+    #     lim = maximum( abs.(H .- H₀) )
+    #     hmh0 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
+    #         xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
+    #         title="Variation in ice thickness at epoch")
+    #     hmh = heatmap(H, title="H")
+    #     display(plot(hmh0, hmh, aspect_ratio=:equal))
+    # end
 
     # Callback to track the training
     #callback(train_loss_UA)
-    # Apply back() to the correct type of 1.0 to get the gradient of loss.
     
     # println("Backpropagation")
     ∇_UA = back_UA(one(loss_UA)) # with UA
@@ -68,7 +67,6 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
     # end
     # println("Gradients ∇_UA: ", ∇_UA)
-    # println("θ BEFORE: ", θ)
 
     Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
 
@@ -76,12 +74,7 @@ function hybrid_train!(loss, UA, opt, H, p, t, t₁)
     # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p # unpack
     # p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format) # repack
 
-    # println("θ AFTER: ", θ)
 end
-
-# Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
-Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
-
 
 """
     loss(batch)
@@ -154,51 +147,41 @@ function iceflow!(H,H_ref::Dict, p,t,t₁)
             current_year = year
         end
 
-        if method == "explicit"
+        while err > tolnl_ref && iter < itMax_ref + 1
+        
+            Err = copy(H)
 
+            # Compute the Shallow Ice Approximation in a staggered grid
             F, dτ = SIA(H, p)
-            inn(H) .= max.(0.0, inn(H) .+ Δt * F)
-            t += Δt_exp
-            total_iter += 1 
 
-        elseif method == "implicit"
-
-            while err > tolnl_ref && iter < itMax_ref + 1
+            # Differentiate H via a Picard iteration method
+            @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
             
-                Err = copy(H)
+            dHdt_ = copy(dHdt)
+            @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
+            
+            # Update the ice thickness
+            H_ = copy(H)
+            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
 
-                # Compute the Shallow Ice Approximation in a staggered grid
-                F, dτ = SIA(H, p)
+            if mod(iter, nout) == 0
+                # Compute error for implicit method with damping
+                Err = Err .- H
+                err = maximum(Err)
+                # println("error at iter ", iter, ": ", err)
 
-                # Differentiate H via a Picard iteration method
-                @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
-                
-                dHdt_ = copy(dHdt)
-                @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                
-                # Update the ice thickness
-                H_ = copy(H)
-                @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
-
-                if mod(iter, nout) == 0
-                    # Compute error for implicit method with damping
-                    Err = Err .- H
-                    err = maximum(Err)
-                    # println("error at iter ", iter, ": ", err)
-
-                    if isnan(err)
-                        error("""NaNs encountered.  Try a combination of:
-                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
-                    end
+                if isnan(err)
+                    error("""NaNs encountered.  Try a combination of:
+                                decreasing `damp` and/or `dtausc`, more smoothing steps""")
                 end
-            
-                iter += 1
-                total_iter += 1
             end
-
-            t += Δt
-
+        
+            iter += 1
+            total_iter += 1
         end
+
+        t += Δt
+
         end # let
 
         # Store timestamps to be used for training of the UDEs
@@ -220,8 +203,6 @@ end
 
 
 predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1f-16 # Adding units outside the NN
-
-nanmean(x) = mean(filter(!isnan,x))
 
 predict_A̅(UA, MB_avg, year) = UA([nanmean(MB_avg[year])])[1] .* 1f-16 # Adding units outside the NN
 
@@ -292,14 +273,10 @@ function iceflow!(H, UA, p,t,t₁)
             p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format)
             current_year = year
         end
-
-        #if method == "implicit"
-            
-        #while err > tolnl && iter < itMax+1
-        while iter < itMax + 1
-
-            #println("iter: ", iter)
-        
+           
+        while err > tolnl && iter < itMax+1
+        # while iter < itMax + 1
+       
             Err = copy(H)
 
             # Compute the Shallow Ice Approximation in a staggered grid
@@ -316,16 +293,12 @@ function iceflow!(H, UA, p,t,t₁)
             
             # Update the ice thickness
             @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
-
-            #@show isderiving()
             
             Zygote.ignore() do
                 if mod(iter, nout) == 0
                     # Compute error for implicit method with damping
                     Err = Err .- H
                     err = maximum(Err)
-                    # println("error: ", err)
-                    #@infiltrate
 
                     if isnan(err)
                         error("""NaNs encountered.  Try a combination of:
@@ -340,10 +313,10 @@ function iceflow!(H, UA, p,t,t₁)
         end
           
         t += Δt
-        #end
+
         end 
     end   
-    end 
+    end # let
 
     return H
 
@@ -389,11 +362,10 @@ function SIA(H, p)
     dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
 
     # Compute velocities
-    # Vx = -D./(av(H) .+ epsi).*av_ya(dSdx)
-    # Vy = -D./(av(H) .+ epsi).*av_xa(dSdy)
+    # Vx = -D./(avg(H) .+ epsi).*av_ya(dSdx)
+    # Vy = -D./(avg(H) .+ epsi).*av_xa(dSdy)
 
     return F, dτ
-    #return sum(F)
 
 end
 
@@ -447,15 +419,6 @@ function A_fake(MB_buffer, shape, var_format)
     return A
 end
 
-# function A_fake(ELA)
-#     # Matching ELA values to A values
-#     ELA_range = 2806:3470
-#     A_step = (1.57e-16-1.57e-17)/length(ELA_range)
-#     A_range = 1.57e-17:A_step:1.57e-16
-    
-#     return A_range[closest_index(ELA_range, ELA)]
-# end
-
 """
     create_NNs()
 
@@ -491,9 +454,6 @@ function create_NNs()
     return hyparams, UA
 end
 
-# Container to track the losses
-losses = Float64[]
-
 """
     callback(l)
 
@@ -501,6 +461,8 @@ Callback to track evolution of the neural network's training.
 """
 # Callback to show the loss during training
 callback(l) = begin
+    # Container to track the losses
+    losses = Float64[]
     push!(losses, l)
     if length(losses)%50==0
         println("Current loss after $(length(losses)) iterations: $(losses[end])")
