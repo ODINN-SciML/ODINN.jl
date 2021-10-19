@@ -51,10 +51,17 @@ cfl  = max(Δx^2,Δy^2)/4.1
 t = 0                      # initial time
 Δt = 1.0/12.0              # time step [yr]
 Δts = []
-t₁ = 3                     # number of simulation years 
+t₁ = 10                     # number of simulation years 
+
+## Climate parameters
+base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands") # OGGM elevation bands
+mb_type = "mb_real_daily"
+grad_type = "var_an_cycle" # could use here as well 'cte'
+# fs = "_daily_".*climate
+fs = "_daily_W5E5"
 
 ### Workflow ###
 # var_format = "scalar"    # data format for the parameter to be learnt
 var_format = "matrix"
-create_ref_dataset = false
+create_ref_dataset = true
 train_UDE = true

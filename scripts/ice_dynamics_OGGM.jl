@@ -7,19 +7,12 @@ SINDy (Brunton et al., 2016).
 =#
 
 ###############################################
-############  JULIA ENVIRONMENT  ##############
+###########  ACTIVATE ENVIRONMENT  ############
 ###############################################
 cd(@__DIR__)
+root_dir = cd(pwd, "..")
 using Pkg; Pkg.activate("../."); 
 Pkg.instantiate()
-using Plots; gr()
-using SparseArrays
-using Statistics
-using LinearAlgebra
-using HDF5
-using JLD
-using Infiltrator
-using Dates # to provide correct Julian time slices 
 
 ################################################
 ############  PYTHON ENVIRONMENT  ##############
@@ -31,14 +24,7 @@ using Dates # to provide correct Julian time slices
 ENV["PYTHON"] = "/Users/Bolib001/miniconda3/envs/oggm_env/bin/python3.9" 
 Pkg.build("PyCall") 
 using PyCall
-using PyPlot # needed for Matplotlib plots
-
-# Essential Python libraries
-np = pyimport("numpy")
-xr = pyimport("xarray")
-matplotlib = pyimport("matplotlib")
-matplotlib.use("Qt5Agg")
-# plt = pyimport("matplotlib.pyplot")
+# using PyPlot # needed for Matplotlib plots
 
 # Import OGGM sub-libraries in Julia
 cfg = pyimport("oggm.cfg")
@@ -47,6 +33,28 @@ workflow = pyimport("oggm.workflow")
 tasks = pyimport("oggm.tasks")
 graphics = pyimport("oggm.graphics")
 MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
+
+# Essential Python libraries
+np = pyimport("numpy")
+xr = pyimport("xarray")
+matplotlib = pyimport("matplotlib")
+matplotlib.use("Qt5Agg") 
+
+###############################################
+############  JULIA ENVIRONMENT  ##############
+###############################################
+using Plots; gr()
+using SparseArrays
+using Statistics
+using LinearAlgebra
+# using HDF5
+using JLD
+using Infiltrator
+using Dates # to provide correct Julian time slices 
+
+###############################################
+#############  ODINN LIBRARIES  ###############
+###############################################
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -72,8 +80,9 @@ PATHS["working_dir"] = "/Users/Bolib001/Jordi/Python/OGGM_data"  # Choose own cu
 # RGI60-11.01450 # Aletsch glacier
 rgi_ids = ["RGI60-11.03638"]
 
+### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
 # Where to fetch the pre-processed directories
-gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=80)
+gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=10)
 
 gdir = gdirs[1]
 
@@ -85,7 +94,7 @@ list_talks = [
     # tasks.compute_downstream_line,
     tasks.prepare_for_inversion,  # This is a preprocessing task
     tasks.mass_conservation_inversion,  # This does the actual job
-    tasks.filter_inversion_output,  # This smoothes the thicknesses at the tongue a little
+    # tasks.filter_inversion_output,  # This smoothes the thicknesses at the tongue a little
     tasks.distribute_thickness_per_altitude
 ]
 for task in list_talks
@@ -94,48 +103,75 @@ for task in list_talks
 end
 # Plot glacier domain
 graphics.plot_domain(gdirs)
-graphics.plot_distributed_thickness(gdir)         
+graphics.plot_distributed_thickness(gdir)     
 
+glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
+nx = glacier_gd.x.size # glacier extent
+ny = glacier_gd.y.size
 
-### We perform the simulations with an explicit forward mo  ###
-# Gather simulation parameters
-p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α, var_format) 
-H = copy(H₀)
+### Generate fake annual long-term temperature time series  ###
+# This represents the long-term average air temperature, which will be used to 
+# drive changes in the `A` value of the SIA
+temp_series =  fake_temp_series(t₁)
+A_series = []
+for temps in temp_series
+    push!(A_series, A_fake.(temps))
+end
+display(plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
+display(plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
+
+let
+H = glacier_gd.distributed_thickness.data # initial ice thickness conditions for forward model
+B = glacier_gd.topo.data # bedrock
 
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
+    println("Generating reference dataset for training...")
     ts = collect(1:t₁)
-    H_ref = Dict("H"=>[], "timestamps"=>ts)
-    @time H = iceflow!(H,H_ref,p,t,t₁)
+    gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
+    glacier_refs = []
+
+    for temps in temp_series
+        println("Reference simulation with temp ≈ ", mean(temps))
+        glacier_ref = copy(gref)
+        # Gather simulation parameters
+        p = (Δx, Δy, Γ, A, B, temps, C, α) 
+        # Perform reference imulation with forward model 
+        @time H, V = iceflow!(H,glacier_ref,p,t,t₁)
+        push!(glacier_refs, glacier_ref)
+    end
+
+    println("Saving reference data")
+    save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
 else 
-    H_ref = load(joinpath(root_dir, "data/H_ref.jld"))["H"]
+    glacier_ref = load(joinpath(root_dir, "data/glacier_ref.jld"))
 end
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     hyparams, UA = create_NNs()
 
-
-    period = length(MB_avg)
-    ŶA = []
-    MB_nan = deepcopy(MB_avg)
-    for i in 1:period
-        MB_nan[i][MB_nan[i] .== 0] .= NaN
-        append!(ŶA, A_fake(MB_nan[i], size(H), "scalar"))
-    end
-    plot(ŶA, yaxis="A", xaxis="Year", label="fake A")
-    # plot(fakeA, 0, t₁, label="fake")
-    initial_NN = []
-    for i in 1:period
-        append!(initial_NN, predict_A(UA, MB_nan, i, "scalar"))
-    end
-    display(plot!(initial_NN, label="initial NN"))
+    # period = length(MB_avg)
+    # ŶA = []
+    # MB_nan = deepcopy(MB_avg)
+    # for i in 1:period
+    #     MB_nan[i][MB_nan[i] .== 0] .= NaN
+    #     append!(ŶA, A_fake(MB_nan[i], size(H), "scalar"))
+    # end
+    # plot(ŶA, yaxis="A", xaxis="Year", label="fake A")
+    # # plot(fakeA, 0, t₁, label="fake")
+    # initial_NN = []
+    # for i in 1:period
+    #     append!(initial_NN, predict_A(UA, MB_nan, i, "scalar"))
+    # end
+    # display(plot!(initial_NN, label="initial NN"))
 
 
     # Train iceflow UDE
     iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
 
 end
+end # let
 
 
 

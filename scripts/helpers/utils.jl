@@ -179,3 +179,50 @@ end
 nansum(x) = sum(filter(!isnan,x))
 
 nanmean(x) = mean(filter(!isnan,x))
+
+
+# Convert Pythonian date to Julian date
+function jldate(pydate)
+    return Date(pydate.dt.year.data[1], pydate.dt.month.data[1], pydate.dt.day.data[1])
+end
+
+function trim_period(period, climate)
+    if any(climate.time[1].dt.date.data[1] > period[1])
+        head = jldate(climate.time[1])
+        period = Date(year(head), 10, 1):Day(1):period[end] # make it a hydrological year
+    end
+    if any(climate.time[end].dt.date.data[1] < period[end])
+        tail = jldate(climate.time[end])
+        period = period[1]:Day(1):Date(year(tail), 9, 30) # make it a hydrological year
+    end
+
+    return period
+end
+
+# Convert normal year to hydrological year. Using multiple dispatch to provide a flexible interface
+function to_hydro_period(mass_balance::PyObject, trim_edges=true)
+    # Select hydro period between October 1st and 30th of September
+    if trim_edges
+        hydro_period = collect(Date(mass_balance.index[1],10,1):Day(1):Date(mass_balance.index[end]-1,09,30))
+    else
+        hydro_period = collect(Date(mass_balance.index[1]-1,10,1):Day(1):Date(mass_balance.index[end],09,30))
+    end
+
+    return hydro_period
+end
+
+function to_hydro_period(years::Array)
+    # Select hydro period between October 1st and 30th of September
+    hydro_period = collect(Date(years[1]-1,10,1):Day(1):Date(years[end],09,30))
+
+    return hydro_period
+end
+
+"""
+    infiltrate()
+
+Wrapper function for the @infiltrate macro to debug the global scope
+"""
+function infiltrate()
+    @infiltrate
+end
