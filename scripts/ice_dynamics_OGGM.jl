@@ -21,10 +21,11 @@ Pkg.instantiate()
 ## Set up Python environment
 # Choose own Python environment with OGGM's installation
 # Use same path as "which python" in shell
-ENV["PYTHON"] = "/Users/Bolib001/miniconda3/envs/oggm_env/bin/python3.9" 
+# ENV["PYTHON"] = "/Users/Bolib001/miniconda3/envs/oggm_env/bin/python3.9" 
+ENV["PYTHON"] = "/nethome/bolib001/.conda/envs/oggm_env/bin/python3.6"
 Pkg.build("PyCall") 
 using PyCall
-# using PyPlot # needed for Matplotlib plots
+using PyPlot # needed for Matplotlib plots
 
 # Import OGGM sub-libraries in Julia
 cfg = pyimport("oggm.cfg")
@@ -32,13 +33,13 @@ utils = pyimport("oggm.utils")
 workflow = pyimport("oggm.workflow")
 tasks = pyimport("oggm.tasks")
 graphics = pyimport("oggm.graphics")
-MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
+# MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline") # TODO: fix issue with Python version in Gemini HPC
 
 # Essential Python libraries
 np = pyimport("numpy")
 xr = pyimport("xarray")
-matplotlib = pyimport("matplotlib")
-matplotlib.use("Qt5Agg") 
+# matplotlib = pyimport("matplotlib")
+# matplotlib.use("Qt5Agg") 
 
 ###############################################
 ############  JULIA ENVIRONMENT  ##############
@@ -69,7 +70,7 @@ include("helpers/climate.jl")
 cfg.initialize() # initialize OGGM configuration
 
 PATHS = PyDict(cfg."PATHS")  # OGGM PATHS
-PATHS["working_dir"] = "/Users/Bolib001/Jordi/Python/OGGM_data"  # Choose own custom path for the OGGM data
+PATHS["working_dir"] = "/nethome/bolib001/Python/OGGM_data"  # Choose own custom path for the OGGM data
 
 ###############################################################
 ###########################  MAIN #############################
