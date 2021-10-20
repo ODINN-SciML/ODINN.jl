@@ -89,8 +89,8 @@ function loss(H, UA, p, t, t₁)
 
     # A = p[4]
     # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
-    l_H = sqrt(Flux.Losses.mse(H, glacier_ref["H"][end]; agg=mean))
-    l_V = sqrt(Flux.Losses.mse(V, mean.(glacier_ref["V"]); agg=mean))
+    l_H = sqrt(Flux.Losses.mse(H, glacier_refs[ts_i]["H"][end]; agg=mean))
+    l_V = sqrt(Flux.Losses.mse(V, mean.(glacier_refs[ts_i]["V"]); agg=mean))
 
     println("l_H: ", l_H)
     println("l_V: ", l_V)
@@ -98,7 +98,7 @@ function loss(H, UA, p, t, t₁)
     # l = l_A + l_H
 
     Zygote.ignore() do
-       hml = heatmap(mean.(H_ref["V"]) .- V, title="Loss error")
+       hml = heatmap(mean.(glacier_refs[ts_i]["V"]) .- V, title="Loss error")
        display(hml)
     end
 
@@ -244,18 +244,19 @@ function iceflow!(H, UA, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
+        V = zeros(ny,nx)
         Hold = copy(H)
-        dHdt = zeros(nx, ny)
+        dHdt = zeros(ny, nx)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
 
-        if(year != current_year)
+        if year != current_year
 
             println("Year: ", year)
         
             # Predict value of `A`
-            temp = temps[year]
+            temp = [temps[year]]
             ŶA = predict_A̅(UA, temp)
 
             # Zygote.ignore() do
@@ -308,14 +309,15 @@ function iceflow!(H, UA, p,t,t₁)
             iter += 1
             total_iter += 1
 
-        end
+        end 
           
         t += Δt
+        let V_ts = V_ts
         push!(V_ts, V)
-
-        end 
-    end   
-    end # let
+        end # let
+        end # let
+    end 
+    end   # let
 
     return H, mean.(V_ts)
 

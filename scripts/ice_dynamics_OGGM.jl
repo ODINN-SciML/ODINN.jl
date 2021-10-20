@@ -123,7 +123,7 @@ display(plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time se
 
 let
 H = glacier_gd.distributed_thickness.data # initial ice thickness conditions for forward model
-B = glacier_gd.topo.data # bedrock
+B = glacier_gd.topo.data - glacier_gd.distributed_thickness.data # bedrock
 
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
@@ -145,11 +145,12 @@ if create_ref_dataset
     println("Saving reference data")
     save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
 else 
-    glacier_ref = load(joinpath(root_dir, "data/glacier_ref.jld"))
+    glacier_ref = load(joinpath(root_dir, "data/glacier_refs.jld"))
 end
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
+    println("Training UDEs...")
     hyparams, UA = create_NNs()
 
     # period = length(MB_avg)
@@ -167,9 +168,15 @@ if train_UDE
     # end
     # display(plot!(initial_NN, label="initial NN"))
 
-
-    # Train iceflow UDE
-    iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
+    global ts_i = 1
+    for temps in temp_series
+        println("UDE training with temp ≈ ", mean(temps))
+        # Gather simulation parameters
+        p = (Δx, Δy, Γ, A, B, temps, C, α) 
+        # Train iceflow UDE
+        iceflow_UDE!(H,glacier_ref,UA,hyparams,p,t,t₁)
+        ts_i += 1
+    end
 
 end
 end # let
