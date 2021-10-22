@@ -63,5 +63,5 @@ fs = "_daily_W5E5"
 ### Workflow ###
 # var_format = "scalar"    # data format for the parameter to be learnt
 var_format = "matrix"
-create_ref_dataset = false
+create_ref_dataset = true
 train_UDE = true

@@ -22,7 +22,7 @@ Pkg.instantiate()
 # Choose own Python environment with OGGM's installation
 # Use same path as "which python" in shell
 # ENV["PYTHON"] = "/Users/Bolib001/miniconda3/envs/oggm_env/bin/python3.9" 
-ENV["PYTHON"] = "/nethome/bolib001/.conda/envs/oggm_env/bin/python3.6"
+ENV["PYTHON"] = "/nethome/bolib001/.conda/envs/oggm_env/bin/python3.8"
 Pkg.build("PyCall") 
 using PyCall
 using PyPlot # needed for Matplotlib plots
@@ -71,6 +71,8 @@ cfg.initialize() # initialize OGGM configuration
 
 PATHS = PyDict(cfg."PATHS")  # OGGM PATHS
 PATHS["working_dir"] = "/nethome/bolib001/Python/OGGM_data"  # Choose own custom path for the OGGM data
+PARAMS = PyDict(cfg."PARAMS")
+# PARAMS["use_multiprocessing"] = true # Let's use multiprocessing
 
 ###############################################################
 ###########################  MAIN #############################
@@ -118,8 +120,8 @@ A_series = []
 for temps in temp_series
     push!(A_series, A_fake.(temps))
 end
-display(plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
-display(plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
+display(Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
+display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
 
 let
 H = glacier_gd.distributed_thickness.data # initial ice thickness conditions for forward model
