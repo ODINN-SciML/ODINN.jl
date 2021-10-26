@@ -73,13 +73,33 @@ Smooth data contained in a matrix with one time step (CFL) of diffusion.
 end
 
 """
-    void2nan!(x, void)
+voidfill!(x, void, fill=NaN)
 
 Convert empty matrix grid cells into NaNs
 """
 function voidfill!(x, void, fill=NaN)
     for i in eachindex(x)
         @inbounds x[i] = ifelse(x[i]==void, fill, x[i])
+    end
+end
+
+function voidfill(xi, void, fill=NaN)
+    x = copy(xi)
+    for i in eachindex(x)
+        @inbounds x[i] = ifelse(x[i]==void, fill, x[i])
+    end
+
+    return x
+end
+
+"""
+fillNaN!(x, fill)
+
+Convert empty matrix grid cells into fill value
+"""
+function fillNaN!(x, fill=0)
+    for i in eachindex(x)
+        @inbounds x[i] = ifelse(isnan(x[i]), fill, x[i])
     end
 end
 

@@ -36,7 +36,7 @@ method = "implicit"        # options: implicit, explicit
 
 
 η = 0.3                    # Parameter that control the stepsize of the numerical method. eta must be < 1
-damp = 0.85
+damp = 0.25
 itMax = 100                # maximum number of iterations used in non-adaptive semi-implicit method
 itMax_ref = 300            # maximum number of iterations used for genereting reference dataset
 nout = 5                   # error check frequency

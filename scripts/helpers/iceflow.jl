@@ -127,9 +127,9 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        V = zeros(ny,nx)
+        V = zeros(nx,ny)
         Hold = copy(H)         # hold value of H for the other iteration in the implicit method
-        dHdt = zeros(ny, nx)   # we need to define dHdt for iter = 1 for Tullio
+        dHdt = zeros(nx, ny)   # we need to define dHdt for iter = 1 for Tullio
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -244,9 +244,9 @@ function iceflow!(H, UA, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        V = zeros(ny,nx)
+        V = zeros(nx,ny)
         Hold = copy(H)
-        dHdt = zeros(ny, nx)
+        dHdt = zeros(nx, ny)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
