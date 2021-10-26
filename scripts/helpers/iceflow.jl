@@ -27,7 +27,7 @@ function iceflow_UDE!(H,glacier_ref,UA,hyparams,p,t,t₁)
     opt = ADAM(10e-2)
 
     # Train the UDE for a given number of epochs
-    @epochs hyparams.epochs hybrid_train!(loss, UA, opt, H, p, t, t₁)
+    @epochs hyparams.epochs hybrid_train!(loss, glacier_ref, UA, opt, H, p, t, t₁)
 end
 
 """
@@ -35,12 +35,12 @@ end
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(loss, UA, opt, H, p, t, t₁)
+function hybrid_train!(loss, glacier_ref, UA, opt, H, p, t, t₁)
     # Retrieve model parameters
     θ = Flux.params(UA)
 
     # println("Forward pass")
-    loss_UA, back_UA = Zygote.pullback(() -> loss(H, UA, p, t, t₁), θ) # with UA
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
 
     # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem
 
@@ -82,15 +82,15 @@ end
 Computes the loss function for a specific batch.
 """
 # We determine the loss function
-function loss(H, UA, p, t, t₁)
+function loss(H, glacier_ref, UA, p, t, t₁)
     l_H, l_A  = 0.0, 0.0
    
     H, V = iceflow!(H, UA, p,t,t₁)
 
     # A = p[4]
     # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
-    l_H = sqrt(Flux.Losses.mse(H, glacier_refs[ts_i]["H"][end]; agg=mean))
-    l_V = sqrt(Flux.Losses.mse(V, mean.(glacier_refs[ts_i]["V"]); agg=mean))
+    l_H = sqrt(Flux.Losses.mse(H, glacier_ref[ts_i]["H"][end]; agg=mean))
+    l_V = sqrt(Flux.Losses.mse(V, mean.(glacier_ref[ts_i]["V"]); agg=mean))
 
     println("l_H: ", l_H)
     println("l_V: ", l_V)
@@ -98,7 +98,7 @@ function loss(H, UA, p, t, t₁)
     # l = l_A + l_H
 
     Zygote.ignore() do
-       hml = heatmap(mean.(glacier_refs[ts_i]["V"]) .- V, title="Loss error")
+       hml = heatmap(mean.(glacier_ref[ts_i]["V"]) .- V, title="Loss error")
        display(hml)
     end
 
@@ -237,7 +237,7 @@ function iceflow!(H, UA, p,t,t₁)
     current_year = 0
     temps = p[6]
     total_iter = 0
-    V_ts = []
+    Vx_ts, Vy_ts = [],[]
 
     # Forward scheme implementation
     while t < t₁
@@ -312,14 +312,18 @@ function iceflow!(H, UA, p,t,t₁)
         end 
           
         t += Δt
-        let V_ts = V_ts
-        push!(V_ts, V)
-        end # let
+
+        # Zygote.ignore() do
+        #     @infiltrate
+        # end
+        push!(Vx_ts, V[1])
+        push!(Vy_ts, V[2])
         end # let
     end 
-    end   # let
 
-    return H, mean.(V_ts)
+    return H, mean(Vx_ts), mean(Vy_ts)
+
+    end   # let
 
 end
 
@@ -390,13 +394,13 @@ Fake law to determine A in the SIA
 """
 function A_fake(temp)
     # Matching point MB values to A values
-    maxA = 1e-15
-    minA = 1e-17
+    maxA = 1e-18
+    minA = 6e-20
 
-    temp_range = -27:0.01:3
+    temp_range = -25:0.01:1
 
     A_step = (maxA-minA)/length(temp_range)
-    A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*2.5f11).*5f-15 # add nonlinear relationship
+    A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*1.5e14).*1.5e-18 # add nonlinear relationship
 
     A = A_range[closest_index(temp_range, temp)]
 
