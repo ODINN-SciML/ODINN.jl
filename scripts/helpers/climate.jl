@@ -159,7 +159,7 @@ struct Dataset
     ablation
 end
 
-function fake_temp_series(t, means=[-5.0,-10.0,-12.0,-13.0,-14.0,-15.0,-20.0])
+function fake_temp_series(t, means=[0, -5.0,-10.0,-12.0,-13.0,-14.0,-15.0,-20.0])
     ts = 1:t
     temps = []
     for mean in means
