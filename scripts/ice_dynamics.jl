@@ -17,6 +17,7 @@ using LinearAlgebra
 using HDF5
 using JLD
 using Infiltrator
+using PyCall # just for compatibility with utils.jl
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -119,22 +120,24 @@ end
 # Gather simulation parameters
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α, var_format) 
 
+ts = collect(1:t₁)
+gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
+glacier_refs = []
+
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-    let
-    ts = collect(1:t₁)
-    gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
-    glacier_refs = []
-    H = copy(H₀)
+
 
     for temps in temp_series
         println("Reference simulation with temp ≈ ", mean(temps))
         glacier_ref = copy(gref)
+        H = copy(H₀)
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
         # Perform reference imulation with forward model 
-        @time H, V = iceflow!(H,glacier_ref,p,t,t₁)
+        @time H, V̂ = iceflow!(H,glacier_ref,p,t,t₁)
+
         push!(glacier_refs, glacier_ref)
 
         ### Glacier ice thickness evolution  ###
@@ -153,38 +156,26 @@ if create_ref_dataset
         display(hm2)
 
     end
-    end # let
 
     println("Saving reference data")
     save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
+
 else 
-    glacier_ref = load(joinpath(root_dir, "data/glacier_refs.jld"))
+    glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
 end
+
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     hyparams, UA = create_NNs()
 
-
-    period = length(MB_avg)
-    ŶA = []
-    MB_nan = deepcopy(MB_avg)
-    for i in 1:period
-        MB_nan[i][MB_nan[i] .== 0] .= NaN
-        append!(ŶA, A_fake(MB_nan[i], size(H), "scalar"))
-    end
-    plot(ŶA, yaxis="A", xaxis="Year", label="fake A")
-    # plot(fakeA, 0, t₁, label="fake")
-    initial_NN = []
-    for i in 1:period
-        append!(initial_NN, predict_A(UA, MB_nan, i, "scalar"))
-    end
-    display(plot!(initial_NN, label="initial NN"))
-
-
     # Train iceflow UDE
-    iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
-
+    for (temps, glacier_ref) in zip(temp_series, glacier_refs)
+        H = copy(H₀)
+        # Gather simulation parameters
+        p = (Δx, Δy, Γ, A, B, temps, C, α) 
+        iceflow_UDE!(H,glacier_ref,UA,hyparams,p,t,t₁)
+    end
 end
 
 
