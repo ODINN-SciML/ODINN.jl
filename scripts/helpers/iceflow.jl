@@ -56,12 +56,12 @@ function hybrid_train!(loss, glacier_ref, UA, opt, H, p, t, t₁)
     # Callback to track the training
     #callback(train_loss_UA)
     
-    # println("Backpropagation")
+    println("Backpropagation")
     ∇_UA = back_UA(one(loss_UA)) # with UA
 
     # ∇_UA = back_UA(one(loss_UA))[1] # inverse problem
     
-    # println("Updating NN weights")
+    println("Updating NN weights")
 
     # for ps in θ
     #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
@@ -85,12 +85,13 @@ Computes the loss function for a specific batch.
 function loss(H, glacier_ref, UA, p, t, t₁)
     l_H, l_A  = 0.0, 0.0
    
-    H, V = iceflow!(H, UA, p,t,t₁)
+    H, V̂ = iceflow!(H, UA, p,t,t₁)
 
     # A = p[4]
     # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
-    l_H = sqrt(Flux.Losses.mse(H, glacier_ref[ts_i]["H"][end]; agg=mean))
-    l_V = sqrt(Flux.Losses.mse(V, mean.(glacier_ref[ts_i]["V"]); agg=mean))
+
+    l_H = sqrt(Flux.Losses.mse(H, glacier_ref["H"][end]; agg=mean))
+    l_V = sqrt(Flux.Losses.mse(V̂, mean(glacier_ref["V"]); agg=mean))
 
     println("l_H: ", l_H)
     println("l_V: ", l_V)
@@ -98,11 +99,11 @@ function loss(H, glacier_ref, UA, p, t, t₁)
     # l = l_A + l_H
 
     Zygote.ignore() do
-       hml = heatmap(mean.(glacier_ref[ts_i]["V"]) .- V, title="Loss error")
+       hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
        display(hml)
     end
 
-    return l_V
+    return l_H
 end
 
 
@@ -187,7 +188,9 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             if t >= glacier_ref["timestamps"][ts_i]
                 println("Saving H at year ", glacier_ref["timestamps"][ts_i])
                 push!(glacier_ref["H"], H)
-                push!(glacier_ref["V"], V)
+                # Compute average surface velocity field
+                V̂ = (V[1].^2 + V[2].^2).^(1/2)
+                push!(glacier_ref["V"], V̂)
                 ts_i += 1
             end          
         end   
@@ -195,13 +198,13 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
     end   
     end # let
     
-    return H, mean.(glacier_ref["V"]) # final ice thickness and average ice surface velocity
+    return H, glacier_ref["V"] # final ice thickness and average ice surface velocity
 end  
 
 
 # predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1f-16 # Adding units outside the NN
 
-predict_A̅(UA, temp) = UA(temp)[1] .* 1f-16 # Adding units outside the NN
+predict_A̅(UA, temp) = UA(temp)[1] .* 1e-20 # Adding units outside the NN
 
 # """
 #     predict_A(UA, MB_avg, var_format)
@@ -237,14 +240,15 @@ function iceflow!(H, UA, p,t,t₁)
     current_year = 0
     temps = p[6]
     total_iter = 0
-    Vx_ts, Vy_ts = [],[]
+    Vx, Vx_buff, Vy, Vy_buff = zeros(nx-1,ny-1),zeros(nx-1,ny-1),zeros(nx-1,ny-1),zeros(nx-1,ny-1)
+    t_step = 0
 
     # Forward scheme implementation
     while t < t₁
         let
         iter = 1
         err = 2 * tolnl
-        V = zeros(nx,ny)
+        V = zeros(nx-1,ny-1)
         Hold = copy(H)
         dHdt = zeros(nx, ny)
 
@@ -312,16 +316,26 @@ function iceflow!(H, UA, p,t,t₁)
         end 
           
         t += Δt
+        t_step += 1
 
         # Zygote.ignore() do
         #     @infiltrate
         # end
-        push!(Vx_ts, V[1])
-        push!(Vy_ts, V[2])
+        
+        # Fill buffers to handle Zygote "Mutating arrays" limitation
+        Vx_buff = copy(Vx)
+        Vy_buff = copy(Vy)
+
+        @tullio Vx[i,j] := Vx_buff[i,j] + V[1][i,j]
+        @tullio Vy[i,j] := Vy_buff[i,j] + V[2][i,j]
+    
         end # let
     end 
 
-    return H, mean(Vx_ts), mean(Vy_ts)
+    # Compute average surface velocity field
+    V̂ = ((Vx./t_step).^2 + (Vy./t_step).^2).^(1/2)
+
+    return H, V̂
 
     end   # let
 

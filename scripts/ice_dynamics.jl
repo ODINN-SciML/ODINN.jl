@@ -120,13 +120,14 @@ end
 # Gather simulation parameters
 p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α, var_format) 
 
+ts = collect(1:t₁)
+gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
+glacier_refs = []
+
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-    let
-    ts = collect(1:t₁)
-    gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
-    glacier_refs = []
+
 
     for temps in temp_series
         println("Reference simulation with temp ≈ ", mean(temps))
@@ -135,7 +136,8 @@ if create_ref_dataset
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
         # Perform reference imulation with forward model 
-        @time H, V = iceflow!(H,glacier_ref,p,t,t₁)
+        @time H, V̂ = iceflow!(H,glacier_ref,p,t,t₁)
+
         push!(glacier_refs, glacier_ref)
 
         ### Glacier ice thickness evolution  ###
@@ -157,23 +159,23 @@ if create_ref_dataset
 
     println("Saving reference data")
     save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
-    end # let
+
 else 
-    glacier_ref = load(joinpath(root_dir, "data/glacier_refs.jld"))
+    glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
 end
+
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     hyparams, UA = create_NNs()
 
     # Train iceflow UDE
-    for temps in temp_series
+    for (temps, glacier_ref) in zip(temp_series, glacier_refs)
         H = copy(H₀)
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
         iceflow_UDE!(H,glacier_ref,UA,hyparams,p,t,t₁)
     end
-
 end
 
 
