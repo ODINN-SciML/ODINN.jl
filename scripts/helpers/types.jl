@@ -7,7 +7,7 @@ using Base: @kwdef
 # Machine learning training hyperameters
 @kwdef mutable struct Hyperparameters
     batchsize::Int = 500     # batch size
-    η::Float32 = 0.1         # learning rate
+    η::Float32 = 0.01         # learning rate
     epochs::Int = 5          # number of epochs
     use_cuda::Bool = true    # use gpu (if cuda available)
 end

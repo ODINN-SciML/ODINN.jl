@@ -11,7 +11,7 @@ cd(@__DIR__)
 using Pkg; Pkg.activate("../."); 
 # Pkg.instantiate()
 using Plots; gr()
-using SparseArrays
+# using SparseArrays
 using Statistics
 using LinearAlgebra
 using HDF5
@@ -90,7 +90,6 @@ if example == "Argentiere"
 
     B  = copy(argentiere.bed)
     H₀ = copy(argentiere.thick[:,:,1])
-    v = zeros(size(argentiere.thick)) # surface velocities
  
     # Spatial and temporal differentials
     Δx = Δy = 50 #m (Δx = Δy)
@@ -117,8 +116,6 @@ elseif example == "Gaussian"
 end
 
 ### We perform the simulations with an explicit forward mo  ###
-# Gather simulation parameters
-p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α, var_format) 
 
 ts = collect(1:t₁)
 gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
@@ -127,7 +124,6 @@ glacier_refs = []
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-
 
     for temps in temp_series
         println("Reference simulation with temp ≈ ", mean(temps))
@@ -168,13 +164,14 @@ end
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     hyparams, UA = create_NNs()
+    losses, predicted_As, fake_As = [],[],[]
+    trackers = (losses, predicted_As, fake_As)
 
     # Train iceflow UDE
     for (temps, glacier_ref) in zip(temp_series, glacier_refs)
-        H = copy(H₀)
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
-        iceflow_UDE!(H,glacier_ref,UA,hyparams,p,t,t₁)
+        iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)
     end
 end
 
@@ -184,26 +181,11 @@ end
 ########################  PLOTS    ################################
 ###################################################################
 
-final_NN = []
-for i in 1:period
-    append!(final_NN, predict_A(UA, MB_nan, i, "scalar"))
-end
-plot(ŶA, yaxis="A", xaxis="Year", label="fake A")
-display(plot!(final_NN, label="final NN"))
+temp_values = [0.0,-5.0,-10.0,-15.0,-20.0]'
 
-### Glacier ice thickness evolution  ###
-hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
-hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
-hm1 = plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
-      xlims=(0,180), ylims=(0,180), colorbar_title="Ice thickness (m)",
-      clims=(0,maximum(H₀)), link=:all)
-display(hm1)
+plot(predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN", ylims=(6e-21,2e-18))
+display(plot!(A_fake.(temp_values)', label="Fake A"))
 
-###  Glacier ice thickness difference  ###
-lim = maximum( abs.(H .- H₀) )
-hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
-      xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
-      title="Variation in ice thickness")
-display(hm2)
+
 
 
