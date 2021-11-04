@@ -163,7 +163,8 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             
             # Update the ice thickness
             H_ = copy(H)
-            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            #@tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ)
 
             if mod(iter, nout) == 0
                 # Compute error for implicit method with damping
@@ -171,9 +172,18 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
                 err = maximum(Err)
                 # println("error at iter ", iter, ": ", err)
 
+                #if isnan(err)
+                #    error("""NaNs encountered.  Try a combination of:
+                #                decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                #end
                 if isnan(err)
                     error("""NaNs encountered.  Try a combination of:
                                 decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                elseif err>10e8
+                    error("""Inestability detected""")
+                elseif iter == itMax_ref && err > tolnl_ref
+                    error("""Desired convergence tolerance don't reached. Increase the number of iterations
+                                itMax or decrease the tolerance tolnl. Current error after $iter iterations is $err""")            
                 end
             end
         
@@ -295,7 +305,8 @@ function iceflow!(H, UA, p,t,t₁)
             H_ = copy(H)
             
             # Update the ice thickness
-            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            #@tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ)
             
             Zygote.ignore() do
                 if mod(iter, nout) == 0
@@ -372,7 +383,12 @@ function SIA(H, p)
     F = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
 
     # Compute dτ for the implicit method
-    dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
+    #dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
+    D_max = 2000000
+    if D_max < maximum(D)
+        error("Increase Maximum diffusivity")
+    end
+    dτ = dτsc * min( 10.0 , 1.0/(1.0/Δt + 1.0/(cfl/(ϵ + D_max))))
 
     # Compute velocities    
     Vx = -D./(avg(H) .+ ϵ).*avg_y(dSdx)
@@ -408,17 +424,21 @@ Fake law to determine A in the SIA
 """
 function A_fake(temp)
     # Matching point MB values to A values
-    maxA = 1e-18
-    minA = 6e-20
+    maxA = 8e-16
+    minA = 1e-16
 
-    temp_range = -25:0.01:1
+    maxT = 1
+    minT = -25
 
-    A_step = (maxA-minA)/length(temp_range)
-    A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*1.5e14).*1.5e-18 # add nonlinear relationship
+    #temp_range = -25:0.01:1
 
-    A = A_range[closest_index(temp_range, temp)]
+    #A_step = (maxA-minA)/length(temp_range)
+    #A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*1.5e14).*1.5e-18 # add nonlinear relationship
 
-    return A
+    #A = A_range[closest_index(temp_range, temp)]
+
+    return minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    #return A
 end
 
 # function A_fake(MB_buffer, shape, var_format)
