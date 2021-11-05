@@ -246,3 +246,15 @@ Wrapper function for the @infiltrate macro to debug the global scope
 function infiltrate()
     @infiltrate
 end
+
+"""
+    shuffle()
+Return a random reference dataset for training
+"""
+function shuffle(temp_series, glacier_refs)
+    rand_idx = rand(1:length(temp_series))
+    temps = temp_series[rand_idx]
+    glacier_ref = glacier_refs[rand_idx]
+
+    return temps, glacier_ref
+end

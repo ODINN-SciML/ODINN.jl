@@ -23,8 +23,8 @@ function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
     # For now, train UDE only with the last timestamp with "observations"
 
     # We define an optimizer
-    # opt = RMSProp(hyparams.η)
-    opt = ADAM(hyparams.η)
+    opt = RMSProp(hyparams.η)
+    # opt = ADAM(hyparams.η)
 
     # Train the UDE for a given number of epochs
     @epochs hyparams.epochs hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
@@ -95,8 +95,8 @@ function loss(H, glacier_ref, UA, p, t, t₁)
   
     H, V̂ = iceflow!(H, UA, p,t,t₁)
 
-    l_H = Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum)
-    l_V = Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum)
+    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))
+    l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
 
     println("l_H: ", l_H)
     println("l_V: ", l_V)
@@ -494,7 +494,7 @@ function create_NNs()
     leakyrelu(x, a=0.01) = max(a*x, x)
 
     # Constraints A within physically plausible values
-    minA = 0.3
+    minA = 3
     maxA = 80
     rangeA = minA:1f-3:maxA
     stdA = std(rangeA)*2
@@ -508,8 +508,9 @@ function create_NNs()
     UA = Chain(
         Dense(1,10), 
         Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
+        Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
         Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
-        Dense(5,1, sigmoid_A) 
+        Dense(5,1) 
     )
 
     return hyparams, UA

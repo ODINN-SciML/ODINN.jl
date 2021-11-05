@@ -128,7 +128,7 @@ if create_ref_dataset
     for temps in temp_series
         println("Reference simulation with temp ≈ ", mean(temps))
         glacier_ref = copy(gref)
-        H = copy(H₀)
+        H = deepcopy(H₀)
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
         # Perform reference imulation with forward model 
@@ -168,8 +168,11 @@ if train_UDE
     trackers = (losses, predicted_As, fake_As)
 
     # Train iceflow UDE
-    for (temps, glacier_ref) in zip(temp_series, glacier_refs)
-        println("Temperature in training: ", temp)
+    for iteration in 1:length(temp_series)*100
+        println("\nIteration #", iteration, "\n")
+        temps, glacier_ref = shuffle(temp_series, glacier_refs)
+        println("Temperature in training: ", temps[1])
+
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
         iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)
@@ -184,8 +187,8 @@ end
 
 temp_values = [0.0,-5.0,-10.0,-15.0,-20.0]'
 
-plot(predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN", ylims=(6e-21,2e-18))
-display(plot!(A_fake.(temp_values)', label="Fake A"))
+plot(A_fake.(temp_values)', label="Fake A")
+display(scatter!(predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN", ylims=(3e-17,8e-16)))
 
 
 
