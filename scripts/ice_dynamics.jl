@@ -169,6 +169,7 @@ if train_UDE
 
     # Train iceflow UDE
     for (temps, glacier_ref) in zip(temp_series, glacier_refs)
+        println("Temperature in training: ", temp)
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
         iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)

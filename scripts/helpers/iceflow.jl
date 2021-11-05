@@ -50,7 +50,7 @@ function hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
     temp = p[6][1]
     push!(predicted_As, predict_A̅(UA, [temp]))
     push!(fake_As, A_fake(temp))
-
+    
     println("Current temp: ", temp)
     println("Predicted A: ", predicted_As[end])
     println("Fake A: ", fake_As[end])
