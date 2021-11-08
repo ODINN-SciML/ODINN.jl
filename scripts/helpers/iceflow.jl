@@ -27,7 +27,9 @@ function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
     # opt = ADAM(hyparams.η)
 
     # Train the UDE for a given number of epochs
-    @epochs 1 hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
+    hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
+    # @epochs hyparams.epochs hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
+
 end
 
 """
@@ -35,49 +37,47 @@ end
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
+function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
     # Retrieve model parameters
     θ = Flux.params(UA)
     println("Resetting initial H state")
     H = deepcopy(H₀) # Make sure we go back to the original initial state for each epoch
-    losses, predicted_As, fake_As = trackers
 
     # println("Forward pass")
     loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
 
     # Update training trackers
-    push!(losses, loss_UA)
+
+    println("trackers: ", trackers)
+    push!(trackers["losses"], loss_UA)
     temp = p[6][1]
-    push!(predicted_As, predict_A̅(UA, [temp]))
-    push!(fake_As, A_fake(temp))
+    push!(trackers["predicted_As"], predict_A̅(UA, [temp]))
+    push!(trackers["fake_As"], A_fake(temp))
     
     println("Current temp: ", temp)
-    println("Predicted A: ", predicted_As[end])
-    println("Fake A: ", fake_As[end])
-    #ploss = plot(losses, title="Training UDE...", ylabel="Loss", xlabel="Epoch")
-    #plot(predicted_As, title="A values", label="Predicted", ylabel="A", xlabel="Epoch")
-    #pA = plot!(fake_As, ylims=(3e-17, 8e-16), label = "Fake")
-    #ptrack = plot(ploss,pA, layout=2)
-    #display(ptrack)
+    println("Predicted A: ", trackers["predicted_As"][end])
+    println("Fake A: ", trackers["fake_As"][end])
 
-    # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem
-
-    # Callback to track the training
-    #callback(train_loss_UA)
-    
-    println("Backpropagation")
-    ∇_UA = back_UA(one(loss_UA)) # with UA
+    # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem 
 
     # ∇_UA = back_UA(one(loss_UA))[1] # inverse problem
-    
-    println("Updating NN weights")
 
     # for ps in θ
     #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
     # end
     # println("Gradients ∇_UA: ", ∇_UA)
 
-    Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+    # Only update NN weights after batch completion 
+    if(trackers["current_batch"] == hyparams.batchsize)
+        println("Backpropagation")
+        ∇_UA = back_UA(one(mean(trackers["losses_batch"]))) # with UA
+
+        println("Updating NN weights")
+        Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+        trackers["losses_batch"] = []
+    else
+        push!(trackers["losses_batch"], loss_UA)
+    end
 
     # Flux.Optimise.update!(opt, A, ∇_UA) # inverse problem
     # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p # unpack
@@ -95,7 +95,8 @@ function loss(H, glacier_ref, UA, p, t, t₁)
   
     H, V̂ = iceflow!(H, UA, p,t,t₁)
 
-    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))
+    l_H = (Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))^1/4
+
     l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
 
     println("l_H: ", l_H)
@@ -103,11 +104,11 @@ function loss(H, glacier_ref, UA, p, t, t₁)
 
     # l = l_A + l_H
 
-    Zygote.ignore() do
-    #    hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
-       #hml = heatmap(mean(glacier_ref["H"]) .- H, title="Loss error - H")
-       #display(hml)
-    end
+    # Zygote.ignore() do
+    # #    hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
+    #    hml = heatmap(glacier_ref["H"][end] .- H, title="Loss error - H")
+    #    display(hml)
+    # end
 
     return l_H
 end
@@ -220,9 +221,9 @@ end
 
 # predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1f-16 # Adding units outside the NN
 
-predict_A̅(UA, temp) = UA(temp)[1] .* 1e-17 # Adding units outside the NN
+predict_A̅(UA, temp) = UA(temp)[1] .* 1e-16 # Adding units outside the NN
 
-predict_A̅(UA, temp::Adjoint) = UA(temp) .* 1e-17
+predict_A̅(UA, temp::Adjoint) = UA(temp) .* 1e-16
 
 # """
 #     predict_A(UA, MB_avg, var_format)
@@ -494,11 +495,11 @@ function create_NNs()
     leakyrelu(x, a=0.01) = max(a*x, x)
 
     # Constraints A within physically plausible values
-    minA = 3
-    maxA = 80
-    #rangeA = minA:1f-3:maxA
-    #stdA = std(rangeA)*2
-    #relu_A(x) = min(max(minA, x), maxA)
+    minA = 0.3
+    maxA = 8
+    rangeA = minA:1f-3:maxA
+    stdA = std(rangeA)*2
+    relu_A(x) = min(max(minA, x), maxA)
     #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
     sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
 
@@ -508,10 +509,10 @@ function create_NNs()
     UA = Chain(
         Dense(1,10), 
         #Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
-        #Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
+        Dense(10,10, x->tanh.(x)), #init = A_init(stdA)), 
         #Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
-        Dense(10,5, x->tanh.(x)),#, init = A_init(stdA)), 
-        Dense(5,1, x->sigmoid_A.(x)) 
+        Dense(10,5, x->tanh.(x)), #init = A_init(stdA)), 
+        Dense(5,1, relu_A)
     )
 
     return hyparams, UA

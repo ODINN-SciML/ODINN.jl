@@ -128,7 +128,7 @@ if create_ref_dataset
 
     for temps in temp_series
         println("Reference simulation with temp ≈ ", mean(temps))
-        glacier_ref = copy(gref)
+        glacier_ref = deepcopy(gref)
         H = deepcopy(H₀)
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
@@ -169,6 +169,7 @@ end
 #    temps_list = vcat(temps_list, temps)
 #end
 
+let
 temp_values = [mean(temps) for temps in temp_series]'
 plot(temp_values', A_fake.(temp_values)', label="Fake A")
 old_trained = A_fake.(temp_values)'
@@ -176,8 +177,9 @@ old_trained = A_fake.(temp_values)'
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     hyparams, UA = create_NNs()
-    losses, predicted_As, fake_As = [],[],[]
-    trackers = (losses, predicted_As, fake_As)
+    trackers = Dict("losses"=>[], "losses_batch"=>[],
+                    "predicted_As"=>[], "fake_As"=>[],
+                    "current_batch"=>1)
 
     # Diagnosis plot after each full epochs
     #display(scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
@@ -187,12 +189,13 @@ if train_UDE
         println("\nEpoch #", i, "\n")
 
         idxs = Random.shuffle(1:length(temp_series))
+        # idxs = 1:length(temp_series)
         #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
 
         for idx in idxs
             temps = temp_series[idx]
             glacier_ref = glacier_refs[idx]
-            println("Temperature in training: ", temps[1])
+            println("\nTemperature in training: ", temps[1])
 
             # Gather simulation parameters
             p = (Δx, Δy, Γ, A, B, temps, C, α) 
@@ -200,16 +203,24 @@ if train_UDE
             
             # plot the evolution
             plot(temp_values', A_fake.(temp_values)', label="Fake A")
-            vline!([temps[1]], label="Current temp")
-            scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
-            display(scatter!(temp_values', old_trained, label="Old NN", color="grey"))#, ylims=(3e-17,8e-16)))
+            vline!([mean(temps)], label="Current temp")
+            scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
+            pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
+            ploss = plot(trackers["losses"], title="Loss", xlabel="Iteration", aspect=:equal)
+            display(plot(pfunc, ploss, layout=(2,1)))
             old_trained = predict_A̅(UA, temp_values)'
+
+            if trackers["current_batch"] < hyparams.batchsize
+                trackers["current_batch"] +=1 # increase batch
+            else
+                trackers["current_batch"] = 1
+            end 
         end
 
     end
 
 end
-
+end # let
 
 
 ###################################################################
