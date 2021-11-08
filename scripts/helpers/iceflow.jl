@@ -27,7 +27,7 @@ function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
     # opt = ADAM(hyparams.η)
 
     # Train the UDE for a given number of epochs
-    @epochs hyparams.epochs hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
+    @epochs 1 hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
 end
 
 """
@@ -54,11 +54,11 @@ function hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
     println("Current temp: ", temp)
     println("Predicted A: ", predicted_As[end])
     println("Fake A: ", fake_As[end])
-    ploss = plot(losses, title="Training UDE...", ylabel="Loss", xlabel="Epoch")
-    plot(predicted_As, title="A values", label="Predicted", ylabel="A", xlabel="Epoch")
-    pA = plot!(fake_As, ylims=(3e-17, 8e-16), label = "Fake")
-    ptrack = plot(ploss,pA, layout=2)
-    display(ptrack)
+    #ploss = plot(losses, title="Training UDE...", ylabel="Loss", xlabel="Epoch")
+    #plot(predicted_As, title="A values", label="Predicted", ylabel="A", xlabel="Epoch")
+    #pA = plot!(fake_As, ylims=(3e-17, 8e-16), label = "Fake")
+    #ptrack = plot(ploss,pA, layout=2)
+    #display(ptrack)
 
     # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem
 
@@ -105,8 +105,8 @@ function loss(H, glacier_ref, UA, p, t, t₁)
 
     Zygote.ignore() do
     #    hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
-       hml = heatmap(mean(glacier_ref["H"]) .- H, title="Loss error - H")
-       display(hml)
+       #hml = heatmap(mean(glacier_ref["H"]) .- H, title="Loss error - H")
+       #display(hml)
     end
 
     return l_H
@@ -496,9 +496,9 @@ function create_NNs()
     # Constraints A within physically plausible values
     minA = 3
     maxA = 80
-    rangeA = minA:1f-3:maxA
-    stdA = std(rangeA)*2
-    relu_A(x) = min(max(minA, x), maxA)
+    #rangeA = minA:1f-3:maxA
+    #stdA = std(rangeA)*2
+    #relu_A(x) = min(max(minA, x), maxA)
     #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
     sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
 
@@ -507,10 +507,11 @@ function create_NNs()
 
     UA = Chain(
         Dense(1,10), 
-        Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
-        Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
-        Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
-        Dense(5,1) 
+        #Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
+        #Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
+        #Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
+        Dense(10,5, x->tanh.(x)),#, init = A_init(stdA)), 
+        Dense(5,1, x->sigmoid_A.(x)) 
     )
 
     return hyparams, UA

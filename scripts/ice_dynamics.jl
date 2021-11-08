@@ -18,6 +18,7 @@ using HDF5
 using JLD
 using Infiltrator
 using PyCall # just for compatibility with utils.jl
+using Random 
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -161,22 +162,52 @@ else
 end
 
 
+# We define the training itenerary
+#temps_list = []
+#for i in 1:hyparams.epochs
+#    temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
+#    temps_list = vcat(temps_list, temps)
+#end
+
+temp_values = [mean(temps) for temps in temp_series]'
+plot(temp_values', A_fake.(temp_values)', label="Fake A")
+old_trained = A_fake.(temp_values)'
+
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     hyparams, UA = create_NNs()
     losses, predicted_As, fake_As = [],[],[]
     trackers = (losses, predicted_As, fake_As)
 
-    # Train iceflow UDE
-    for iteration in 1:length(temp_series)*100
-        println("\nIteration #", iteration, "\n")
-        temps, glacier_ref = shuffle(temp_series, glacier_refs)
-        println("Temperature in training: ", temps[1])
+    # Diagnosis plot after each full epochs
+    #display(scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
 
-        # Gather simulation parameters
-        p = (Δx, Δy, Γ, A, B, temps, C, α) 
-        iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)
+    # Train iceflow UDE
+    for i in 1:hyparams.epochs
+        println("\nEpoch #", i, "\n")
+
+        idxs = Random.shuffle(1:length(temp_series))
+        #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
+
+        for idx in idxs
+            temps = temp_series[idx]
+            glacier_ref = glacier_refs[idx]
+            println("Temperature in training: ", temps[1])
+
+            # Gather simulation parameters
+            p = (Δx, Δy, Γ, A, B, temps, C, α) 
+            iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)          
+            
+            # plot the evolution
+            plot(temp_values', A_fake.(temp_values)', label="Fake A")
+            vline!([temps[1]], label="Current temp")
+            scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
+            display(scatter!(temp_values', old_trained, label="Old NN", color="grey"))#, ylims=(3e-17,8e-16)))
+            old_trained = predict_A̅(UA, temp_values)'
+        end
+
     end
+
 end
 
 
@@ -185,10 +216,11 @@ end
 ########################  PLOTS    ################################
 ###################################################################
 
-temp_values = [0.0,-5.0,-10.0,-15.0,-20.0]'
+#temp_values = [0.0,-5.0,-10.0,-15.0,-20.0]'
+temp_values = [mean(temps) for temps in temp_series]'
 
 plot(A_fake.(temp_values)', label="Fake A")
-display(scatter!(predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN", ylims=(3e-17,8e-16)))
+display(scatter!(predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
 
 
 
