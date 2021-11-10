@@ -6,7 +6,7 @@ using Base: @kwdef
 
 # Machine learning training hyperameters
 @kwdef mutable struct Hyperparameters
-    batchsize::Int = 5    # batch size
+    batchsize::Int = 9    # batch size
     η::Float32 = 0.01         # learning rate
     epochs::Int = 10        # number of epochs
     #epochs_internal::Int = 1        # number of epochs per single glacier

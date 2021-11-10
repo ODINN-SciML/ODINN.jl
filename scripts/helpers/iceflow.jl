@@ -48,8 +48,10 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
 
     # Update training trackers
 
-    println("trackers: ", trackers)
-    push!(trackers["losses"], loss_UA)
+    #println("trackers: ", trackers)
+    push!(trackers["grad_batch"], back_UA)
+    #push!(trackers["losses"], loss_UA)
+
     temp = p[6][1]
     push!(trackers["predicted_As"], predict_A̅(UA, [temp]))
     push!(trackers["fake_As"], A_fake(temp))
@@ -70,11 +72,29 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
     # Only update NN weights after batch completion 
     if(trackers["current_batch"] == hyparams.batchsize)
         println("Backpropagation")
-        ∇_UA = back_UA(one(mean(trackers["losses_batch"]))) # with UA
+        # We update the weights with the gradients of all tha glaciers in the batch
+        # This is equivalent to taking the gradint with respect of the full loss function
+        for i in 1:hyparams.batchsize
+            back_UA = trackers["grad_batch"][i]
+            ∇_UA = back_UA(1)
+            println("Updating NN weights")
+            Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+        end
 
-        println("Updating NN weights")
-        Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+        #∇_UA = back_UA(one(mean(trackers["losses_batch"]))) # with UA
+        #println("Updating NN weights")
+        #Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+        
+        # Keep track of the loss function per batch
+        push!(trackers["losses"], mean(trackers["losses_batch"]))
         trackers["losses_batch"] = []
+
+        # Plot progress of the loss function 
+        temp_values = LinRange(-25, 0, 20)'
+        plot(temp_values', A_fake.(temp_values)', label="Fake A")
+        pfunc = scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")
+        ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
+        display(plot(pfunc, ploss, layout=(2,1)))
     else
         push!(trackers["losses_batch"], loss_UA)
     end
