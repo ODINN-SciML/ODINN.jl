@@ -13,7 +13,7 @@ include("utils.jl")
 Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
 """
-    iceflow_UDE!(H₀,glacier_ref,UA,hyparams,p,t,t₁)
+    iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
 
 Hybrid ice flow model solving and optimizing the Shallow Ice Approximation (SIA) PDE using 
 Universal Differential Equations (UDEs)
@@ -33,7 +33,7 @@ function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
 end
 
 """
-    hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
+    hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
 
 Train hybrid ice flow model based on UDEs.
 """
@@ -46,20 +46,6 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
     # println("Forward pass")
     loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
 
-    # Update training trackers
-
-    #println("trackers: ", trackers)
-    push!(trackers["grad_batch"], back_UA)
-    #push!(trackers["losses"], loss_UA)
-
-    temp = p[6][1]
-    push!(trackers["predicted_As"], predict_A̅(UA, [temp]))
-    push!(trackers["fake_As"], A_fake(temp))
-    
-    println("Current temp: ", temp)
-    println("Predicted A: ", trackers["predicted_As"][end])
-    println("Fake A: ", trackers["fake_As"][end])
-
     # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem 
 
     # ∇_UA = back_UA(one(loss_UA))[1] # inverse problem
@@ -69,8 +55,14 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
     # end
     # println("Gradients ∇_UA: ", ∇_UA)
 
+    println("Predicted A: ", predict_A̅(UA, [mean(p[6])]))
+
     # Only update NN weights after batch completion 
     if(trackers["current_batch"] == hyparams.batchsize)
+        # Update training trackers
+        push!(trackers["losses"], mean(trackers["losses_batch"]))
+        println("trackers: ", trackers)
+ 
         println("Backpropagation")
         # We update the weights with the gradients of all tha glaciers in the batch
         # This is equivalent to taking the gradint with respect of the full loss function
@@ -106,23 +98,21 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
 end
 
 """
-    loss(batch)
+    loss(H, glacier_ref, UA, p, t, t₁)
 
-Computes the loss function for a specific batch.
+Computes the loss function for a specific batch
 """
 # We determine the loss function
 function loss(H, glacier_ref, UA, p, t, t₁)
   
     H, V̂ = iceflow!(H, UA, p,t,t₁)
 
-    l_H = (Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))^1/4
+    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))
 
     l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
 
     println("l_H: ", l_H)
     println("l_V: ", l_V)
-
-    # l = l_A + l_H
 
     # Zygote.ignore() do
     # #    hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
@@ -241,9 +231,9 @@ end
 
 # predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1f-16 # Adding units outside the NN
 
-predict_A̅(UA, temp) = UA(temp)[1] .* 1e-16 # Adding units outside the NN
+predict_A̅(UA, temp) = UA(Flux.normalise(temp))[1] .* 1e-16 # Adding units outside the NN
 
-predict_A̅(UA, temp::Adjoint) = UA(temp) .* 1e-16
+predict_A̅(UA, temp::Adjoint) = UA(Flux.normalise(temp)) .* 1e-16
 
 # """
 #     predict_A(UA, MB_avg, var_format)
@@ -532,7 +522,7 @@ function create_NNs()
         Dense(10,10, x->tanh.(x)), #init = A_init(stdA)), 
         #Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
         Dense(10,5, x->tanh.(x)), #init = A_init(stdA)), 
-        Dense(5,1, relu_A)
+        Dense(5,1, sigmoid_A)
     )
 
     return hyparams, UA
