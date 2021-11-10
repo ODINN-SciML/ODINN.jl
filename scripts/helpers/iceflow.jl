@@ -19,8 +19,6 @@ Hybrid ice flow model solving and optimizing the Shallow Ice Approximation (SIA)
 Universal Differential Equations (UDEs)
 """
 function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
-    println("Running forward UDE ice flow model...\n")
-    # For now, train UDE only with the last timestamp with "observations"
 
     # We define an optimizer
     opt = RMSProp(hyparams.η)
@@ -40,11 +38,15 @@ Train hybrid ice flow model based on UDEs.
 function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
     # Retrieve model parameters
     θ = Flux.params(UA)
-    println("Resetting initial H state")
+    # println("Resetting initial H state")
     H = deepcopy(H₀) # Make sure we go back to the original initial state for each epoch
 
     # println("Forward pass")
     loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
+
+    # Save gradients from current batch
+    push!(trackers["grad_batch"], back_UA)
+    push!(trackers["losses_batch"], loss_UA)
 
     # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem 
 
@@ -61,15 +63,15 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
     if(trackers["current_batch"] == hyparams.batchsize)
         # Update training trackers
         push!(trackers["losses"], mean(trackers["losses_batch"]))
-        println("trackers: ", trackers)
+        # println("trackers: ", trackers)
  
-        println("Backpropagation")
+        println("Backpropagation...")
         # We update the weights with the gradients of all tha glaciers in the batch
-        # This is equivalent to taking the gradint with respect of the full loss function
+        # This is equivalent to taking the gradient with respect of the full loss function
         for i in 1:hyparams.batchsize
             back_UA = trackers["grad_batch"][i]
             ∇_UA = back_UA(1)
-            println("Updating NN weights")
+            println("#$i Updating NN weights")
             Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
         end
 
@@ -79,6 +81,9 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
         
         # Keep track of the loss function per batch
         push!(trackers["losses"], mean(trackers["losses_batch"]))
+
+        # Clear trackers for current finished batch
+        trackers["grad_batch"] = []
         trackers["losses_batch"] = []
 
         # Plot progress of the loss function 
@@ -87,8 +92,7 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
         pfunc = scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")
         ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
         display(plot(pfunc, ploss, layout=(2,1)))
-    else
-        push!(trackers["losses_batch"], loss_UA)
+  
     end
 
     # Flux.Optimise.update!(opt, A, ∇_UA) # inverse problem
@@ -153,7 +157,7 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
         year = floor(Int, t) + 1
         if year != current_year
 
-            println("Year: ", year)
+            # println("Year: ", year)
             
             # Predict A with the fake A law
             temp = temps[year]

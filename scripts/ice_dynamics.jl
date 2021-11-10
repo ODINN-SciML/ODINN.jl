@@ -171,13 +171,14 @@ end
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
+    println("Running forward UDE ice flow model...\n")
     let
     temp_values = [mean(temps) for temps in temp_series]'
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
     old_trained = A_fake.(temp_values)'
     hyparams, UA = create_NNs()
     trackers = Dict("losses"=>[], "losses_batch"=>[],
-                    "current_batch"=>1)
+                    "current_batch"=>1, "grad_batch"=>[])
 
     # Diagnosis plot after each full epochs
     #display(scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
