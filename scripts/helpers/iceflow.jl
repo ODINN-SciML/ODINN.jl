@@ -62,9 +62,6 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
 
     # Only update NN weights after batch completion 
     if(trackers["current_batch"] == hyparams.batchsize)
-        # Update training trackers
-        push!(trackers["losses"], mean(trackers["losses_batch"]))
-        # println("trackers: ", trackers)
  
         println("Backpropagation...")
         # We update the weights with the gradients of all tha glaciers in the batch
@@ -88,11 +85,11 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
         trackers["losses_batch"] = []
 
         # Plot progress of the loss function 
-        temp_values = LinRange(-25, 0, 20)'
-        plot(temp_values', A_fake.(temp_values)', label="Fake A")
-        pfunc = scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")
-        ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
-        display(plot(pfunc, ploss, layout=(2,1)))
+        # temp_values = LinRange(-25, 0, 20)'
+        # plot(temp_values', A_fake.(temp_values)', label="Fake A")
+        # pfunc = scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")
+        # ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
+        # display(plot(pfunc, ploss, layout=(2,1)))
   
     end
 
@@ -293,7 +290,7 @@ function iceflow!(H, UA, p,t,t₁)
 
         if year != current_year
 
-            println("Year: ", year)
+            # println("Year: ", year)
         
             # Predict value of `A`
             temp = [temps[year]]
