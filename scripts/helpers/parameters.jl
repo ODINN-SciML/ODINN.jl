@@ -51,7 +51,7 @@ cfl  = max(Δx^2,Δy^2)/4.1
 t = 0                      # initial time
 Δt = 1.0/12.0              # time step [yr]
 Δts = []
-t₁ = 10                     # number of simulation years 
+t₁ = 3                     # number of simulation years 
 
 ## Climate parameters
 base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands") # OGGM elevation bands
