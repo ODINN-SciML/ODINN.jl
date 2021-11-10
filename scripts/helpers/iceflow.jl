@@ -13,62 +13,88 @@ include("utils.jl")
 Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
 """
-    iceflow_UDE!(H,H_ref,UA,hyparams,p,t,t₁)
+    iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
 
 Hybrid ice flow model solving and optimizing the Shallow Ice Approximation (SIA) PDE using 
 Universal Differential Equations (UDEs)
 """
-function iceflow_UDE!(H,glacier_ref,UA,hyparams,p,t,t₁)
-    println("Running forward UDE ice flow model...\n")
-    # For now, train UDE only with the last timestamp with "observations"
+function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
 
     # We define an optimizer
-    # opt = RMSProp(0.0001)
-    opt = ADAM(10e-2)
+    opt = RMSProp(hyparams.η)
+    # opt = ADAM(hyparams.η)
 
     # Train the UDE for a given number of epochs
-    @epochs hyparams.epochs hybrid_train!(loss, glacier_ref, UA, opt, H, p, t, t₁)
+    hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
+    # @epochs hyparams.epochs hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
+
 end
 
 """
-    hybrid_train!(loss, ps_Up, ps_Ut, data, opt)
+    hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
 
 Train hybrid ice flow model based on UDEs.
 """
-function hybrid_train!(loss, glacier_ref, UA, opt, H, p, t, t₁)
+function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
     # Retrieve model parameters
     θ = Flux.params(UA)
+    # println("Resetting initial H state")
+    H = deepcopy(H₀) # Make sure we go back to the original initial state for each epoch
 
     # println("Forward pass")
     loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
 
-    # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem
+    # Save gradients from current batch
+    push!(trackers["grad_batch"], back_UA)
+    push!(trackers["losses_batch"], loss_UA)
 
-    # Zygote.ignore() do
-    #     lim = maximum( abs.(H .- H₀) )
-    #     hmh0 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
-    #         xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
-    #         title="Variation in ice thickness at epoch")
-    #     hmh = heatmap(H, title="H")
-    #     display(plot(hmh0, hmh, aspect_ratio=:equal))
-    # end
 
-    # Callback to track the training
-    #callback(train_loss_UA)
-    
-    println("Backpropagation")
-    ∇_UA = back_UA(one(loss_UA)) # with UA
+    # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem 
 
     # ∇_UA = back_UA(one(loss_UA))[1] # inverse problem
-    
-    println("Updating NN weights")
 
     # for ps in θ
     #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
     # end
     # println("Gradients ∇_UA: ", ∇_UA)
 
-    Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+    println("Predicted A: ", predict_A̅(UA, [mean(p[6])]))
+
+    # Only update NN weights after batch completion 
+    if(trackers["current_batch"] == hyparams.batchsize)
+        # Update training trackers
+        push!(trackers["losses"], mean(trackers["losses_batch"]))
+        # println("trackers: ", trackers)
+ 
+        println("Backpropagation...")
+        # We update the weights with the gradients of all tha glaciers in the batch
+        # This is equivalent to taking the gradient with respect of the full loss function
+        for i in 1:hyparams.batchsize
+            back_UA = trackers["grad_batch"][i]
+            ∇_UA = back_UA(1)
+            println("#$i Updating NN weights")
+            Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+        end
+
+        #∇_UA = back_UA(one(mean(trackers["losses_batch"]))) # with UA
+        #println("Updating NN weights")
+        #Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+        
+        # Keep track of the loss function per batch
+        push!(trackers["losses"], mean(trackers["losses_batch"]))
+
+        # Clear trackers for current finished batch
+        trackers["grad_batch"] = []
+        trackers["losses_batch"] = []
+
+        # Plot progress of the loss function 
+        temp_values = LinRange(-25, 0, 20)'
+        plot(temp_values', A_fake.(temp_values)', label="Fake A")
+        pfunc = scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")
+        ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
+        display(plot(pfunc, ploss, layout=(2,1)))
+  
+    end
 
     # Flux.Optimise.update!(opt, A, ∇_UA) # inverse problem
     # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p # unpack
@@ -77,31 +103,27 @@ function hybrid_train!(loss, glacier_ref, UA, opt, H, p, t, t₁)
 end
 
 """
-    loss(batch)
+    loss(H, glacier_ref, UA, p, t, t₁)
 
-Computes the loss function for a specific batch.
+Computes the loss function for a specific batch
 """
 # We determine the loss function
 function loss(H, glacier_ref, UA, p, t, t₁)
-    l_H, l_A  = 0.0, 0.0
-   
+  
     H, V̂ = iceflow!(H, UA, p,t,t₁)
 
-    # A = p[4]
-    # l_A = max((A-20)*100, 0) + abs(min((A-1)*100, 0))
+    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))
 
-    l_H = sqrt(Flux.Losses.mse(H, glacier_ref["H"][end]; agg=mean))
-    l_V = sqrt(Flux.Losses.mse(V̂, mean(glacier_ref["V"]); agg=mean))
+    l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
 
     println("l_H: ", l_H)
     println("l_V: ", l_V)
 
-    # l = l_A + l_H
-
-    Zygote.ignore() do
-       hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
-       display(hml)
-    end
+    # Zygote.ignore() do
+    # #    hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
+    #    hml = heatmap(glacier_ref["H"][end] .- H, title="Loss error - H")
+    #    display(hml)
+    # end
 
     return l_H
 end
@@ -136,7 +158,7 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
         year = floor(Int, t) + 1
         if year != current_year
 
-            println("Year: ", year)
+            # println("Year: ", year)
             
             # Predict A with the fake A law
             temp = temps[year]
@@ -163,7 +185,8 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             
             # Update the ice thickness
             H_ = copy(H)
-            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            #@tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ)
 
             if mod(iter, nout) == 0
                 # Compute error for implicit method with damping
@@ -171,9 +194,18 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
                 err = maximum(Err)
                 # println("error at iter ", iter, ": ", err)
 
+                #if isnan(err)
+                #    error("""NaNs encountered.  Try a combination of:
+                #                decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                #end
                 if isnan(err)
                     error("""NaNs encountered.  Try a combination of:
                                 decreasing `damp` and/or `dtausc`, more smoothing steps""")
+                elseif err>10e8
+                    error("""Inestability detected""")
+                elseif iter == itMax_ref && err > tolnl_ref
+                    error("""Desired convergence tolerance don't reached. Increase the number of iterations
+                                itMax or decrease the tolerance tolnl. Current error after $iter iterations is $err""")            
                 end
             end
         
@@ -204,7 +236,10 @@ end
 
 # predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1f-16 # Adding units outside the NN
 
-predict_A̅(UA, temp) = UA(temp)[1] .* 1e-20 # Adding units outside the NN
+
+predict_A̅(UA, temp) = UA(Flux.normalise(temp))[1] .* 1e-16 # Adding units outside the NN
+
+predict_A̅(UA, temp::Adjoint) = UA(Flux.normalise(temp)) .* 1e-16
 
 # """
 #     predict_A(UA, MB_avg, var_format)
@@ -248,7 +283,8 @@ function iceflow!(H, UA, p,t,t₁)
         let
         iter = 1
         err = 2 * tolnl
-        V = zeros(nx-1,ny-1)
+
+        V = (zeros(nx-1,ny-1),zeros(nx-1,ny-1))
         Hold = copy(H)
         dHdt = zeros(nx, ny)
 
@@ -295,7 +331,8 @@ function iceflow!(H, UA, p,t,t₁)
             H_ = copy(H)
             
             # Update the ice thickness
-            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            #@tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
+            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ)
             
             Zygote.ignore() do
                 if mod(iter, nout) == 0
@@ -372,14 +409,23 @@ function SIA(H, p)
     F = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
 
     # Compute dτ for the implicit method
-    dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
+    #dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
+    D_max = 2000000
+    if D_max < maximum(D)
+        error("Increase Maximum diffusivity")
+    end
+    dτ = dτsc * min( 10.0 , 1.0/(1.0/Δt + 1.0/(cfl/(ϵ + D_max))))
 
     # Compute velocities    
     Vx = -D./(avg(H) .+ ϵ).*avg_y(dSdx)
     Vy = -D./(avg(H) .+ ϵ).*avg_x(dSdy)
-    V = (Vx,Vy)
+    
+    # Zygote.ignore() do
+    #     @infiltrate
+    #     V = (Vx, Vy)
+    # end
 
-    return F, V, dτ
+    return F, (Vx,Vy), dτ
 
 end
 
@@ -408,17 +454,21 @@ Fake law to determine A in the SIA
 """
 function A_fake(temp)
     # Matching point MB values to A values
-    maxA = 1e-18
-    minA = 6e-20
+    maxA = 8e-16
+    minA = 3e-17
 
-    temp_range = -25:0.01:1
+    maxT = 1
+    minT = -25
 
-    A_step = (maxA-minA)/length(temp_range)
-    A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*1.5e14).*1.5e-18 # add nonlinear relationship
+    #temp_range = -25:0.01:1
 
-    A = A_range[closest_index(temp_range, temp)]
+    #A_step = (maxA-minA)/length(temp_range)
+    #A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*1.5e14).*1.5e-18 # add nonlinear relationship
 
-    return A
+    #A = A_range[closest_index(temp_range, temp)]
+
+    return minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    #return A
 end
 
 # function A_fake(MB_buffer, shape, var_format)
@@ -462,8 +512,8 @@ function create_NNs()
     leakyrelu(x, a=0.01) = max(a*x, x)
 
     # Constraints A within physically plausible values
-    minA = 0.1
-    maxA = 5
+    minA = 0.3
+    maxA = 8
     rangeA = minA:1f-3:maxA
     stdA = std(rangeA)*2
     relu_A(x) = min(max(minA, x), maxA)
@@ -475,9 +525,11 @@ function create_NNs()
 
     UA = Chain(
         Dense(1,10), 
-        Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
-        Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
-        Dense(5,1, sigmoid_A) 
+        #Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
+        Dense(10,10, x->tanh.(x)), #init = A_init(stdA)), 
+        #Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
+        Dense(10,5, x->tanh.(x)), #init = A_init(stdA)), 
+        Dense(5,1, sigmoid_A)
     )
 
     return hyparams, UA

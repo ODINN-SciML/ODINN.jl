@@ -6,9 +6,10 @@ using Base: @kwdef
 
 # Machine learning training hyperameters
 @kwdef mutable struct Hyperparameters
-    batchsize::Int = 500     # batch size
-    η::Float32 = 0.1         # learning rate
-    epochs::Int = 5          # number of epochs
+    batchsize::Int = 9    # batch size
+    η::Float32 = 0.01      # learning rate
+    epochs::Int = 50        # number of epochs
+    #epochs_internal::Int = 1        # number of epochs per single glacier
     use_cuda::Bool = true    # use gpu (if cuda available)
 end
 

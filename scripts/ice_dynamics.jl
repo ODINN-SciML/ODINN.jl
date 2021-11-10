@@ -11,13 +11,14 @@ cd(@__DIR__)
 using Pkg; Pkg.activate("../."); 
 # Pkg.instantiate()
 using Plots; gr()
-using SparseArrays
+# using SparseArrays
 using Statistics
 using LinearAlgebra
 using HDF5
 using JLD
 using Infiltrator
 using PyCall # just for compatibility with utils.jl
+using Random 
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -90,7 +91,6 @@ if example == "Argentiere"
 
     B  = copy(argentiere.bed)
     H₀ = copy(argentiere.thick[:,:,1])
-    v = zeros(size(argentiere.thick)) # surface velocities
  
     # Spatial and temporal differentials
     Δx = Δy = 50 #m (Δx = Δy)
@@ -117,8 +117,10 @@ elseif example == "Gaussian"
 end
 
 ### We perform the simulations with an explicit forward mo  ###
-# Gather simulation parameters
-p = (Δx, Δy, Γ, A, B, v, argentiere.MB, MB_avg, C, α, var_format) 
+
+ts = collect(1:t₁)
+gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
+glacier_refs = []
 
 ts = collect(1:t₁)
 gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
@@ -128,11 +130,10 @@ glacier_refs = []
 if create_ref_dataset 
     println("Generating reference dataset for training...")
 
-
     for temps in temp_series
         println("Reference simulation with temp ≈ ", mean(temps))
-        glacier_ref = copy(gref)
-        H = copy(H₀)
+        glacier_ref = deepcopy(gref)
+        H = deepcopy(H₀)
         # Gather simulation parameters
         p = (Δx, Δy, Γ, A, B, temps, C, α) 
         # Perform reference imulation with forward model 
@@ -165,45 +166,68 @@ else
 end
 
 
+
+# We define the training itenerary
+#temps_list = []
+#for i in 1:hyparams.epochs
+#    temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
+#    temps_list = vcat(temps_list, temps)
+#end
+
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
+    println("Running forward UDE ice flow model...\n")
+    let
+    temp_values = [mean(temps) for temps in temp_series]'
+    plot(temp_values', A_fake.(temp_values)', label="Fake A")
+    old_trained = A_fake.(temp_values)'
     hyparams, UA = create_NNs()
+    trackers = Dict("losses"=>[], "losses_batch"=>[],
+                    "current_batch"=>1, "grad_batch"=>[])
+
+    # Diagnosis plot after each full epochs
+    #display(scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
 
     # Train iceflow UDE
-    for (temps, glacier_ref) in zip(temp_series, glacier_refs)
-        H = copy(H₀)
-        # Gather simulation parameters
-        p = (Δx, Δy, Γ, A, B, temps, C, α) 
-        iceflow_UDE!(H,glacier_ref,UA,hyparams,p,t,t₁)
+
+    for i in 1:hyparams.epochs
+        println("\nEpoch #", i, "\n")
+
+        idxs = Random.shuffle(1:length(temp_series))
+        # idxs = 1:length(temp_series)
+        #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
+
+        for idx in idxs
+            temps = temp_series[idx]
+            glacier_ref = glacier_refs[idx]
+            println("\nTemperature in training: ", temps[1])
+
+            # Gather simulation parameters
+            p = (Δx, Δy, Γ, A, B, temps, C, α) 
+            iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)          
+
+            if trackers["current_batch"] < hyparams.batchsize
+                trackers["current_batch"] +=1 # increase batch
+            else
+                trackers["current_batch"] = 1
+
+                 # Plot the evolution
+                plot(temp_values', A_fake.(temp_values)', label="Fake A")
+                # vline!([mean(temps)], label="Last temp")
+                scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
+                pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
+                ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
+                display(plot(pfunc, ploss, layout=(2,1)))
+                old_trained = predict_A̅(UA, temp_values)'
+
+            end 
+        end
+
     end
 end
-
+end # let
 
 
 ###################################################################
 ########################  PLOTS    ################################
 ###################################################################
-
-final_NN = []
-for i in 1:period
-    append!(final_NN, predict_A(UA, MB_nan, i, "scalar"))
-end
-plot(ŶA, yaxis="A", xaxis="Year", label="fake A")
-display(plot!(final_NN, label="final NN"))
-
-### Glacier ice thickness evolution  ###
-hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
-hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
-hm1 = plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
-      xlims=(0,180), ylims=(0,180), colorbar_title="Ice thickness (m)",
-      clims=(0,maximum(H₀)), link=:all)
-display(hm1)
-
-###  Glacier ice thickness difference  ###
-lim = maximum( abs.(H .- H₀) )
-hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
-      xlims=(0,180), ylims=(0,180), clim = (-lim, lim),
-      title="Variation in ice thickness")
-display(hm2)
-
-
