@@ -23,6 +23,7 @@ function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
     # We define an optimizer
     opt = RMSProp(hyparams.η)
     # opt = ADAM(hyparams.η)
+    #opt = BFGS(hyparams.η)
 
     # Train the UDE for a given number of epochs
     hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
@@ -404,9 +405,10 @@ function SIA(H, p)
 
     # Compute dτ for the implicit method
     #dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
-    D_max = 2000000
-    if D_max < maximum(D)
-        error("Increase Maximum diffusivity")
+    D_max = 3000000
+    current_D_max = maximum(D) 
+    if D_max < current_D_max
+        error("Increase Maximum diffusivity. Required value must be larger than $current_D_max")
     end
     dτ = dτsc * min( 10.0 , 1.0/(1.0/Δt + 1.0/(cfl/(ϵ + D_max))))
 
@@ -507,7 +509,7 @@ function create_NNs()
 
     # Constraints A within physically plausible values
     minA = 0.3
-    maxA = 8
+    maxA = 12 #8
     rangeA = minA:1f-3:maxA
     stdA = std(rangeA)*2
     relu_A(x) = min(max(minA, x), maxA)
@@ -517,13 +519,18 @@ function create_NNs()
     A_init(custom_std, dims...) = randn(Float32, dims...) .* custom_std
     A_init(custom_std) = (dims...) -> A_init(custom_std, dims...)
 
+    #UA = Chain(
+    #    Dense(1,10), 
+    #    #Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
+    #    Dense(10,10, x->tanh.(x)), #init = A_init(stdA)), 
+    #    #Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
+    #    Dense(10,5, x->tanh.(x)), #init = A_init(stdA)), 
+    #    Dense(5,1, sigmoid_A)
+    #)
+
     UA = Chain(
-        Dense(1,10), 
-        #Dense(10,10, x->tanh.(x), init = A_init(stdA)), 
-        Dense(10,10, x->tanh.(x)), #init = A_init(stdA)), 
-        #Dense(10,5, x->tanh.(x), init = A_init(stdA)), 
-        Dense(10,5, x->tanh.(x)), #init = A_init(stdA)), 
-        Dense(5,1, sigmoid_A)
+        Dense(1,3),
+        Dense(3,1, sigmoid_A)
     )
 
     return hyparams, UA
