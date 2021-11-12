@@ -217,7 +217,9 @@ if train_UDE
                 scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
                 pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
                 ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
-                display(plot(pfunc, ploss, layout=(2,1)))
+                ptrain = plot(pfunc, ploss, layout=(2,1))
+                savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
+                display(ptrain)
                 old_trained = predict_A̅(UA, temp_values)'
 
             end 
