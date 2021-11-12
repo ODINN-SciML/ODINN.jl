@@ -180,8 +180,8 @@ if train_UDE
     let
     temp_values = [mean(temps) for temps in temp_series]'
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
-    old_trained = A_fake.(temp_values)'
     hyparams, UA = create_NNs()
+    old_trained = predict_A̅(UA, temp_values)' #A_fake.(temp_values)'
     trackers = Dict("losses"=>[], "losses_batch"=>[],
                     "current_batch"=>1, "grad_batch"=>[])
 
