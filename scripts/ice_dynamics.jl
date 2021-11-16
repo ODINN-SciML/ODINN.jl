@@ -76,6 +76,7 @@ hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
 temp_series =  fake_temp_series(t₁)
+norm_temp_series = Flux.normalise.(temp_series)
 A_series = []
 for temps in temp_series
     push!(A_series, A_fake.(temps))
@@ -179,9 +180,10 @@ if train_UDE
     println("Running forward UDE ice flow model...\n")
     let
     temp_values = [mean(temps) for temps in temp_series]'
+    norm_temp_values = [mean(temps) for temps in norm_temp_series]'
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
     hyparams, UA = create_NNs()
-    old_trained = predict_A̅(UA, temp_values)' #A_fake.(temp_values)'
+    old_trained = predict_A̅(UA, norm_temp_values)' #A_fake.(temp_values)'
     trackers = Dict("losses"=>[], "losses_batch"=>[],
                     "current_batch"=>1, "grad_batch"=>[])
 
@@ -199,11 +201,12 @@ if train_UDE
 
         for idx in idxs
             temps = temp_series[idx]
+            norm_temps = norm_temp_series[idx]
             glacier_ref = glacier_refs[idx]
             println("\nTemperature in training: ", temps[1])
 
             # Gather simulation parameters
-            p = (Δx, Δy, Γ, A, B, temps, C, α) 
+            p = (Δx, Δy, Γ, A, B, norm_temps, C, α) 
             iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)          
 
             if trackers["current_batch"] < hyparams.batchsize
@@ -214,13 +217,13 @@ if train_UDE
                  # Plot the evolution
                 plot(temp_values', A_fake.(temp_values)', label="Fake A")
                 # vline!([mean(temps)], label="Last temp")
-                scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
+                scatter!(temp_values', predict_A̅(UA, norm_temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
                 pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
-                ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
+                ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal, legend=:outertopright)
                 ptrain = plot(pfunc, ploss, layout=(2,1))
                 savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
                 display(ptrain)
-                old_trained = predict_A̅(UA, temp_values)'
+                old_trained = predict_A̅(UA, norm_temp_values)'
 
             end 
         end

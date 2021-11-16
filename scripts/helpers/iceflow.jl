@@ -59,7 +59,7 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
     # end
     # println("Gradients ∇_UA: ", ∇_UA)
 
-    println("Predicted A: ", predict_A̅(UA, [mean(p[6])]))
+    # println("Predicted A: ", predict_A̅(UA, [mean(p[6])]'))
 
     # Only update NN weights after batch completion 
     if(trackers["current_batch"] == hyparams.batchsize)
@@ -235,9 +235,9 @@ end
 # predict_Â(UA, MB_avg, year) = UA(vec(MB_avg[year])') .* 1f-16 # Adding units outside the NN
 
 
-predict_A̅(UA, temp) = UA(Flux.normalise(temp))[1] .* 1e-16 # Adding units outside the NN
+# predict_A̅(UA, temp) = UA(temp)[1] .* 1e-16 # Adding units outside the NN
 
-predict_A̅(UA, temp::Adjoint) = UA(Flux.normalise(temp)) .* 1e-16
+predict_A̅(UA, temp) = UA(temp) .* 1e-16
 
 # """
 #     predict_A(UA, MB_avg, var_format)
@@ -294,7 +294,7 @@ function iceflow!(H, UA, p,t,t₁)
             # println("Year: ", year)
         
             # Predict value of `A`
-            temp = [temps[year]]
+            temp = [temps[year]]'
             ŶA = predict_A̅(UA, temp)
 
             # Zygote.ignore() do
@@ -533,6 +533,7 @@ function create_NNs()
 
     UA = Chain(
         Dense(1,3),
+        Dense(3,3),
         Dense(3,1, sigmoid_A)
     )
 
