@@ -75,8 +75,8 @@ hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-temp_series =  fake_temp_series(t₁)
-norm_temp_series = Flux.normalise.(temp_series)
+temp_series, norm_temp_series =  fake_temp_series(t₁)
+
 A_series = []
 for temps in temp_series
     push!(A_series, A_fake.(temps))

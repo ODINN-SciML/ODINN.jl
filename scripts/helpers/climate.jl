@@ -1,3 +1,4 @@
+using Flux
 
 ###############################################
 ############  FUNCTIONS   #####################
@@ -160,15 +161,23 @@ struct Dataset
 end
 
 function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0])
-    ts = 1:t
-    temps = []
+    temps, norm_temps, norm_temps_flat = [],[],[]
     for mean in means
        push!(temps, mean .+ rand(t).*1e-1) # static
+       append!(norm_temps_flat, mean .+ rand(t).*1e-1) # static
     #    push!(temps, (mean .+ rand(t)) .+ 0.5.*ts) # with trend
     #    push!(temps, (mean .+ rand(t)) .+ -0.5.*ts) # with trend
     end
 
-    return temps
+    # Normalise temperature series
+    norm_temps_flat = Flux.normalise([norm_temps_flat...]) # requires splatting
+
+    # Re-create array of arrays 
+    for i in 1:3:length(norm_temps_flat)
+        push!(norm_temps, norm_temps_flat[i:i+2])
+    end
+
+    return temps, norm_temps
 end
 
 
