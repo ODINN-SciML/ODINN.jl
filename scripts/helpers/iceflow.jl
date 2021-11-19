@@ -82,7 +82,9 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
         push!(trackers["losses"], mean(trackers["losses_batch"]))
 
         # Clear trackers for current finished batch
+        trackers["grad_batch"] = nothing
         trackers["grad_batch"] = []
+        trackers["losses_batch"] = nothing
         trackers["losses_batch"] = []
 
         # Plot progress of the loss function 
@@ -112,10 +114,10 @@ function loss(H, glacier_ref, UA, p, t, t₁)
 
     l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))
 
-    l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
+    # l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
 
     println("l_H: ", l_H)
-    println("l_V: ", l_V)
+    # println("l_V: ", l_V)
 
     # Zygote.ignore() do
     # #    hml = heatmap(mean(glacier_ref["V"]) .- V̂, title="Loss error - V")
@@ -161,6 +163,7 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             # Predict A with the fake A law
             temp = temps[year]
             ŶA = A_fake(temp)
+            println("A fake: ", ŶA)
 
             # Unpack and repack tuple with updated A value
             Δx, Δy, Γ, A, B, temps, C, α = p
@@ -200,9 +203,9 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
                     error("""NaNs encountered.  Try a combination of:
                                 decreasing `damp` and/or `dtausc`, more smoothing steps""")
                 elseif err>10e8
-                    error("""Inestability detected""")
+                    error("""Instability detected""")
                 elseif iter == itMax_ref && err > tolnl_ref
-                    error("""Desired convergence tolerance don't reached. Increase the number of iterations
+                    error("""Desired convergence tolerance not reached. Increase the number of iterations
                                 itMax or decrease the tolerance tolnl. Current error after $iter iterations is $err""")            
                 end
             end
@@ -210,6 +213,8 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             iter += 1
             total_iter += 1
         end
+
+        println("iterations: ", iter)
 
         t += Δt
 
@@ -271,10 +276,10 @@ function iceflow!(H, UA, p,t,t₁)
     # Retrieve input variables  
     let                  
     current_year = 0
-    temps = p[6]
     total_iter = 0
     Vx, Vx_buff, Vy, Vy_buff = zeros(nx-1,ny-1),zeros(nx-1,ny-1),zeros(nx-1,ny-1),zeros(nx-1,ny-1)
     t_step = 0
+    temps = p[6]
 
     # Forward scheme implementation
     while t < t₁
@@ -512,8 +517,8 @@ function create_NNs()
 
     # Constraints A within physically plausible values
     minA = 0.3
-    maxA = 12 #8
-    rangeA = minA:1f-3:maxA
+    maxA = 8
+    rangeA = minA:1e-3:maxA
     stdA = std(rangeA)*2
     relu_A(x) = min(max(minA, x), maxA)
     #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
@@ -532,8 +537,9 @@ function create_NNs()
     #)
 
     UA = Chain(
-        Dense(1,3),
-        Dense(3,3),
+        Dense(1,3, x->tanh.(x)),
+        Dense(3,10, x->tanh.(x)),
+        Dense(10,3, x->tanh.(x)),
         Dense(3,1, sigmoid_A)
     )
 

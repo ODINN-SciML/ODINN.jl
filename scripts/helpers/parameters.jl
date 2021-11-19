@@ -36,20 +36,21 @@ method = "implicit"        # options: implicit, explicit
 
 
 η = 0.3                    # Parameter that control the stepsize of the numerical method. eta must be < 1
-damp = 0.85
-itMax = 100                # maximum number of iterations used in non-adaptive semi-implicit method
-itMax_ref = 300            # maximum number of iterations used for genereting reference dataset
+damp = 0.85                # Tuning parameter
+itMax = 1000                # maximum number of iterations used in non-adaptive semi-implicit method
+itMax_ref = 1000            # maximum number of iterations used for genereting reference dataset
 nout = 5                   # error check frequency
-tolnl = 1e-1               # tolerance of semi-implicit method 
-tolnl_ref  = 1e-2          # tolerance of semi-implicit method used to generate reference dataset
-dτsc   = 1.0/2.0           # iterative dtau scaling
+tolnl = 1e-5               # tolerance of semi-implicit method 
+tolnl_ref  = 1e-5          # tolerance of semi-implicit method used to generate reference dataset
+dτsc   = 1.0/2.0           # Tuning parameter - iterative dtau scaling
 ϵ     = 1e-4               # small number
 Δx = Δy = 50               # [m]
 cfl  = max(Δx^2,Δy^2)/4.1
 
 # Time 
 t = 0                      # initial time
-Δt = 1.0/12.0              # time step [yr]
+Δt = 1.0/12.0     
+# Δt = 1.0/365.25          # time step [yr]
 Δts = []
 t₁ = 3                     # number of simulation years 
 
@@ -63,5 +64,5 @@ fs = "_daily_W5E5"
 ### Workflow ###
 # var_format = "scalar"    # data format for the parameter to be learnt
 var_format = "matrix"
-create_ref_dataset = false  
+create_ref_dataset = true  
 train_UDE = true

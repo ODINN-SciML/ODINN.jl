@@ -142,13 +142,13 @@ if create_ref_dataset
 
         push!(glacier_refs, glacier_ref)
 
-        ### Glacier ice thickness evolution  ###
-        hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
-        hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
-        hm1 = Plots.plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
-            colorbar_title="Ice thickness (m)",
-            clims=(0,maximum(H₀)), link=:all)
-        display(hm1)
+        ### Glacier ice thickness evolution  ### Not that useful
+        # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
+        # hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
+        # hm1 = Plots.plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
+        #     colorbar_title="Ice thickness (m)",
+        #     clims=(0,maximum(H₀)), link=:all)
+        # display(hm1)
 
         ###  Glacier ice thickness difference  ###
         lim = maximum( abs.(H .- H₀) )
@@ -207,7 +207,14 @@ if train_UDE
 
             # Gather simulation parameters
             p = (Δx, Δy, Γ, A, B, norm_temps, C, α) 
-            iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)          
+            iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)   
+            
+            predicted_A = predict_A̅(UA, [mean(norm_temps)]')[1]
+            fake_A = A_fake(mean(temps)) 
+            A_error = predicted_A - fake_A
+            println("Predicted A: ", predicted_A)
+            println("Fake A: ", fake_A)
+            println("A error: ", A_error)
 
             if trackers["current_batch"] < hyparams.batchsize
                 trackers["current_batch"] +=1 # increase batch
@@ -219,7 +226,7 @@ if train_UDE
                 # vline!([mean(temps)], label="Last temp")
                 scatter!(temp_values', predict_A̅(UA, norm_temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
                 pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
-                ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal, legend=:outertopright)
+                ploss = plot(trackers["losses"], xlabel="Epoch", ylabel="Loss", aspect=:equal, legend=:outertopright, label="")
                 ptrain = plot(pfunc, ploss, layout=(2,1))
                 savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
                 display(ptrain)
