@@ -24,7 +24,7 @@ Pkg.instantiate()
 # using SparseArrays
 @everywhere using Statistics
 @everywhere using LinearAlgebra
-using HDF5
+@everywhere using HDF5
 @everywhere using JLD
 @everywhere using Infiltrator
 using PyCall # just for compatibility with utils.jl
@@ -45,12 +45,11 @@ using PyCall # just for compatibility with utils.jl
 ###############################################################
 
 # Load the HDF5 file with Harry's simulated data
-root_dir = cd(pwd, "..")
-res = 50 # m
-argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
+@everywhere root_dir = cd(pwd, "..")
+@everywhere argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
 
 # Fill the Glacier structure with the retrieved data
-argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
+@everywhere argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                      HDF5.read(argentiere_f["thick_hist"])[begin:end-2,:,2:end],
                      HDF5.read(argentiere_f["vel_hist"])[begin:end-2,:,2:end],
                      HDF5.read(argentiere_f["s_apply_hist"])[begin:end-2,:,2:end],
@@ -66,8 +65,8 @@ voidfill!(MB_plot, argentiere.MB[1,1,1])
 #ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
 
 # Domain size
-nx = size(argentiere.bed)[1]
-ny = size(argentiere.bed)[2];
+@everywhere nx = size(argentiere.bed)[1]
+@everywhere ny = size(argentiere.bed)[2];
 
 
 ###  Plot initial data  ###
@@ -84,14 +83,16 @@ hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-temp_series, norm_temp_series =  fake_temp_series(t₁)
+@everywhere temp_series, norm_temp_series =  fake_temp_series(t₁)
 
 A_series = []
 for temps in temp_series
     push!(A_series, A_fake.(temps))
 end
-display(Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
-display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
+
+pts = Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series")
+pas = Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series")
+
 
 #### Choose the example to run  #####
 example = "Argentiere"
@@ -99,11 +100,11 @@ example = "Argentiere"
 
 if example == "Argentiere"
 
-    B  = copy(argentiere.bed)
-    H₀ = copy(argentiere.thick[:,:,1])
+    @everywhere B  = copy(argentiere.bed)
+    @everywhere H₀ = copy(argentiere.thick[:,:,1])
  
     # Spatial and temporal differentials
-    Δx = Δy = 50 #m (Δx = Δy)
+    @everywhere Δx = Δy = 50 #m (Δx = Δy)
 
     MB_avg = []
     for year in 1:length(argentiere.MB[1,1,:])
@@ -139,35 +140,14 @@ glacier_refs = []
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-
-    @distributed for temps in temp_series
-        @everywhere println("Reference simulation with temp ≈ ", mean(temps))
-        @everywhere glacier_ref = deepcopy(gref)
-        @everywhere H = deepcopy(H₀)
-        # Gather simulation parameters
-        @everywhere p = (Δx, Δy, Γ, A, B, temps, C, α) 
-        # Perform reference imulation with forward model 
-        @time @everywhere H, V̂ = iceflow!(H,glacier_ref,p,t,t₁)
-
-        @everywhere push!(glacier_refs, glacier_ref)
-
-        ### Glacier ice thickness evolution  ### Not that useful
-        # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
-        # hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
-        # hm1 = Plots.plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
-        #     colorbar_title="Ice thickness (m)",
-        #     clims=(0,maximum(H₀)), link=:all)
-        # display(hm1)
-
-        ###  Glacier ice thickness difference  ###
-        @everywhere lim = maximum( abs.(H .- H₀) )
-        @everywhere hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
-            clim = (-lim, lim),
-            title="Variation in ice thickness")
-        @everywhere display(hm2)
-
+    
+    ref_n = 1
+    
+    # Compute reference dataset in parallel
+    @time @distributed for temps in temp_series
+        ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
     end
-
+    
     println("Saving reference data")
     save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
 
@@ -237,8 +217,10 @@ if train_UDE
                 pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
                 ploss = plot(trackers["losses"], xlabel="Epoch", ylabel="Loss", aspect=:equal, legend=:outertopright, label="")
                 ptrain = plot(pfunc, ploss, layout=(2,1))
+                    
                 savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
-                display(ptrain)
+                if x11 display(ptrain) end
+                    
                 old_trained = predict_A̅(UA, norm_temp_values)'
 
             end 

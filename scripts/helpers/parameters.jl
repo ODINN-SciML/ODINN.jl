@@ -61,7 +61,7 @@ const fs = "_daily_W5E5"
 ### Workflow ###
 # var_format = "scalar"    # data format for the parameter to be learnt
 var_format = "matrix"
-USE_GPU = false # switch here to use GPU
 
+x11 = false
 create_ref_dataset = true  
 train_UDE = true
