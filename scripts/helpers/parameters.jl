@@ -36,13 +36,13 @@ method = "implicit"        # options: implicit, explicit
 
 
 η = 0.3                    # Parameter that control the stepsize of the numerical method. eta must be < 1
-damp = 0.85                # Tuning parameter
-itMax = 1000                # maximum number of iterations used in non-adaptive semi-implicit method
-itMax_ref = 1000            # maximum number of iterations used for genereting reference dataset
+damp = 0.95                # Tuning parameter
+itMax = 500                # maximum number of iterations used in non-adaptive semi-implicit method
+itMax_ref = 500            # maximum number of iterations used for genereting reference dataset
 nout = 5                   # error check frequency
-tolnl = 1e-5               # tolerance of semi-implicit method 
-tolnl_ref  = 1e-5          # tolerance of semi-implicit method used to generate reference dataset
-dτsc   = 1.0/2.0           # Tuning parameter - iterative dtau scaling
+tolnl = 1e-3               # tolerance of semi-implicit method 
+tolnl_ref  = 1e-3          # tolerance of semi-implicit method used to generate reference dataset
+dτsc   = 0.65              # Tuning parameter - iterative dtau scaling
 ϵ     = 1e-4               # small number
 Δx = Δy = 50               # [m]
 cfl  = max(Δx^2,Δy^2)/4.1
@@ -52,7 +52,7 @@ t = 0                      # initial time
 Δt = 1.0/12.0     
 # Δt = 1.0/365.25          # time step [yr]
 Δts = []
-t₁ = 3                     # number of simulation years 
+t₁ = 2                     # number of simulation years 
 
 ## Climate parameters
 base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands") # OGGM elevation bands
