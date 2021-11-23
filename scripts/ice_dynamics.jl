@@ -81,8 +81,12 @@ A_series = []
 for temps in temp_series
     push!(A_series, A_fake.(temps))
 end
-display(Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
-display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
+pts = Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series")
+pas = Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series")
+if x11
+    display(pts)
+    display(pas)
+end
 
 #### Choose the example to run  #####
 example = "Argentiere"
@@ -130,6 +134,8 @@ glacier_refs = []
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
+    
+    ref_n = 1
 
     for temps in temp_series
         println("Reference simulation with temp ≈ ", mean(temps))
@@ -155,7 +161,10 @@ if create_ref_dataset
         hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
             clim = (-lim, lim),
             title="Variation in ice thickness")
-        display(hm2)
+        if x11 display(hm2) end
+        savefig(hm2,joinpath(root_dir,"plots/references","reference$ref_n.png"))
+        
+        ref_n += 1
 
     end
 
@@ -229,7 +238,7 @@ if train_UDE
                 ploss = plot(trackers["losses"], xlabel="Epoch", ylabel="Loss", aspect=:equal, legend=:outertopright, label="")
                 ptrain = plot(pfunc, ploss, layout=(2,1))
                 savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
-                display(ptrain)
+                if x11 display(ptrain) end
                 old_trained = predict_A̅(UA, norm_temp_values)'
 
             end 

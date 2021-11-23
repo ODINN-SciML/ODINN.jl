@@ -8,7 +8,11 @@ SINDy (Brunton et al., 2016).
 
 ## Environment and packages
 using Distributed
-addprocs(2) 
+processes = 4
+
+if nprocs() < processes
+    addprocs(processes - nprocs())
+end
 
 println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
@@ -129,24 +133,23 @@ end
 
 ### We perform the simulations with an explicit forward mo  ###
 
-ts = collect(1:t₁)
-gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
-glacier_refs = []
-
-ts = collect(1:t₁)
-gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
-glacier_refs = []
+@everywhere begin
+    ts = collect(1:t₁)
+    gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
+    glacier_refs = []
+end
 
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-    
-    ref_n = 1
-    
+        
+    # Generate array of args for workers
+    nargs = ((temps, gref, H₀, t) for temps in temp_series)
+  
     # Compute reference dataset in parallel
-    @time @distributed for temps in temp_series
-        ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
-    end
+    @time @sync glacier_refs = pmap((args) -> ref_dataset(args...), nargs)
+    
+    # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
     
     println("Saving reference data")
     save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)

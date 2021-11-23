@@ -12,6 +12,49 @@ include("utils.jl")
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
 Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
+function ref_dataset(temps, gref, H₀, t)
+      
+    tempn = mean(temps)
+    println("Reference simulation with temp ≈ ", mean(temps))
+    glacier_ref = deepcopy(gref)
+    glacier_refs = []
+    H = deepcopy(H₀)
+    # Gather simulation parameters
+    p = (Δx, Δy, Γ, A, B, temps, C, α) 
+    # Perform reference imulation with forward model 
+    #@time  H, V̂ = pmap((H,glacier_ref,p,t,t₁) -> iceflow!(H,glacier_ref,p,t,t₁), H,glacier_ref,p,t,t₁)
+
+    H, V̂ = iceflow!(H,glacier_ref,p,t,t₁)
+
+    push!(glacier_refs, glacier_ref)
+    
+    println("glacier_refs: ", length(glacier_refs))
+
+    ### Glacier ice thickness evolution  ### Not that useful
+    # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
+    # hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
+    # hm1 = Plots.plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
+    #     colorbar_title="Ice thickness (m)",
+    #     clims=(0,maximum(H₀)), link=:all)
+    # display(hm1)
+
+    ###  Glacier ice thickness difference  ###
+    lim = maximum( abs.(H .- H₀) )
+    hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
+        clim = (-lim, lim),
+        title="Variation in ice thickness")
+    
+    #if x11 
+    #    display(hm2) 
+    #end
+
+    savefig(hm2,joinpath(root_dir,"plots/references","reference_$tempn.png"))
+
+    return glacier_refs
+    
+end
+
+
 """
     iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
 
@@ -161,6 +204,7 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             # println("Year: ", year)
             
             # Predict A with the fake A law
+            println("temps: ", temps)
             temp = temps[year]
             ŶA = A_fake(temp)
             println("A fake: ", ŶA)
@@ -300,6 +344,7 @@ function iceflow!(H, UA, p,t,t₁)
         
             # Predict value of `A`
             temp = [temps[year]]'
+                    
             ŶA = predict_A̅(UA, temp)
 
             # Zygote.ignore() do
