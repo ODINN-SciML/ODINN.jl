@@ -15,9 +15,8 @@ Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimis
 function ref_dataset(temps, gref, H₀, t)
       
     tempn = mean(temps)
-    println("Reference simulation with temp ≈ ", mean(temps))
+    println("Reference simulation with temp ≈ ", tempn)
     glacier_ref = deepcopy(gref)
-    glacier_refs = []
     H = deepcopy(H₀)
     # Gather simulation parameters
     p = (Δx, Δy, Γ, A, B, temps, C, α) 
@@ -25,10 +24,10 @@ function ref_dataset(temps, gref, H₀, t)
     #@time  H, V̂ = pmap((H,glacier_ref,p,t,t₁) -> iceflow!(H,glacier_ref,p,t,t₁), H,glacier_ref,p,t,t₁)
 
     H, V̂ = iceflow!(H,glacier_ref,p,t,t₁)
-
-    push!(glacier_refs, glacier_ref)
     
-    println("glacier_refs: ", length(glacier_refs))
+    #push!(glacier_refs, glacier_ref)
+    
+    #println("glacier_refs: ", length(glacier_refs))
 
     ### Glacier ice thickness evolution  ### Not that useful
     # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
@@ -47,10 +46,11 @@ function ref_dataset(temps, gref, H₀, t)
     #if x11 
     #    display(hm2) 
     #end
-
+    
+    tempn = floor(tempn)
     savefig(hm2,joinpath(root_dir,"plots/references","reference_$tempn.png"))
 
-    return glacier_refs
+    return glacier_ref
     
 end
 
@@ -204,10 +204,10 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             # println("Year: ", year)
             
             # Predict A with the fake A law
-            println("temps: ", temps)
+            #println("temps: ", temps)
             temp = temps[year]
             ŶA = A_fake(temp)
-            println("A fake: ", ŶA)
+            #println("A fake: ", ŶA)
 
             # Unpack and repack tuple with updated A value
             Δx, Δy, Γ, A, B, temps, C, α = p
@@ -258,7 +258,7 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
             total_iter += 1
         end
 
-        println("iterations: ", iter)
+        #println("iterations: ", iter)
 
         t += Δt
 

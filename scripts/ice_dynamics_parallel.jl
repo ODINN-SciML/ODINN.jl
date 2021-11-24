@@ -8,6 +8,7 @@ SINDy (Brunton et al., 2016).
 
 ## Environment and packages
 using Distributed
+using SharedArrays
 processes = 4
 
 if nprocs() < processes
@@ -17,47 +18,48 @@ end
 println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
-@everywhere cd(@__DIR__)
-using Pkg 
-@everywhere using Pkg 
-Pkg.activate("../."); 
-@everywhere Pkg.activate("../.");
-Pkg.instantiate()
-@everywhere Pkg.instantiate()
-@everywhere using Plots; gr()
-# using SparseArrays
-@everywhere using Statistics
-@everywhere using LinearAlgebra
-@everywhere using HDF5
-@everywhere using JLD
-@everywhere using Infiltrator
-using PyCall # just for compatibility with utils.jl
-@everywhere using Random 
-
-### Global parameters  ###
-@everywhere include("helpers/parameters.jl")
-### Types  ###
-@everywhere include("helpers/types.jl")
-### Iceflow forward model  ###
-# (includes utils.jl as well)
-@everywhere include("helpers/iceflow.jl")
-### Climate data processing  ###
-@everywhere include("helpers/climate.jl")
+@everywhere begin 
+    cd(@__DIR__)
+    using Pkg 
+    Pkg.activate("../.");
+    Pkg.instantiate()
+    using Plots; gr()
+    ENV["GKSwstype"] = "nul"
+    using Statistics
+    using LinearAlgebra
+    using HDF5
+    using JLD
+    using Infiltrator
+    using PyCall # just for compatibility with utils.jl
+    using Random 
+    using ParallelStencil
+    
+    ### Global parameters  ###
+    include("helpers/parameters.jl")
+    ### Types  ###
+    include("helpers/types.jl")
+    ### Iceflow forward model  ###
+    # (includes utils.jl as well)
+    include("helpers/iceflow.jl")
+    ### Climate data processing  ###
+    include("helpers/climate.jl")
 
 ###############################################################
 ###########################  MAIN #############################
 ###############################################################
 
 # Load the HDF5 file with Harry's simulated data
-@everywhere root_dir = cd(pwd, "..")
-@everywhere argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
+root_dir = cd(pwd, "..")
+argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
 
 # Fill the Glacier structure with the retrieved data
-@everywhere argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
+argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                      HDF5.read(argentiere_f["thick_hist"])[begin:end-2,:,2:end],
                      HDF5.read(argentiere_f["vel_hist"])[begin:end-2,:,2:end],
                      HDF5.read(argentiere_f["s_apply_hist"])[begin:end-2,:,2:end],
                      0, 0)
+    
+end # @everywhere
 
 # Update mass balance data with NaNs
 MB_plot = copy(argentiere.MB)
@@ -135,19 +137,24 @@ end
 
 @everywhere begin
     ts = collect(1:t₁)
+    
+    #gref = (H_ref, V_ref, ts)
     gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
-    glacier_refs = []
 end
 
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
+    
+    #@everywhere glacier_refs = []
+    #glacier_refs = SharedArray{typeof(gref)(size(temp_series))
         
     # Generate array of args for workers
-    nargs = ((temps, gref, H₀, t) for temps in temp_series)
+    #nargs = ((temps, gref, H₀, t) for temps in temp_series)
   
     # Compute reference dataset in parallel
-    @time @sync glacier_refs = pmap((args) -> ref_dataset(args...), nargs)
+    #@time @sync glacier_refs = pmap((args) -> ref_dataset(args...), nargs)
+    @time glacier_refs = pmap(temps -> ref_dataset(temps, gref, H₀, t), temp_series)
     
     # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
     
