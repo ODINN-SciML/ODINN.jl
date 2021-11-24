@@ -7,22 +7,33 @@ SINDy (Brunton et al., 2016).
 =#
 
 ## Environment and packages
+
 using Distributed
-using SharedArrays
-processes = 4
-
-if nprocs() < processes
-    addprocs(processes - nprocs())
-end
-
-println("Number of cores: ", nprocs())
-println("Number of workers: ", nworkers())
-
 @everywhere begin 
+    
     cd(@__DIR__)
     using Pkg 
     Pkg.activate("../.");
     Pkg.instantiate()
+
+    processes = 4
+
+    const USE_GPU = false
+    using ParallelStencil
+
+    @static if USE_GPU
+        @init_parallel_stencil(CUDA, Float64, 3);
+    else
+        @init_parallel_stencil(Threads, Float64, 3);
+    end
+
+    if nprocs() < processes
+        addprocs(processes - nprocs())
+    end
+
+    println("Number of cores: ", nprocs())
+    println("Number of workers: ", nworkers())
+    
     using Plots; gr()
     ENV["GKSwstype"] = "nul"
     using Statistics
@@ -32,7 +43,6 @@ println("Number of workers: ", nworkers())
     using Infiltrator
     using PyCall # just for compatibility with utils.jl
     using Random 
-    using ParallelStencil
     
     ### Global parameters  ###
     include("helpers/parameters.jl")
@@ -80,7 +90,7 @@ voidfill!(MB_plot, argentiere.MB[1,1,1])
 hm01 = heatmap(argentiere.bed, c = :turku, title="Bedrock")
 # Argentière ice thickness for an individual year
 hm02 = heatmap(argentiere.thick[:,:,1], c = :ice, title="Ice thickness")
-# Surface velocities
+# Surface velocities
 hm03 = heatmap(argentiere.vel[:,:,15], c =:speed, title="Ice velocities")
 hm04 = heatmap(MB_plot[:,:,90], c = cgrad(:balance,rev=true), clim=(-12,12), title="Mass balance")
 hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
@@ -109,7 +119,7 @@ if example == "Argentiere"
     @everywhere B  = copy(argentiere.bed)
     @everywhere H₀ = copy(argentiere.thick[:,:,1])
  
-    # Spatial and temporal differentials
+    # Spatial and temporal differentials
     @everywhere Δx = Δy = 50 #m (Δx = Δy)
 
     MB_avg = []
@@ -128,7 +138,7 @@ elseif example == "Gaussian"
     σ = 1000
     H₀ = [ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for i in 1:nx, j in 1:ny ]    
     
-    # Spatial and temporal differentials
+    # Spatial and temporal differentials
     Δx = Δy = 50 #m (Δx = Δy)    
 
 end
