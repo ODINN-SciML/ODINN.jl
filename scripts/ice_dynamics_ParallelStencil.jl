@@ -1,47 +1,45 @@
 #= Glacier ice dynamics toy model
-
 Test with ideal data of a hybrid glacier ice dynamics model based on neural networks
 that respect the Shallow Ice Approximation, mixed with model interpretation using 
 SINDy (Brunton et al., 2016).
-
 =#
 
 ## Environment and packages
-using Distributed
-using SharedArrays
-processes = 4
+cd(@__DIR__)
+using Pkg 
+Pkg.activate("../.");
+Pkg.instantiate()
 
-if nprocs() < processes
-    addprocs(processes - nprocs(); exeflags="--project=")
+const USE_GPU = false
+using ParallelStencil
+using ParallelStencil.FiniteDifferences2D
+
+@static if USE_GPU
+    @init_parallel_stencil(CUDA, Float64, 3);
+else
+    @init_parallel_stencil(Threads, Float64, 3);
 end
 
-println("Number of cores: ", nprocs())
-println("Number of workers: ", nworkers())
-
-@everywhere begin 
-    cd(@__DIR__)
-    using Pkg 
-    Pkg.activate("../.");
-    Pkg.instantiate()
-    using Plots; gr()
-    ENV["GKSwstype"] = "nul"
-    using Statistics
-    using LinearAlgebra
-    using HDF5
-    using JLD
-    using Infiltrator
-    using PyCall # just for compatibility with utils.jl
-    using Random 
     
-    ### Global parameters  ###
-    include("helpers/parameters.jl")
-    ### Types  ###
-    include("helpers/types.jl")
-    ### Iceflow forward model  ###
-    # (includes utils.jl as well)
-    include("helpers/iceflow.jl")
-    ### Climate data processing  ###
-    include("helpers/climate.jl")
+using Plots; gr()
+ENV["GKSwstype"] = "nul"
+using Statistics
+using LinearAlgebra
+using HDF5
+using JLD
+using Infiltrator
+using PyCall # just for compatibility with utils.jl
+using Random 
+
+### Global parameters  ###
+include("helpers/parameters.jl")
+### Types  ###
+include("helpers/types.jl")
+### Iceflow forward model  ###
+# (includes utils.jl as well)
+include("helpers/iceflow_parallel.jl")
+### Climate data processing  ###
+include("helpers/climate.jl")
 
 ###############################################################
 ###########################  MAIN #############################
@@ -58,8 +56,6 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                      HDF5.read(argentiere_f["s_apply_hist"])[begin:end-2,:,2:end],
                      0, 0)
     
-end # @everywhere
-
 # Update mass balance data with NaNs
 MB_plot = copy(argentiere.MB)
 voidfill!(MB_plot, argentiere.MB[1,1,1])
@@ -70,8 +66,8 @@ voidfill!(MB_plot, argentiere.MB[1,1,1])
 #ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
 
 # Domain size
-@everywhere nx = size(argentiere.bed)[1]
-@everywhere ny = size(argentiere.bed)[2];
+nx = size(argentiere.bed)[1]
+ny = size(argentiere.bed)[2];
 
 
 ###  Plot initial data  ###
@@ -88,7 +84,7 @@ hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-@everywhere temp_series, norm_temp_series =  fake_temp_series(t₁)
+temp_series, norm_temp_series =  fake_temp_series(t₁)
 
 A_series = []
 for temps in temp_series
@@ -104,12 +100,14 @@ example = "Argentiere"
 # example = "Gaussian" # Fake
 
 if example == "Argentiere"
-
-    @everywhere B  = copy(argentiere.bed)
-    @everywhere H₀ = copy(argentiere.thick[:,:,1])
+    
+    B = @zeros(nx,ny)
+    B  .= copy(argentiere.bed)
+    H₀ = @zeros(nx,ny)
+    H₀ = copy(argentiere.thick[:,:,1])
  
     # Spatial and temporal differentials
-    @everywhere Δx = Δy = 50 #m (Δx = Δy)
+    Δx = Δy = 50 #m (Δx = Δy)
 
     MB_avg = []
     for year in 1:length(argentiere.MB[1,1,:])
@@ -134,13 +132,14 @@ end
 
 ### We perform the simulations with an explicit forward mo  ###
 
-@everywhere begin
-    ts = collect(1:t₁)
-    
-    #gref = (H_ref, V_ref, ts)
-    gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
-end
 
+ts = collect(1:t₁)
+
+#gref = (H_ref, V_ref, ts)
+gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
+glacier_refs = []
+
+#=
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
@@ -163,8 +162,9 @@ if create_ref_dataset
 else 
     glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
 end
+=#
 
-
+glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
 
 # We define the training itenerary
 #temps_list = []
