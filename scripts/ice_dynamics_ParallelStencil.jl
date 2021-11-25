@@ -15,11 +15,12 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 
 @static if USE_GPU
-    @init_parallel_stencil(CUDA, Float64, 3);
+    @init_parallel_stencil(CUDA, Float64, 2); # 2D
 else
-    @init_parallel_stencil(Threads, Float64, 3);
+    @init_parallel_stencil(Threads, Float64, 2); # 2D
 end
 
+ENV["JULIA_NUM_THREADS"] = 16 # number of cores to be used by ParallelStencil.jl
     
 using Plots; gr()
 ENV["GKSwstype"] = "nul"
@@ -139,22 +140,15 @@ ts = collect(1:t₁)
 gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
 glacier_refs = []
 
-#=
+
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-    
-    #@everywhere glacier_refs = []
-    #glacier_refs = SharedArray{typeof(gref)(size(temp_series))
-        
-    # Generate array of args for workers
-    #nargs = ((temps, gref, H₀, t) for temps in temp_series)
   
     # Compute reference dataset in parallel
     #@time @sync glacier_refs = pmap((args) -> ref_dataset(args...), nargs)
-    @time glacier_refs = pmap(temps -> ref_dataset(temps, gref, H₀, t), temp_series)
+    @time glacier_refs = map(temps -> ref_dataset(temps, gref, H₀, t), temp_series)
     
-    # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
     
     println("Saving reference data")
     save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
@@ -162,9 +156,7 @@ if create_ref_dataset
 else 
     glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
 end
-=#
 
-glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
 
 # We define the training itenerary
 #temps_list = []
