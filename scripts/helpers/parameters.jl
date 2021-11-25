@@ -31,14 +31,16 @@ model = "standard"         # options: "standard", "fake A", "fake C"
 method = "implicit"        # options: implicit, explicit
 
 
-const η = 0.3                    # Parameter that control the stepsize of the numerical method. eta must be < 1
-const damp = 0.95                # Tuning parameter
+#damp = 0.95                # Tuning parameter
+damp = 0.85 
+#dτsc   = 0.65              # Tuning parameter - iterative dtau scaling
+dτsc   = 0.1
 const itMax = 500                # maximum number of iterations used in non-adaptive semi-implicit method
 const itMax_ref = 500            # maximum number of iterations used for genereting reference dataset
+const η = 0.3                    # Parameter that control the stepsize of the numerical method. eta must be < 1
 const nout = 5                   # error check frequency
 const tolnl = 1e-3               # tolerance of semi-implicit method 
 const tolnl_ref  = 1e-3          # tolerance of semi-implicit method used to generate reference dataset
-const dτsc   = 0.65              # Tuning parameter - iterative dtau scaling
 const ϵ     = 1e-4               # small number
 const Δx = 50                    # [m]
 const Δy = 50
@@ -64,5 +66,5 @@ var_format = "matrix"
 
 x11 = false
 
-create_ref_dataset = true  
+create_ref_dataset = false  
 train_UDE = true

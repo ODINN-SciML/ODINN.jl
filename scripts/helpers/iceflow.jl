@@ -12,6 +12,46 @@ include("utils.jl")
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
 Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
+function train_batch_UDE!(H₀, UA, glacier_refs, temp_series, hyparams, trackers, idx, p)
+    
+    temps = temp_series[idx]
+    norm_temps = norm_temp_series[idx]
+    glacier_ref = glacier_refs[idx]
+    println("\nTemperature in training: ", temps[1])
+
+    # Gather simulation parameters
+    p = (Δx, Δy, Γ, A, B, norm_temps, C, α) 
+    iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)   
+
+    predicted_A = predict_A̅(UA, [mean(norm_temps)]')[1]
+    fake_A = A_fake(mean(temps)) 
+    A_error = predicted_A - fake_A
+    println("Predicted A: ", predicted_A)
+    println("Fake A: ", fake_A)
+    println("A error: ", A_error)
+
+    if trackers["current_batch"] < hyparams.batchsize
+        trackers["current_batch"] +=1 # increase batch
+    else
+        trackers["current_batch"] = 1
+
+         # Plot the evolution
+        plot(temp_values', A_fake.(temp_values)', label="Fake A")
+        # vline!([mean(temps)], label="Last temp")
+        scatter!(temp_values', predict_A̅(UA, norm_temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
+        pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
+        ploss = plot(trackers["losses"], xlabel="Epoch", ylabel="Loss", aspect=:equal, legend=:outertopright, label="")
+        ptrain = plot(pfunc, ploss, layout=(2,1))
+
+        savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
+        if x11 display(ptrain) end
+
+        old_trained = predict_A̅(UA, norm_temp_values)'
+
+    end 
+    
+end
+
 function ref_dataset(temps, gref, H₀, t)
       
     tempn = mean(temps)
@@ -110,7 +150,7 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
         println("Backpropagation...")
         # We update the weights with the gradients of all tha glaciers in the batch
         # This is equivalent to taking the gradient with respect of the full loss function
-        for i in 1:hyparams.batchsize
+        for i in 1:hyparam
             back_UA = trackers["grad_batch"][i]
             ∇_UA = back_UA(1)
             println("#$i Updating NN weights")

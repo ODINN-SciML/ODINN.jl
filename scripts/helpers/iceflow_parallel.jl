@@ -181,20 +181,31 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
     println("Running forward PDE ice flow model...\n")
 
     # Instantiate variables
-    let             
+    let                            
     current_year = 0
     total_iter = 0
-    ts_i = 1
+    H_    = @zeros(nx  , ny  )
+    Hold     = @zeros(nx  , ny  )
+    Err      = @zeros(nx  , ny  )
+    dτ     = @zeros(nx-2, ny-2)
+    ResH     = @zeros(nx-2, ny-2)
+    dHdt, dHdt_ = @zeros(nx-2, ny-2), @zeros(nx-2, ny-2)
+    F      = @zeros(nx-2, ny-2)
+    Fx      = @zeros(nx-1, ny-2)
+    Fy      = @zeros(nx-2, ny-1)
+    V, V_, Vx, Vx_, Vy, Vy_ = @zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1)
+    S, dSdx, dSdy, ∇S² = @zeros(nx,ny), @zeros(nx-1,ny), @zeros(nx,ny-1), @zeros(nx-1,ny-1)
+    D = @zeros(nx-1, ny-1)
+    t_step = 0
     temps = p[6]
+    ts_i = 1
 
     # Manual explicit forward scheme implementation
     while t < t₁
         let
         iter = 1
         err = 2 * tolnl
-        V = zeros(nx,ny)
-        Hold = copy(H)         # hold value of H for the other iteration in the implicit method
-        dHdt = zeros(nx, ny)   # we need to define dHdt for iter = 1 for Tullio
+        @parallel assign!(Hold, H)
 
         # Get current year for MB and ELA
         year = floor(Int, t) + 1
@@ -216,42 +227,8 @@ function iceflow!(H,glacier_ref::Dict, p,t,t₁)
 
         while err > tolnl_ref && iter < itMax_ref + 1
         
-            Err = copy(H)
-
             # Compute the Shallow Ice Approximation in a staggered grid
-            F, V, dτ = SIA(H, p)
-
-            # Differentiate H via a Picard iteration method
-            @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
-            
-            dHdt_ = copy(dHdt)
-            @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-            
-            # Update the ice thickness
-            H_ = copy(H)
-            #@tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
-            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ)
-
-            if mod(iter, nout) == 0
-                # Compute error for implicit method with damping
-                Err = Err .- H
-                err = maximum(Err)
-                # println("error at iter ", iter, ": ", err)
-
-                #if isnan(err)
-                #    error("""NaNs encountered.  Try a combination of:
-                #                decreasing `damp` and/or `dtausc`, more smoothing steps""")
-                #end
-                if isnan(err)
-                    error("""NaNs encountered.  Try a combination of:
-                                decreasing `damp` and/or `dtausc`, more smoothing steps""")
-                elseif err>10e8
-                    error("""Instability detected""")
-                elseif iter == itMax_ref && err > tolnl_ref
-                    error("""Desired convergence tolerance not reached. Increase the number of iterations
-                                itMax or decrease the tolerance tolnl. Current error after $iter iterations is $err""")            
-                end
-            end
+            SIA!(H, H_, S, dSdx, dSdy, ∇S², D, F, Fx, Fy, V, V_, Vx, Vy, Vx_, Vy_, dτ, ResH, Hold, dHdt, dHdt_, err, iter, p)
         
             iter += 1
             total_iter += 1
@@ -329,8 +306,8 @@ function iceflow!(H, UA, p,t,t₁)
     F      = @zeros(nx-2, ny-2)
     Fx      = @zeros(nx-1, ny-2)
     Fy      = @zeros(nx-2, ny-1)
-    V, Vx, Vx_buff, Vy, Vy_buff = @zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1)
-    S, dSdx, dSdy, ∇S² = @zeros(nx,ny), @zeros(nx-1,ny), @zeros(nx,ny-1), @zeros(nx-2,ny-2)
+    V, V_, Vx, Vx_, Vy, Vy_ = @zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1),@zeros(nx-1,ny-1)
+    S, dSdx, dSdy, ∇S² = @zeros(nx,ny), @zeros(nx-1,ny), @zeros(nx,ny-1), @zeros(nx-1,ny-1)
     D = @zeros(nx-1, ny-1)
     t_step = 0
     temps = p[6]
@@ -374,7 +351,7 @@ function iceflow!(H, UA, p,t,t₁)
         # while iter < itMax + 1
            
             # Compute the Shallow Ice Approximation in a staggered grid
-            SIA!(H, H_, S, dSdx, dSdy, ∇S², D, F, Fx, Fy, Vx, Vy, dτ, ResH, Hold, dHdt, dHdt_, err, p)
+            SIA!(H, H_, S, dSdx, dSdy, ∇S², D, F, Fx, Fy, V, V_, Vx, Vy, Vx_, Vy_, dτ, ResH, Hold, dHdt, dHdt_, err, iter, p)
 
             iter += 1
             total_iter += 1
@@ -387,13 +364,6 @@ function iceflow!(H, UA, p,t,t₁)
         # Zygote.ignore() do
         #     @infiltrate
         # end
-        
-        # Fill buffers to handle Zygote "Mutating arrays" limitation
-        Vx_buff = copy(Vx)
-        Vy_buff = copy(Vy)
-
-        @tullio Vx[i,j] := Vx_buff[i,j] + V[1][i,j]
-        @tullio Vy[i,j] := Vy_buff[i,j] + V[2][i,j]
     
         end # let
     end # while
@@ -407,10 +377,16 @@ function iceflow!(H, UA, p,t,t₁)
 
 end
 
+
+@parallel function assign!(Aold, A)
+    @all(Aold) = @all(A)
+    return
+end
+
 @parallel function compute_dS!(S, dSdx, dSdy, ∇S²)
     @all(dSdx)  = @d_xa(S) / Δx
     @all(dSdy)  = @d_ya(S) / Δy
-    @all(∇S²) = @av_ya(dSdx).^2 .+ @av_xa(dSdy).^2
+    @all(∇S²) = (@av_ya(dSdx)*@av_ya(dSdx)) + (@av_xa(dSdy)*@av_xa(dSdy))
     return
 end
 
@@ -429,10 +405,10 @@ end
     return
 end
 
-@parallel function compute_dHdt!(dτ, ResH, dHdt, dHdt_, D, H, Hold, Fx, Fy, Dmax, dτsc)
+@parallel function compute_dHdt!(dτ, ResH, dHdt, dHdt_, D, H, Hold, Fx, Fy, dτsc)
     
     # Compute dτ for the implicit method   
-    @all(dτ) = dτsc * min(10.0, 1.0/(1.0/Δt + 1.0/(cfl/(ϵ + Dmax))))
+    @all(dτ) = dτsc * min(10.0, 1.0/(1.0/Δt + 1.0/(cfl/(ϵ + @av(D)))))
     @all(ResH) = -(@inn(H) - @inn(Hold))/Δt -(@d_xa(Fx)/Δx + @d_ya(Fy)/Δy) # + @inn(M) # MB should go here
     @all(dHdt) = @all(dHdt_)*damp + @all(ResH)
     
@@ -440,13 +416,13 @@ end
 end
 
 @parallel function compute_H!(H, H_, dHdt, dτ)
-    @inn(H) = max(0.0, @inn(H_) + dτ * @all(dHdt) )
+    @inn(H) = max(0.0, @inn(H_) + @all(dτ) * @all(dHdt) )
     return
 end
 
 @parallel function compute_V!(Vx, Vy, D, H, dSdx, dSdy, ϵ)
-    @all(Vx) = -@all(D)/(@av(H) + epsi)*@av_ya(dSdx)
-    @all(Vy) = -@all(D)/(@av(H) + epsi)*@av_xa(dSdy)
+    @all(Vx) = -@all(D)/(@av(H) + ϵ)*@av_ya(dSdx)
+    @all(Vy) = -@all(D)/(@av(H) + ϵ)*@av_xa(dSdy)
     return
 end
 
@@ -456,7 +432,7 @@ end
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
-function SIA!(H, H_, S, dSdx, dSdy, ∇S², D, F, Fx, Fy, Vx, Vy, dτ, ResH, Hold, dHdt, dHdt_, err, p)
+function SIA!(H, H_, S, dSdx, dSdy, ∇S², D, F, Fx, Fy, V, V_, Vx, Vy, Vx_, Vy_, dτ, ResH, Hold, dHdt, dHdt_, err, iter, p)
     Δx, Δy, Γ, A, B, temps, C, α = p
 
     # Update glacier surface altimetry
@@ -466,7 +442,7 @@ function SIA!(H, H_, S, dSdx, dSdy, ∇S², D, F, Fx, Fy, Vx, Vy, dτ, ResH, Hol
     # Compute surface gradients on edges
     @parallel compute_dS!(S, dSdx, dSdy, ∇S²)
 
-    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
+    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s   
     
     # Compute diffusivity
     @parallel compute_D!(D, H, ∇S², Γ)
@@ -475,18 +451,21 @@ function SIA!(H, H_, S, dSdx, dSdy, ∇S², D, F, Fx, Fy, Vx, Vy, dτ, ResH, Hol
     @parallel compute_F!(F, Fx, Fy, D, S)
     
     #dτ = dτsc * min.( 10.0 , 1.0./(1.0/Δt .+ 1.0./(cfl./(ϵ .+ avg(D)))))
-    Dmax = 3000000
-    current_DDmax = maximum(D) 
+    #=
+    Dmax = 3e7
+    current_Dmax = maximum(D) 
     if Dmax < current_Dmax
-        error("Increase Maximum diffusivity. Required value must be larger than $current_D_max")
+        error("Increase Maximum diffusivity. Required value must be larger than $current_Dmax")
     end
-    
+    =#
+        
     @parallel assign!(dHdt_, dHdt)
-    @parallel compute_dHdt!(dτ, ResH, dHdt, D, H, Hold, Fx, Fy, Dmax, dτsc)
+    @parallel compute_dHdt!(dτ, ResH, dHdt, dHdt_, D, H, Hold, Fx, Fy, dτsc)
     
     @parallel assign!(H_, H)
-    @parallel compute_H!(H, dHdt, dτ)
+    @parallel compute_H!(H, H_, dHdt, dτ)
     
+    @parallel assign!(V_, V)
     @parallel compute_V!(Vx, Vy, D, H, dSdx, dSdy, ϵ)
 
     Zygote.ignore() do
