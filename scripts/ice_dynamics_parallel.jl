@@ -8,21 +8,23 @@ SINDy (Brunton et al., 2016).
 
 ## Environment and packages
 using Distributed
-using SharedArrays
 processes = 4
 
 if nprocs() < processes
-    addprocs(processes - nprocs(); exeflags="--project=")
+    addprocs(processes - nprocs(); exeflags="--project")
 end
 
 println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
 @everywhere begin 
-    cd(@__DIR__)
+    #cd(@__DIR__)
     using Pkg 
     Pkg.activate("../.");
     Pkg.instantiate()
+end
+    
+@everywhere begin 
     using Plots; gr()
     ENV["GKSwstype"] = "nul"
     using Statistics
