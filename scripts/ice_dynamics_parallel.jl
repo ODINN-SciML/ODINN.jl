@@ -146,16 +146,9 @@ end
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-    
-    #@everywhere glacier_refs = []
-    #glacier_refs = SharedArray{typeof(gref)(size(temp_series))
-        
-    # Generate array of args for workers
-    #nargs = ((temps, gref, H₀, t) for temps in temp_series)
   
     # Compute reference dataset in parallel
-    #@time @sync glacier_refs = pmap((args) -> ref_dataset(args...), nargs)
-    @time glacier_refs = pmap(temps -> ref_dataset(temps, gref, H₀, t), temp_series)
+    @time generate_ref_dataset(temp_series, gref, H₀, t)
     
     # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
     
@@ -177,30 +170,39 @@ end
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
+    
     println("Running forward UDE ice flow model...\n")
+    
     let
     temp_values = [mean(temps) for temps in temp_series]'
     norm_temp_values = [mean(temps) for temps in norm_temp_series]'
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
     hyparams, UA = create_NNs()
     old_trained = predict_A̅(UA, norm_temp_values)' #A_fake.(temp_values)'
-    trackers = Dict("losses"=>[], "losses_batch"=>[],
-                    "current_batch"=>1, "grad_batch"=>[])
+    
+    #trackers = Dict("losses"=>[], "losses_batch"=>[],
+    #                "current_batch"=>1, "grad_batch"=>[])
 
     # Diagnosis plot after each full epochs
     #display(scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
 
     # Train iceflow UDE
-
     for i in 1:hyparams.epochs
         println("\nEpoch #", i, "\n")
         
+        # Randomize order of glaciers in the batch
         idxs = Random.shuffle(1:length(temp_series))
         # idxs = 1:length(temp_series)
         #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
         
         # Train UDE batch in parallel
-        @time glacier_refs = pmap(idx -> train_batch_UDE!(H₀, UA, glacier_refs, temp_series, hyparams, trackers, idx, p), idxs)   
+        @time train_batch_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idxs)  
+        
+        # Update NN weights after batch completion 
+        @time update_UDE_batch!(UA, loss_UAs, back_UAs)
+        
+        # Plot evolution of training
+        plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values)
 
     end
 end

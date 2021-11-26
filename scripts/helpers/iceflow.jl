@@ -12,62 +12,38 @@ include("utils.jl")
 # Patch suggested by Michael Abbott needed in order to correctly retrieve gradients
 Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimise.update!(opt, x, reshape(Δ, size(x)))
 
-function train_batch_UDE!(H₀, UA, glacier_refs, temp_series, hyparams, trackers, idx, p)
+"""
+    generate_ref_dataset(temp_series, gref, H₀, t)
+
+Training of reference dataset with multiple glaciers forced with 
+different temperature series.
+"""
+function generate_ref_dataset(temp_series, gref, H₀, t)
     
-    temps = temp_series[idx]
-    norm_temps = norm_temp_series[idx]
-    glacier_ref = glacier_refs[idx]
-    println("\nTemperature in training: ", temps[1])
-
-    # Gather simulation parameters
-    p = (Δx, Δy, Γ, A, B, norm_temps, C, α) 
-    iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers,p,t,t₁)   
-
-    predicted_A = predict_A̅(UA, [mean(norm_temps)]')[1]
-    fake_A = A_fake(mean(temps)) 
-    A_error = predicted_A - fake_A
-    println("Predicted A: ", predicted_A)
-    println("Fake A: ", fake_A)
-    println("A error: ", A_error)
-
-    if trackers["current_batch"] < hyparams.batchsize
-        trackers["current_batch"] +=1 # increase batch
-    else
-        trackers["current_batch"] = 1
-
-         # Plot the evolution
-        plot(temp_values', A_fake.(temp_values)', label="Fake A")
-        # vline!([mean(temps)], label="Last temp")
-        scatter!(temp_values', predict_A̅(UA, norm_temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
-        pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
-        ploss = plot(trackers["losses"], xlabel="Epoch", ylabel="Loss", aspect=:equal, legend=:outertopright, label="")
-        ptrain = plot(pfunc, ploss, layout=(2,1))
-
-        savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
-        if x11 display(ptrain) end
-
-        old_trained = predict_A̅(UA, norm_temp_values)'
-
-    end 
+    # Compute reference dataset in parallel
+    glacier_refs = pmap(temps -> ref_glacier(temps, gref, H₀, t), temp_series)
+    
+    return glacier_refs
     
 end
 
+
+"""
+    ref_glacier(temps, gref, H₀, t)
+
+Training reference dataset of a single glacier
+"""
 function ref_dataset(temps, gref, H₀, t)
       
     tempn = mean(temps)
     println("Reference simulation with temp ≈ ", tempn)
     glacier_ref = deepcopy(gref)
     H = deepcopy(H₀)
+    
     # Gather simulation parameters
     p = (Δx, Δy, Γ, A, B, temps, C, α) 
     # Perform reference imulation with forward model 
-    #@time  H, V̂ = pmap((H,glacier_ref,p,t,t₁) -> iceflow!(H,glacier_ref,p,t,t₁), H,glacier_ref,p,t,t₁)
-
     H, V̂ = iceflow!(H,glacier_ref,p,t,t₁)
-    
-    #push!(glacier_refs, glacier_ref)
-    
-    #println("glacier_refs: ", length(glacier_refs))
 
     ### Glacier ice thickness evolution  ### Not that useful
     # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
@@ -94,44 +70,123 @@ function ref_dataset(temps, gref, H₀, t)
     
 end
 
+"""
+    train_batch_iceflow_UDE!(H₀, UA, glacier_refs, temp_series, hyparams, idx, p)
+
+Training of a batch for the iceflow UDE based on the SIA.
+"""
+function train_batch_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idxs)
+    
+    # Train UDE batch in parallel
+    loss_UAs, back_UAs = map(idx -> train_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idx), idxs) 
+    
+    return loss_UA, back_UA
+    
+end
+
+
+function train_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idx)
+    temps = temp_series[idx]
+    norm_temps = norm_temp_series[idx]
+    glacier_ref = glacier_refs[idx]
+    println("\nTemperature in training: ", temps[1])
+
+    # Gather simulation parameters
+    p = (Δx, Δy, Γ, A, B, norm_temps, C, α) 
+    loss_UA, back_UA = iceflow_UDE(H₀,glacier_ref,UA,hyparams,p,t,t₁)   
+
+    predicted_A = predict_A̅(UA, [mean(norm_temps)]')[1]
+    fake_A = A_fake(mean(temps)) 
+    A_error = predicted_A - fake_A
+    println("Predicted A: ", predicted_A)
+    println("Fake A: ", fake_A)
+    println("A error: ", A_error)
+
+    return loss_UA, back_UA
+    
+end
+
 
 """
-    iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
+    update_UDE_batch!(UA, back_UAs)
+
+Update neural network weights after having trained on a whole batch of glaciers. 
+"""
+function update_UDE_batch!(UA, loss_UAs, back_UAs)
+    
+    println("Backpropagation...")
+    # We update the weights with the gradients of all tha glaciers in the batch
+    # This is equivalent to taking the gradient with respect of the full loss function
+    θ = Flux.params(UA)
+    
+    for back_UA in back_UAs
+        ∇_UA = back_UA(1)
+        println("#$i Updating NN weights")
+        Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+    end
+
+    #∇_UA = back_UA(one(mean(trackers["losses_batch"]))) # with UA
+    #println("Updating NN weights")
+    #Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
+
+    # Keep track of the loss function per batch
+    println("Loss batch: ", mean(loss_UAs))  
+
+end
+
+
+"""
+    plot_training!(UA, old_trained, temp_values, norm_temp_values)
+
+Plot evolution of the functions learnt by the UDE. 
+"""
+function plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values)
+    
+    # Plot progress of the loss function 
+    # temp_values = LinRange(-25, 0, 20)'
+    # plot(temp_values', A_fake.(temp_values)', label="Fake A")
+    # pfunc = scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")
+    # ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
+    # display(plot(pfunc, ploss, layout=(2,1)))
+    
+    # Plot the evolution
+    plot(temp_values', A_fake.(temp_values)', label="Fake A")
+    scatter!(temp_values', predict_A̅(UA, norm_temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
+    pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
+    ploss = plot(loss_UAs, xlabel="Epoch", ylabel="Loss", aspect=:equal, legend=:outertopright, label="")
+    ptrain = plot(pfunc, ploss, layout=(2,1))
+
+    savefig(ptrain,joinpath(root_dir,"plots/training","epoch$i.png"))
+    #if x11 
+    #    display(ptrain) 
+    #end
+
+    old_trained = predict_A̅(UA, norm_temp_values)'
+    
+end
+
+
+"""
+    iceflow_UDE!(H₀, glacier_ref, UA, hyparams, p, t, t₁)
 
 Hybrid ice flow model solving and optimizing the Shallow Ice Approximation (SIA) PDE using 
 Universal Differential Equations (UDEs)
 """
-function iceflow_UDE!(H₀,glacier_ref,UA,hyparams,trackers, p,t,t₁)
 
+function iceflow_UDE(H₀, glacier_ref, UA, hyparams, p, t, t₁)
+    
     # We define an optimizer
     opt = RMSProp(hyparams.η)
     # opt = ADAM(hyparams.η)
     #opt = BFGS(hyparams.η)
-
-    # Train the UDE for a given number of epochs
-    hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
-    # @epochs hyparams.epochs hybrid_train!(trackers, glacier_ref, UA, opt, H₀, p, t, t₁)
-
-end
-
-"""
-    hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
-
-Train hybrid ice flow model based on UDEs.
-"""
-function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t₁)
+    
     # Retrieve model parameters
     θ = Flux.params(UA)
     # println("Resetting initial H state")
     H = deepcopy(H₀) # Make sure we go back to the original initial state for each epoch
 
-    # println("Forward pass")
+    println("Forward pass")
     loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
-
-    # Save gradients from current batch
-    push!(trackers["grad_batch"], back_UA)
-    push!(trackers["losses_batch"], loss_UA)
-
 
     # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem 
 
@@ -144,46 +199,15 @@ function hybrid_train!(trackers, hyparams, glacier_ref, UA, opt, H₀, p, t, t�
 
     # println("Predicted A: ", predict_A̅(UA, [mean(p[6])]'))
 
-    # Only update NN weights after batch completion 
-    if(trackers["current_batch"] == hyparams.batchsize)
- 
-        println("Backpropagation...")
-        # We update the weights with the gradients of all tha glaciers in the batch
-        # This is equivalent to taking the gradient with respect of the full loss function
-        for i in 1:hyparam
-            back_UA = trackers["grad_batch"][i]
-            ∇_UA = back_UA(1)
-            println("#$i Updating NN weights")
-            Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
-        end
-
-        #∇_UA = back_UA(one(mean(trackers["losses_batch"]))) # with UA
-        #println("Updating NN weights")
-        #Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
-        
-        # Keep track of the loss function per batch
-        push!(trackers["losses"], mean(trackers["losses_batch"]))
-
-        # Clear trackers for current finished batch
-        trackers["grad_batch"] = nothing
-        trackers["grad_batch"] = []
-        trackers["losses_batch"] = nothing
-        trackers["losses_batch"] = []
-
-        # Plot progress of the loss function 
-        # temp_values = LinRange(-25, 0, 20)'
-        # plot(temp_values', A_fake.(temp_values)', label="Fake A")
-        # pfunc = scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")
-        # ploss = plot(trackers["losses"], title="Loss", xlabel="Epoch", aspect=:equal)
-        # display(plot(pfunc, ploss, layout=(2,1)))
-  
-    end
-
     # Flux.Optimise.update!(opt, A, ∇_UA) # inverse problem
     # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p # unpack
     # p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format) # repack
+    
+    return loss_UA, back_UA
 
 end
+
+
 
 """
     loss(H, glacier_ref, UA, p, t, t₁)
@@ -196,7 +220,7 @@ function loss(H, glacier_ref, UA, p, t, t₁)
     H, V̂ = iceflow!(H, UA, p,t,t₁)
 
     l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))
-
+    
     # l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
 
     println("l_H: ", l_H)
