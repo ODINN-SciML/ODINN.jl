@@ -18,12 +18,12 @@ Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimis
 Training of reference dataset with multiple glaciers forced with 
 different temperature series.
 """
-function generate_ref_dataset(temp_series, gref, H₀, t)
+function generate_ref_dataset(temp_series, H₀, t)
     
     # Compute reference dataset in parallel
-    glacier_refs = pmap(temps -> ref_glacier(temps, gref, H₀, t), temp_series)
+    iceflow_prob = map(temps -> ref_glacier(temps, H₀, t), temp_series)
     
-    return glacier_refs
+    return iceflow_prob
     
 end
 
@@ -33,18 +33,26 @@ end
 
 Training reference dataset of a single glacier
 """
-function ref_dataset(temps, gref, H₀, t)
+function ref_glacier(temps, H₀, t)
       
     tempn = mean(temps)
     println("Reference simulation with temp ≈ ", tempn)
     H = deepcopy(H₀)
     
+    # Initialize all matrices for the solver
+    S, dSdx, dSdy = zeros(Float32,nx,ny),zeros(Float32,nx-1,ny),zeros(Float32,nx,ny-1)
+    dSdx_edges, dSdy_edges, ∇S = zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1),zeros(Float32,nx-1,ny-1)
+    D, F, Fx, Fy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-2,ny-2),zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1)
+    V, Vx, Vy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1)
+    
     # Gather simulation parameters
     current_year = 0
-    p = (Δx, Δy, Γ, A, B, temps, C, α, current_year) 
+    p = (Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year)
 
     # Perform reference simulation with forward model 
+    println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),p)
+    @time solve(iceflow_prob, KenCarp4(autodiff=false), progress=true, progress_steps = 1)
 
     ### Glacier ice thickness evolution  ### Not that useful
     # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
@@ -56,7 +64,7 @@ function ref_dataset(temps, gref, H₀, t)
 
     ###  Glacier ice thickness difference  ###
     lim = maximum( abs.(H .- H₀) )
-    hm2 = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
+    hm = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
         clim = (-lim, lim),
         title="Variation in ice thickness")
     
@@ -64,10 +72,9 @@ function ref_dataset(temps, gref, H₀, t)
     #    display(hm2) 
     #end
     
-    tempn = floor(tempn)
-    savefig(hm2,joinpath(root_dir,"plots/references","reference_$tempn.png"))
+    @infiltrate
 
-    return glacier_ref
+    return iceflow_prob, hm
     
 end
 
@@ -187,7 +194,7 @@ function iceflow_UDE(H₀, glacier_ref, UA, hyparams, p, t, t₁)
     H = deepcopy(H₀) # Make sure we go back to the original initial state for each epoch
 
     println("Forward pass")
-    loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
+    loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
 
     # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem 
 
@@ -244,16 +251,17 @@ Forward ice flow model solving the Shallow Ice Approximation PDE
 """
 function iceflow!(dH, H, p,t)
 
-    println("Running forward PDE ice flow model...\n")
-
-    # Instantiate variables
-    Δx, Δy, Γ, A, B, temps, C, α, current_year = p         
-
+    # Unpack parameters
+    Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year = p
+    
     # Get current year for MB and ELA
+    
+    # TODO: find a way to access timestep in solver to compute this
+    println("t: ", t)
     year = floor(Int, t) + 1
     if year != current_year
 
-        # println("Year: ", year)
+        println("Year: ", year)
         
         # Predict A with the fake A law
         #println("temps: ", temps)
@@ -262,15 +270,16 @@ function iceflow!(dH, H, p,t)
         #println("A fake: ", ŶA)
 
         # Unpack and repack tuple with updated A value
-        Δx, Δy, Γ, A, B, temps, C, α = p
-        p = (Δx, Δy, Γ, ŶA, B, temps, C, α) 
+        p = (Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year)
+        
         current_year = year
     end
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    F, V = SIA(H, p)
-
-    dH = H .+ F
+    SIA!(H, V, p)
+    
+    @tullio dH[i,j] = H[i,j] + F[pad(i-1,1,1),pad(j-1,1,1)]
+    #dH = H .+ F
 
 end  
 
@@ -337,7 +346,7 @@ function iceflow!(H, UA, p,t,t₁)
             # Compute the Shallow Ice Approximation in a staggered grid
             F, V, dτ = SIA(H, p)
 
-            # Compute the residual ice thickness for the inertia
+            # Compute the residual ice thickness for the inertia
             @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
 
             dHdt_ = copy(dHdt)
@@ -400,37 +409,37 @@ end
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
-function SIA(H, p)
-    Δx, Δy, Γ, A, B, temps, C, α, current_year = p   
+function SIA!(H, V, p)
+    
+    # Retrieve parameters
+    Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year = p   
 
     # Update glacier surface altimetry
-    S = B .+ H
+    S .= B .+ H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx  = diff(S, dims=1) / Δx
-    dSdy  = diff(S, dims=2) / Δy
-    ∇S² = avg_y(dSdx).^2 .+ avg_x(dSdy).^2
+    dSdx .= diff(S, dims=1) / Δx
+    dSdy .= diff(S, dims=2) / Δy
+    ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
 
-    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s # Γ from Jupyter notebook. To do: standarize this value in patameters.jl
-
-    D = Γ .* avg(H).^(n + 2) .* ∇S².^((n - 1)/2)
+    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
+    
+    D .= Γ .* avg(H).^(n + 2) .* ∇S
 
     # Compute flux components
-    dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
-    dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
-    Fx = .-avg_y(D) .* dSdx_edges
-    Fy = .-avg_x(D) .* dSdy_edges    
-    #  Flux divergence
-    F = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+    dSdx_edges .= diff(S[:,2:end - 1], dims=1) / Δx
+    dSdy_edges .= diff(S[2:end - 1,:], dims=2) / Δy
+    Fx .= .-avg_y(D) .* dSdx_edges
+    Fy .= .-avg_x(D) .* dSdy_edges 
+
+    #  Flux divergence
+    F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
 
     # Compute velocities    
-    Vx = -D./(avg(H) .+ ϵ).*avg_y(dSdx)
-    Vy = -D./(avg(H) .+ ϵ).*avg_x(dSdy)
-
-
-    return F, (Vx,Vy)
-
+    Vx .= -D./(avg(H) .+ ϵ).*avg_y(dSdx)
+    Vy .= -D./(avg(H) .+ ϵ).*avg_x(dSdy)
+    
 end
 
 """
@@ -515,7 +524,7 @@ function create_NNs()
     # Leaky ReLu as activation function
     leakyrelu(x, a=0.01) = max(a*x, x)
 
-    # Constraints A within physically plausible values
+    # Constraints A within physically plausible values
     minA = 0.3
     maxA = 8
     rangeA = minA:1e-3:maxA

@@ -24,13 +24,17 @@ using PyCall # just for compatibility with utils.jl
 using Random 
 using DifferentialEquations
 
+using Logging: global_logger
+using TerminalLoggers: TerminalLogger
+global_logger(TerminalLogger())
+
 ### Global parameters  ###
 include("helpers/parameters.jl")
 ### Types  ###
 include("helpers/types.jl")
 ### Iceflow forward model  ###
 # (includes utils.jl as well)
-include("helpers/iceflow.jl")
+include("helpers/iceflow_DiffEqs.jl")
 ### Climate data processing  ###
 include("helpers/climate.jl")
 
@@ -60,8 +64,8 @@ voidfill!(MB_plot, argentiere.MB[1,1,1])
 #ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
 
 # Domain size
-nx = size(argentiere.bed)[1]
-ny = size(argentiere.bed)[2];
+const nx = size(argentiere.bed)[1]
+const ny = size(argentiere.bed)[2];
 
 
 ###  Plot initial data  ###
@@ -95,11 +99,11 @@ example = "Argentiere"
 
 if example == "Argentiere"
 
-    B  = copy(argentiere.bed)
-    H₀ = copy(argentiere.thick[:,:,1])
+    const B  = copy(argentiere.bed)
+    const H₀ = copy(argentiere.thick[:,:,1])
  
     # Spatial and temporal differentials
-    Δx = Δy = 50 #m (Δx = Δy)
+    const Δx, Δy = 50, 50 #m (Δx = Δy)
 
     MB_avg = []
     for year in 1:length(argentiere.MB[1,1,:])
@@ -134,7 +138,13 @@ if create_ref_dataset
     println("Generating reference dataset for training...")
   
     # Compute reference dataset in parallel
-    @time generate_ref_dataset(temp_series, gref, H₀, t)
+    @time glacier_refs = generate_ref_dataset(temp_series, H₀, t)
+    
+    # Save reference plots
+    for temps in temp_series
+        tempn = floor(mean(temps))
+        savefig(hm2,joinpath(root_dir,"plots/references","reference_$tempn.png"))
+    end
     
     # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
     
