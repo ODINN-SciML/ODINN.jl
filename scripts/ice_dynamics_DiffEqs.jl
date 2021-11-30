@@ -138,12 +138,12 @@ if create_ref_dataset
     println("Generating reference dataset for training...")
   
     # Compute reference dataset in parallel
-    @time glacier_refs = generate_ref_dataset(temp_series, H₀, t)
+    @time glacier_refs, hms = generate_ref_dataset(temp_series, H₀, t)
     
     # Save reference plots
-    for temps in temp_series
+    for (temps, hms) in zip(temp_series, hms)
         tempn = floor(mean(temps))
-        savefig(hm2,joinpath(root_dir,"plots/references","reference_$tempn.png"))
+        savefig(hm,joinpath(root_dir,"plots/references","reference_$tempn.png"))
     end
     
     # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)

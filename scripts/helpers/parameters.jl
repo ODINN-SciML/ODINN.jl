@@ -45,6 +45,10 @@ const ϵ     = 1e-4               # small number
 const Δx = 50                    # [m]
 const Δy = 50
 const cfl  = max(Δx^2,Δy^2)/4.1
+const maxA = 8e-16
+const minA = 3e-17
+const maxT = 1
+const minT = -25
 
 # Time 
 t = 0                      # initial time

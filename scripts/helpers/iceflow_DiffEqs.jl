@@ -3,7 +3,6 @@
 ###################################################################
 
 using Zygote
-using PaddedViews
 using Flux
 using Flux: @epochs
 using Tullio
@@ -21,9 +20,9 @@ different temperature series.
 function generate_ref_dataset(temp_series, H₀, t)
     
     # Compute reference dataset in parallel
-    iceflow_prob = map(temps -> ref_glacier(temps, H₀, t), temp_series)
+    iceflow_prob, hm = map(temps -> ref_glacier(temps, H₀, t), temp_series)
     
-    return iceflow_prob
+    return iceflow_prob, hm
     
 end
 
@@ -42,17 +41,19 @@ function ref_glacier(temps, H₀, t)
     # Initialize all matrices for the solver
     S, dSdx, dSdy = zeros(Float32,nx,ny),zeros(Float32,nx-1,ny),zeros(Float32,nx,ny-1)
     dSdx_edges, dSdy_edges, ∇S = zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1),zeros(Float32,nx-1,ny-1)
-    D, F, Fx, Fy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-2,ny-2),zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1)
+    D, dH, Fx, Fy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-2,ny-2),zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1)
     V, Vx, Vy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1)
     
     # Gather simulation parameters
     current_year = 0
-    p = (Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year)
+    p = [A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year]
 
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),p)
-    @time solve(iceflow_prob, KenCarp4(autodiff=false), progress=true, progress_steps = 1)
+    #@time solve(iceflow_prob, alg_hints=[:stiff], reltol=1e-14,abstol=1e-14, progress=true, progress_steps = 1)
+    @time iceflow_sol = solve(iceflow_prob, Vern7(), dt=1e-14, progress=true, progress_steps = 1)
+    
 
     ### Glacier ice thickness evolution  ### Not that useful
     # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
@@ -71,10 +72,8 @@ function ref_glacier(temps, H₀, t)
     #if x11 
     #    display(hm2) 
     #end
-    
-    @infiltrate
 
-    return iceflow_prob, hm
+    return iceflow_sol, hm
     
 end
 
@@ -252,34 +251,32 @@ Forward ice flow model solving the Shallow Ice Approximation PDE
 function iceflow!(dH, H, p,t)
 
     # Unpack parameters
-    Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year = p
+    #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
+    current_year = @view p[end]
+    A = @view p[1]
     
     # Get current year for MB and ELA
-    
-    # TODO: find a way to access timestep in solver to compute this
-    println("t: ", t)
     year = floor(Int, t) + 1
-    if year != current_year
+    if year != current_year && year <= t₁
 
-        println("Year: ", year)
+        #println("Year: ", year)
+        #println("current_year before: ", current_year)
+        #println("current_year before p: ", p[end])
         
         # Predict A with the fake A law
         #println("temps: ", temps)
-        temp = temps[year]
-        ŶA = A_fake(temp)
+        temp = @view p[7][year]
+        A .= A_fake(temp)
         #println("A fake: ", ŶA)
 
         # Unpack and repack tuple with updated A value
-        p = (Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year)
-        
-        current_year = year
+        current_year .= year
+        #println("current_year after: ", current_year)
+
     end
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    SIA!(H, V, p)
-    
-    @tullio dH[i,j] = H[i,j] + F[pad(i-1,1,1),pad(j-1,1,1)]
-    #dH = H .+ F
+    SIA!(dH, H, p)
 
 end  
 
@@ -409,11 +406,24 @@ end
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
-function SIA!(H, V, p)
+function SIA!(dH, H, p)
     
     # Retrieve parameters
-    Δx, Δy, Γ, A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, F, Vx, Vy, V, C, α, current_year = p   
-
+    #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year  
+    
+    S = p[3]
+    B = p[2]
+    dSdx = p[4]
+    dSdy = p[5]
+    ∇S = p[10]
+    D = p[6]
+    dSdx_edges = p[8]
+    dSdy_edges = p[9]
+    Fx = p[11]
+    Fy = p[12]
+    Vx = p[13]
+    Vy = p[14]
+    
     # Update glacier surface altimetry
     S .= B .+ H
 
@@ -434,11 +444,15 @@ function SIA!(H, V, p)
     Fy .= .-avg_x(D) .* dSdy_edges 
 
     #  Flux divergence
-    F .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+    inn(dH) .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+    #@tullio dH[i,j] = -(diff(Fx, dims=1)[pad(i-1,1,1),pad(j-1,1,1)] / Δx + diff(Fy, dims=2)[pad(i-1,1,1),pad(j-1,1,1)] / Δy)
 
     # Compute velocities    
     Vx .= -D./(avg(H) .+ ϵ).*avg_y(dSdx)
     Vy .= -D./(avg(H) .+ ϵ).*avg_x(dSdy)
+    
+    #@tullio dH[i,j] = H[i,j] + F[pad(i-1,1,1),pad(j-1,1,1)]
+    #dH = H .+ F
     
 end
 
@@ -467,11 +481,6 @@ Fake law to determine A in the SIA
 """
 function A_fake(temp)
     # Matching point MB values to A values
-    maxA = 8e-16
-    minA = 3e-17
-
-    maxT = 1
-    minT = -25
 
     #temp_range = -25:0.01:1
 
@@ -480,7 +489,7 @@ function A_fake(temp)
 
     #A = A_range[closest_index(temp_range, temp)]
 
-    return minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    return @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
     #return A
 end
 
