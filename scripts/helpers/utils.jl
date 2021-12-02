@@ -12,7 +12,7 @@
 
 4-point average in a matrix 
 """
-@views avg(A) = 0.25 * ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+@views avg(A) = 0.25 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
 
 """
     avg_x(A)
@@ -27,6 +27,10 @@
 2-point average on y-axis 
 """
 @views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
+
+@views diff_x(A) = (A[begin + 1:end, :] .- A[1:end - 1, :])
+
+@views diff_y(A) = (A[:, begin + 1:end] .- A[:, 1:end - 1])
 
 """
     pad(A, s) 

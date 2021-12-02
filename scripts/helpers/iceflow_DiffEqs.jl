@@ -20,9 +20,9 @@ different temperature series.
 function generate_ref_dataset(temp_series, H₀, t)
     
     # Compute reference dataset in parallel
-    iceflow_prob, hm = map(temps -> ref_glacier(temps, H₀, t), temp_series)
+    iceflow_prob = pmap(temps -> ref_glacier(temps, H₀, t), temp_series)
     
-    return iceflow_prob, hm
+    return iceflow_prob
     
 end
 
@@ -52,28 +52,13 @@ function ref_glacier(temps, H₀, t)
     println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),p)
     #@time solve(iceflow_prob, alg_hints=[:stiff], reltol=1e-14,abstol=1e-14, progress=true, progress_steps = 1)
-    @time iceflow_sol = solve(iceflow_prob, Vern7(), dt=1e-14, progress=true, progress_steps = 1)
+    #@time iceflow_sol = solve(iceflow_prob, Vern7(), progress=true, progress_steps = 1)
+    iceflow_sol = solve(iceflow_prob, BS3(), progress=true, progress_steps = 1)
+    #@time iceflow_sol = solve(iceflow_prob, KenCarp4(autodiff=false), reltol=1e-8,abstol=1e-8, progress=true, progress_steps = 1)
     
+    println("max H: ", maximum(iceflow_sol[end]))
 
-    ### Glacier ice thickness evolution  ### Not that useful
-    # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
-    # hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
-    # hm1 = Plots.plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
-    #     colorbar_title="Ice thickness (m)",
-    #     clims=(0,maximum(H₀)), link=:all)
-    # display(hm1)
-
-    ###  Glacier ice thickness difference  ###
-    lim = maximum( abs.(H .- H₀) )
-    hm = heatmap(H .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
-        clim = (-lim, lim),
-        title="Variation in ice thickness")
-    
-    #if x11 
-    #    display(hm2) 
-    #end
-
-    return iceflow_sol, hm
+    return iceflow_sol[end]
     
 end
 
@@ -82,34 +67,48 @@ end
 
 Training of a batch for the iceflow UDE based on the SIA.
 """
-function train_batch_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idxs)
+function train_batch_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idxs)
     
     # Train UDE batch in parallel
-    loss_UAs, back_UAs = map(idx -> train_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idx), idxs) 
+    iceflow_trained = map(idx -> train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idx), idxs) 
     
-    return loss_UA, back_UA
+    return iceflow_trained
     
 end
 
 
-function train_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idx)
+function train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idx)
+    
+    # Gather simulation parameters
+    H = deepcopy(H₀)
     temps = temp_series[idx]
     norm_temps = norm_temp_series[idx]
-    glacier_ref = glacier_refs[idx]
+    H_ref = H_refs[idx]
     println("\nTemperature in training: ", temps[1])
-
+    
+    # Initialize all matrices for the solver
+    S, dSdx, dSdy = zeros(Float32,nx,ny),zeros(Float32,nx-1,ny),zeros(Float32,nx,ny-1)
+    dSdx_edges, dSdy_edges, ∇S = zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1),zeros(Float32,nx-1,ny-1)
+    D, dH, Fx, Fy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-2,ny-2),zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1)
+    V, Vx, Vy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1)
+    
     # Gather simulation parameters
-    p = (Δx, Δy, Γ, A, B, norm_temps, C, α) 
-    loss_UA, back_UA = iceflow_UDE(H₀,glacier_ref,UA,hyparams,p,t,t₁)   
-
-    predicted_A = predict_A̅(UA, [mean(norm_temps)]')[1]
+    current_year = 0
+    θ = initial_params(UA)
+    p = [A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ]
+    
+    @infiltrate
+    
+    iceflow_trained = DiffEqFlux.sciml_train(loss(p), θ, RMSProp(hyparams.η), cb=callback, maxiters = 200)
+    
+    predicted_A = predict_A̅(UA, θ, [mean(norm_temps)]')[1]
     fake_A = A_fake(mean(temps)) 
     A_error = predicted_A - fake_A
     println("Predicted A: ", predicted_A)
     println("Fake A: ", fake_A)
     println("A error: ", A_error)
 
-    return loss_UA, back_UA
+    return iceflow_trained
     
 end
 
@@ -158,7 +157,7 @@ function plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values
     
     # Plot the evolution
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
-    scatter!(temp_values', predict_A̅(UA, norm_temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
+    scatter!(temp_values', predict_A̅(UA, θ, norm_temp_values)', yaxis="A", xaxis="Air temperature (°C)", label="Trained NN", color="red")#, ylims=(3e-17,8e-16)))
     pfunc = scatter!(temp_values', old_trained, label="Previous NN", color="grey", aspect=:equal, legend=:outertopright)#, ylims=(3e-17,8e-16)))
     ploss = plot(loss_UAs, xlabel="Epoch", ylabel="Loss", aspect=:equal, legend=:outertopright, label="")
     ptrain = plot(pfunc, ploss, layout=(2,1))
@@ -168,52 +167,9 @@ function plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values
     #    display(ptrain) 
     #end
 
-    old_trained = predict_A̅(UA, norm_temp_values)'
+    old_trained = predict_A̅(UA, θ, norm_temp_values)'
     
 end
-
-
-"""
-    iceflow_UDE!(H₀, glacier_ref, UA, hyparams, p, t, t₁)
-
-Hybrid ice flow model solving and optimizing the Shallow Ice Approximation (SIA) PDE using 
-Universal Differential Equations (UDEs)
-"""
-
-function iceflow_UDE(H₀, glacier_ref, UA, hyparams, p, t, t₁)
-    
-    # We define an optimizer
-    opt = RMSProp(hyparams.η)
-    # opt = ADAM(hyparams.η)
-    #opt = BFGS(hyparams.η)
-    
-    # Retrieve model parameters
-    θ = Flux.params(UA)
-    # println("Resetting initial H state")
-    H = deepcopy(H₀) # Make sure we go back to the original initial state for each epoch
-
-    println("Forward pass")
-    loss_UA, back_UA = Zygote.pullback(() -> loss(H, glacier_ref, UA, p, t, t₁), θ) # with UA
-
-    # loss_UA, back_UA = Zygote.pullback(A -> loss(H, A, p, t, t₁), A) # inverse problem 
-
-    # ∇_UA = back_UA(one(loss_UA))[1] # inverse problem
-
-    # for ps in θ
-    #    println("Gradients ∇_UA[ps]: ", ∇_UA[ps])
-    # end
-    # println("Gradients ∇_UA: ", ∇_UA)
-
-    # println("Predicted A: ", predict_A̅(UA, [mean(p[6])]'))
-
-    # Flux.Optimise.update!(opt, A, ∇_UA) # inverse problem
-    # Δx, Δy, Γ, A, B, v, MB, MB_avg, C, α, var_format = p # unpack
-    # p = (Δx, Δy, Γ, ŶA, B, v, MB, MB_avg, C, α, var_format) # repack
-    
-    return loss_UA, back_UA
-
-end
-
 
 
 """
@@ -222,11 +178,12 @@ end
 Computes the loss function for a specific batch
 """
 # We determine the loss function
-function loss(H, glacier_ref, UA, p, t, t₁)
-  
-    H, V̂ = iceflow!(H, UA, p,t,t₁)
-
-    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], glacier_ref["H"][end][H.!= 0.0]; agg=sum))
+function loss(p)
+    
+    H = predict_iceflow(p)
+    
+    H_ref = @view p[19][:,:]
+    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=sum))
     
     # l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
 
@@ -240,6 +197,24 @@ function loss(H, glacier_ref, UA, p, t, t₁)
     # end
 
     return l_H
+end
+
+function predict_iceflow(p)
+        
+    H = @view p[20][:,:]
+    θ = p[end]
+    
+    iceflow_prob = ODEProblem(iceflow_UDE!,H,(0.0,t₁),p)
+    iceflow_sol = solve(iceflow_prob, BS3(), p=θ, sensealg = ForwardDiffSensitivity(), progress=true, progress_steps = 1)
+    
+    #prob_nn = ODEProblem(nn_dynamics!,Xₙ[:, 1], tspan, p)
+    #Array(solve(prob_nn, Vern7(), u0 = X, p=θ,
+    #            tspan = (T[1], T[end]), saveat = T,
+    #            abstol=1e-6, reltol=1e-6,
+    #            sensealg = ForwardDiffSensitivity()
+    #            ))
+    
+    return H
 end
 
 
@@ -267,7 +242,7 @@ function iceflow!(dH, H, p,t)
         #println("temps: ", temps)
         temp = @view p[7][year]
         A .= A_fake(temp)
-        #println("A fake: ", ŶA)
+        #println("A fake: ", p[1])
 
         # Unpack and repack tuple with updated A value
         current_year .= year
@@ -281,124 +256,53 @@ function iceflow!(dH, H, p,t)
 end  
 
 
-predict_A̅(UA, temp) = UA(temp) .* 1e-16
+predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-16
 
 
 """
-    iceflow!(H,p,t,t₁)
+    iceflow_UDE!(dH, UA, H, p,t)
 
 Hybrid forward ice flow model combining the SIA PDE and neural networks with neural networks into an UDE
 """
-function iceflow!(H, UA, p,t,t₁)
+function iceflow_UDE!(dH, H, p,t)
 
-    # Retrieve input variables  
-    let                  
-    current_year = 0
-    total_iter = 0
-    Vx, Vx_buff, Vy, Vy_buff = zeros(nx-1,ny-1),zeros(nx-1,ny-1),zeros(nx-1,ny-1),zeros(nx-1,ny-1)
-    t_step = 0
-    temps = p[6]
-
-    # Forward scheme implementation
-    while t < t₁
-        let
-        iter = 1
-        err = 2 * tolnl
-
-        V = (zeros(nx-1,ny-1),zeros(nx-1,ny-1))
-        Hold = copy(H)
-        dHdt = zeros(nx, ny)
-
-        # Get current year for MB and ELA
-        year = floor(Int, t) + 1
-
-        if year != current_year
-
-            # println("Year: ", year)
-        
-            # Predict value of `A`
-            temp = [temps[year]]'
-                    
-            ŶA = predict_A̅(UA, temp)
-
-            # Zygote.ignore() do
-            #     println("Current params: ", Flux.params(UA))
-
-            #     println("ŶA: ", ŶA )
-
-            #     display(heatmap(MB_avg[year], title="MB"))
-            # end
-        
-            ## Unpack and repack tuple with updated A value
-            Δx, Δy, Γ, A, B, temps, C, α = p
-            p = (Δx, Δy, Γ, ŶA, B, temps, C, α)
-            current_year = year
-        end
-           
-        while err > tolnl && iter < itMax+1
-        # while iter < itMax + 1
-       
-            Err = copy(H)
-
-            # Compute the Shallow Ice Approximation in a staggered grid
-            F, V, dτ = SIA(H, p)
-
-            # Compute the residual ice thickness for the inertia
-            @tullio ResH[i,j] := -(H[i,j] - Hold[i,j])/Δt + F[pad(i-1,1,1),pad(j-1,1,1)]
-
-            dHdt_ = copy(dHdt)
-            @tullio dHdt[i,j] := dHdt_[i,j]*damp + ResH[i,j]
-                            
-            # We keep local copies for tullio
-            H_ = copy(H)
-            
-            # Update the ice thickness
-            #@tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ[pad(i-1,1,1),pad(j-1,1,1)])
-            @tullio H[i,j] := max(0.0, H_[i,j] + dHdt[i,j]*dτ)
-            
-            Zygote.ignore() do
-                if mod(iter, nout) == 0
-                    # Compute error for implicit method with damping
-                    Err = Err .- H
-                    err = maximum(Err)
-
-                    if isnan(err)
-                        error("""NaNs encountered.  Try a combination of:
-                                    decreasing `damp` and/or `dtausc`, more smoothing steps""")
-                    end
-                end
-            end
-
-            iter += 1
-            total_iter += 1
-
-        end 
-          
-        t += Δt
-        t_step += 1
-
-        # Zygote.ignore() do
-        #     @infiltrate
-        # end
-        
-        # Fill buffers to handle Zygote "Mutating arrays" limitation
-        Vx_buff = copy(Vx)
-        Vy_buff = copy(Vy)
-
-        @tullio Vx[i,j] := Vx_buff[i,j] + V[1][i,j]
-        @tullio Vy[i,j] := Vy_buff[i,j] + V[2][i,j]
+    # Unpack parameters
+    #A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ
+    current_year = p[18]
+    A = p[1]
+    UA = p[21]
+    θ = p[22]
     
-        end # let
-    end 
+    # Get current year for MB and ELA
+    year = floor(Int, t) + 1
+    if year != current_year && year <= t₁
 
-    # Compute average surface velocity field
-    V̂ = ((Vx./t_step).^2 + (Vy./t_step).^2).^(1/2)
+        #println("Year: ", year)
+        #println("current_year before: ", current_year)
+        #println("current_year before p: ", p[end])
+        
+        # Predict A with the fake A law
+        #println("temps: ", temps)
+        
+        temp = p[7][year]
+        #temp = @view p[7][year]
+        println("temp: ", temp)
+        println("UA: ", UA)
+        println("θ: ", θ)
+        @infiltrate
+        A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
+        #println("A fake: ", p[1])
 
-    return H, V̂
+        # Unpack and repack tuple with updated A value
+        current_year .= year
+        #println("current_year after: ", current_year)
 
-    end   # let
+    end
 
-end
+    # Compute the Shallow Ice Approximation in a staggered grid
+    SIA!(dH, H, p)
+
+end  
 
 """
     SIA(H, p)
@@ -411,26 +315,29 @@ function SIA!(dH, H, p)
     # Retrieve parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year  
     
-    S = p[3]
-    B = p[2]
-    dSdx = p[4]
-    dSdy = p[5]
-    ∇S = p[10]
-    D = p[6]
-    dSdx_edges = p[8]
-    dSdy_edges = p[9]
-    Fx = p[11]
-    Fy = p[12]
-    Vx = p[13]
-    Vy = p[14]
+    A = @view p[1]
+    B = @view p[2][:,:]
+    S = @view p[3][:,:]
+    dSdx = @view p[4][:,:]
+    dSdy = @view p[5][:,:]
+    D = @view p[6][:,:]
+    dSdx_edges = @view p[8][:,:]
+    dSdy_edges = @view p[9][:,:]
+    ∇S = @view p[10][:,:]
+    Fx = @view p[11][:,:]
+    Fy = @view p[12][:,:]
+    Vx = @view p[13][:,:]
+    Vy = @view p[14][:,:]
+    
+    #@infiltrate
     
     # Update glacier surface altimetry
     S .= B .+ H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx .= diff(S, dims=1) / Δx
-    dSdy .= diff(S, dims=2) / Δy
+    dSdx .= diff_x(S) ./ Δx
+    dSdy .= diff_y(S) / Δy
     ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
 
     Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
@@ -554,11 +461,11 @@ function create_NNs()
     #    Dense(5,1, sigmoid_A)
     #)
 
-    UA = Chain(
-        Dense(1,3, x->tanh.(x)),
-        Dense(3,10, x->tanh.(x)),
-        Dense(10,3, x->tanh.(x)),
-        Dense(3,1, sigmoid_A)
+    UA = FastChain(
+        FastDense(1,3, x->tanh.(x)),
+        FastDense(3,10, x->tanh.(x)),
+        FastDense(10,3, x->tanh.(x)),
+        FastDense(3,1, sigmoid_A)
     )
 
     return hyparams, UA

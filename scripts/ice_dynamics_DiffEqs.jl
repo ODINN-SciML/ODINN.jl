@@ -7,7 +7,6 @@ SINDy (Brunton et al., 2016).
 =#
 
 ## Environment and packages
-
 cd(@__DIR__)
 using Pkg 
 Pkg.activate("../.");
@@ -22,8 +21,12 @@ using JLD
 using Infiltrator
 using PyCall # just for compatibility with utils.jl
 using Random 
-using DifferentialEquations
+using OrdinaryDiffEq
+using DiffEqFlux
 
+println("Top packages imported")
+
+using Profile
 using Logging: global_logger
 using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
@@ -37,6 +40,8 @@ include("helpers/types.jl")
 include("helpers/iceflow_DiffEqs.jl")
 ### Climate data processing  ###
 include("helpers/climate.jl")
+
+println("Packages loaded")
 
 ###############################################################
 ###########################  MAIN #############################
@@ -55,8 +60,8 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
     
 
 # Update mass balance data with NaNs
-MB_plot = copy(argentiere.MB)
-voidfill!(MB_plot, argentiere.MB[1,1,1])
+#MB_plot = copy(argentiere.MB)
+#voidfill!(MB_plot, argentiere.MB[1,1,1])
 # Interpolate mass balance to daily values
 #MB_weekly = interpolate(argentiere.MB/54, (NoInterp(), NoInterp(), BSpline(Linear())))
 
@@ -70,13 +75,13 @@ const ny = size(argentiere.bed)[2];
 
 ###  Plot initial data  ###
 # Argentière bedrock
-hm01 = heatmap(argentiere.bed, c = :turku, title="Bedrock")
+#hm01 = heatmap(argentiere.bed, c = :turku, title="Bedrock")
 # Argentière ice thickness for an individual year
-hm02 = heatmap(argentiere.thick[:,:,1], c = :ice, title="Ice thickness")
+#hm02 = heatmap(argentiere.thick[:,:,1], c = :ice, title="Ice thickness")
 # Surface velocities
-hm03 = heatmap(argentiere.vel[:,:,15], c =:speed, title="Ice velocities")
-hm04 = heatmap(MB_plot[:,:,90], c = cgrad(:balance,rev=true), clim=(-12,12), title="Mass balance")
-hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
+#hm03 = heatmap(argentiere.vel[:,:,15], c =:speed, title="Ice velocities")
+#hm04 = heatmap(MB_plot[:,:,90], c = cgrad(:balance,rev=true), clim=(-12,12), title="Mass balance")
+#hm0 = plot(hm01,hm02,hm03,hm04, layout=4, aspect_ratio=:equal, xlims=(0,180))
 #display(hm0)
 
 ### Generate fake annual long-term temperature time series  ###
@@ -114,6 +119,7 @@ if example == "Argentiere"
 
     # Fill areas outside the glacier with NaN values for scalar training
     voidfill!(MB_avg, argentiere.MB[1,1,1])
+    println("Argentiere data loaded")
     
 elseif example == "Gaussian"
     
@@ -138,11 +144,30 @@ if create_ref_dataset
     println("Generating reference dataset for training...")
   
     # Compute reference dataset in parallel
-    @time glacier_refs, hms = generate_ref_dataset(temp_series, H₀, t)
+    @time glacier_refs = generate_ref_dataset(temp_series, H₀, t)
     
     # Save reference plots
-    for (temps, hms) in zip(temp_series, hms)
+    for (temps, H) in zip(temp_series, glacier_refs)
+        ### Glacier ice thickness evolution  ### Not that useful
+        # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
+        # hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
+        # hm1 = Plots.plot(hm11,hm12, layout=2, aspect_ratio=:equal, size=(800,350),
+        #     colorbar_title="Ice thickness (m)",
+        #     clims=(0,maximum(H₀)), link=:all)
+        # display(hm1)
+        
+        ###  Glacier ice thickness difference  ###
+        lim = maximum( abs.(H[end] .- H₀) )
+        hm = heatmap(H[end] .- H₀, c = cgrad(:balance,rev=true), aspect_ratio=:equal,
+            clim = (-lim, lim),
+            title="Variation in ice thickness")
+
+        #if x11 
+        #    display(hm2) 
+        #end
+        
         tempn = floor(mean(temps))
+        println("Saving reference_$tempn.png...")
         savefig(hm,joinpath(root_dir,"plots/references","reference_$tempn.png"))
     end
     
@@ -153,6 +178,7 @@ if create_ref_dataset
 
 else 
     glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
+    println("Reference dataset loaded")
 end
 
 
@@ -174,7 +200,7 @@ if train_UDE
     norm_temp_values = [mean(temps) for temps in norm_temp_series]'
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
     hyparams, UA = create_NNs()
-    old_trained = predict_A̅(UA, norm_temp_values)' #A_fake.(temp_values)'
+    old_trained = predict_A̅(UA, θ, norm_temp_values)' #A_fake.(temp_values)'
     
     #trackers = Dict("losses"=>[], "losses_batch"=>[],
     #                "current_batch"=>1, "grad_batch"=>[])
@@ -192,13 +218,13 @@ if train_UDE
         #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
         
         # Train UDE batch in parallel
-        @time train_batch_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idxs)  
+        @time iceflow_trained = train_batch_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idxs)  
         
         # Update NN weights after batch completion 
-        @time update_UDE_batch!(UA, loss_UAs, back_UAs)
+        #@time update_UDE_batch!(UA, loss_UAs, back_UAs)
         
         # Plot evolution of training
-        plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values)
+        #plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values)
 
     end
 end
