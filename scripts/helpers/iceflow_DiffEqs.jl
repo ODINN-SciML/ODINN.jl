@@ -20,7 +20,8 @@ different temperature series.
 function generate_ref_dataset(temp_series, H₀, t)
     
     # Compute reference dataset in parallel
-    iceflow_prob = pmap(temps -> ref_glacier(temps, H₀, t), temp_series)
+    # TODO: Add @everything macros to run this in parallel
+    iceflow_prob = map(temps -> ref_glacier(temps, H₀, t), temp_series)
     
     return iceflow_prob
     
@@ -53,10 +54,8 @@ function ref_glacier(temps, H₀, t)
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),p)
     #@time solve(iceflow_prob, alg_hints=[:stiff], reltol=1e-14,abstol=1e-14, progress=true, progress_steps = 1)
     #@time iceflow_sol = solve(iceflow_prob, Vern7(), progress=true, progress_steps = 1)
-    iceflow_sol = solve(iceflow_prob, BS3(), progress=true, progress_steps = 1)
+    iceflow_sol = solve(iceflow_prob, BS3(), progress=true, saveat=1.0, progress_steps = 1)
     #@time iceflow_sol = solve(iceflow_prob, KenCarp4(autodiff=false), reltol=1e-8,abstol=1e-8, progress=true, progress_steps = 1)
-    
-    println("max H: ", maximum(iceflow_sol[end]))
 
     return iceflow_sol[end]
     
@@ -95,11 +94,11 @@ function train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idx)
     # Gather simulation parameters
     current_year = 0
     θ = initial_params(UA)
-    p = [A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ]
-    
-    @infiltrate
-    
-    iceflow_trained = DiffEqFlux.sciml_train(loss(p), θ, RMSProp(hyparams.η), cb=callback, maxiters = 200)
+    context = [A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ]
+
+    loss(θ) = loss_iceflow(UA, θ, H, context) # closure
+
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(hyparams.η), cb=callback, maxiters = 10)
     
     predicted_A = predict_A̅(UA, θ, [mean(norm_temps)]')[1]
     fake_A = A_fake(mean(temps)) 
@@ -178,11 +177,11 @@ end
 Computes the loss function for a specific batch
 """
 # We determine the loss function
-function loss(p)
+function loss_iceflow(UA, θ, H, context)
     
-    H = predict_iceflow(p)
+    H = predict_iceflow(UA, θ, H, context)
     
-    H_ref = @view p[19][:,:]
+    H_ref = @view context[19][:,:]
     l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=sum))
     
     # l_V = sqrt(Flux.Losses.mse(V̂[V̂ .!= 0.0], mean(glacier_ref["V"])[V̂ .!= 0.0]; agg=sum))
@@ -199,13 +198,18 @@ function loss(p)
     return l_H
 end
 
-function predict_iceflow(p)
+function predict_iceflow(UA, θ, H, context)
         
-    H = @view p[20][:,:]
-    θ = p[end]
+    #H = @view u0[20][:,:]
+    #θ = p[end]
     
-    iceflow_prob = ODEProblem(iceflow_UDE!,H,(0.0,t₁),p)
-    iceflow_sol = solve(iceflow_prob, BS3(), p=θ, sensealg = ForwardDiffSensitivity(), progress=true, progress_steps = 1)
+    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context) # closure
+    tspan = (0.0,t₁)
+    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
+    #@infiltrate
+    H_pred = solve(iceflow_prob, BS3(), u0=H, p=θ, saveat=1.0, 
+                   sensealg = BacksolveAdjoint(autojacvec=ZygoteVJP()), 
+                   progress=true, progress_steps = 1)
     
     #prob_nn = ODEProblem(nn_dynamics!,Xₙ[:, 1], tspan, p)
     #Array(solve(prob_nn, Vern7(), u0 = X, p=θ,
@@ -214,7 +218,7 @@ function predict_iceflow(p)
     #            sensealg = ForwardDiffSensitivity()
     #            ))
     
-    return H
+    return H_pred[end]
 end
 
 
@@ -227,7 +231,7 @@ function iceflow!(dH, H, p,t)
 
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
-    current_year = @view p[end]
+    current_year = @view p[18]
     A = @view p[1]
     
     # Get current year for MB and ELA
@@ -256,7 +260,7 @@ function iceflow!(dH, H, p,t)
 end  
 
 
-predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-16
+predict_A̅(UA, θ, temp) = UA(temp, θ)[1] .* 1e-16
 
 
 """
@@ -264,14 +268,15 @@ predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-16
 
 Hybrid forward ice flow model combining the SIA PDE and neural networks with neural networks into an UDE
 """
-function iceflow_UDE!(dH, H, p,t)
-
+function iceflow_NN!(dH, H, θ, t, context)
+    
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ
-    current_year = p[18]
-    A = p[1]
-    UA = p[21]
-    θ = p[22]
+    current_year = context[18]
+    A = Ref{Float32}(context[1])
+    UA = context[21]
+    dH = @view context[20][:,:]
+    #θ = p[22]
     
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
@@ -284,23 +289,22 @@ function iceflow_UDE!(dH, H, p,t)
         # Predict A with the fake A law
         #println("temps: ", temps)
         
-        temp = p[7][year]
+        temp = context[7][year]
         #temp = @view p[7][year]
-        println("temp: ", temp)
-        println("UA: ", UA)
-        println("θ: ", θ)
-        @infiltrate
-        A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
-        #println("A fake: ", p[1])
+ 
+        #@infiltrate
+        context[1] = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
+        println("Predicted A: ", A[])
+        println("context[1]: ", context[1])
 
         # Unpack and repack tuple with updated A value
-        current_year .= year
+        current_year = year
         #println("current_year after: ", current_year)
 
     end
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    SIA!(dH, H, p)
+    SIA!(dH, H, context)
 
 end  
 
@@ -310,53 +314,54 @@ end
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
-function SIA!(dH, H, p)
+function SIA!(dH, H, context)
     
     # Retrieve parameters
-    #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year  
+    #A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ
     
-    A = @view p[1]
-    B = @view p[2][:,:]
-    S = @view p[3][:,:]
-    dSdx = @view p[4][:,:]
-    dSdy = @view p[5][:,:]
-    D = @view p[6][:,:]
-    dSdx_edges = @view p[8][:,:]
-    dSdy_edges = @view p[9][:,:]
-    ∇S = @view p[10][:,:]
-    Fx = @view p[11][:,:]
-    Fy = @view p[12][:,:]
-    Vx = @view p[13][:,:]
-    Vy = @view p[14][:,:]
+    A = Ref{Float32}(context[1])
+    B = @view context[2][:,:]
+    S = @view context[3][:,:]
+    dSdx = @view context[4][:,:]
+    dSdy = @view context[5][:,:]
+    D = @view context[6][:,:]
+    dSdx_edges = @view context[8][:,:]
+    dSdy_edges = @view context[9][:,:]
+    ∇S = @view context[10][:,:]
+    Fx = @view context[11][:,:]
+    Fy = @view context[12][:,:]
+    Vx = @view context[13][:,:]
+    Vy = @view context[14][:,:]
     
     #@infiltrate
     
     # Update glacier surface altimetry
-    S .= B .+ H
+    S = B .+ H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx .= diff_x(S) ./ Δx
-    dSdy .= diff_y(S) / Δy
-    ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
+    dSdx = diff_x(S) / Δx
+    dSdy = diff_y(S) / Δy
+    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
 
-    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
+    println("A in Γ: ", A[])
+    Γ = 2 * A[] * (ρ * g)^n / (n+2) # 1 / m^3 s 
     
-    D .= Γ .* avg(H).^(n + 2) .* ∇S
+    D = Γ .* avg(H).^(n + 2) .* ∇S
 
     # Compute flux components
-    dSdx_edges .= diff(S[:,2:end - 1], dims=1) / Δx
-    dSdy_edges .= diff(S[2:end - 1,:], dims=2) / Δy
-    Fx .= .-avg_y(D) .* dSdx_edges
-    Fy .= .-avg_x(D) .* dSdy_edges 
+    dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
+    dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
+    Fx = .-avg_y(D) .* dSdx_edges
+    Fy = .-avg_x(D) .* dSdy_edges 
 
     #  Flux divergence
-    inn(dH) .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+    inn(dH) = .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
     #@tullio dH[i,j] = -(diff(Fx, dims=1)[pad(i-1,1,1),pad(j-1,1,1)] / Δx + diff(Fy, dims=2)[pad(i-1,1,1),pad(j-1,1,1)] / Δy)
 
     # Compute velocities    
-    Vx .= -D./(avg(H) .+ ϵ).*avg_y(dSdx)
-    Vy .= -D./(avg(H) .+ ϵ).*avg_x(dSdy)
+    Vx = -D./(avg(H) .+ ϵ).*avg_y(dSdx)
+    Vy = -D./(avg(H) .+ ϵ).*avg_x(dSdy)
     
     #@tullio dH[i,j] = H[i,j] + F[pad(i-1,1,1),pad(j-1,1,1)]
     #dH = H .+ F

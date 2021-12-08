@@ -13,18 +13,16 @@ Pkg.activate("../.");
 Pkg.instantiate()
 
 using Plots; gr()
-ENV["GKSwstype"] = "nul"
+#ENV["GKSwstype"] = "nul"
 using Statistics
 using LinearAlgebra
 using HDF5
 using JLD
 using Infiltrator
-using PyCall # just for compatibility with utils.jl
 using Random 
+using Distributed
 using OrdinaryDiffEq
 using DiffEqFlux
-
-println("Top packages imported")
 
 using Profile
 using Logging: global_logger
@@ -40,8 +38,6 @@ include("helpers/types.jl")
 include("helpers/iceflow_DiffEqs.jl")
 ### Climate data processing  ###
 include("helpers/climate.jl")
-
-println("Packages loaded")
 
 ###############################################################
 ###########################  MAIN #############################
@@ -110,6 +106,7 @@ if example == "Argentiere"
     # Spatial and temporal differentials
     const Δx, Δy = 50, 50 #m (Δx = Δy)
 
+    #=
     MB_avg = []
     for year in 1:length(argentiere.MB[1,1,:])
         MB_buff = buffer_mean(argentiere.MB, year)
@@ -119,7 +116,7 @@ if example == "Argentiere"
 
     # Fill areas outside the glacier with NaN values for scalar training
     voidfill!(MB_avg, argentiere.MB[1,1,1])
-    println("Argentiere data loaded")
+    =#
     
 elseif example == "Gaussian"
     
@@ -178,7 +175,6 @@ if create_ref_dataset
 
 else 
     glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
-    println("Reference dataset loaded")
 end
 
 
@@ -200,6 +196,7 @@ if train_UDE
     norm_temp_values = [mean(temps) for temps in norm_temp_series]'
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
     hyparams, UA = create_NNs()
+    θ = initial_params(UA)
     old_trained = predict_A̅(UA, θ, norm_temp_values)' #A_fake.(temp_values)'
     
     #trackers = Dict("losses"=>[], "losses_batch"=>[],
