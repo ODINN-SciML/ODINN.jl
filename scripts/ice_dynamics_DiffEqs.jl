@@ -22,6 +22,8 @@ using Infiltrator
 using Random 
 using Distributed
 using OrdinaryDiffEq
+using RecursiveArrayTools
+using Tullio
 using DiffEqFlux
 
 using Profile

@@ -55,7 +55,7 @@ t = 0                      # initial time
 const Δt = 1.0/12.0     
 # Δt = 1.0/365.25          # time step [yr]
 Δts = []
-const t₁ = 2                     # number of simulation years 
+const t₁ = 5                 # number of simulation years 
 
 ## Climate parameters
 const base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands") # OGGM elevation bands
@@ -70,5 +70,5 @@ var_format = "matrix"
 
 x11 = false
 
-create_ref_dataset = false  
+create_ref_dataset = true   
 train_UDE = true
