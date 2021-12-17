@@ -23,6 +23,7 @@ using Random
 using Distributed
 using OrdinaryDiffEq
 using RecursiveArrayTools
+using ComponentArrays
 using Tullio
 using DiffEqFlux
 
@@ -212,12 +213,12 @@ if train_UDE
         println("\nEpoch #", i, "\n")
         
         # Randomize order of glaciers in the batch
-        idxs = Random.shuffle(1:length(temp_series))
+        idxs = Random.shuffle(1:length(norm_temp_series))
         # idxs = 1:length(temp_series)
         #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
         
         # Train UDE batch in parallel
-        @time iceflow_trained = train_batch_iceflow_UDE(H₀, UA, glacier_refs, temp_series, hyparams, idxs)  
+        @time iceflow_trained = train_batch_iceflow_UDE(H₀, UA, glacier_refs, norm_temp_series, hyparams, idxs)  
         
         # Update NN weights after batch completion 
         #@time update_UDE_batch!(UA, loss_UAs, back_UAs)
