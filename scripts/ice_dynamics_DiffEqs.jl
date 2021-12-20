@@ -24,6 +24,7 @@ using Distributed
 using OrdinaryDiffEq
 using RecursiveArrayTools
 using ComponentArrays
+using Parameters: @unpack
 using Tullio
 using DiffEqFlux
 
@@ -31,6 +32,9 @@ using Profile
 using Logging: global_logger
 using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
+
+# Enabling multithreading
+Threads.nthreads()
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -177,7 +181,7 @@ if create_ref_dataset
     save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
 
 else 
-    glacier_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
+    H_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
 end
 
 
@@ -208,25 +212,28 @@ if train_UDE
     # Diagnosis plot after each full epochs
     #display(scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
 
-    # Train iceflow UDE
-    for i in 1:hyparams.epochs
-        println("\nEpoch #", i, "\n")
-        
-        # Randomize order of glaciers in the batch
-        idxs = Random.shuffle(1:length(norm_temp_series))
-        # idxs = 1:length(temp_series)
-        #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
-        
-        # Train UDE batch in parallel
-        @time iceflow_trained = train_batch_iceflow_UDE(H₀, UA, glacier_refs, norm_temp_series, hyparams, idxs)  
-        
-        # Update NN weights after batch completion 
-        #@time update_UDE_batch!(UA, loss_UAs, back_UAs)
-        
-        # Plot evolution of training
-        #plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values)
 
-    end
+    train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams)
+
+    # Train iceflow UDE
+    # for i in 1:hyparams.epochs
+    #     println("\nEpoch #", i, "\n")
+        
+    #     # Randomize order of glaciers in the batch
+    #     idxs = Random.shuffle(1:length(norm_temp_series))
+    #     # idxs = 1:length(temp_series)
+    #     #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
+        
+    #     # Train UDE batch in parallel
+    #     @time iceflow_trained = train_batch_iceflow_UDE(H₀, UA, glacier_refs, norm_temp_series, hyparams, idxs)  
+        
+    #     # Update NN weights after batch completion 
+    #     #@time update_UDE_batch!(UA, loss_UAs, back_UAs)
+        
+    #     # Plot evolution of training
+    #     #plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values)
+
+    # end
 end
 end # let
 

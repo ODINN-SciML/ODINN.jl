@@ -76,22 +76,15 @@ function train_batch_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idxs)
 end
 
 
-function train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idx)
+function train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams)
     
-    # Gather simulation parameters
     H = deepcopy(H₀)
-    temps = temp_series[idx]
-    # norm_temps = norm_temp_series[idx]
-    H_ref = H_refs[idx]
-    println("\nTemperature in training: ", temps[1])
-
-    # Gather simulation parameters
-    H = deepcopy(H₀)
-
-    # Gather simulation parameters
     current_year = 0
     θ = initial_params(UA)
-    context = ComponentArray(B=B, C=C, α=α, temps=temps,current_year=current_year, H=H, H_ref=H_ref, θ=θ)
+    # ComponentArray with all the temp series and H_refs
+    parameters = ComponentArray(B=B, C=C, α=α, temp_series=temp_series, current_year=current_year, H=H, θ=θ)
+    forcings = [temp_series, H_refs]
+    context = [forcings, parameters]
     loss(context) = loss_iceflow(context, UA) # closure
 
     println("Training iceflow UDE...")
@@ -170,29 +163,47 @@ Computes the loss function for a specific batch
 function loss_iceflow(context, UA)
 
     H_pred = predict_iceflow(context, UA)
+    params = context[2]
 
-    l_H = sqrt(Flux.Losses.mse(H_pred[H_pred .!= 0.0], context.H_ref[H_pred.!= 0.0]; agg=sum))
+    Zygote.ignore() do 
+        @infiltrate
+    end
+
+    l_H = sqrt(Flux.Losses.mse(H_pred[H_pred .!= 0.0], params.H_ref[H_pred.!= 0.0]; agg=sum))
     println("Loss = ", l_H)
 
     return l_H
 end
 
-function predict_iceflow(context, UA)
-        
+function predict_iceflow(context, UA, ensemble=EnsembleSerial())
+
+    function prob_iceflow_func(prob, i, repeat, context) # closure
+        forcings = context[1]
+        @unpack B, C, α, temp_series, current_year, H, θ = parameters
+        # I repack the ComponentArray with the ith temp_series for the temps and H_refs
+        context_ = ComponentArray(B=B, C=C, α=α, temps=forcings[1][i], current_year=parameters.current_year, H=H, H_ref=forcings[2][i], θ=θ)
+        iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context_, UA) # closure
+
+        remake(prob, f=iceflow_UDE_batch!)
+
+    end
+
+    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context)
+
+    H = context[2].H
+    θ = context[2].θ
     tspan = (0.0,t₁)
-    H = context.H
     iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, UA) # closure
     iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan)
-    # H_pred = solve(iceflow_prob, VCABM(), u0=H, p=context.θ, reltol=1e-6, 
-    #                sensealg = BacksolveAdjoint(autojacvec=ZygoteVJP(),checkpointing=true), 
-    #                progress=true, progress_steps = 1)
-    H_pred = solve(iceflow_prob, BS3(), u0=H, p=context.θ, reltol=1e-6, 
+
+    ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
+    println("Solving ensemble problem")
+    H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(context[2].temp_series), u0=H, p=θ, reltol=1e-6, 
                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
                    progress=true, progress_steps = 1)
 
     return H_pred[end]
 end
-
 
 """
     iceflow!(H,p,t,t₁)
@@ -295,7 +306,7 @@ end
 
 # Function without mutation for Zygote, with context as a ComponentArray
 function SIA!(dH, H, A, context::ComponentArray)
-    
+
     # Retrieve parameters
     B = context.B
 
