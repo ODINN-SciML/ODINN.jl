@@ -65,10 +65,9 @@ const grad_type = "var_an_cycle" # could use here as well 'cte'
 const fs = "_daily_W5E5"
 
 ### Workflow ###
-# var_format = "scalar"    # data format for the parameter to be learnt
-var_format = "matrix"
-
 x11 = false
+# ensemble = EnsembleDistributed() # Multiprocessing
+ensemble = EnsembleThreads()   # Multithreading
 
 create_ref_dataset = false   
 train_UDE = true
