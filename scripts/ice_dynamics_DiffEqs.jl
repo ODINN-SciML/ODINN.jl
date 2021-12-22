@@ -7,11 +7,24 @@ SINDy (Brunton et al., 2016).
 =#
 
 ## Environment and packages
+using Distributed
+processes = 4
+
+if nprocs() < processes
+    addprocs(processes - nprocs(); exeflags="--project")
+end
+
+println("Number of cores: ", nprocs())
+println("Number of workers: ", nworkers())
+
+@everywhere begin 
 cd(@__DIR__)
 using Pkg 
 Pkg.activate("../.");
 Pkg.instantiate()
+end
 
+@everywhere begin 
 using Plots; gr()
 #ENV["GKSwstype"] = "nul"
 using Statistics
@@ -32,9 +45,6 @@ using Profile
 using Logging: global_logger
 using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
-
-# Enabling multithreading
-Threads.nthreads()
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -62,6 +72,8 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                      0, 0)
     
 
+end # @everywhere
+
 # Update mass balance data with NaNs
 #MB_plot = copy(argentiere.MB)
 #voidfill!(MB_plot, argentiere.MB[1,1,1])
@@ -72,8 +84,8 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
 #ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
 
 # Domain size
-const nx = size(argentiere.bed)[1]
-const ny = size(argentiere.bed)[2];
+@everywhere const nx = size(argentiere.bed)[1]
+@everywhere const ny = size(argentiere.bed)[2];
 
 
 ###  Plot initial data  ###
@@ -90,15 +102,15 @@ const ny = size(argentiere.bed)[2];
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-temp_series, norm_temp_series =  fake_temp_series(t₁)
+@everywhere temp_series, norm_temp_series =  fake_temp_series(t₁)
 
 A_series = []
 for temps in temp_series
     push!(A_series, A_fake.(temps))
 end
 
-pts = Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series")
-pas = Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series")
+# pts = Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series")
+# pas = Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series")
 
 
 #### Choose the example to run  #####
@@ -107,11 +119,11 @@ example = "Argentiere"
 
 if example == "Argentiere"
 
-    const B  = copy(argentiere.bed)
-    const H₀ = copy(argentiere.thick[:,:,1])
+    @everywhere const B  = copy(argentiere.bed)
+    @everywhere const H₀ = copy(argentiere.thick[:,:,1])
  
     # Spatial and temporal differentials
-    const Δx, Δy = 50, 50 #m (Δx = Δy)
+    @everywhere  const Δx, Δy = 50, 50 #m (Δx = Δy)
 
     #=
     MB_avg = []
@@ -136,22 +148,16 @@ elseif example == "Gaussian"
 
 end
 
-### We perform the simulations with an explicit forward mo  ###
-
-ts = collect(1:t₁)
-
-#gref = (H_ref, V_ref, ts)
-gref = Dict("H"=>[], "V"=>[], "timestamps"=>ts)
 
 # We generate the reference dataset using fake know laws
 if create_ref_dataset 
     println("Generating reference dataset for training...")
   
     # Compute reference dataset in parallel
-    @time glacier_refs = generate_ref_dataset(temp_series, H₀, t)
+    @time H_refs = generate_ref_dataset(temp_series, H₀)
     
     # Save reference plots
-    for (temps, H) in zip(temp_series, glacier_refs)
+    for (temps, H) in zip(temp_series, H_refs)
         ### Glacier ice thickness evolution  ### Not that useful
         # hm11 = heatmap(H₀, c = :ice, title="Ice thickness (t=0)")
         # hm12 = heatmap(H, c = :ice, title="Ice thickness (t=$t₁)")
@@ -178,10 +184,10 @@ if create_ref_dataset
     # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
     
     println("Saving reference data")
-    save(joinpath(root_dir, "data/glacier_refs.jld"), "glacier_refs", glacier_refs)
+    save(joinpath(root_dir, "data/H_refs.jld"), "H_refs", H_refs)
 
 else 
-    H_refs = load(joinpath(root_dir, "data/glacier_refs.jld"))["glacier_refs"]
+    H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
 end
 
 

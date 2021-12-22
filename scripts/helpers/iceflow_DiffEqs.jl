@@ -17,26 +17,9 @@ Flux.Optimise.update!(opt, x::AbstractMatrix, Δ::AbstractVector) = Flux.Optimis
 Training of reference dataset with multiple glaciers forced with 
 different temperature series.
 """
-function generate_ref_dataset(temp_series, H₀, t)
+function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     
     # Compute reference dataset in parallel
-    # TODO: Add @everything macros to run this in parallel
-    iceflow_prob = map(temps -> ref_glacier(temps, H₀, t), temp_series)
-    
-    return iceflow_prob
-    
-end
-
-
-"""
-    ref_glacier(temps, gref, H₀, t)
-
-Training reference dataset of a single glacier
-"""
-function ref_glacier(temps, H₀, t)
-      
-    tempn = mean(temps)
-    println("Reference simulation with temp ≈ ", tempn)
     H = deepcopy(H₀)
     
     # Initialize all matrices for the solver
@@ -47,31 +30,29 @@ function ref_glacier(temps, H₀, t)
     
     # Gather simulation parameters
     current_year = 0
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, temp_series[1], dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
+
+    function prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
+        
+        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
+        context.x[7] .= temp_series[i] # We set the temp_series for the ith trajectory
+       
+        iceflow_PDE_batch!(dH, H, p, t) = iceflow!(dH, H, context, t) # closure
+        remake(prob, f=iceflow_PDE_batch!)
+
+    end
+
+    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
 
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
-    #@time solve(iceflow_prob, alg_hints=[:stiff], reltol=1e-14,abstol=1e-14, progress=true, progress_steps = 1)
-    #@time iceflow_sol = solve(iceflow_prob, Vern7(), progress=true, progress_steps = 1)
-    iceflow_sol = solve(iceflow_prob, BS3(), progress=true, saveat=1.0, progress_steps = 1)
-    #@time iceflow_sol = solve(iceflow_prob, KenCarp4(autodiff=false), reltol=1e-8,abstol=1e-8, progress=true, progress_steps = 1)
+    ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
+    iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
+                        reltol=1e-6, progress=true, saveat=1.0, progress_steps = 100)
 
-    return Float32.(iceflow_sol[end])
+    return Float32.(iceflow_sol)
     
-end
-
-"""
-    train_batch_iceflow_UDE!(H₀, UA, glacier_refs, temp_series, hyparams, idx, p)
-
-Training of a batch for the iceflow UDE based on the SIA.
-"""
-function train_batch_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idxs)
-    
-    # Train UDE batch in parallel
-    iceflow_trained = map(idx -> train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams, idx), idxs) 
-    
-    return iceflow_trained
     
 end
 
@@ -79,10 +60,10 @@ end
 function train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams)
     
     H = deepcopy(H₀)
-    current_year = 0
+    current_year = 0f0
     θ = initial_params(UA)
     # ComponentArray with all the temp series and H_refs
-    parameters = ComponentArray(B=B, C=C, α=α, temp_series=temp_series, current_year=current_year, H=H, θ=θ)
+    parameters = ComponentArray(B=B, H=H, θ=θ, temp_series=temp_series, C=C, α=α, current_year=0.0)
     forcings = [temp_series, H_refs]
     context = [forcings, parameters]
     loss(context) = loss_iceflow(context, UA) # closure
@@ -92,34 +73,6 @@ function train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams)
 
     return iceflow_trained
     
-end
-
-
-"""
-    update_UDE_batch!(UA, back_UAs)
-
-Update neural network weights after having trained on a whole batch of glaciers. 
-"""
-function update_UDE_batch!(UA, loss_UAs, back_UAs)
-    
-    println("Backpropagation...")
-    # We update the weights with the gradients of all tha glaciers in the batch
-    # This is equivalent to taking the gradient with respect of the full loss function
-    θ = Flux.params(UA)
-    
-    for back_UA in back_UAs
-        ∇_UA = back_UA(1)
-        println("#$i Updating NN weights")
-        Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
-    end
-
-    #∇_UA = back_UA(one(mean(trackers["losses_batch"]))) # with UA
-    #println("Updating NN weights")
-    #Flux.Optimise.update!(opt, θ, ∇_UA) # with UA
-
-    # Keep track of the loss function per batch
-    println("Loss batch: ", mean(loss_UAs))  
-
 end
 
 
@@ -162,30 +115,32 @@ Computes the loss function for a specific batch
 # We determine the loss function
 function loss_iceflow(context, UA)
 
-    H_pred = predict_iceflow(context, UA)
-    params = context[2]
+    H_preds = predict_iceflow(context, UA)
 
-    Zygote.ignore() do 
-        @infiltrate
+    # Compute loss function for the full batch
+    l_H = []
+    for (H_pred, H_ref) in zip(H_preds, context[1][2])
+        H = H_pred.u[end]
+        push!(l_H, sqrt(Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=sum)))
     end
 
-    l_H = sqrt(Flux.Losses.mse(H_pred[H_pred .!= 0.0], params.H_ref[H_pred.!= 0.0]; agg=sum))
-    println("Loss = ", l_H)
+    l_H_avg = mean(l_H)
+    println("Loss = ", l_H_avg)
 
-    return l_H
+    return l_H_avg
 end
 
-function predict_iceflow(context, UA, ensemble=EnsembleSerial())
+function predict_iceflow(context, UA, ensemble=ensemble)
 
     function prob_iceflow_func(prob, i, repeat, context) # closure
         forcings = context[1]
-        @unpack B, C, α, temp_series, current_year, H, θ = parameters
-        # I repack the ComponentArray with the ith temp_series for the temps and H_refs
-        context_ = ComponentArray(B=B, C=C, α=α, temps=forcings[1][i], current_year=parameters.current_year, H=H, H_ref=forcings[2][i], θ=θ)
+        parameters = context[2]
+       
+        println("Processing temp series #$i ≈ ", mean(forcings[1][i]))
+        # We add the ith temperature series and H_ref to the context for the ith batch
+        context_ = ComponentArray(parameters, temps=forcings[1][i], H_ref=forcings[2][i][end])
         iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context_, UA) # closure
-
         remake(prob, f=iceflow_UDE_batch!)
-
     end
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context)
@@ -197,12 +152,11 @@ function predict_iceflow(context, UA, ensemble=EnsembleSerial())
     iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan)
 
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-    println("Solving ensemble problem")
     H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(context[2].temp_series), u0=H, p=θ, reltol=1e-6, 
                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
-                   progress=true, progress_steps = 1)
+                   progress=true, progress_steps = 100)
 
-    return H_pred[end]
+    return H_pred
 end
 
 """
@@ -245,6 +199,7 @@ function iceflow_NN!(dH, H, θ, t, context, UA)
     else
         temp = context.temps[year-1]
     end
+
     YA = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
