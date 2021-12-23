@@ -67,7 +67,9 @@ const fs = "_daily_W5E5"
 ### Workflow ###
 x11 = false
 # ensemble = EnsembleDistributed() # Multiprocessing
-ensemble = EnsembleThreads()   # Multithreading
+# ensemble = EnsembleSplitThreads()
+# ensemble = EnsembleThreads() ∫  # Multithreading
+ensemble = EnsembleSerial()
 
 create_ref_dataset = false   
 train_UDE = true

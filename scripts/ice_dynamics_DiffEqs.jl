@@ -8,7 +8,7 @@ SINDy (Brunton et al., 2016).
 
 ## Environment and packages
 using Distributed
-processes = 4
+const processes = 4
 
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
@@ -26,7 +26,7 @@ end
 
 @everywhere begin 
 using Plots; gr()
-#ENV["GKSwstype"] = "nul"
+ENV["GKSwstype"] = "nul"
 using Statistics
 using LinearAlgebra
 using HDF5
@@ -37,7 +37,6 @@ using Distributed
 using OrdinaryDiffEq
 using RecursiveArrayTools
 using ComponentArrays
-using Parameters: @unpack
 using Tullio
 using DiffEqFlux
 
@@ -154,7 +153,7 @@ if create_ref_dataset
     println("Generating reference dataset for training...")
   
     # Compute reference dataset in parallel
-    @time H_refs = generate_ref_dataset(temp_series, H₀)
+    H_refs = generate_ref_dataset(temp_series, H₀)
     
     # Save reference plots
     for (temps, H) in zip(temp_series, H_refs)
@@ -180,68 +179,31 @@ if create_ref_dataset
         println("Saving reference_$tempn.png...")
         savefig(hm,joinpath(root_dir,"plots/references","reference_$tempn.png"))
     end
-    
-    # @time @everywhere glacier_refs = ref_dataset(temp_series, gref, H₀, p, t, t₁, ref_n)
-    
+        
     println("Saving reference data")
     save(joinpath(root_dir, "data/H_refs.jld"), "H_refs", H_refs)
 
 else 
-    H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
+    @everywhere H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
 end
 
-
-
-# We define the training itenerary
-#temps_list = []
-#for i in 1:hyparams.epochs
-#    temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
-#    temps_list = vcat(temps_list, temps)
-#end
 
 # We train an UDE in order to learn and infer the fake laws
 if train_UDE
     
     println("Running forward UDE ice flow model...\n")
     
-    let
     temp_values = [mean(temps) for temps in temp_series]'
     norm_temp_values = [mean(temps) for temps in norm_temp_series]'
     plot(temp_values', A_fake.(temp_values)', label="Fake A")
     hyparams, UA = create_NNs()
     θ = initial_params(UA)
     old_trained = predict_A̅(UA, θ, norm_temp_values)' #A_fake.(temp_values)'
-    
-    #trackers = Dict("losses"=>[], "losses_batch"=>[],
-    #                "current_batch"=>1, "grad_batch"=>[])
 
-    # Diagnosis plot after each full epochs
-    #display(scatter!(temp_values', predict_A̅(UA, temp_values)', yaxis="A", xaxis="Year", label="Trained NN"))#, ylims=(3e-17,8e-16)))
-
-
+    # Train iceflow UDE with in parallel
     train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams)
 
-    # Train iceflow UDE
-    # for i in 1:hyparams.epochs
-    #     println("\nEpoch #", i, "\n")
-        
-    #     # Randomize order of glaciers in the batch
-    #     idxs = Random.shuffle(1:length(norm_temp_series))
-    #     # idxs = 1:length(temp_series)
-    #     #temps = LinRange{Int}(1, length(temp_series), length(temp_series))[Random.shuffle(1:end)]
-        
-    #     # Train UDE batch in parallel
-    #     @time iceflow_trained = train_batch_iceflow_UDE(H₀, UA, glacier_refs, norm_temp_series, hyparams, idxs)  
-        
-    #     # Update NN weights after batch completion 
-    #     #@time update_UDE_batch!(UA, loss_UAs, back_UAs)
-        
-    #     # Plot evolution of training
-    #     #plot_training!(old_trained, UA, loss_UAs, temp_values, norm_temp_values)
-
-    # end
 end
-end # let
 
 
 ###################################################################
