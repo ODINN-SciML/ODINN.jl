@@ -72,12 +72,8 @@ function train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams)
     # end
     loss(θ) = loss_iceflow(θ, context, UA) # closure
 
-    Zygote.ignore() do
-        @infiltrate
-    end
-
     println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, context, RMSProp(hyparams.η), maxiters = 10)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(hyparams.η), maxiters = 10)
 
     return iceflow_trained
     
@@ -164,6 +160,10 @@ function predict_iceflow(context, UA, θ, ensemble=ensemble)
     tspan = (0.0,t₁)
     iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, UA) # closure
     iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan)
+
+    Zygote.ignore() do
+        @infiltrate
+    end
 
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
     @time H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(context[2].temp_series), 

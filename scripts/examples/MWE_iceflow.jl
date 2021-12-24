@@ -1,12 +1,33 @@
+## Environment and packages
+using Distributed
+const processes = 4
+
+if nprocs() < processes
+    addprocs(processes - nprocs(); exeflags="--project")
+end
+
+println("Number of cores: ", nprocs())
+println("Number of workers: ", nworkers())
+
+# @everywhere begin 
+# cd(@__DIR__)
+# using Pkg 
+# Pkg.activate("../../.");
+# Pkg.instantiate()
+# end
+
+@everywhere begin 
 using Statistics
 using LinearAlgebra
 using Random 
 using OrdinaryDiffEq
 using DiffEqFlux
 using Flux
+using Distributed
 using Tullio
 using RecursiveArrayTools
 using ComponentArrays
+using Parameters: @unpack
 using Infiltrator
 using Plots
 
@@ -29,9 +50,10 @@ C = 0
 @views diff_x(A) = (A[begin + 1:end, :] .- A[1:end - 1, :])
 @views diff_y(A) = (A[:, begin + 1:end] .- A[:, 1:end - 1])
 @views inn(A) = A[2:end-1,2:end-1]
+end # @everything 
 
-function ref_glacier(temps, H₀)
-      
+function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
+    # Compute reference dataset in parallel
     H = deepcopy(H₀)
     
     # Initialize all matrices for the solver
@@ -41,16 +63,135 @@ function ref_glacier(temps, H₀)
     V, Vx, Vy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1)
     
     # Gather simulation parameters
-    current_year = Int(0)
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
+    current_year = 0
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, similar(temp_series[1]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
+
+    function prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
+        
+        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
+        context.x[7] .= temp_series[i] # We set the temp_series for the ith trajectory
+       
+        iceflow_PDE_batch!(dH, H, p, t) = iceflow!(dH, H, context, t) # closure
+        remake(prob, f=iceflow_PDE_batch!)
+
+    end
+
+    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
 
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
-    iceflow_sol = solve(iceflow_prob, BS3(), reltol=1e-6, progress=true, saveat=1.0, progress_steps = 1)
+    ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
+    iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
+                        pmap_batch_size=length(temp_series), reltol=1e-6, 
+                        progress=true, saveat=1.0, progress_steps = 100)
 
-    return Float32.(iceflow_sol[end])
+    return Float32.(iceflow_sol)  
 end
+
+function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
+    H = deepcopy(H₀)
+    current_year = 0f0
+    θ = initial_params(UA)
+    # ComponentArray with all the temp series and H_refs
+    parameters = ComponentArray(B=B, H=H, θ=θ, C=C, α=α, current_year=current_year) # this should be a tuple/array
+    # which then can be converted to a ComponentArray for each batch
+    context = [temp_series, parameters]
+    # end
+    loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
+
+    @infiltrate
+    println("Training iceflow UDE...")
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), maxiters = 10)
+
+    return iceflow_trained
+end
+
+function loss_iceflow(θ, context, UA, H_refs) 
+    H_preds = predict_iceflow(θ, context, UA)
+
+    H = H_preds.u[end]
+    H_ref = H_refs[1]
+
+    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=sum))
+
+    # # Compute loss function for the full batch
+    # l_H = Vector{Float32}([])
+    # for (H_pred, H_ref) in zip(H_preds, context[1][2])
+    #     H = H_pred.u[end]
+    #     push!(l_H, sqrt(Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=sum)))
+    # end
+
+    # l_H_avg = mean(l_H)
+    # println("Loss = ", l_H_avg)
+
+    return l_H
+end
+
+
+function predict_iceflow(θ, context, UA, ensemble=ensemble)
+
+    function prob_iceflow_func(prob, i, repeat, context, UA) # closure
+        temp_series = context[1]
+        parameters = context[2]
+       
+        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
+        # We add the ith temperature series and H_ref to the context for the ith batch
+        context_ = ComponentArray(parameters, temps=temp_series[i])
+        println("fire in the hole")
+        iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context_, UA) # closure
+        remake(prob, f=iceflow_UDE_batch!)
+        println("out")
+    end
+
+    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
+
+    H = copy(context[2].H)
+    # θ = context[2].θ
+    tspan = (0.0,t₁)
+    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, UA) # closure
+    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan)
+
+    ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
+
+
+    # H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(context[2].temp_series), 
+    #                 pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
+    #                 sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
+    #                 progress=true, progress_steps = 100)
+
+    ##### debugging only one trajectory
+    temp_series = context[1]
+    parameters = context[2]
+    println("over here")
+    # We add the ith temperature series and H_ref to the context for the ith batch  
+    #@unpack B, H, θ, C, α, current_year = parameters # these are probably views
+    B = copy(parameters.B)
+    C = parameters.C
+    α = parameters.α
+    println("here")
+    Zygote.ignore() do
+        @infiltrate
+    end
+    context2 = ComponentArray(B=B, H=H, θ=θ, temps=temp_series[1], C=C, α=α, current_year=parameters.current_year)
+    println("fire in the hole")
+    iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context2, UA) # closure
+    iceflow_prob2 = ODEProblem(iceflow_UDE_batch!,H,tspan)
+
+    # Zygote.ignore() do
+    #     @infiltrate
+    # end
+
+    H_pred = solve(iceflow_prob2, BS3(), u0=H, p=θ, reltol=1e-6, 
+                sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
+                progress=true, progress_steps = 100)
+
+    ######
+
+    return H_pred
+end
+
+@everywhere begin
 
 function iceflow!(dH, H, context,t)
     # Unpack parameters
@@ -68,81 +209,8 @@ function iceflow!(dH, H, context,t)
 
     # Compute the Shallow Ice Approximation in a staggered grid
     SIA!(dH, H, context)
-end      
-
-
-function train_iceflow_UDE(H₀, UA, H_ref, temps)
+end    
     
-    # Gather simulation parameters
-    H = deepcopy(H₀)
-    
-    # Gather simulation parameters
-    current_year = 0
-    θ = initial_params(UA)
-    context = ComponentArray(B=B, C=C, α=α, temps=temps,current_year=current_year, H=H, H_ref=H_ref, θ=θ)
-    loss(context) = loss_iceflow(context, UA) # closure
-
-    println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, context, RMSProp(0.01), maxiters = 10)
-
-    return iceflow_trained
-end
-
-function loss_iceflow(context, UA)
-
-    H_in = deepcopy(context.H)
-
-    # Zygote.ignore() do
-
-    #     predicted_A = predict_A̅(UA, θ, [mean(context.temps[7])]')[1]
-    #     fake_A = A_fake(mean(context.temps)) 
-    #     A_error = predicted_A - fake_A
-    #     println("BEFORE")
-    #     println("Predicted A: ", predicted_A)
-    #     println("Fake A: ", fake_A)
-    #     println("A error: ", A_error)
-    # end
-    
-    H_pred = predict_iceflow(context, UA)
-
-    l_H = sqrt(Flux.Losses.mse(H_pred[H_pred .!= 0.0], context.H_ref[H_pred.!= 0.0]; agg=sum))
-    println("Loss = ", l_H)
-    #println("θ: ", θ)
-
-    Zygote.ignore() do
-
-        predicted_A = predict_A̅(UA, context.θ, [mean(context.temps)]')[1]
-        fake_A = A_fake(mean(context.temps)) 
-        A_error = predicted_A - fake_A
-        println("AFTER")
-        println("Predicted A: ", predicted_A)
-        println("Fake A: ", fake_A)
-        println("A error: ", A_error)
-
-        display(heatmap(H_pred .- context.H_ref, title="H_pred - H_ref"))
-
-    end
-
-
-    return l_H
-end
-
-function predict_iceflow(context, UA)
-    
-    tspan = (0.0,t₁)
-    H = context.H
-    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, UA) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan)
-    # H_pred = solve(iceflow_prob, VCABM(), u0=H, p=context.θ, reltol=1e-6, 
-    #                sensealg = BacksolveAdjoint(autojacvec=ZygoteVJP(),checkpointing=true), 
-    #                progress=true, progress_steps = 1)
-    H_pred = solve(iceflow_prob, BS3(), u0=H, p=context.θ, reltol=1e-6, 
-                   sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
-                   progress=true, progress_steps = 1)
-
-    return H_pred[end]
-end
-
 function iceflow_NN!(dH, H, θ, t, context, UA)
     
     year = floor(Int, t) + 1
@@ -155,11 +223,6 @@ function iceflow_NN!(dH, H, θ, t, context, UA)
 
     # Compute the Shallow Ice Approximation in a staggered grid
     dH .= SIA!(dH, H, YA, context)
-
-    # println("$t - A: ", YA)
-    # println("dH: ", maximum(dH))
-    # println("Hmax: ", maximum(H))
-
 end  
 
 """
@@ -169,7 +232,6 @@ Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 
 function SIA!(dH, H, context)
-    
     # Retrieve parameters
     #A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ
     A = context.x[1]
@@ -204,12 +266,10 @@ function SIA!(dH, H, context)
 
     #  Flux divergence
     inn(dH) .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
-    
 end
 
 # Function without mutation for Zygote, with context as a ComponentArray
 function SIA!(dH, H, A, context::ComponentArray)
-    
     # Retrieve parameters
     B = context.B
 
@@ -244,16 +304,40 @@ end
 
 predict_A̅(UA, θ, temp) = UA(temp, θ)[1] .* 1e-16
 
+end # @everywhere
 
+function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0])
+    temps, norm_temps, norm_temps_flat = [],[],[]
+    for mean in means
+       push!(temps, mean .+ rand(t).*1e-1) # static
+       append!(norm_temps_flat, mean .+ rand(t).*1e-1) # static
+    end
+
+    # Normalise temperature series
+    norm_temps_flat = Flux.normalise([norm_temps_flat...]) # requires splatting
+
+    # Re-create array of arrays 
+    for i in 1:t₁:length(norm_temps_flat)
+        push!(norm_temps, norm_temps_flat[i:i+(t₁-1)])
+    end
+
+    return temps, norm_temps
+end
+
+##################################################
 #### Generate reference dataset ####
+##################################################
+@everywhere begin
 nx = ny = 100
 const B = zeros(Float32, (nx, ny))
 const σ = 1000
 H₀ = Matrix{Float32}([ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for i in 1:nx, j in 1:ny ])    
 Δx = Δy = 50 #m   
+ensemble = EnsembleSerial()
+end # @everywhere
 
-const temps =  Vector{Float32}([0.0, -0.5, -0.2, -0.1, -0.3, -0.1, -0.2, -0.3, -0.4, -0.1])
-H_ref = ref_glacier(temps, H₀)
+temp_series, norm_temp_series =  fake_temp_series(t₁)
+H_refs = generate_ref_dataset(temp_series, H₀)
 
 # Train UDE
 minA_out = 0.3
@@ -266,4 +350,5 @@ UA = FastChain(
         FastDense(3,1, sigmoid_A)
     )
 
-iceflow_trained = train_iceflow_UDE(H₀, UA, H_ref, temps)
+# Train iceflow UDE with in parallel
+train_iceflow_UDE(H₀, UA, H_refs, temp_series)
