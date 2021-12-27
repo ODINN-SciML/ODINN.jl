@@ -9,13 +9,6 @@ end
 println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
-# @everywhere begin 
-# cd(@__DIR__)
-# using Pkg 
-# Pkg.activate("../../.");
-# Pkg.instantiate()
-# end
-
 @everywhere begin 
 using Statistics
 using LinearAlgebra
@@ -26,8 +19,6 @@ using Flux
 using Distributed
 using Tullio
 using RecursiveArrayTools
-using ComponentArrays
-using Parameters: @unpack
 using Infiltrator
 using Plots
 
@@ -64,16 +55,15 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     
     # Gather simulation parameters
     current_year = 0
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, similar(temp_series[1]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, copy(temp_series[1]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
 
     function prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
         
         println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         context.x[7] .= temp_series[i] # We set the temp_series for the ith trajectory
-       
-        iceflow_PDE_batch!(dH, H, p, t) = iceflow!(dH, H, context, t) # closure
-        remake(prob, f=iceflow_PDE_batch!)
 
+        # iceflow_PDE_batch!(dH, H, p, t) = iceflow!(dH, H, context, t) # closure
+        return remake(prob, p=context)
     end
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
@@ -84,7 +74,7 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
     iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
                         pmap_batch_size=length(temp_series), reltol=1e-6, 
-                        progress=true, saveat=1.0, progress_steps = 100)
+                        progress=true, saveat=1.0, progress_steps = 50)
 
     return Float32.(iceflow_sol)  
 end
@@ -93,14 +83,11 @@ function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
     H = deepcopy(H₀)
     current_year = 0f0
     θ = initial_params(UA)
-    # ComponentArray with all the temp series and H_refs
-    parameters = ComponentArray(B=B, H=H, θ=θ, C=C, α=α, current_year=current_year) # this should be a tuple/array
-    # which then can be converted to a ComponentArray for each batch
-    context = [temp_series, parameters]
-    # end
+    # Tuple with all the temp series and H_refs
+    context = (B, H, current_year, temp_series) 
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
-    @infiltrate
+    # @infiltrate
     println("Training iceflow UDE...")
     iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), maxiters = 10)
 
@@ -108,90 +95,51 @@ function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
 end
 
 function loss_iceflow(θ, context, UA, H_refs) 
-    H_preds = predict_iceflow(θ, context, UA)
-
-    H = H_preds.u[end]
-    H_ref = H_refs[1]
-
-    l_H = sqrt(Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=sum))
+    H_preds = predict_iceflow(θ, UA, context)
 
     # # Compute loss function for the full batch
-    # l_H = Vector{Float32}([])
-    # for (H_pred, H_ref) in zip(H_preds, context[1][2])
-    #     H = H_pred.u[end]
-    #     push!(l_H, sqrt(Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=sum)))
-    # end
+    l_H, count = 0.0, 0
+    for (H_pred, H_ref) in zip(H_preds, H_refs)
+        H = H_pred.u[end]
+        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
+        count += 1
+    end
 
-    # l_H_avg = mean(l_H)
-    # println("Loss = ", l_H_avg)
-
-    return l_H
+    l_H_avg = l_H/count
+    println("Loss = ", l_H_avg) # TODO: use callback instead of this!
+    return l_H_avg
 end
 
 
-function predict_iceflow(θ, context, UA, ensemble=ensemble)
+function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
-    function prob_iceflow_func(prob, i, repeat, context, UA) # closure
-        temp_series = context[1]
-        parameters = context[2]
-       
+    function prob_iceflow_func(prob, i, repeat, context) # closure
+        # B, H, current_year, temp_series)  
+        temp_series = context[4]
+    
         println("Processing temp series #$i ≈ ", mean(temp_series[i]))
-        # We add the ith temperature series and H_ref to the context for the ith batch
-        context_ = ComponentArray(parameters, temps=temp_series[i])
-        println("fire in the hole")
-        iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context_, UA) # closure
-        remake(prob, f=iceflow_UDE_batch!)
-        println("out")
+        # We add the ith temperature series 
+        iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[i], UA) # closure
+        
+        return remake(prob, f=iceflow_UDE_batch!)
     end
 
-    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
+    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context)
 
-    H = copy(context[2].H)
-    # θ = context[2].θ
+    # ArrayPartition(B, H, current_year, temp_series, batch_idx)
+    H = context[2]
     tspan = (0.0,t₁)
-    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, UA) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan)
 
+    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[1], UA) # closure
+    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-
-
-    # H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(context[2].temp_series), 
-    #                 pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
-    #                 sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
-    #                 progress=true, progress_steps = 100)
-
-    ##### debugging only one trajectory
-    temp_series = context[1]
-    parameters = context[2]
-    println("over here")
-    # We add the ith temperature series and H_ref to the context for the ith batch  
-    #@unpack B, H, θ, C, α, current_year = parameters # these are probably views
-    B = copy(parameters.B)
-    C = parameters.C
-    α = parameters.α
-    println("here")
-    Zygote.ignore() do
-        @infiltrate
-    end
-    context2 = ComponentArray(B=B, H=H, θ=θ, temps=temp_series[1], C=C, α=α, current_year=parameters.current_year)
-    println("fire in the hole")
-    iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context2, UA) # closure
-    iceflow_prob2 = ODEProblem(iceflow_UDE_batch!,H,tspan)
-
-    # Zygote.ignore() do
-    #     @infiltrate
-    # end
-
-    H_pred = solve(iceflow_prob2, BS3(), u0=H, p=θ, reltol=1e-6, 
-                sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
-                progress=true, progress_steps = 100)
-
-    ######
+    H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
+                    pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
+                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
+                    progress=true, progress_steps = 50)
 
     return H_pred
 end
-
-@everywhere begin
 
 function iceflow!(dH, H, context,t)
     # Unpack parameters
@@ -210,19 +158,21 @@ function iceflow!(dH, H, context,t)
     # Compute the Shallow Ice Approximation in a staggered grid
     SIA!(dH, H, context)
 end    
-    
-function iceflow_NN!(dH, H, θ, t, context, UA)
-    
+
+function iceflow_NN!(dH, H, θ, t, context, temps, UA)
+    # ArrayPartition(B, H, current_year, temp_series, batch_idx) 
+
     year = floor(Int, t) + 1
     if year <= t₁
-        temp = context.temps[year]
+        temp = temps[year]
     else
-        temp = context.temps[year-1]
+        temp = temps[year-1]
     end
-    YA = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
+
+    A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    dH .= SIA!(dH, H, YA, context)
+    dH .= SIA!(dH, H, A, context)
 end  
 
 """
@@ -268,10 +218,10 @@ function SIA!(dH, H, context)
     inn(dH) .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
 end
 
-# Function without mutation for Zygote, with context as a ComponentArray
-function SIA!(dH, H, A, context::ComponentArray)
+# Function without mutation for Zygote, with context as an ArrayPartition
+function SIA!(dH, H, A, context)
     # Retrieve parameters
-    B = context.B
+    B = context[1]
 
     # Update glacier surface altimetry
     S = B .+ H
@@ -303,8 +253,6 @@ function A_fake(temp)
 end
 
 predict_A̅(UA, θ, temp) = UA(temp, θ)[1] .* 1e-16
-
-end # @everywhere
 
 function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0])
     temps, norm_temps, norm_temps_flat = [],[],[]
