@@ -68,7 +68,7 @@ const fs = "_daily_W5E5"
 x11 = false
 # ensemble = EnsembleDistributed() # Multiprocessing
 # ensemble = EnsembleSplitThreads()
-# ensemble = EnsembleThreads() ∫  # Multithreading
+# ensemble = EnsembleThreads()  # Multithreading
 ensemble = EnsembleSerial()
 
 create_ref_dataset = false   

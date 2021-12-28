@@ -82,38 +82,46 @@ end
 function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
     H = deepcopy(H₀)
     current_year = 0f0
-    θ = initial_params(UA)
     # Tuple with all the temp series and H_refs
-    context = (B, H, current_year, temp_series) 
+    context = (B, H, current_year, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
     # @infiltrate
     println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), maxiters = 10)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01f0), cb=callback, maxiters = 10)
 
     return iceflow_trained
 end
 
+callback = function (θ,l) # callback function to observe training
+    @show l
+    false
+  end
+
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
 
+    A_pred = predict_A̅(UA, θ, [-5.0])
+    A_ref = A_fake(-5.0)
+    println("Predicted A: ", A_pred)
+    println("True A: ", A_ref)
+
     # # Compute loss function for the full batch
-    l_H, count = 0.0, 0
+    l_H = 0.0
     for (H_pred, H_ref) in zip(H_preds, H_refs)
         H = H_pred.u[end]
         l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
-        count += 1
     end
 
-    l_H_avg = l_H/count
-    println("Loss = ", l_H_avg) # TODO: use callback instead of this!
+    l_H_avg = l_H/length(H_preds)
+    # println("Loss = ", l_H_avg) # TODO: use callback instead of this!
     return l_H_avg
 end
 
 
 function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
-    function prob_iceflow_func(prob, i, repeat, context) # closure
+    function prob_iceflow_func(prob, i, repeat, context, UA) # closure
         # B, H, current_year, temp_series)  
         temp_series = context[4]
     
@@ -124,7 +132,7 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
         return remake(prob, f=iceflow_UDE_batch!)
     end
 
-    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context)
+    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
 
     # ArrayPartition(B, H, current_year, temp_series, batch_idx)
     H = context[2]
@@ -172,7 +180,7 @@ function iceflow_NN!(dH, H, θ, t, context, temps, UA)
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    dH .= SIA!(dH, H, A, context)
+    dH .= SIA(dH, H, A, context)
 end  
 
 """
@@ -219,7 +227,7 @@ function SIA!(dH, H, context)
 end
 
 # Function without mutation for Zygote, with context as an ArrayPartition
-function SIA!(dH, H, A, context)
+function SIA(dH, H, A, context)
     # Retrieve parameters
     B = context[1]
 
@@ -254,11 +262,11 @@ end
 
 predict_A̅(UA, θ, temp) = UA(temp, θ)[1] .* 1e-16
 
-function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0])
+function fake_temp_series(t, means=Array{Float32}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
     temps, norm_temps, norm_temps_flat = [],[],[]
     for mean in means
-       push!(temps, mean .+ rand(t).*1e-1) # static
-       append!(norm_temps_flat, mean .+ rand(t).*1e-1) # static
+       push!(temps, mean .+ rand(t).*1f-1) # static
+       append!(norm_temps_flat, mean .+ rand(t).*1f-1) # static
     end
 
     # Normalise temperature series
@@ -284,8 +292,8 @@ H₀ = Matrix{Float32}([ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for
 ensemble = EnsembleSerial()
 end # @everywhere
 
-temp_series, norm_temp_series =  fake_temp_series(t₁)
-H_refs = generate_ref_dataset(temp_series, H₀)
+const temp_series, norm_temp_series =  fake_temp_series(t₁)
+const H_refs = generate_ref_dataset(temp_series, H₀)
 
 # Train UDE
 minA_out = 0.3
@@ -297,6 +305,7 @@ UA = FastChain(
         FastDense(10,3, x->tanh.(x)),
         FastDense(3,1, sigmoid_A)
     )
+θ = initial_params(UA)
 
 # Train iceflow UDE with in parallel
 train_iceflow_UDE(H₀, UA, H_refs, temp_series)
