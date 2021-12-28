@@ -82,6 +82,7 @@ end
 function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
     H = deepcopy(H₀)
     current_year = 0f0
+    θ = initial_params(UA)
     # Tuple with all the temp series and H_refs
     context = (B, H, current_year, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
@@ -134,15 +135,20 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
 
-    # ArrayPartition(B, H, current_year, temp_series, batch_idx)
+    # (B, H, current_year, temp_series, batch_idx)
     H = context[2]
     tspan = (0.0,t₁)
 
     iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[1], UA) # closure
     iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-    H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
-                    pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
+
+    # H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
+    #                 pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
+    #                 sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
+    #                 progress=true, progress_steps = 50)
+
+    H_pred = solve(iceflow_prob, BS3(), u0=H, p=θ, reltol=1e-6, 
                     sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
                     progress=true, progress_steps = 50)
 
@@ -305,7 +311,6 @@ UA = FastChain(
         FastDense(10,3, x->tanh.(x)),
         FastDense(3,1, sigmoid_A)
     )
-θ = initial_params(UA)
 
 # Train iceflow UDE with in parallel
 train_iceflow_UDE(H₀, UA, H_refs, temp_series)
