@@ -23,15 +23,15 @@ using Infiltrator
 using Plots
 
 const t₁ = 5                 # number of simulation years 
-const ρ = 900f0                     # Ice density [kg / m^3]
-const g = 9.81f0                    # Gravitational acceleration [m / s^2]
-const n = 3f0                       # Glen's flow law exponent
-const maxA = 8f-16
-const minA = 3f-17
-const maxT = 1f0
-const minT = -25f0
-A = 1.3f-24 #2e-16  1 / Pa^3 s
-A *= Float32(60 * 60 * 24 * 365.25) # [1 / Pa^3 yr]
+const ρ = 900                     # Ice density [kg / m^3]
+const g = 9.81                    # Gravitational acceleration [m / s^2]
+const n = 3                      # Glen's flow law exponent
+const maxA = 8e-16
+const minA = 3e-17
+const maxT = 1
+const minT = -25
+A = 1.3e-24 #2e-16  1 / Pa^3 s
+A *= Float64(60 * 60 * 24 * 365.25) # [1 / Pa^3 yr]
 C = 0
 α = 0
 
@@ -48,10 +48,10 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     H = deepcopy(H₀)
     
     # Initialize all matrices for the solver
-    S, dSdx, dSdy = zeros(Float32,nx,ny),zeros(Float32,nx-1,ny),zeros(Float32,nx,ny-1)
-    dSdx_edges, dSdy_edges, ∇S = zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1),zeros(Float32,nx-1,ny-1)
-    D, dH, Fx, Fy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-2,ny-2),zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1)
-    V, Vx, Vy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1)
+    S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
+    dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
+    D, dH, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-2,ny-2),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
+    V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
     
     # Gather simulation parameters
     current_year = 0
@@ -76,7 +76,7 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
                         pmap_batch_size=length(temp_series), reltol=1e-6, 
                         progress=true, saveat=1.0, progress_steps = 50)
 
-    return Float32.(iceflow_sol)  
+    return Float64.(iceflow_sol)  
 end
 
 function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
@@ -88,12 +88,12 @@ function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
     # @infiltrate
-    println("Gradients: ", gradient(loss, θ))
+    # println("Gradients: ", gradient(loss, θ))
 
-    # println("Training iceflow UDE...")
-    # iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01f0), cb=callback, maxiters = 10)
+    println("Training iceflow UDE...")
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), cb=callback, maxiters = 10)
 
-    # return iceflow_trained
+    return iceflow_trained
 end
 
 callback = function (θ,l) # callback function to observe training
@@ -175,7 +175,7 @@ function iceflow!(dH, H, context,t)
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
     if year != current_year[] && year <= t₁
-        temp = Ref{Float32}(context.x[7][year])
+        temp = Ref{Float64}(context.x[7][year])
         A[] .= A_fake(temp[])
         current_year[] .= year
     end
@@ -242,7 +242,7 @@ function SIA!(dH, H, context)
     Fy .= .-avg_x(D) .* dSdy_edges 
 
     #  Flux divergence
-    inn(dH) .= .-(diff(Fx, dims=1) / Δx .+ diff(Fy, dims=2) / Δy) # MB to be added here 
+    inn(dH) .= .-(diff_x(Fx) / Δx .+ diff_y(Fy) / Δy) # MB to be added here 
 end
 
 # Function without mutation for Zygote, with context as an ArrayPartition
@@ -269,7 +269,7 @@ function SIA(dH, H, A, context)
     Fy = .-avg_x(D) .* dSdy_edges 
 
     #  Flux divergence
-    @tullio dH[i,j] := -(diff(Fx, dims=1)[pad(i-1,1,1),pad(j-1,1,1)] / Δx + diff(Fy, dims=2)[pad(i-1,1,1),pad(j-1,1,1)] / Δy) # MB to be added here 
+    @tullio dH[i,j] := -(diff_x(Fx)[pad(i-1,1,1),pad(j-1,1,1)] / Δx + diff_y(Fy)[pad(i-1,1,1),pad(j-1,1,1)] / Δy) # MB to be added here 
 
     return dH
 end
@@ -281,11 +281,11 @@ end
 
 predict_A̅(UA, θ, temp) = UA(temp, θ)[1] .* 1e-16
 
-function fake_temp_series(t, means=Array{Float32}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
+function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
     temps, norm_temps, norm_temps_flat = [],[],[]
     for mean in means
-       push!(temps, mean .+ rand(t).*1f-1) # static
-       append!(norm_temps_flat, mean .+ rand(t).*1f-1) # static
+       push!(temps, mean .+ rand(t).*1e-1) # static
+       append!(norm_temps_flat, mean .+ rand(t).*1e-1) # static
     end
 
     # Normalise temperature series
@@ -304,14 +304,14 @@ end
 ##################################################
 @everywhere begin
 nx = ny = 100
-const B = zeros(Float32, (nx, ny))
+const B = zeros(Float64, (nx, ny))
 const σ = 1000
-H₀ = Matrix{Float32}([ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for i in 1:nx, j in 1:ny ])    
+H₀ = Matrix{Float64}([ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for i in 1:nx, j in 1:ny ])    
 Δx = Δy = 50 #m   
 ensemble = EnsembleSerial()
 end # @everywhere
 
-const temp_series, norm_temp_series =  fake_temp_series(t₁)
+const temp_series, norm_temp_series = fake_temp_series(t₁)
 const H_refs = generate_ref_dataset(temp_series, H₀)
 
 # Train UDE
