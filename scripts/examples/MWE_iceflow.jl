@@ -55,7 +55,7 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     
     # Gather simulation parameters
     current_year = 0
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, copy(temp_series[1]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, copy(temp_series[5]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
 
     function prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
         
@@ -88,10 +88,12 @@ function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
     # @infiltrate
-    println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01f0), cb=callback, maxiters = 10)
+    println("Gradients: ", gradient(loss, θ))
 
-    return iceflow_trained
+    # println("Training iceflow UDE...")
+    # iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01f0), cb=callback, maxiters = 10)
+
+    # return iceflow_trained
 end
 
 callback = function (θ,l) # callback function to observe training
@@ -102,20 +104,29 @@ callback = function (θ,l) # callback function to observe training
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
 
-    A_pred = predict_A̅(UA, θ, [-5.0])
-    A_ref = A_fake(-5.0)
+    A_pred = predict_A̅(UA, θ, [mean(temp_series[5])])
+    A_ref = A_fake(mean(temp_series[5]))
     println("Predicted A: ", A_pred)
     println("True A: ", A_ref)
 
-    # # Compute loss function for the full batch
-    l_H = 0.0
-    for (H_pred, H_ref) in zip(H_preds, H_refs)
-        H = H_pred.u[end]
-        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
-    end
+    # Zygote.ignore() do 
+    #     @infiltrate
+    # end
 
-    l_H_avg = l_H/length(H_preds)
-    # println("Loss = ", l_H_avg) # TODO: use callback instead of this!
+    H = H_preds.u[end]
+    H_ref = H_refs[5][end]
+
+    l_H_avg = Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
+
+    # # Compute loss function for the full batch
+    # l_H = 0.0
+    # for (H_pred, H_ref) in zip(H_preds, H_refs)
+    #     H = H_pred.u[end]
+    #     l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
+    # end
+
+    # l_H_avg = l_H/length(H_preds)
+    
     return l_H_avg
 end
 
@@ -139,7 +150,7 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     H = context[2]
     tspan = (0.0,t₁)
 
-    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[1], UA) # closure
+    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[5], UA) # closure
     iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
 
@@ -176,17 +187,19 @@ end
 function iceflow_NN!(dH, H, θ, t, context, temps, UA)
     # ArrayPartition(B, H, current_year, temp_series, batch_idx) 
 
-    year = floor(Int, t) + 1
-    if year <= t₁
-        temp = temps[year]
-    else
-        temp = temps[year-1]
-    end
+    # year = floor(Int, t) + 1
+    # if year <= t₁
+    #     temp = temps[year]
+    # else
+    #     temp = temps[year-1]
+    # end
+    temp = temps[1]
 
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
     dH .= SIA(dH, H, A, context)
+    # println("dH: ", maximum(dH))
 end  
 
 """
