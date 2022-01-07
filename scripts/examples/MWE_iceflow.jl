@@ -1,6 +1,6 @@
 ## Environment and packages
 using Distributed
-const processes = 4
+const processes = 10
 
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
@@ -79,22 +79,25 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     return Float64.(iceflow_sol)  
 end
 
-function train_iceflow_UDE(H₀, UA, H_refs, temp_series)
+function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     H = deepcopy(H₀)
     current_year = 0f0
-    θ = initial_params(UA)
     # Tuple with all the temp series and H_refs
     context = (B, H, current_year, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
+    # Debugging
+    # println("Gradients: ", gradient(loss, θ))
     # @infiltrate
     # println("Gradients: ", gradient(loss, θ))
 
     println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), cb=callback, maxiters = 10)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), cb=callback, maxiters = 5)
 
     return iceflow_trained
 end
+
+@everywhere begin 
 
 callback = function (θ,l) # callback function to observe training
     @show l
@@ -104,28 +107,29 @@ callback = function (θ,l) # callback function to observe training
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
 
-    A_pred = predict_A̅(UA, θ, [mean(temp_series[5])])
-    A_ref = A_fake(mean(temp_series[5]))
-    println("Predicted A: ", A_pred)
-    println("True A: ", A_ref)
+    # Zygote.ignore() do
+    #     A_pred = predict_A̅(UA, θ, [mean(temp_series[5])])
+    #     A_ref = A_fake(mean(temp_series[5]))
+    #     println("Predicted A: ", A_pred)
+    #     println("True A: ", A_ref)
+    # end
 
     # Zygote.ignore() do 
     #     @infiltrate
     # end
 
-    H = H_preds.u[end]
-    H_ref = H_refs[5][end]
+    # H = H_preds.u[end]
+    # H_ref = H_refs[5][end]
+    # l_H_avg = Flux.Losses.mse(H, H_ref; agg=mean)
 
-    l_H_avg = Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
+    # Compute loss function for the full batch
+    l_H = 0.0
+    for (H_pred, H_ref) in zip(H_preds, H_refs)
+        H = H_pred.u[end]
+        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
+    end
 
-    # # Compute loss function for the full batch
-    # l_H = 0.0
-    # for (H_pred, H_ref) in zip(H_preds, H_refs)
-    #     H = H_pred.u[end]
-    #     l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
-    # end
-
-    # l_H_avg = l_H/length(H_preds)
+    l_H_avg = l_H/length(H_preds)
     
     return l_H_avg
 end
@@ -146,7 +150,7 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
 
-    # (B, H, current_year, temp_series, batch_idx)
+    # (B, H, current_year, temp_series)
     H = context[2]
     tspan = (0.0,t₁)
 
@@ -154,14 +158,15 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
 
-    # H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
-    #                 pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
-    #                 sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
-    #                 progress=true, progress_steps = 50)
+    H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
+                    pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
+                    sensealg = InterpolatingAdjoint(), save_everystep=false, 
+                    progress=true, progress_steps = 10)
+    
 
-    H_pred = solve(iceflow_prob, BS3(), u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
-                    progress=true, progress_steps = 50)
+    # H_pred = solve(iceflow_prob, BS3(), u0=H, p=θ, reltol=1e-6, 
+    #                 sensealg = InterpolatingAdjoint(checkpointing=true), saveat=0.1, 
+    #                 progress=true, progress_steps = 10)
 
     return H_pred
 end
@@ -279,7 +284,7 @@ function A_fake(temp)
     return @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
 end
 
-predict_A̅(UA, θ, temp) = UA(temp, θ)[1] .* 1e-16
+predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-16
 
 function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
     temps, norm_temps, norm_temps_flat = [],[],[]
@@ -299,6 +304,8 @@ function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,
     return temps, norm_temps
 end
 
+end # @everything 
+
 ##################################################
 #### Generate reference dataset ####
 ##################################################
@@ -308,7 +315,9 @@ const B = zeros(Float64, (nx, ny))
 const σ = 1000
 H₀ = Matrix{Float64}([ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for i in 1:nx, j in 1:ny ])    
 Δx = Δy = 50 #m   
-ensemble = EnsembleSerial()
+# ensemble = EnsembleSerial()
+ensemble = EnsembleDistributed()
+sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 end # @everywhere
 
 const temp_series, norm_temp_series = fake_temp_series(t₁)
@@ -317,13 +326,21 @@ const H_refs = generate_ref_dataset(temp_series, H₀)
 # Train UDE
 minA_out = 0.3
 maxA_out = 8
-sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 UA = FastChain(
         FastDense(1,3, x->tanh.(x)),
         FastDense(3,10, x->tanh.(x)),
         FastDense(10,3, x->tanh.(x)),
         FastDense(3,1, sigmoid_A)
     )
+θ = initial_params(UA)
 
 # Train iceflow UDE with in parallel
-train_iceflow_UDE(H₀, UA, H_refs, temp_series)
+iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
+θ_trained = iceflow_trained.minimizer
+
+pred_A = predict_A̅(UA, θ_trained, [-20.0, -15.0, -10.0, -5.0, -0.0]')
+pred_A = [pred_A...]
+true_A = A_fake([-20.0, -15.0, -10.0, -5.0, -0.0])
+
+plot(true_A, label="True A")
+plot!(pred_A, label="Predicted A")
