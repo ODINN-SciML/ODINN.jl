@@ -87,9 +87,8 @@ function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
     # Debugging
-    # println("Gradients: ", gradient(loss, θ))
-    # @infiltrate
-    # println("Gradients: ", gradient(loss, θ))
+    println("Gradients: ", gradient(loss, θ))
+    @infiltrate
 
     println("Training iceflow UDE...")
     iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), cb=callback, maxiters = 5)
@@ -160,7 +159,7 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
     H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
                     pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(), save_everystep=false, 
+                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
                     progress=true, progress_steps = 10)
     
 
@@ -192,13 +191,12 @@ end
 function iceflow_NN!(dH, H, θ, t, context, temps, UA)
     # ArrayPartition(B, H, current_year, temp_series, batch_idx) 
 
-    # year = floor(Int, t) + 1
-    # if year <= t₁
-    #     temp = temps[year]
-    # else
-    #     temp = temps[year-1]
-    # end
-    temp = temps[1]
+    year = floor(Int, t) + 1
+    if year <= t₁
+        temp = temps[year]
+    else
+        temp = temps[year-1]
+    end
 
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
@@ -241,8 +239,8 @@ function SIA!(dH, H, context)
     D .= Γ .* avg(H).^(n + 2) .* ∇S
 
     # Compute flux components
-    dSdx_edges .= diff(S[:,2:end - 1], dims=1) / Δx
-    dSdy_edges .= diff(S[2:end - 1,:], dims=2) / Δy
+    dSdx_edges .= diff_x(S[:,2:end - 1]) / Δx
+    dSdy_edges .= diff_y(S[2:end - 1,:]) / Δy
     Fx .= .-avg_y(D) .* dSdx_edges
     Fy .= .-avg_x(D) .* dSdy_edges 
 
@@ -268,8 +266,8 @@ function SIA(dH, H, A, context)
     D = Γ .* avg(H).^(n + 2) .* ∇S
 
     # Compute flux components
-    dSdx_edges = diff(S[:,2:end - 1], dims=1) / Δx
-    dSdy_edges = diff(S[2:end - 1,:], dims=2) / Δy
+    dSdx_edges = diff_x(S[:,2:end - 1]) / Δx
+    dSdy_edges = diff_y(S[2:end - 1,:]) / Δy
     Fx = .-avg_y(D) .* dSdx_edges
     Fy = .-avg_x(D) .* dSdy_edges 
 
@@ -317,6 +315,8 @@ H₀ = Matrix{Float64}([ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for
 Δx = Δy = 50 #m   
 # ensemble = EnsembleSerial()
 ensemble = EnsembleDistributed()
+const minA_out = 0.3
+const maxA_out = 8
 sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 end # @everywhere
 
@@ -324,8 +324,6 @@ const temp_series, norm_temp_series = fake_temp_series(t₁)
 const H_refs = generate_ref_dataset(temp_series, H₀)
 
 # Train UDE
-minA_out = 0.3
-maxA_out = 8
 UA = FastChain(
         FastDense(1,3, x->tanh.(x)),
         FastDense(3,10, x->tanh.(x)),
@@ -339,7 +337,7 @@ iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 pred_A = predict_A̅(UA, θ_trained, [-20.0, -15.0, -10.0, -5.0, -0.0]')
-pred_A = [pred_A...]
+pred_A = [pred_A...] # flatten
 true_A = A_fake([-20.0, -15.0, -10.0, -5.0, -0.0])
 
 plot(true_A, label="True A")
