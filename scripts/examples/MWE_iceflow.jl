@@ -1,6 +1,6 @@
 ## Environment and packages
 using Distributed
-const processes = 10
+const processes = 16
 
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
@@ -87,11 +87,11 @@ function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
     # Debugging
-    println("Gradients: ", gradient(loss, θ))
-    @infiltrate
+    # println("Gradients: ", gradient(loss, θ))
+    # @infiltrate
 
     println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), cb=callback, maxiters = 5)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), cb=callback, maxiters = epochs)
 
     return iceflow_trained
 end
@@ -99,7 +99,15 @@ end
 @everywhere begin 
 
 callback = function (θ,l) # callback function to observe training
-    @show l
+    println("Loss H: ", l)
+
+    pred_A = predict_A̅(UA, θ, [-20.0, -15.0, -10.0, -5.0, -0.0]')
+    pred_A = [pred_A...] # flatten
+    true_A = A_fake([-20.0, -15.0, -10.0, -5.0, -0.0])
+
+    plot(true_A, label="True A")
+    display(plot!(pred_A, label="Predicted A"))
+
     false
   end
 
@@ -140,7 +148,7 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
         # B, H, current_year, temp_series)  
         temp_series = context[4]
     
-        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
+        # println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         # We add the ith temperature series 
         iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[i], UA) # closure
         
@@ -159,13 +167,8 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
     H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
                     pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false, 
+                    sensealg = InterpolatingAdjoint(), save_everystep=false, 
                     progress=true, progress_steps = 10)
-    
-
-    # H_pred = solve(iceflow_prob, BS3(), u0=H, p=θ, reltol=1e-6, 
-    #                 sensealg = InterpolatingAdjoint(checkpointing=true), saveat=0.1, 
-    #                 progress=true, progress_steps = 10)
 
     return H_pred
 end
@@ -331,9 +334,10 @@ UA = FastChain(
         FastDense(3,1, sigmoid_A)
     )
 θ = initial_params(UA)
+const epochs = 30
 
 # Train iceflow UDE with in parallel
-iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
+@time iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 pred_A = predict_A̅(UA, θ_trained, [-20.0, -15.0, -10.0, -5.0, -0.0]')
