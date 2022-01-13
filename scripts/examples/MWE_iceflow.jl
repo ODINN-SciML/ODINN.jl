@@ -91,7 +91,7 @@ function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     # @infiltrate
 
     println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(0.01), cb=callback, maxiters = epochs)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(η), cb=callback, maxiters = epochs)
 
     return iceflow_trained
 end
@@ -101,12 +101,14 @@ end
 callback = function (θ,l) # callback function to observe training
     println("Loss H: ", l)
 
-    pred_A = predict_A̅(UA, θ, [-20.0, -15.0, -10.0, -5.0, -0.0]')
+    pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
     pred_A = [pred_A...] # flatten
-    true_A = A_fake([-20.0, -15.0, -10.0, -5.0, -0.0])
+    true_A = A_fake(-20.0:0.0)
 
     plot(true_A, label="True A")
-    display(plot!(pred_A, label="Predicted A"))
+    plot_epoch = plot!(pred_A, label="Predicted A")
+    savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
+    global current_epoch += 1
 
     false
   end
@@ -335,14 +337,18 @@ UA = FastChain(
     )
 θ = initial_params(UA)
 const epochs = 30
+current_epoch = 1
+const η = 0.005
 
-# Train iceflow UDE with in parallel
+const root_plots = cd(pwd, "plots")
+# Train iceflow UDE in parallel
 @time iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
-pred_A = predict_A̅(UA, θ_trained, [-20.0, -15.0, -10.0, -5.0, -0.0]')
+pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
 pred_A = [pred_A...] # flatten
-true_A = A_fake([-20.0, -15.0, -10.0, -5.0, -0.0])
+true_A = A_fake(-20:0.0)
 
 plot(true_A, label="True A")
-plot!(pred_A, label="Predicted A")
+train_final = plot!(pred_A, label="Predicted A")
+savefig(train_final,joinpath(root_plots,"training","final_model.png"))
