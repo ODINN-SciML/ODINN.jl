@@ -34,38 +34,11 @@ using PyCall
 @views diff_y(A) = (A[:, begin + 1:end] .- A[:, 1:end - 1])
 
 """
-    pad(A, s) 
-
-Zero padding around a matrix `A`
-"""
-@views padxy(A, pad=1) = PaddedView(0.0, A, (size(A,1)+pad,size(A,2)+pad), (2,2))
-
-"""
-    pad_x(A, s) 
-
-Zero padding around a matrix `A` on x-axis
-"""
-@views padx(A, pad=1) = PaddedView(0.0, A, (size(A,1)+pad,size(A,2)), (2,0))
-
-"""
-    pad_y(A, s) 
-
-Zero padding around a matrix `A` on y-axis 
-"""
-@views pady(A, pad=1) = PaddedView(0.0, A, (size(A,1),size(A,2)+pad), (0,2))
-
-"""
     inn(A)
 
 Access inner matrix 
 """
 @views inn(A) = A[2:end-1,2:end-1];
-
-
-# function gradnorm(dAdx, dAdy)
-#     org_size = size(A)
-#     sqrt.(avg_y(dSdx).^2 .+ avg_x(dSdyy).^2)
-# end
 
 """
     smooth!(A)

@@ -8,7 +8,7 @@ SINDy (Brunton et al., 2016).
 
 ## Environment and packages
 using Distributed
-const processes = 4
+const processes = 10
 
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
@@ -17,16 +17,15 @@ end
 println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
-@everywhere begin 
-cd(@__DIR__)
-using Pkg 
-Pkg.activate("../.");
-Pkg.instantiate()
-end
+# @everywhere begin 
+# cd(@__DIR__)
+# using Pkg 
+# Pkg.activate("../.");
+# Pkg.instantiate()
+# end
 
 @everywhere begin 
 using Plots; gr()
-ENV["GKSwstype"] = "nul"
 using Statistics
 using LinearAlgebra
 using HDF5
@@ -35,15 +34,14 @@ using Infiltrator
 using Random 
 using Distributed
 using OrdinaryDiffEq
-using RecursiveArrayTools
-using ComponentArrays
 using Tullio
-using DiffEqFlux
 
 using Profile
 using Logging: global_logger
 using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
+
+# using ProgressMeter
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
@@ -60,6 +58,7 @@ include("helpers/climate.jl")
 ###############################################################
 
 # Load the HDF5 file with Harry's simulated data
+cd(@__DIR__)
 root_dir = cd(pwd, "..")
 argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
 
@@ -71,6 +70,10 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                      0, 0)
     
 
+# Domain size
+const nx = size(argentiere.bed)[1]
+const ny = size(argentiere.bed)[2]
+
 end # @everywhere
 
 # Update mass balance data with NaNs
@@ -81,10 +84,6 @@ end # @everywhere
 
 # Get the annual ELAs based on the mass balance data
 #ELAs = get_annual_ELAs(argentiere.MB, argentiere.bed .+ argentiere.thick)
-
-# Domain size
-@everywhere const nx = size(argentiere.bed)[1]
-@everywhere const ny = size(argentiere.bed)[2];
 
 
 ###  Plot initial data  ###
@@ -101,7 +100,7 @@ end # @everywhere
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-@everywhere temp_series, norm_temp_series =  fake_temp_series(t₁)
+temp_series, norm_temp_series =  fake_temp_series(t₁)
 
 A_series = []
 for temps in temp_series
@@ -118,11 +117,13 @@ example = "Argentiere"
 
 if example == "Argentiere"
 
-    @everywhere const B  = copy(argentiere.bed)
-    @everywhere const H₀ = copy(argentiere.thick[:,:,1])
+    @everywhere begin
+    const B  = copy(argentiere.bed)
+    const H₀ = copy(argentiere.thick[:,:,1])
  
     # Spatial and temporal differentials
-    @everywhere  const Δx, Δy = 50, 50 #m (Δx = Δy)
+    const Δx, Δy = 50, 50 #m (Δx = Δy)
+    end # @everywhere
 
     #=
     MB_avg = []
@@ -171,10 +172,6 @@ if create_ref_dataset
             clim = (-lim, lim),
             title="Variation in ice thickness")
 
-        #if x11 
-        #    display(hm2) 
-        #end
-        
         tempn = floor(mean(temps))
         println("Saving reference_$tempn.png...")
         savefig(hm,joinpath(root_dir,"plots/references","reference_$tempn.png"))
@@ -184,7 +181,7 @@ if create_ref_dataset
     save(joinpath(root_dir, "data/H_refs.jld"), "H_refs", H_refs)
 
 else 
-    @everywhere H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
+   const H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
 end
 
 
@@ -201,11 +198,20 @@ if train_UDE
     old_trained = predict_A̅(UA, θ, norm_temp_values)' #A_fake.(temp_values)'
 
     # Train iceflow UDE with in parallel
-    train_iceflow_UDE(H₀, UA, H_refs, temp_series, hyparams)
+    iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series, hyparams)
+    θ_trained = iceflow_trained.minimizer
+
+
+    ###################################################################
+    ########################  PLOTS    ################################
+    ###################################################################
+
+    pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
+    pred_A = [pred_A...] # flatten
+    true_A = A_fake(-20:0.0)
+
+    plot(true_A, label="True A")
+    train_final = plot!(pred_A, label="Predicted A")
+    savefig(train_final,joinpath(root_plots,"training","final_model.png"))
 
 end
-
-
-###################################################################
-########################  PLOTS    ################################
-###################################################################

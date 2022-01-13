@@ -25,23 +25,7 @@ const Γ = (n-1) * (ρ * g)^n / (n+2) # 1 / m^3 s
 ### Differential equations ###
 # Configuration of the forward model
 
-# Model 
-model = "standard"         # options: "standard", "fake A", "fake C" 
-# Method to solve the DE
-method = "implicit"        # options: implicit, explicit
-
-
-#damp = 0.95                # Tuning parameter
-damp = 0.85 
-#dτsc   = 0.65              # Tuning parameter - iterative dtau scaling
-dτsc   = 0.1
-const itMax = 500                # maximum number of iterations used in non-adaptive semi-implicit method
-const itMax_ref = 500            # maximum number of iterations used for genereting reference dataset
-const η = 0.3                    # Parameter that control the stepsize of the numerical method. eta must be < 1
-const nout = 5                   # error check frequency
-const tolnl = 1e-3               # tolerance of semi-implicit method 
-const tolnl_ref  = 1e-3          # tolerance of semi-implicit method used to generate reference dataset
-const ϵ     = 1e-4               # small number
+# Model            # small number
 const Δx = 50                    # [m]
 const Δy = 50
 const cfl  = max(Δx^2,Δy^2)/4.1
@@ -64,12 +48,14 @@ const grad_type = "var_an_cycle" # could use here as well 'cte'
 # fs = "_daily_".*climate
 const fs = "_daily_W5E5"
 
+## UDE training
+const epochs = 50
+
 ### Workflow ###
-x11 = false
-# ensemble = EnsembleDistributed() # Multiprocessing
+ensemble = EnsembleDistributed() # Multiprocessing
 # ensemble = EnsembleSplitThreads()
 # ensemble = EnsembleThreads()  # Multithreading
-ensemble = EnsembleSerial()
+# ensemble = EnsembleSerial()
 
-create_ref_dataset = false   
+create_ref_dataset = true   
 train_UDE = true

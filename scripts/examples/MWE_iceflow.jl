@@ -62,7 +62,6 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
         println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         context.x[7] .= temp_series[i] # We set the temp_series for the ith trajectory
 
-        # iceflow_PDE_batch!(dH, H, p, t) = iceflow!(dH, H, context, t) # closure
         return remake(prob, p=context)
     end
 
@@ -76,12 +75,12 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
                         pmap_batch_size=length(temp_series), reltol=1e-6, 
                         progress=true, saveat=1.0, progress_steps = 50)
 
-    return Float64.(iceflow_sol)  
+    return iceflow_sol  
 end
 
 function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     H = deepcopy(H₀)
-    current_year = 0f0
+    current_year = 0.0
     # Tuple with all the temp series and H_refs
     context = (B, H, current_year, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
@@ -99,7 +98,7 @@ end
 @everywhere begin 
 
 callback = function (θ,l) # callback function to observe training
-    println("Loss H: ", l)
+    println("Epoch #$current_epoch - Loss H: ", l)
 
     pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
     pred_A = [pred_A...] # flatten
@@ -111,7 +110,7 @@ callback = function (θ,l) # callback function to observe training
     global current_epoch += 1
 
     false
-  end
+end
 
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
@@ -194,7 +193,6 @@ function iceflow!(dH, H, context,t)
 end    
 
 function iceflow_NN!(dH, H, θ, t, context, temps, UA)
-    # ArrayPartition(B, H, current_year, temp_series, batch_idx) 
 
     year = floor(Int, t) + 1
     if year <= t₁
@@ -207,15 +205,13 @@ function iceflow_NN!(dH, H, θ, t, context, temps, UA)
 
     # Compute the Shallow Ice Approximation in a staggered grid
     dH .= SIA(dH, H, A, context)
-    # println("dH: ", maximum(dH))
 end  
 
 """
-    SIA(H, p)
+    SIA!(dH, H, context)
 
 Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
-
 function SIA!(dH, H, context)
     # Retrieve parameters
     #A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ
