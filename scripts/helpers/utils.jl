@@ -6,6 +6,8 @@ using PyCall
 ############  FUNCTIONS   #####################
 ###############################################
 
+@everywhere begin
+
 ### Staggered grids ###
 
 """
@@ -38,7 +40,9 @@ using PyCall
 
 Access inner matrix 
 """
-@views inn(A) = A[2:end-1,2:end-1];
+@views inn(A) = A[2:end-1,2:end-1]
+
+end # @everywhere
 
 """
     smooth!(A)
@@ -215,15 +219,6 @@ function to_hydro_period(years::Array)
     hydro_period = collect(Date(years[1]-1,10,1):Day(1):Date(years[end],09,30))
 
     return hydro_period
-end
-
-"""
-    infiltrate()
-
-Wrapper function for the @infiltrate macro to debug the global scope
-"""
-function infiltrate()
-    @infiltrate
 end
 
 """

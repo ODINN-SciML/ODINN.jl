@@ -12,6 +12,8 @@
 A = 1.3e-24 #2e-16  1 / Pa^3 s
 A *= 60 * 60 * 24 * 365.25 # [1 / Pa^3 yr]
 
+@everywhere begin
+
 # 
 const ρ = 900                     # Ice density [kg / m^3]
 const g = 9.81                    # Gravitational acceleration [m / s^2]
@@ -34,12 +36,16 @@ const minA = 3e-17
 const maxT = 1
 const minT = -25
 
-# Time 
-t = 0                      # initial time
-const Δt = 1.0/12.0     
-# Δt = 1.0/365.25          # time step [yr]
-Δts = []
-const t₁ = 5                 # number of simulation years 
+# Time               # initial time
+const t₁ = 5    
+
+### Workflow ###
+ensemble = EnsembleDistributed() # Multiprocessing
+# ensemble = EnsembleSplitThreads()
+# ensemble = EnsembleThreads()  # Multithreading
+# ensemble = EnsembleSerial()# number of simulation years 
+
+end # @everywhere
 
 ## Climate parameters
 const base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands") # OGGM elevation bands
@@ -50,12 +56,7 @@ const fs = "_daily_W5E5"
 
 ## UDE training
 const epochs = 50
+const η = 0.01
 
-### Workflow ###
-ensemble = EnsembleDistributed() # Multiprocessing
-# ensemble = EnsembleSplitThreads()
-# ensemble = EnsembleThreads()  # Multithreading
-# ensemble = EnsembleSerial()
-
-create_ref_dataset = true   
+create_ref_dataset = false   
 train_UDE = true

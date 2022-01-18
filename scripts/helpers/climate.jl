@@ -160,6 +160,8 @@ struct Dataset
     ablation
 end
 
+@everywhere begin
+
 function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0])
     temps, norm_temps, norm_temps_flat = [],[],[]
     for mean in means
@@ -179,5 +181,7 @@ function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20
 
     return temps, norm_temps
 end
+
+end # @everywhere
 
 

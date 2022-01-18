@@ -17,36 +17,41 @@ end
 println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
-# @everywhere begin 
-# cd(@__DIR__)
-# using Pkg 
-# Pkg.activate("../.");
-# Pkg.instantiate()
-# end
+@everywhere begin 
+    cd(@__DIR__)
+    using Pkg 
+    Pkg.activate("../.");
+    Pkg.instantiate()
+end
 
 @everywhere begin 
-using Plots; gr()
 using Statistics
 using LinearAlgebra
-using HDF5
+using HDF5  
 using JLD
-using Infiltrator
 using Random 
-using Distributed
 using OrdinaryDiffEq
+using DiffEqFlux
+using Flux
+using Distributed
 using Tullio
+using RecursiveArrayTools
+using Infiltrator
+using Plots
 
-using Profile
-using Logging: global_logger
-using TerminalLoggers: TerminalLogger
-global_logger(TerminalLogger())
+# using Profile
+# using Logging: global_logger
+# using TerminalLoggers: TerminalLogger
+# global_logger(TerminalLogger())
+# using ProgressLogging
 
-# using ProgressMeter
+### Types  ###
+include("helpers/types.jl")
+end # @everywhere 
 
 ### Global parameters  ###
 include("helpers/parameters.jl")
-### Types  ###
-include("helpers/types.jl")
+
 ### Iceflow forward model  ###
 # (includes utils.jl as well)
 include("helpers/iceflow_DiffEqs.jl")
@@ -57,6 +62,8 @@ include("helpers/climate.jl")
 ###########################  MAIN #############################
 ###############################################################
 
+@everywhere begin
+    
 # Load the HDF5 file with Harry's simulated data
 cd(@__DIR__)
 root_dir = cd(pwd, "..")
@@ -69,7 +76,6 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                      HDF5.read(argentiere_f["s_apply_hist"])[begin:end-2,:,2:end],
                      0, 0)
     
-
 # Domain size
 const nx = size(argentiere.bed)[1]
 const ny = size(argentiere.bed)[2]
@@ -100,12 +106,7 @@ end # @everywhere
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-temp_series, norm_temp_series =  fake_temp_series(t₁)
-
-A_series = []
-for temps in temp_series
-    push!(A_series, A_fake.(temps))
-end
+const temp_series, norm_temp_series =  fake_temp_series(t₁) 
 
 # pts = Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series")
 # pas = Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series")
@@ -139,8 +140,8 @@ if example == "Argentiere"
     
 elseif example == "Gaussian"
     
-    B = zeros(Float64, (nx, ny))
-    σ = 1000
+    const B = zeros(Float64, (nx, ny))
+    const σ = 1000
     H₀ = [ 250 * exp( - ( (i - nx/2)^2 + (j - ny/2)^2 ) / σ ) for i in 1:nx, j in 1:ny ]    
     
     # Spatial and temporal differentials
@@ -154,7 +155,7 @@ if create_ref_dataset
     println("Generating reference dataset for training...")
   
     # Compute reference dataset in parallel
-    H_refs = generate_ref_dataset(temp_series, H₀)
+    const H_refs = generate_ref_dataset(temp_series, H₀)
     
     # Save reference plots
     for (temps, H) in zip(temp_series, H_refs)
@@ -190,15 +191,19 @@ if train_UDE
     
     println("Running forward UDE ice flow model...\n")
     
-    temp_values = [mean(temps) for temps in temp_series]'
-    norm_temp_values = [mean(temps) for temps in norm_temp_series]'
-    plot(temp_values', A_fake.(temp_values)', label="Fake A")
-    hyparams, UA = create_NNs()
+    # temp_values = [mean(temps) for temps in temp_series]'
+    # norm_temp_values = [mean(temps) for temps in norm_temp_series]'
+    # plot(temp_values', A_fake.(temp_values)', label="Fake A")
+
+    # Define NN for the UDE
+    UA = create_NNs()
     θ = initial_params(UA)
-    old_trained = predict_A̅(UA, θ, norm_temp_values)' #A_fake.(temp_values)'
+
+    # old_trained = predict_A̅(UA, θ, norm_temp_values)' #A_fake.(temp_values)'
+    current_epoch = 1
 
     # Train iceflow UDE with in parallel
-    iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series, hyparams)
+    iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     θ_trained = iceflow_trained.minimizer
 
 

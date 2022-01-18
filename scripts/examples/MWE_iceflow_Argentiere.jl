@@ -1,15 +1,57 @@
-###################################################################
-###   Functions for PDE solving in staggered grids with UDEs   ####
-###################################################################
+## Environment and packages
+using Distributed
+const processes = 3
 
-@everywhere include("utils.jl")
+if nprocs() < processes
+    addprocs(processes - nprocs(); exeflags="--project")
+end
 
-"""
-    generate_ref_dataset(temp_series, gref, H₀, t)
+println("Number of cores: ", nprocs())
+println("Number of workers: ", nworkers())
 
-Generate reference dataset with multiple glaciers forced with 
-different temperature series.
-"""
+@everywhere begin 
+    cd(@__DIR__)
+    using Pkg 
+    Pkg.activate("../../.");
+    Pkg.instantiate()
+end
+
+@everywhere begin 
+using Statistics
+using LinearAlgebra
+using Random 
+using HDF5  
+using JLD
+using OrdinaryDiffEq
+using DiffEqFlux
+using Flux
+using Distributed
+using Tullio
+using RecursiveArrayTools
+using Infiltrator
+using Plots
+
+const t₁ = 5                 # number of simulation years 
+const ρ = 900                     # Ice density [kg / m^3]
+const g = 9.81                    # Gravitational acceleration [m / s^2]
+const n = 3                      # Glen's flow law exponent
+const maxA = 8e-16
+const minA = 3e-17
+const maxT = 1
+const minT = -25
+A = 1.3e-24 #2e-16  1 / Pa^3 s
+A *= Float64(60 * 60 * 24 * 365.25) # [1 / Pa^3 yr]
+C = 0
+α = 0
+
+@views avg(A) = 0.25 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
+@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
+@views diff_x(A) = (A[begin + 1:end, :] .- A[1:end - 1, :])
+@views diff_y(A) = (A[:, begin + 1:end] .- A[:, 1:end - 1])
+@views inn(A) = A[2:end-1,2:end-1]
+end # @everything 
+
 function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     # Compute reference dataset in parallel
     H = deepcopy(H₀)
@@ -26,11 +68,10 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
 
     function prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
         
-        batch_temp = round(mean(temp_series[i]), digits=3)
-        println("Processing temp series #$i ≈ ", batch_temp)
+        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         context.x[7] .= temp_series[i] # We set the temp_series for the ith trajectory
 
-        return remake(prob, p=context, progress_name="#$i Temp series ≈ $batch_temp")
+        return remake(prob, p=context)
     end
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
@@ -41,22 +82,11 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
     iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
                         pmap_batch_size=length(temp_series), reltol=1e-6, 
-                        progress=true, save_everystep=false, progress_steps = 50)
+                        progress=true, saveat=1.0, progress_steps = 50)
 
-    # Save only matrices
-    H_refs = [] 
-    for result in iceflow_sol
-        push!(H_refs, result.u[end])
-    end
-
-    return H_refs  
+    return iceflow_sol  
 end
-    
-"""
-    train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series, hyparams)
 
-Training of multiple UDEs of glacier ice flow in order to learn a given parameter
-"""
 function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     H = deepcopy(H₀)
     current_year = 0.0
@@ -74,7 +104,7 @@ function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     return iceflow_trained
 end
 
-@everywhere begin
+@everywhere begin 
 
 callback = function (θ,l) # callback function to observe training
     println("Epoch #$current_epoch - Loss H: ", l)
@@ -91,47 +121,52 @@ callback = function (θ,l) # callback function to observe training
     false
 end
 
-"""
-    loss(H, glacier_ref, UA, p, t, t₁)
-
-Computes the loss function for a specific batch
-"""
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
+    
+    println("After predict")
 
-    println("after predict")
+    # Zygote.ignore() do
+    #     A_pred = predict_A̅(UA, θ, [mean(temp_series[5])])
+    #     A_ref = A_fake(mean(temp_series[5]))
+    #     println("Predicted A: ", A_pred)
+    #     println("True A: ", A_ref)
+    # end
+
+    # Zygote.ignore() do 
+    #     @infiltrate
+    # end
+
+    # H = H_preds.u[end]
+    # H_ref = H_refs[5][end]
+    # l_H_avg = Flux.Losses.mse(H, H_ref; agg=mean)
 
     # Compute loss function for the full batch
     l_H = 0.0
     for (H_pred, H_ref) in zip(H_preds, H_refs)
         H = H_pred.u[end]
-        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
+        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
     end
 
     l_H_avg = l_H/length(H_preds)
 
-    println("sending loss")
+    println("l_H_avg: ", l_H_avg)
     
     return l_H_avg
 end
 
-"""
-    predict_iceflow(θ, UA, context, ensemble=ensemble)
 
-Predict one batch of glacier ice flow UDEs.
-"""
 function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
     function prob_iceflow_func(prob, i, repeat, context, UA) # closure
-
         # B, H, current_year, temp_series)  
         temp_series = context[4]
-        batch_temp = string(mean(temp_series[i]))[1:4] # /!\ round() crashes here
-
+    
+        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         # We add the ith temperature series 
         iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[i], UA) # closure
         
-        return remake(prob, f=iceflow_UDE_batch!, progress_name="#$i Temp series ≈ $batch_temp")
+        return remake(prob, f=iceflow_UDE_batch!)
     end
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
@@ -152,12 +187,6 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     return H_pred
 end
 
-
-"""
-    iceflow!(H,p,t,t₁)
-
-Forward ice flow model solving the Shallow Ice Approximation PDE 
-"""
 function iceflow!(dH, H, context,t)
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
@@ -167,22 +196,17 @@ function iceflow!(dH, H, context,t)
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
     if year != current_year[] && year <= t₁
-        temp = Ref{Float32}(context.x[7][year])
+        temp = Ref{Float64}(context.x[7][year])
         A[] .= A_fake(temp[])
         current_year[] .= year
     end
 
     # Compute the Shallow Ice Approximation in a staggered grid
     SIA!(dH, H, context)
-end  
+end    
 
-"""
-    iceflow_NN!(dH, H, θ, t, context, UA)
-
-Hybrid forward ice flow model combining the SIA PDE and neural networks with neural networks into an UDE
-"""
 function iceflow_NN!(dH, H, θ, t, context, temps, UA)
-   
+
     year = floor(Int, t) + 1
     if year <= t₁
         temp = temps[year]
@@ -194,12 +218,12 @@ function iceflow_NN!(dH, H, θ, t, context, temps, UA)
 
     # Compute the Shallow Ice Approximation in a staggered grid
     dH .= SIA(dH, H, A, context)
-end   
+end  
 
 """
     SIA!(dH, H, context)
 
-Compute a step of the Shallow Ice Approximation PDE 
+Compute a step of the Shallow Ice Approximation PDE in a forward model
 """
 function SIA!(dH, H, context)
     # Retrieve parameters
@@ -238,12 +262,7 @@ function SIA!(dH, H, context)
     inn(dH) .= .-(diff_x(Fx) / Δx .+ diff_y(Fy) / Δy) # MB to be added here 
 end
 
-
-"""
-    SIA!(dH, H, context)
-
-Compute a step of the Shallow Ice Approximation UDE 
-"""
+# Function without mutation for Zygote, with context as an ArrayPartition
 function SIA(dH, H, A, context)
     # Retrieve parameters
     B = context[1]
@@ -272,81 +291,101 @@ function SIA(dH, H, A, context)
     return dH
 end
 
-"""
-    C_fake(MB, ∇S)
 
-Fake law to determine the sliding rate factor 
-"""
-# TODO: to be updated in order to make it depend on the surrounding
-# ice surface velocity pattern
-function C_fake(MB, ∇S)
-    MB[MB .> 0] .= 0
-    MB[MB .< -20] .= 0
-    #println("∇S max: ", maximum(∇S))
-    #println("((MB).^2)/4) max: ", maximum(((MB).^2)/4))
-
-    return ((avg(MB).^2)./6) .* 3e-13
-    #return ((avg(MB).^2)./6) 
-
+function A_fake(temp)
+    return @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
 end
 
-"""
-    predict_A̅(UA, θ, temp)
-
-Make a prediction of A with a neural network
-"""
 predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-16
 
-"""
-    A_fake(ELA)
+function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
+    temps, norm_temps, norm_temps_flat = [],[],[]
+    for mean in means
+       push!(temps, mean .+ rand(t).*1e-1) # static
+       append!(norm_temps_flat, mean .+ rand(t).*1e-1) # static
+    end
 
-Fake law to determine A in the SIA
-"""
-function A_fake(temp)
-    # Matching point MB values to A values
+    # Normalise temperature series
+    norm_temps_flat = Flux.normalise([norm_temps_flat...]) # requires splatting
 
-    #temp_range = -25:0.01:1
+    # Re-create array of arrays 
+    for i in 1:t₁:length(norm_temps_flat)
+        push!(norm_temps, norm_temps_flat[i:i+(t₁-1)])
+    end
 
-    #A_step = (maxA-minA)/length(temp_range)
-    #A_range = sigmoid.(Flux.normalise(minA:A_step:maxA).*1.5e14).*1.5e-18 # add nonlinear relationship
-
-    #A = A_range[closest_index(temp_range, temp)]
-
-    return @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
-    #return A
+    return temps, norm_temps
 end
 
-"""
-    create_NNs()
+end # @everything 
 
-Generates the hyperaparameters and the neural networks needed for the training of UDEs
-"""
-function create_NNs()
-    ######### Define the network  ############
-    # We determine the hyperameters for the training
-    # hyparams = Hyperparameters()
+##################################################
+#### Generate reference dataset ####
+##################################################
+@everywhere begin
+# Load the HDF5 file with Harry's simulated data
+cd(@__DIR__)
+root_dir = cd(pwd, "../..")
+argentiere_f = h5open(joinpath(root_dir, "data/Argentiere_2003-2100_aflow2e-16_50mres_rcp2.6.h5"), "r")
 
-    # Constraints A within physically plausible values
-    minA = 0.3
-    maxA = 8
-    # rangeA = minA:1e-3:maxA
-    # stdA = std(rangeA)*2
-    # relu_A(x) = min(max(minA, x), maxA)
-    #relu_A(x) = min(max(minA, 0.00001 * x), maxA)
-    sigmoid_A(x) = minA + (maxA - minA) / ( 1 + exp(-x) )
+struct Glacier
+    bed::Array{Float32}    # bedrock height
+    thick::Array{Float32}  # ice thickness
+    vel::Array{Float32}    # surface velocities
+    MB::Array{Float32}     # surface mass balance
+    lat::Float32
+    lon::Float32
+end
 
-    # A_init(custom_std, dims...) = randn(Float32, dims...) .* custom_std
-    # A_init(custom_std) = (dims...) -> A_init(custom_std, dims...)
+# Fill the Glacier structure with the retrieved data
+argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
+                     HDF5.read(argentiere_f["thick_hist"])[begin:end-2,:,2:end],
+                     HDF5.read(argentiere_f["vel_hist"])[begin:end-2,:,2:end],
+                     HDF5.read(argentiere_f["s_apply_hist"])[begin:end-2,:,2:end],
+                     0, 0)
+    
+# Domain size
+const nx = size(argentiere.bed)[1]
+const ny = size(argentiere.bed)[2]
 
-    UA = FastChain(
+const B  = copy(argentiere.bed)
+const H₀ = copy(argentiere.thick[:,:,1])
+
+# Spatial and temporal differentials
+const Δx, Δy = 50, 50 #m (Δx = Δy)
+
+# ensemble = EnsembleSerial()
+ensemble = EnsembleDistributed()
+const minA_out = 0.3
+const maxA_out = 8
+sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
+end # @everywhere
+
+const temp_series, norm_temp_series = fake_temp_series(t₁)
+const H_refs = generate_ref_dataset(temp_series, H₀)
+    
+# Train UDE
+UA = FastChain(
         FastDense(1,3, x->tanh.(x)),
         FastDense(3,10, x->tanh.(x)),
         FastDense(10,3, x->tanh.(x)),
         FastDense(3,1, sigmoid_A)
     )
+    
+θ = initial_params(UA)
+const epochs = 30
+current_epoch = 1
+const η = 0.005
 
-    return UA
-end
+cd(@__DIR__)
+const root_plots = cd(pwd, "../../plots")
+# Train iceflow UDE in parallel
+@time iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
+θ_trained = iceflow_trained.minimizer
 
-end # @everywhere 
+pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
+pred_A = [pred_A...] # flatten
+true_A = A_fake(-20:0.0)
 
+plot(true_A, label="True A")
+train_final = plot!(pred_A, label="Predicted A")
+savefig(train_final,joinpath(root_plots,"training","final_model.png"))
