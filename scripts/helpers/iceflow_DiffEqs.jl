@@ -2,7 +2,7 @@
 ###   Functions for PDE solving in staggered grids with UDEs   ####
 ###################################################################
 
-@everywhere include("utils.jl")
+include("utils.jl")
 
 """
     generate_ref_dataset(temp_series, gref, H₀, t)
