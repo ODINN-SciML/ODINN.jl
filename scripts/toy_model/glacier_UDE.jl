@@ -39,10 +39,6 @@ const maxA = 8e-16
 const minA = 3e-17
 const maxT = 1
 const minT = -25
-A = 1.3e-24 #2e-16  1 / Pa^3 s
-A *= Float64(60 * 60 * 24 * 365.25) # [1 / Pa^3 yr]
-C = 0
-α = 0
 
 create_ref_dataset = true
 
