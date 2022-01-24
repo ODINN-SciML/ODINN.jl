@@ -64,6 +64,9 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
     D, dH, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-2,ny-2),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
+    A = 2e-16
+    α = 0                       # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
+    C = 15e-14                  # Sliding factor, between (0 - 25) [m⁸ N⁻³ a⁻¹]
     
     # Gather simulation parameters
     current_year = 0
@@ -89,6 +92,7 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
 
     # Save only matrices
     idx = 1
+    H_refs = [] 
     for result in iceflow_sol
         if idx == 1
             H_refs = result.u[end]
@@ -113,7 +117,7 @@ function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     # @infiltrate
 
     println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(η), cb=callback, maxiters = epochs)
+    iceflow_trained = @time DiffEqFlux.sciml_train(loss, θ, RMSProp(η), cb=callback, maxiters = epochs)
 
     return iceflow_trained
 end
@@ -137,29 +141,16 @@ end
 
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
+
+    println("computing loss")
     
-    println("After predict")
-
-    # Zygote.ignore() do
-    #     A_pred = predict_A̅(UA, θ, [mean(temp_series[5])])
-    #     A_ref = A_fake(mean(temp_series[5]))
-    #     println("Predicted A: ", A_pred)
-    #     println("True A: ", A_ref)
-    # end
-
-    # Zygote.ignore() do 
-    #     @infiltrate
-    # end
-
-    # H = H_preds.u[end]
-    # H_ref = H_refs[5][end]
-    # l_H_avg = Flux.Losses.mse(H, H_ref; agg=mean)
-
     # Compute loss function for the full batch
     l_H = 0.0
-    for (H_pred, H_ref) in zip(H_preds, H_refs)
-        H = H_pred.u[end]
-        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[end][H.!= 0.0]; agg=mean)
+
+    for i in 1:length(H_preds)
+        H_ref = H_refs[:,:,i]
+        H = H_preds[i].u[end]
+        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
     end
 
     l_H_avg = l_H/length(H_preds)
@@ -178,9 +169,9 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     
         println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         # We add the ith temperature series 
-        iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[i], UA) # closure
+        iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[i], UA) # closure
         
-        return remake(prob, f=iceflow_UDE_batch!)
+        return remake(prob, f=iceflow_UDE_batch)
     end
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
@@ -189,14 +180,18 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     H = context[2]
     tspan = (0.0,t₁)
 
-    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[5], UA) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
+    iceflow_UDE(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[5], UA) # closure
+    iceflow_prob = ODEProblem(iceflow_UDE,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
 
+    println("solve")
+
     H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
-                    pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(),  
+                    pmap_batch_size=batch_size, u0=H, p=θ, reltol=1e-6, 
+                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()),  
                     progress=true, progress_steps = 10)
+
+    println("after solve")
 
     return H_pred
 end
@@ -219,7 +214,7 @@ function iceflow!(dH, H, context,t)
     SIA!(dH, H, context)
 end    
 
-function iceflow_NN!(dH, H, θ, t, context, temps, UA)
+function iceflow_NN(H, θ, t, context, temps, UA)
 
     year = floor(Int, t) + 1
     if year <= t₁
@@ -231,7 +226,7 @@ function iceflow_NN!(dH, H, θ, t, context, temps, UA)
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    dH .= SIA(dH, H, A, context)
+    return SIA(H, A, context)
 end  
 
 """
@@ -277,7 +272,7 @@ function SIA!(dH, H, context)
 end
 
 # Function without mutation for Zygote, with context as an ArrayPartition
-function SIA(dH, H, A, context)
+function SIA(H, A, context)
     # Retrieve parameters
     B = context[1]
 

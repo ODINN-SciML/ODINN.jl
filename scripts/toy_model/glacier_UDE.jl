@@ -1,6 +1,6 @@
 ## Environment and packages
 using Distributed
-const processes = 16
+const processes = 10
 
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
@@ -40,7 +40,7 @@ const minA = 3e-17
 const maxT = 1
 const minT = -25
 
-create_ref_dataset = true
+create_ref_dataset = false
 
 # Include all functions
 include("iceflow.jl")
@@ -111,8 +111,8 @@ if create_ref_dataset
     println("Saving reference data")
     save(joinpath(root_dir, "data/H_refs.jld"), "H_refs", H_refs)
 
-else 
-   const H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
+else
+   H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
 end
     
 # Train UDE
@@ -127,6 +127,7 @@ UA = FastChain(
 const epochs = 30
 current_epoch = 1
 const η = 0.005
+batch_size = length(temp_series)
 
 cd(@__DIR__)
 const root_plots = cd(pwd, "../../plots")
