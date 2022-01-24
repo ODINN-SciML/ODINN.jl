@@ -127,7 +127,7 @@ rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
 
 ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
 # Where to fetch the pre-processed directories
-gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=10)
+gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=10) # TODO: change to Lilian's version in notebook (ODINN_MB.ipynb)
 
 gdir = gdirs[1]
 
