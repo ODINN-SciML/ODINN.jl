@@ -10,6 +10,13 @@ println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
 @everywhere begin 
+    cd(@__DIR__)
+    using Pkg 
+    Pkg.activate("../../.");
+    Pkg.instantiate()
+end
+
+@everywhere begin 
 using Statistics
 using LinearAlgebra
 using Random 
@@ -72,7 +79,7 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
     iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
-                        pmap_batch_size=length(temp_series), reltol=1e-6, 
+                        pmap_batch_size=length(temp_series), reltol=1e-6, save_everystep=false, 
                         progress=true, saveat=1.0, progress_steps = 50)
 
     return iceflow_sol  
@@ -100,20 +107,22 @@ end
 callback = function (θ,l) # callback function to observe training
     println("Epoch #$current_epoch - Loss H: ", l)
 
-    pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
-    pred_A = [pred_A...] # flatten
-    true_A = A_fake(-20.0:0.0)
+    # pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
+    # pred_A = [pred_A...] # flatten
+    # true_A = A_fake(-20.0:0.0)
 
-    plot(true_A, label="True A")
-    plot_epoch = plot!(pred_A, label="Predicted A")
-    savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
-    global current_epoch += 1
+    # plot(true_A, label="True A")
+    # plot_epoch = plot!(pred_A, label="Predicted A")
+    # savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
+    # global current_epoch += 1
 
     false
 end
 
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
+    
+    println("After predict")
 
     # Zygote.ignore() do
     #     A_pred = predict_A̅(UA, θ, [mean(temp_series[5])])
@@ -138,6 +147,8 @@ function loss_iceflow(θ, context, UA, H_refs)
     end
 
     l_H_avg = l_H/length(H_preds)
+
+    println("l_H_avg: ", l_H_avg)
     
     return l_H_avg
 end
@@ -149,11 +160,11 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
         # B, H, current_year, temp_series)  
         temp_series = context[4]
     
-        # println("Processing temp series #$i ≈ ", mean(temp_series[i]))
+        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         # We add the ith temperature series 
-        iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[i], UA) # closure
+        iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[i], UA) # closure
         
-        return remake(prob, f=iceflow_UDE_batch!)
+        return remake(prob, f=iceflow_UDE_batch)
     end
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
@@ -162,13 +173,13 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     H = context[2]
     tspan = (0.0,t₁)
 
-    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[5], UA) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
+    iceflow_UDE(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[5], UA) # closure
+    iceflow_prob = ODEProblem(iceflow_UDE,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
 
     H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
                     pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(), save_everystep=false, 
+                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false,  
                     progress=true, progress_steps = 10)
 
     return H_pred
@@ -192,7 +203,7 @@ function iceflow!(dH, H, context,t)
     SIA!(dH, H, context)
 end    
 
-function iceflow_NN!(dH, H, θ, t, context, temps, UA)
+function iceflow_NN(H, θ, t, context, temps, UA)
 
     year = floor(Int, t) + 1
     if year <= t₁
@@ -204,7 +215,7 @@ function iceflow_NN!(dH, H, θ, t, context, temps, UA)
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    dH .= SIA(dH, H, A, context)
+    return SIA(H, A, context)
 end  
 
 """
@@ -250,7 +261,7 @@ function SIA!(dH, H, context)
 end
 
 # Function without mutation for Zygote, with context as an ArrayPartition
-function SIA(dH, H, A, context)
+function SIA(H, A, context)
     # Retrieve parameters
     B = context[1]
 
@@ -336,7 +347,6 @@ const epochs = 30
 current_epoch = 1
 const η = 0.005
 
-const root_plots = cd(pwd, "plots")
 # Train iceflow UDE in parallel
 @time iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
@@ -345,6 +355,7 @@ pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
 pred_A = [pred_A...] # flatten
 true_A = A_fake(-20:0.0)
 
+const root_plots = cd(pwd, "plots")
 plot(true_A, label="True A")
 train_final = plot!(pred_A, label="Predicted A")
 savefig(train_final,joinpath(root_plots,"training","final_model.png"))

@@ -1,6 +1,6 @@
 ## Environment and packages
 using Distributed
-const processes = 10
+const processes = 20
 
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
@@ -94,7 +94,7 @@ if create_ref_dataset
     # Compute reference dataset in parallel
     H_refs = generate_ref_dataset(temp_series, H₀)
     
-    # Save reference plots
+    ## Save reference plots
     # for (temps, H) in zip(temp_series, H_refs)
         
     #     ###  Glacier ice thickness difference  ###

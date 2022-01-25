@@ -164,9 +164,9 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     
         println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         # We add the ith temperature series 
-        iceflow_UDE_batch!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[i], UA) # closure
+        iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[i], UA) # closure
         
-        return remake(prob, f=iceflow_UDE_batch!)
+        return remake(prob, f=iceflow_UDE_batch)
     end
 
     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
@@ -175,13 +175,13 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     H = context[2]
     tspan = (0.0,t₁)
 
-    iceflow_UDE!(dH, H, θ, t) = iceflow_NN!(dH, H, θ, t, context, temp_series[5], UA) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE!,H,tspan,θ)
+    iceflow_UDE(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[5], UA) # closure
+    iceflow_prob = ODEProblem(iceflow_UDE,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
 
     H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
                     pmap_batch_size=length(temp_series), u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(),  
+                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()),  
                     progress=true, progress_steps = 10)
 
     return H_pred
@@ -205,7 +205,7 @@ function iceflow!(dH, H, context,t)
     SIA!(dH, H, context)
 end    
 
-function iceflow_NN!(dH, H, θ, t, context, temps, UA)
+function iceflow_NN(H, θ, t, context, temps, UA)
 
     year = floor(Int, t) + 1
     if year <= t₁
@@ -217,7 +217,7 @@ function iceflow_NN!(dH, H, θ, t, context, temps, UA)
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    dH .= SIA(dH, H, A, context)
+    return SIA(H, A, context)
 end  
 
 """
@@ -263,7 +263,7 @@ function SIA!(dH, H, context)
 end
 
 # Function without mutation for Zygote, with context as an ArrayPartition
-function SIA(dH, H, A, context)
+function SIA(H, A, context)
     # Retrieve parameters
     B = context[1]
 

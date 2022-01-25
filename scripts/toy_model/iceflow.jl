@@ -87,7 +87,7 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
     iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
-                        pmap_batch_size=length(temp_series), reltol=1e-6, 
+                        pmap_batch_size=length(temp_series), reltol=1e-6, save_everystep=false, 
                         progress=true, saveat=1.0, progress_steps = 50)
 
     # Save only matrices
@@ -141,8 +141,6 @@ end
 
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
-
-    println("computing loss")
     
     # Compute loss function for the full batch
     l_H = 0.0
@@ -154,8 +152,6 @@ function loss_iceflow(θ, context, UA, H_refs)
     end
 
     l_H_avg = l_H/length(H_preds)
-
-    println("l_H_avg: ", l_H_avg)
     
     return l_H_avg
 end
@@ -167,7 +163,7 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
         # B, H, current_year, temp_series)  
         temp_series = context[4]
     
-        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
+        # println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         # We add the ith temperature series 
         iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[i], UA) # closure
         
@@ -184,14 +180,10 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     iceflow_prob = ODEProblem(iceflow_UDE,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
 
-    println("solve")
-
     H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
                     pmap_batch_size=batch_size, u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()),  
+                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false,   
                     progress=true, progress_steps = 10)
-
-    println("after solve")
 
     return H_pred
 end
