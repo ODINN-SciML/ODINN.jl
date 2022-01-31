@@ -37,7 +37,7 @@ function glacier_evolution(glacier_list, ensemble=ensemble)
     println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-    iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
+    iceflow_sol = solve(ensemble_prob, ROCK4(), ensemble, trajectories = length(temp_series), 
                         pmap_batch_size=length(temp_series), reltol=1e-6, 
                         progress=true, saveat=1.0, progress_steps = 50)
 
@@ -86,9 +86,26 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-    iceflow_sol = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
+
+                iceflow_sol = solve(ensemble_prob, ROCK4(), ensemble, trajectories = n_trajectories, 
                         pmap_batch_size=length(temp_series), reltol=1e-6, save_everystep=false, 
                         progress=true, saveat=1.0, progress_steps = 50)
+
+    # Distributed progress bars for solving PDEs in paralell
+    # @sync begin
+    #     @async begin
+    #         tasksdone = 0
+    #         while tasksdone < n_trajectories
+    #             tasksdone += take!(channel)
+    #             update!(progress, tasksdone)
+    #         end
+    #     end
+    #     @async begin
+    #         iceflow_sol = solve(ensemble_prob, ROCK4(), ensemble, trajectories = n_trajectories, 
+    #                     pmap_batch_size=length(temp_series), reltol=1e-6, save_everystep=false, 
+    #                     progress=true, saveat=1.0, progress_steps = 50)
+    #     end
+    # end
 
     # Save only matrices
     idx = 1
@@ -105,9 +122,11 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     return H_refs  
 end
 
-function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
+function train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
     H = deepcopy(H₀)
     current_year = 0.0
+    optimizer = train_settings[1]
+    epochs = train_settings[2]
     # Tuple with all the temp series and H_refs
     context = (B, H, current_year, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
@@ -117,7 +136,8 @@ function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     # @infiltrate
 
     println("Training iceflow UDE...")
-    iceflow_trained = @time DiffEqFlux.sciml_train(loss, θ, RMSProp(η), cb=callback, maxiters = epochs)
+    # println("Using solver: ", solver)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
 
     return iceflow_trained
 end
@@ -156,6 +176,11 @@ function loss_iceflow(θ, context, UA, H_refs)
     return l_H_avg
 end
 
+function output_func(sol, i)
+    put!(channel, 1)
+    sol, false
+end
+
 
 function predict_iceflow(θ, UA, context, ensemble=ensemble)
 
@@ -179,11 +204,33 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
     iceflow_UDE(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[5], UA) # closure
     iceflow_prob = ODEProblem(iceflow_UDE,H,tspan,θ)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
+    # ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func, output_func = output_func)
 
-    H_pred = solve(ensemble_prob, BS3(), ensemble, trajectories = length(temp_series), 
-                    pmap_batch_size=batch_size, u0=H, p=θ, reltol=1e-6, 
-                    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false,   
-                    progress=true, progress_steps = 10)
+    H_pred = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
+        pmap_batch_size=batch_size, u0=H, p=θ, reltol=1e-6, save_everystep=false,   
+        progress=true, progress_steps = 10)
+
+    # Distributed progress bars for solving UDEs in paralell
+    # @sync begin
+    #     @async begin
+    #         tasksdone = 0
+    #         println("tasksdone: ", tasksdone)
+    #         while tasksdone < n_trajectories
+    #             println("here")
+    #             tasksdone += take!(channel)
+    #             println("there")
+    #             update!(progress, tasksdone)
+    #             println("out")
+    #         end
+    #     end
+    #     @async begin
+    #         println("solving")
+    #         H_pred = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
+    #                 pmap_batch_size=batch_size, u0=H, p=θ, reltol=1e-6, 
+    #                 sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false,   
+    #                 progress=true, progress_steps = 10)
+    #     end
+    # end
 
     return H_pred
 end

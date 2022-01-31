@@ -1,6 +1,11 @@
 ## Environment and packages
+cd(@__DIR__)
+using Pkg 
+Pkg.activate("../../.");
+Pkg.instantiate()
+
 using Distributed
-const processes = 20
+const processes = 10
 
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
@@ -13,7 +18,7 @@ println("Number of workers: ", nworkers())
     cd(@__DIR__)
     using Pkg 
     Pkg.activate("../../.");
-    Pkg.instantiate()
+    # Pkg.instantiate()
 end
 
 @everywhere begin 
@@ -90,6 +95,12 @@ const temp_series, norm_temp_series = fake_temp_series(t₁)
 
 if create_ref_dataset 
     println("Generating reference dataset for training...")
+
+    # Settings for distributed progress bars
+    # n_trajectories = length(temp_series)
+    # progress = Progress(n_trajectories)
+    # const channel = RemoteChannel(()->Channel{Int}(n_trajectories))
+    # @everywhere const channel = $channel
   
     # Compute reference dataset in parallel
     H_refs = generate_ref_dataset(temp_series, H₀)
@@ -117,22 +128,35 @@ end
     
 # Train UDE
 UA = FastChain(
-        FastDense(1,3, x->tanh.(x)),
-        FastDense(3,10, x->tanh.(x)),
-        FastDense(10,3, x->tanh.(x)),
+        FastDense(1,3, x->softplus.(x)),
+        FastDense(3,10, x->softplus.(x)),
+        FastDense(10,3, x->softplus.(x)),
         FastDense(3,1, sigmoid_A)
     )
     
 θ = initial_params(UA)
-const epochs = 30
 current_epoch = 1
-const η = 0.005
+η = 0.02
 batch_size = length(temp_series)
+
+# Settings for distributed progress bars
+# n_trajectories = batch_size
+# progress = Progress(n_trajectories)
+# const channel = RemoteChannel(()->Channel{Int}(n_trajectories))
+# @everywhere const channel = $channel
 
 cd(@__DIR__)
 const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
-@time iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
+# First train with ADAM to move the parameters into a favourable space
+train_settings = (RMSProp(η), 20) # optimizer, epochs
+solver = ROCK4()
+iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
+θ_trained = iceflow_trained.minimizer
+
+# Continue training with BFGS
+train_settings = (BFGS(initial_stepnorm=0.01f0), 20) # optimizer, epochs
+iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
