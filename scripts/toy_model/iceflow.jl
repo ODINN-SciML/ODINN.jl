@@ -37,7 +37,7 @@ function glacier_evolution(glacier_list, ensemble=ensemble)
     println("Running forward PDE ice flow model...\n")
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-    iceflow_sol = solve(ensemble_prob, ROCK4(), ensemble, trajectories = length(temp_series), 
+    iceflow_sol = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
                         pmap_batch_size=length(temp_series), reltol=1e-6, 
                         progress=true, saveat=1.0, progress_steps = 50)
 
@@ -87,7 +87,7 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
 
-                iceflow_sol = solve(ensemble_prob, ROCK4(), ensemble, trajectories = n_trajectories, 
+    iceflow_sol = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
                         pmap_batch_size=length(temp_series), reltol=1e-6, save_everystep=false, 
                         progress=true, saveat=1.0, progress_steps = 50)
 
@@ -149,9 +149,9 @@ callback = function (θ,l) # callback function to observe training
 
     pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
     pred_A = [pred_A...] # flatten
-    true_A = A_fake(-20.0:0.0)
+    true_A = A_fake(-20.0:0.0, noise)
 
-    plot(true_A, label="True A")
+    scatter(true_A, label="True A")
     plot_epoch = plot!(pred_A, label="Predicted A")
     savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
@@ -245,7 +245,7 @@ function iceflow!(dH, H, context,t)
     year = floor(Int, t) + 1
     if year != current_year[] && year <= t₁
         temp = Ref{Float64}(context.x[7][year])
-        A[] .= A_fake(temp[])
+        A[] .= A_fake(temp[], noise)
         current_year[] .= year
     end
 
@@ -340,8 +340,13 @@ function SIA(H, A, context)
 end
 
 
-function A_fake(temp)
-    return @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+function A_fake(temp, noise=false)
+    A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    if noise
+        A = A .+ randn(rng, length(temp)).*4e-17
+    end
+
+    return A
 end
 
 predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-16

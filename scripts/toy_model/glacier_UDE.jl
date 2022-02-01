@@ -17,14 +17,13 @@ println("Number of workers: ", nworkers())
 @everywhere begin 
     cd(@__DIR__)
     using Pkg 
-    Pkg.activate("../../.");
-    # Pkg.instantiate()
+    Pkg.activate("../../.")
 end
 
 @everywhere begin 
 using Statistics
 using LinearAlgebra
-using Random 
+using Random
 using HDF5  
 using JLD
 using OrdinaryDiffEq
@@ -45,10 +44,9 @@ const minA = 3e-17
 const maxT = 1
 const minT = -25
 
-create_ref_dataset = false
-
-# Include all functions
-include("iceflow.jl")
+create_ref_dataset = true
+const noise = true # Add random noise to fake A law
+const rng = MersenneTwister(1) # random seed
 
 ##################################################
 #### Generate reference dataset ####
@@ -73,7 +71,7 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
                      HDF5.read(argentiere_f["vel_hist"])[begin:end-2,:,2:end],
                      HDF5.read(argentiere_f["s_apply_hist"])[begin:end-2,:,2:end],
                      0, 0)
-    
+ 
 # Domain size
 const nx = size(argentiere.bed)[1]
 const ny = size(argentiere.bed)[2]
@@ -91,6 +89,9 @@ const maxA_out = 8
 sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 end # @everywhere
 
+# Include all functions
+include("iceflow.jl")
+
 const temp_series, norm_temp_series = fake_temp_series(t₁)
 
 if create_ref_dataset 
@@ -103,6 +104,7 @@ if create_ref_dataset
     # @everywhere const channel = $channel
   
     # Compute reference dataset in parallel
+    solver = Ralston()
     H_refs = generate_ref_dataset(temp_series, H₀)
     
     ## Save reference plots
@@ -149,8 +151,8 @@ cd(@__DIR__)
 const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
-train_settings = (RMSProp(η), 20) # optimizer, epochs
 solver = ROCK4()
+train_settings = (RMSProp(η), 10) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
@@ -159,10 +161,11 @@ train_settings = (BFGS(initial_stepnorm=0.01f0), 20) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
-pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
+data_range = -20.0:0.0
+pred_A = predict_A̅(UA, θ_trained, collect(data_range)')
 pred_A = [pred_A...] # flatten
-true_A = A_fake(-20:0.0)
+true_A = A_fake(data_range) 
 
-plot(true_A, label="True A")
+scatter(true_A, label="True A")
 train_final = plot!(pred_A, label="Predicted A")
 savefig(train_final,joinpath(root_plots,"training","final_model.png"))
