@@ -8,54 +8,69 @@
 @views inn(A) = A[2:end-1,2:end-1]
 end # @everywhere 
 
-function glacier_evolution(glacier_list, ensemble=ensemble)
+# function glacier_evolution(glacier_list)
 
-    # Initialize all matrices for the solver
-    S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
-    dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
-    H, D, dH, Fx, Fy = zeros(Float64,nx,ny), zeros(Float64,nx-1,ny-1),zeros(Float64,nx-2,ny-2),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
-    V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
+#     # Initialize all matrices for the solver
+#     S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
+#     dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
+#     H, D, dH, Fx, Fy = zeros(Float64,nx,ny), zeros(Float64,nx-1,ny-1),zeros(Float64,nx-2,ny-2),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
+#     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
     
-    # Gather simulation parameters
-    current_year = 0
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, [current_year])
+#     # Gather simulation parameters
+#     current_year = 0
+#     context = ArrayPartition([A], B, S, dSdx, dSdy, D, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, [current_year])
 
-    function prob_iceflow_func(prob, i, repeat, context, glacier_list) # closure
+#     function prob_iceflow_func(prob, i, repeat, context, glacier_list) # closure
 
-        H = glacier_gd[i].distributed_thickness.data # initial ice thickness conditions for forward model
-        B = glacier_gd[i].topo.data - glacier_gd.distributed_thickness.data # bedrock
+#         H = glacier_gd[i].distributed_thickness.data # initial ice thickness conditions for forward model
+#         B = glacier_gd[i].topo.data - glacier_gd.distributed_thickness.data # bedrock
         
-        println("Processing glacier #$i ≈ ", mean(temp_series[i]))
-        context.x[2] .= B # Bedrock for current glacier
+#         println("Processing glacier #$i ≈ ", mean(temp_series[i]))
+#         context.x[2] .= B # Bedrock for current glacier
 
-        return remake(prob, p=context)
-    end
+#         return remake(prob, p=context)
+#     end
 
-    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
+#     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
 
-    # Perform reference simulation with forward model 
-    println("Running forward PDE ice flow model...\n")
+#     # Perform reference simulation with forward model 
+#     println("Running forward PDE ice flow model...\n")
+#     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
+#     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
+#     iceflow_sol = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
+#                         pmap_batch_size=length(temp_series), reltol=1e-6, 
+#                         progress=true, saveat=1.0, progress_steps = 50)
+
+#     # Save only matrices
+#     idx = 1
+#     for result in iceflow_sol
+#         if idx == 1
+#             H_refs = result.u[end]
+#         else
+#             @views H_refs = cat(H_refs, result.u[end], dims=3)
+#         end
+#         idx += 1
+#     end
+
+#     return H_refs  
+# end
+
+@everywhere begin
+function prob_iceflow_PDE(H, temps, context) 
+        
+    println("Processing temp series ≈ ", mean(temps))
+    context.x[7] .= temps # We set the temp_series for the ith trajectory
+
     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
-    ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-    iceflow_sol = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
-                        pmap_batch_size=length(temp_series), reltol=1e-6, 
-                        progress=true, saveat=1.0, progress_steps = 50)
+    iceflow_sol = solve(iceflow_prob, solver,
+                    reltol=1e-6, save_everystep=false, 
+                    progress=true, progress_steps = 10)
 
-    # Save only matrices
-    idx = 1
-    for result in iceflow_sol
-        if idx == 1
-            H_refs = result.u[end]
-        else
-            @views H_refs = cat(H_refs, result.u[end], dims=3)
-        end
-        idx += 1
-    end
-
-    return H_refs  
+    return iceflow_sol 
 end
+end # @everywhere
 
-function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
+function generate_ref_dataset(temp_series, H₀)
     # Compute reference dataset in parallel
     H = deepcopy(H₀)
     
@@ -72,40 +87,10 @@ function generate_ref_dataset(temp_series, H₀, ensemble=ensemble)
     current_year = 0
     context = ArrayPartition([A], B, S, dSdx, dSdy, D, copy(temp_series[5]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
 
-    function prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
-        
-        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
-        context.x[7] .= temp_series[i] # We set the temp_series for the ith trajectory
-
-        return remake(prob, p=context)
-    end
-
-    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
-
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
-    iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
-    ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-
-    iceflow_sol = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
-                        pmap_batch_size=length(temp_series), reltol=1e-6, save_everystep=false, 
-                        progress=true, saveat=1.0, progress_steps = 50)
-
-    # Distributed progress bars for solving PDEs in paralell
-    # @sync begin
-    #     @async begin
-    #         tasksdone = 0
-    #         while tasksdone < n_trajectories
-    #             tasksdone += take!(channel)
-    #             update!(progress, tasksdone)
-    #         end
-    #     end
-    #     @async begin
-    #         iceflow_sol = solve(ensemble_prob, ROCK4(), ensemble, trajectories = n_trajectories, 
-    #                     pmap_batch_size=length(temp_series), reltol=1e-6, save_everystep=false, 
-    #                     progress=true, saveat=1.0, progress_steps = 50)
-    #     end
-    # end
+    # Train batches in parallel
+    iceflow_sol = @showprogress pmap(temps -> prob_iceflow_PDE(H, temps, context), temp_series)
 
     # Save only matrices
     idx = 1
@@ -124,12 +109,11 @@ end
 
 function train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
     H = deepcopy(H₀)
-    current_year = 0.0
     optimizer = train_settings[1]
     epochs = train_settings[2]
     # Tuple with all the temp series and H_refs
-    context = (B, H, current_year, temp_series)
-    loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
+    context = (B, H)
+    loss(θ) = loss_iceflow(θ, context, UA, H_refs, temp_series) # closure
 
     # Debugging
     # println("Gradients: ", gradient(loss, θ))
@@ -141,8 +125,6 @@ function train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
 
     return iceflow_trained
 end
-
-@everywhere begin 
 
 callback = function (θ,l) # callback function to observe training
     println("Epoch #$current_epoch - Loss H: ", l)
@@ -159,8 +141,9 @@ callback = function (θ,l) # callback function to observe training
     false
 end
 
-function loss_iceflow(θ, context, UA, H_refs) 
-    H_preds = predict_iceflow(θ, UA, context)
+function loss_iceflow(θ, context, UA, H_refs, temp_series) 
+
+    H_preds = predict_iceflow(θ, UA, context, temp_series)
     
     # Compute loss function for the full batch
     l_H = 0.0
@@ -168,73 +151,49 @@ function loss_iceflow(θ, context, UA, H_refs)
     for i in 1:length(H_preds)
         H_ref = H_refs[:,:,i]
         H = H_preds[i].u[end]
+
+        Zygote.ignore() do
+            error = heatmap(H, title="H_pred")
+            savefig(error,joinpath(root_plots,"training","error$i.png"))
+        end
+ 
         l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
     end
 
     l_H_avg = l_H/length(H_preds)
+
+    println("l_H_avg: ", l_H_avg)
     
     return l_H_avg
 end
 
-function output_func(sol, i)
-    put!(channel, 1)
-    sol, false
-end
-
-
-function predict_iceflow(θ, UA, context, ensemble=ensemble)
-
-    function prob_iceflow_func(prob, i, repeat, context, UA) # closure
-        # B, H, current_year, temp_series)  
-        temp_series = context[4]
-    
-        # println("Processing temp series #$i ≈ ", mean(temp_series[i]))
-        # We add the ith temperature series 
-        iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[i], UA) # closure
+@everywhere begin 
+function prob_iceflow_UDE(θ, H, temps, context, UA) 
         
-        return remake(prob, f=iceflow_UDE_batch)
-    end
+    # println("Processing temp series ≈ ", mean(temps))
+    iceflow_UDE_batch(u, p, t) = iceflow_NN(H, θ, t, context, temps, UA) # closure
+    iceflow_prob = ODEProblem(iceflow_UDE_batch,H,(0.0,t₁),context)
+    iceflow_sol = solve(iceflow_prob, solver, 
+                    # sensealg=InterpolatingAdjoint(autojacvec=ZygoteVJP()),
+                    reltol=1e-6, save_everystep=false, 
+                    progress=true, progress_steps = 10)
 
-    prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, UA)
+    return iceflow_sol 
+end
+end # @everywhere
 
-    # (B, H, current_year, temp_series)
+function predict_iceflow(θ, UA, context, temp_series)
+
+    # (B, H, current_year)
     H = context[2]
-    tspan = (0.0,t₁)
 
-    iceflow_UDE(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[5], UA) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE,H,tspan,θ)
-    ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-    # ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func, output_func = output_func)
+    # Train UDE in parallel
+    H_preds = pmap(temps -> prob_iceflow_UDE(θ, H, temps, context, UA), temp_series)
 
-    H_pred = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
-        pmap_batch_size=batch_size, u0=H, p=θ, reltol=1e-6, save_everystep=false,   
-        progress=true, progress_steps = 10)
-
-    # Distributed progress bars for solving UDEs in paralell
-    # @sync begin
-    #     @async begin
-    #         tasksdone = 0
-    #         println("tasksdone: ", tasksdone)
-    #         while tasksdone < n_trajectories
-    #             println("here")
-    #             tasksdone += take!(channel)
-    #             println("there")
-    #             update!(progress, tasksdone)
-    #             println("out")
-    #         end
-    #     end
-    #     @async begin
-    #         println("solving")
-    #         H_pred = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
-    #                 pmap_batch_size=batch_size, u0=H, p=θ, reltol=1e-6, 
-    #                 sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP()), save_everystep=false,   
-    #                 progress=true, progress_steps = 10)
-    #     end
-    # end
-
-    return H_pred
+    return H_preds
 end
 
+@everywhere begin 
 function iceflow!(dH, H, context,t)
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 

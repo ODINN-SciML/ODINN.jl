@@ -1,10 +1,16 @@
 ## Environment and packages
-cd(@__DIR__)
-using Pkg 
-Pkg.activate("../../.");
-Pkg.instantiate()
+import Pkg
+# activate project
+Pkg.activate(dirname(Base.current_project()))
+# make sure all packages are precompiled
+Pkg.precompile()
+
+# using Logging: global_logger
+# using TerminalLoggers: TerminalLogger
+# global_logger(TerminalLogger())
 
 using Distributed
+using ProgressMeter
 const processes = 10
 
 if nprocs() < processes
@@ -15,9 +21,9 @@ println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
 @everywhere begin 
-    cd(@__DIR__)
-    using Pkg 
-    Pkg.activate("../../.")
+    import Pkg
+    Pkg.activate(dirname(Base.current_project()))
+    Pkg.precompile()
 end
 
 @everywhere begin 
@@ -29,7 +35,6 @@ using JLD
 using OrdinaryDiffEq
 using DiffEqFlux
 using Flux
-using Distributed
 using Tullio
 using RecursiveArrayTools
 using Infiltrator
@@ -44,9 +49,9 @@ const minA = 3e-17
 const maxT = 1
 const minT = -25
 
-create_ref_dataset = true
+create_ref_dataset = false
 const noise = true # Add random noise to fake A law
-const rng = MersenneTwister(1) # random seed
+(@isdefined rng) || (const rng = MersenneTwister(1)) # random seed
 
 ##################################################
 #### Generate reference dataset ####
@@ -76,14 +81,12 @@ argentiere = Glacier(HDF5.read(argentiere_f["bed"])[begin:end-2,:],
 const nx = size(argentiere.bed)[1]
 const ny = size(argentiere.bed)[2]
 
-const B  = copy(argentiere.bed)
-const H₀ = copy(argentiere.thick[:,:,1])
+(@isdefined B) || (const B  = copy(argentiere.bed))
+(@isdefined H₀) || (const H₀ = copy(argentiere.thick[:,:,1]))
 
 # Spatial and temporal differentials
 const Δx, Δy = 50, 50 #m (Δx = Δy)
 
-# ensemble = EnsembleSerial()
-ensemble = EnsembleDistributed()
 const minA_out = 0.3
 const maxA_out = 8
 sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
@@ -92,7 +95,7 @@ end # @everywhere
 # Include all functions
 include("iceflow.jl")
 
-const temp_series, norm_temp_series = fake_temp_series(t₁)
+(@isdefined temp_series) || (const temp_series, norm_temp_series = fake_temp_series(t₁))
 
 if create_ref_dataset 
     println("Generating reference dataset for training...")
@@ -104,7 +107,7 @@ if create_ref_dataset
     # @everywhere const channel = $channel
   
     # Compute reference dataset in parallel
-    solver = Ralston()
+    @everywhere solver = Ralston()
     H_refs = generate_ref_dataset(temp_series, H₀)
     
     ## Save reference plots
@@ -141,7 +144,7 @@ current_epoch = 1
 η = 0.02
 batch_size = length(temp_series)
 
-# Settings for distributed progress bars
+# Settings for  distributed progress bars
 # n_trajectories = batch_size
 # progress = Progress(n_trajectories)
 # const channel = RemoteChannel(()->Channel{Int}(n_trajectories))
@@ -151,7 +154,7 @@ cd(@__DIR__)
 const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
-solver = ROCK4()
+@everywhere solver = ROCK4()
 train_settings = (RMSProp(η), 10) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
