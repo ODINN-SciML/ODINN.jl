@@ -8,53 +8,6 @@
 @views inn(A) = A[2:end-1,2:end-1]
 end # @everywhere 
 
-# function glacier_evolution(glacier_list)
-
-#     # Initialize all matrices for the solver
-#     S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
-#     dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
-#     H, D, dH, Fx, Fy = zeros(Float64,nx,ny), zeros(Float64,nx-1,ny-1),zeros(Float64,nx-2,ny-2),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
-#     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
-    
-#     # Gather simulation parameters
-#     current_year = 0
-#     context = ArrayPartition([A], B, S, dSdx, dSdy, D, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, [current_year])
-
-#     function prob_iceflow_func(prob, i, repeat, context, glacier_list) # closure
-
-#         H = glacier_gd[i].distributed_thickness.data # initial ice thickness conditions for forward model
-#         B = glacier_gd[i].topo.data - glacier_gd.distributed_thickness.data # bedrock
-        
-#         println("Processing glacier #$i ≈ ", mean(temp_series[i]))
-#         context.x[2] .= B # Bedrock for current glacier
-
-#         return remake(prob, p=context)
-#     end
-
-#     prob_func(prob, i, repeat) = prob_iceflow_func(prob, i, repeat, context, temp_series) # closure
-
-#     # Perform reference simulation with forward model 
-#     println("Running forward PDE ice flow model...\n")
-#     iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
-#     ensemble_prob = EnsembleProblem(iceflow_prob, prob_func = prob_func)
-#     iceflow_sol = solve(ensemble_prob, solver, ensemble, trajectories = length(temp_series), 
-#                         pmap_batch_size=length(temp_series), reltol=1e-6, 
-#                         progress=true, saveat=1.0, progress_steps = 50)
-
-#     # Save only matrices
-#     idx = 1
-#     for result in iceflow_sol
-#         if idx == 1
-#             H_refs = result.u[end]
-#         else
-#             @views H_refs = cat(H_refs, result.u[end], dims=3)
-#         end
-#         idx += 1
-#     end
-
-#     return H_refs  
-# end
-
 @everywhere begin
 function prob_iceflow_PDE(H, temps, context) 
         
@@ -114,10 +67,6 @@ function train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
     # Tuple with all the temp series and H_refs
     context = (B, H)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs, temp_series) # closure
-
-    # Debugging
-    # println("Gradients: ", gradient(loss, θ))
-    # @infiltrate
 
     println("Training iceflow UDE...")
     # println("Using solver: ", solver)

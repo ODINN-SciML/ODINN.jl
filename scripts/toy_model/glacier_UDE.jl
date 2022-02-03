@@ -139,12 +139,6 @@ current_epoch = 1
 η = 0.02
 batch_size = length(temp_series)
 
-# Settings for  distributed progress bars
-# n_trajectories = batch_size
-# progress = Progress(n_trajectories)
-# const channel = RemoteChannel(()->Channel{Int}(n_trajectories))
-# @everywhere const channel = $channel
-
 cd(@__DIR__)
 const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
