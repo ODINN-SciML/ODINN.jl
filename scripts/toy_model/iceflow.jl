@@ -126,6 +126,8 @@ function train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
     return iceflow_trained
 end
 
+@everywhere begin 
+
 callback = function (θ,l) # callback function to observe training
     println("Epoch #$current_epoch - Loss H: ", l)
 
@@ -133,8 +135,10 @@ callback = function (θ,l) # callback function to observe training
     pred_A = [pred_A...] # flatten
     true_A = A_fake(-20.0:0.0, noise)
 
-    scatter(true_A, label="True A")
-    plot_epoch = plot!(pred_A, label="Predicted A")
+    scatter(-20.0:0.0, true_A, label="True A")
+    plot_epoch = plot!(-20.0:0.0, pred_A, label="Predicted A", 
+                        xlabel="Long-term air temperature (°C)",
+                        ylabel="A")
     savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
 
@@ -142,7 +146,6 @@ callback = function (θ,l) # callback function to observe training
 end
 
 function loss_iceflow(θ, context, UA, H_refs, temp_series) 
-
     H_preds = predict_iceflow(θ, UA, context, temp_series)
     
     # Compute loss function for the full batch
@@ -162,25 +165,8 @@ function loss_iceflow(θ, context, UA, H_refs, temp_series)
 
     l_H_avg = l_H/length(H_preds)
 
-    println("l_H_avg: ", l_H_avg)
-    
     return l_H_avg
 end
-
-@everywhere begin 
-function prob_iceflow_UDE(θ, H, temps, context, UA) 
-        
-    # println("Processing temp series ≈ ", mean(temps))
-    iceflow_UDE_batch(u, p, t) = iceflow_NN(H, θ, t, context, temps, UA) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE_batch,H,(0.0,t₁),context)
-    iceflow_sol = solve(iceflow_prob, solver, 
-                    # sensealg=InterpolatingAdjoint(autojacvec=ZygoteVJP()),
-                    reltol=1e-6, save_everystep=false, 
-                    progress=true, progress_steps = 10)
-
-    return iceflow_sol 
-end
-end # @everywhere
 
 function predict_iceflow(θ, UA, context, temp_series)
 
@@ -193,7 +179,18 @@ function predict_iceflow(θ, UA, context, temp_series)
     return H_preds
 end
 
-@everywhere begin 
+function prob_iceflow_UDE(θ, H, temps, context, UA) 
+        
+    # println("Processing temp series ≈ ", mean(temps))
+    iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temps, UA) # closure
+    iceflow_prob = ODEProblem(iceflow_UDE_batch,H,(0.0,t₁),θ)
+    iceflow_sol = solve(iceflow_prob, solver, u0=H, p=θ,
+                    reltol=1e-6, save_everystep=false, 
+                    progress=true, progress_steps = 10)
+
+    return iceflow_sol 
+end
+
 function iceflow!(dH, H, context,t)
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
@@ -302,7 +299,7 @@ end
 function A_fake(temp, noise=false)
     A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
     if noise
-        A = A .+ randn(rng, length(temp)).*4e-17
+        A = A .+ randn(rng_seed(), length(temp)).*4e-17
     end
 
     return A

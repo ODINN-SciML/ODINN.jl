@@ -39,6 +39,7 @@ using Tullio
 using RecursiveArrayTools
 using Infiltrator
 using Plots
+using ProgressMeter
 
 const t₁ = 5                 # number of simulation years 
 const ρ = 900                     # Ice density [kg / m^3]
@@ -49,9 +50,9 @@ const minA = 3e-17
 const maxT = 1
 const minT = -25
 
-create_ref_dataset = false
+create_ref_dataset = true
 const noise = true # Add random noise to fake A law
-(@isdefined rng) || (const rng = MersenneTwister(1)) # random seed
+rng_seed() = MersenneTwister(123) # random seed
 
 ##################################################
 #### Generate reference dataset ####
@@ -99,12 +100,6 @@ include("iceflow.jl")
 
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-
-    # Settings for distributed progress bars
-    # n_trajectories = length(temp_series)
-    # progress = Progress(n_trajectories)
-    # const channel = RemoteChannel(()->Channel{Int}(n_trajectories))
-    # @everywhere const channel = $channel
   
     # Compute reference dataset in parallel
     @everywhere solver = Ralston()
