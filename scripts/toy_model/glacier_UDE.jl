@@ -50,7 +50,7 @@ const minA = 3e-17
 const maxT = 1
 const minT = -25
 
-create_ref_dataset = true
+create_ref_dataset = false
 const noise = true # Add random noise to fake A law
 rng_seed() = MersenneTwister(123) # random seed
 
@@ -94,7 +94,7 @@ sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 end # @everywhere
 
 # Include all functions
-include("iceflow.jl")
+include("helpers/iceflow.jl")
 
 (@isdefined temp_series) || (const temp_series, norm_temp_series = fake_temp_series(t₁))
 
@@ -136,7 +136,7 @@ UA = FastChain(
     
 θ = initial_params(UA)
 current_epoch = 1
-η = 0.02
+η = 0.03
 batch_size = length(temp_series)
 
 cd(@__DIR__)
@@ -144,12 +144,12 @@ const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
-train_settings = (RMSProp(η), 10) # optimizer, epochs
+train_settings = (RMSProp(η), 20) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 # Continue training with BFGS
-train_settings = (BFGS(initial_stepnorm=0.01f0), 20) # optimizer, epochs
+train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 

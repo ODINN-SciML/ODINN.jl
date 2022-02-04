@@ -102,13 +102,7 @@ function loss_iceflow(θ, context, UA, H_refs, temp_series)
 
     for i in 1:length(H_preds)
         H_ref = H_refs[:,:,i]
-        H = H_preds[i].u[end]
-
-        Zygote.ignore() do
-            error = heatmap(H, title="H_pred")
-            savefig(error,joinpath(root_plots,"training","error$i.png"))
-        end
- 
+        H = H_preds[i].u[end] 
         l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
     end
 
