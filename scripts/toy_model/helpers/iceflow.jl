@@ -103,7 +103,8 @@ function loss_iceflow(θ, context, UA, H_refs, temp_series)
     for i in 1:length(H_preds)
         H_ref = H_refs[:,:,i]
         H = H_preds[i].u[end] 
-        l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
+        #l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
+        l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean)
     end
 
     l_H_avg = l_H/length(H_preds)
