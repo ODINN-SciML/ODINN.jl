@@ -1,8 +1,6 @@
 ## Environment and packages
 import Pkg
-# activate project
-Pkg.activate(dirname(Base.current_project()))
-# make sure all packages are precompiled
+Pkg.activate(dirname(Base.current_project())) # activate project
 Pkg.precompile()
 
 # using Logging: global_logger
@@ -103,7 +101,7 @@ if create_ref_dataset
   
     # Compute reference dataset in parallel
     @everywhere solver = Ralston()
-    H_refs = generate_ref_dataset(temp_series, H₀)
+    H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, H₀)
     
     ## Save reference plots
     # for (temps, H) in zip(temp_series, H_refs)
@@ -121,6 +119,8 @@ if create_ref_dataset
         
     println("Saving reference data")
     save(joinpath(root_dir, "data/H_refs.jld"), "H_refs", H_refs)
+    save(joinpath(root_dir, "data/Vx_refs.jld"), "Vx_refs", V̄x_refs)
+    save(joinpath(root_dir, "data/Vy_refs.jld"), "Vy_refs", V̄y_refs)
 
 else
    H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
@@ -136,7 +136,6 @@ UA = FastChain(
     
 θ = initial_params(UA)
 current_epoch = 1
-η = 0.03
 batch_size = length(temp_series)
 
 cd(@__DIR__)
@@ -144,14 +143,22 @@ const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
-train_settings = (RMSProp(η), 20) # optimizer, epochs
+train_settings = (ADAM(0.03), 20) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
+
+# Continue training with a smaller learning rate
+# train_settings = (ADAM(0.001), 20) # optimizer, epochs
+# iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
+# θ_trained = iceflow_trained.minimizer
 
 # Continue training with BFGS
 train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
+
+# Save trained NN weights
+save(joinpath(root_dir, "data/trained_weights.jld"), "θ_trained", θ_trained)
 
 data_range = -20.0:0.0
 pred_A = predict_A̅(UA, θ_trained, collect(data_range)')

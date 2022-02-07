@@ -19,7 +19,9 @@ function prob_iceflow_PDE(H, temps, context)
                     reltol=1e-6, save_everystep=false, 
                     progress=true, progress_steps = 10)
 
-    return iceflow_sol 
+    V̄x, V̄y = context[13]./length(iceflow_sol.t), context[14]./length(iceflow_sol.t)
+
+    return iceflow_sol, V̄x, V̄y 
 end
 end # @everywhere
 
@@ -43,7 +45,7 @@ function generate_ref_dataset(temp_series, H₀)
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
     # Train batches in parallel
-    iceflow_sol = @showprogress pmap(temps -> prob_iceflow_PDE(H, temps, context), temp_series)
+    iceflow_sol, V̄x_refs, V̄y_refs  = @showprogress pmap(temps -> prob_iceflow_PDE(H, temps, context), temp_series)
 
     # Save only matrices
     idx = 1
@@ -57,7 +59,7 @@ function generate_ref_dataset(temp_series, H₀)
         idx += 1
     end
 
-    return H_refs  
+    return H_refs, V̄x_refs, V̄y_refs
 end
 
 function train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
@@ -87,7 +89,8 @@ callback = function (θ,l) # callback function to observe training
     scatter(-20.0:0.0, true_A, label="True A")
     plot_epoch = plot!(-20.0:0.0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)",
-                        ylabel="A")
+                        ylabel="A", ylims=(2e-17,8e-16),
+                        legend=:topleft)
     savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
 
@@ -186,6 +189,9 @@ function SIA!(dH, H, context)
     ∇S = context.x[10]
     Fx = context.x[11]
     Fy = context.x[12]
+    Vx = context.x[13]
+    Vy = context.x[14]
+    # V = context.x[15]
     
     # Update glacier surface altimetry
     S .= B .+ H
@@ -204,6 +210,10 @@ function SIA!(dH, H, context)
     dSdy_edges .= diff_y(S[2:end - 1,:]) / Δy
     Fx .= .-avg_y(D) .* dSdx_edges
     Fy .= .-avg_x(D) .* dSdy_edges 
+
+    # Compute cumulative velocities. They will be averaged afterwards
+    Vx .= Vx .+ -D./(avg(H) .+ ϵ).*avg_y(dSdx)
+    Vy .= Vy .+ -D./(avg(H) .+ ϵ).*avg_x(dSdy)
 
     #  Flux divergence
     inn(dH) .= .-(diff_x(Fx) / Δx .+ diff_y(Fy) / Δy) # MB to be added here 
