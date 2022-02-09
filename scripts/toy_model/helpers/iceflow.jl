@@ -106,8 +106,23 @@ function loss_iceflow(θ, context, UA, H_refs, temp_series)
     for i in 1:length(H_preds)
         H_ref = H_refs[:,:,i]
         H = H_preds[i].u[end] 
-        #l_H += Flux.Losses.mse(H[H .!= 0.0], H_ref[H.!= 0.0]; agg=mean)
-        l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean)
+        #l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean)
+
+        # sample random indices for which H_ref is non-zero
+        n_sample = 10
+        n_counts = 0 
+        while n_counts < n_sample
+            i, j = rand(1:nx), rand(1:ny)
+            if H_ref[i,j] != 0.0
+                #println("New non-zero count for loss function: ", i, j)
+                n_counts += 1
+                l_H += ( H[i,j] - H_ref[i,j] )^2
+                # what about trying a percentual error?
+                # l_H += ( (H[i,j] - H_ref[i,j]) / H_ref[i,j] )^2
+            end
+        end
+        l_H = l_H / n_sample
+
     end
 
     l_H_avg = l_H/length(H_preds)
