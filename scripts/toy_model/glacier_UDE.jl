@@ -1,6 +1,8 @@
 ## Environment and packages
 import Pkg
-Pkg.activate(dirname(Base.current_project())) # activate project
+#Pkg.activate(dirname(Base.current_project())) # activate project
+cd(@__DIR__)
+Pkg.activate("../../.") # activate project
 Pkg.precompile()
 
 # using Logging: global_logger
@@ -20,7 +22,8 @@ println("Number of workers: ", nworkers())
 
 @everywhere begin 
     import Pkg
-    Pkg.activate(dirname(Base.current_project()))
+    #Pkg.activate(dirname(Base.current_project()))
+    Pkg.activate("../../.")
     Pkg.precompile()
 end
 
@@ -39,22 +42,14 @@ using Infiltrator
 using Plots
 using ProgressMeter
 
-const t₁ = 5                 # number of simulation years 
-const ρ = 900                     # Ice density [kg / m^3]
-const g = 9.81                    # Gravitational acceleration [m / s^2]
-const n = 3                      # Glen's flow law exponent
-const maxA = 8e-16
-const minA = 3e-17
-const maxT = 1
-const minT = -25
+include("helpers/parameters.jl")
 
-create_ref_dataset = false
-const noise = true # Add random noise to fake A law
 rng_seed() = MersenneTwister(123) # random seed
 
-##################################################
-#### Generate reference dataset ####
-##################################################
+#######################################################################################################
+#############################             Glacier Setup            ####################################
+#######################################################################################################
+
 # Load the HDF5 file with Harry's simulated data
 cd(@__DIR__)
 root_dir = cd(pwd, "../..")
@@ -86,13 +81,14 @@ const ny = size(argentiere.bed)[2]
 # Spatial and temporal differentials
 const Δx, Δy = 50, 50 #m (Δx = Δy)
 
-const minA_out = 0.3
-const maxA_out = 8
-sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 end # @everywhere
 
 # Include all functions
 include("helpers/iceflow.jl")
+
+#######################################################################################################
+#############################             Glacier Setup            ####################################
+#######################################################################################################
 
 (@isdefined temp_series) || (const temp_series, norm_temp_series = fake_temp_series(t₁))
 
@@ -126,7 +122,12 @@ else
    H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
 end
     
-# Train UDE
+#######################################################################################################
+#############################             Train UDE            ########################################
+#######################################################################################################
+
+sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
+
 UA = FastChain(
         FastDense(1,3, x->softplus.(x)),
         FastDense(3,10, x->softplus.(x)),
