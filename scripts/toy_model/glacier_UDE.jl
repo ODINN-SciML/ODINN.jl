@@ -115,9 +115,10 @@ if create_ref_dataset
     println("Saving reference data")
     jldsave(joinpath(root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs)
 
-else
-   PDE_refs = load(joinpath(root_dir, "data/PDE_refs.jld2"))
 end
+
+# Load stored PDE reference datasets
+PDE_refs = load(joinpath(root_dir, "data/PDE_refs.jld2"))
     
 #######################################################################################################
 #############################             Train UDE            ########################################
@@ -150,7 +151,7 @@ iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs
 
 # Continue training with BFGS
 train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, (V̄x_refs, V̄y_refs), temp_series)
+iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, PDE_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 # Save trained NN weights
