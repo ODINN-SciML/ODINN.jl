@@ -1,9 +1,7 @@
 ## Environment and packages
 import Pkg
-#Pkg.activate(dirname(Base.current_project())) # activate project
-cd(@__DIR__)
-Pkg.activate("../../.") # activate project
-Pkg.precompile()
+Pkg.activate(dirname(Base.current_project())) # activate project
+# Pkg.precompile()
 
 # using Logging: global_logger
 # using TerminalLoggers: TerminalLogger
@@ -22,9 +20,7 @@ println("Number of workers: ", nworkers())
 
 @everywhere begin 
     import Pkg
-    #Pkg.activate(dirname(Base.current_project()))
-    Pkg.activate("../../.")
-    Pkg.precompile()
+    Pkg.activate(dirname(Base.current_project()))
 end
 
 @everywhere begin 
