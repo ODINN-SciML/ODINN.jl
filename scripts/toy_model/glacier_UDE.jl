@@ -1,7 +1,6 @@
 ## Environment and packages
 import Pkg
 Pkg.activate(dirname(Base.current_project())) # activate project
-# Pkg.precompile()
 
 # using Logging: global_logger
 # using TerminalLoggers: TerminalLogger
@@ -21,6 +20,7 @@ println("Number of workers: ", nworkers())
 @everywhere begin 
     import Pkg
     Pkg.activate(dirname(Base.current_project()))
+    Pkg.precompile()
 end
 
 @everywhere begin 
@@ -28,7 +28,7 @@ using Statistics
 using LinearAlgebra
 using Random
 using HDF5  
-using JLD
+using JLD2
 using OrdinaryDiffEq
 using DiffEqFlux
 using Flux
@@ -86,7 +86,7 @@ end # @everywhere
 include("helpers/iceflow.jl")
 
 #######################################################################################################
-#############################             Glacier Setup            ####################################
+#############################           Reference dataset          ####################################
 #######################################################################################################
 
 (@isdefined temp_series) || (const temp_series, norm_temp_series = fake_temp_series(t₁))
@@ -113,12 +113,10 @@ if create_ref_dataset
     # end
         
     println("Saving reference data")
-    save(joinpath(root_dir, "data/H_refs.jld"), "H_refs", H_refs)
-    save(joinpath(root_dir, "data/Vx_refs.jld"), "Vx_refs", V̄x_refs)
-    save(joinpath(root_dir, "data/Vy_refs.jld"), "Vy_refs", V̄y_refs)
+    jldsave(joinpath(root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs)
 
 else
-   H_refs = load(joinpath(root_dir, "data/H_refs.jld"))["H_refs"]
+   PDE_refs = load(joinpath(root_dir, "data/PDE_refs.jld2"))
 end
     
 #######################################################################################################
@@ -142,7 +140,7 @@ const root_plots = cd(pwd, "../../plots")
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
 train_settings = (ADAM(0.03), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
+iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 # Continue training with a smaller learning rate
@@ -151,13 +149,15 @@ iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, 
 # θ_trained = iceflow_trained.minimizer
 
 # Continue training with BFGS
+
 train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, temp_series)
+iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, (V̄x_refs, V̄y_refs), temp_series)
 θ_trained = iceflow_trained.minimizer
 
 # Save trained NN weights
 save(joinpath(root_dir, "data/trained_weights.jld"), "θ_trained", θ_trained)
 
+# Plot the final trained model
 data_range = -20.0:0.0
 pred_A = predict_A̅(UA, θ_trained, collect(data_range)')
 pred_A = [pred_A...] # flatten
