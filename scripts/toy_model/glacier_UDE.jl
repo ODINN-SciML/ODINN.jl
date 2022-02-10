@@ -139,7 +139,7 @@ const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
-train_settings = (ADAM(0.03), 20) # optimizer, epochs
+train_settings = (ADAM(0.05), 20) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
@@ -149,7 +149,6 @@ iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs
 # θ_trained = iceflow_trained.minimizer
 
 # Continue training with BFGS
-
 train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
 iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, H_refs, (V̄x_refs, V̄y_refs), temp_series)
 θ_trained = iceflow_trained.minimizer
