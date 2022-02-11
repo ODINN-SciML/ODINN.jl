@@ -342,6 +342,7 @@ end
 Computes the average ice velocity for a given input temperature
 """
 function avg_surface_V(H, B, temp)
+
     # Update glacier surface altimetry
     S = B .+ H
 
@@ -351,13 +352,13 @@ function avg_surface_V(H, B, temp)
     dSdy = diff_y(S) / Δy
     ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
     
-    A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
-    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
-    D = Γ .* avg(H).^(n + 2) .* ∇S
-
-    # Compute cumulative velocities. They will be averaged afterwards
-    Vx = -D./(avg(H) .+ ϵ).*avg_y(dSdx)
-    Vy = -D./(avg(H) .+ ϵ).*avg_x(dSdy)
+    A = predict_A̅(UA, θ, [temp])      # FastChain prediction requires explicit parameters
+    Γ₂ = 2 * A * (ρ * g)^n / (n+1)     # 1 / m^3 s 
+    D = Γ₂ .* avg(H).^(n + 1) .* ∇S
+    
+    # Compute averaged surface velocities
+    Vx = - D .* avg_y(dSdx)
+    Vy = - D .* avg_x(dSdy)
 
     return Vx, Vy
         
