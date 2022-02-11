@@ -41,3 +41,14 @@
 Access the inner part of the matrix (-2,-2)
 """
 @views inn(A) = A[2:end-1,2:end-1]
+
+"""
+fillNaN!(x, fill)
+
+Convert empty matrix grid cells into fill value
+"""
+function fillNaN!(x, fill=0)
+    for i in eachindex(x)
+        @inbounds x[i] = ifelse(isnan(x[i]), fill, x[i])
+    end
+end
