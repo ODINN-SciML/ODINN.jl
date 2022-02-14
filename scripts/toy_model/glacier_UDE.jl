@@ -40,8 +40,6 @@ using ProgressMeter
 
 include("helpers/parameters.jl")
 
-rng_seed() = MersenneTwister(123) # random seed
-
 #######################################################################################################
 #############################             Glacier Setup            ####################################
 #######################################################################################################
@@ -76,9 +74,6 @@ const ny = size(argentiere.bed)[2]
 
 # Spatial and temporal differentials
 const Δx, Δy = 50, 50 #m (Δx = Δy)
-
-# this shouldm't be here
-sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 
 end # @everywhere
 

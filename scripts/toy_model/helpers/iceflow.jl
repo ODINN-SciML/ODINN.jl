@@ -32,7 +32,7 @@ function generate_ref_dataset(temp_series, H₀)
     # Compute average ice surface velocities for the simulated period
     V̄x_refs, V̄y_refs = [],[]
     for (H_ref, temps) in zip(H_refs, temp_series) 
-        V̄x_ref, V̄y_ref = avg_surface_V(H_ref, B, mean(temps)) # Average velocity with average temperature
+        V̄x_ref, V̄y_ref = avg_surface_V(H_ref, B, mean(temps), "PDE") # Average velocity with average temperature
         push!(V̄x_refs, V̄x_ref)
         push!(V̄y_refs, V̄y_ref)
     end
@@ -96,12 +96,12 @@ callback = function (θ,l) # callback function to observe training
     pred_A = [pred_A...] # flatten
     true_A = A_fake(-20.0:0.0, noise)
 
-    scatter(-20.0:0.0, true_A, label="True A")
-    plot_epoch = plot!(-20.0:0.0, pred_A, label="Predicted A", 
+    Plots.scatter(-20.0:0.0, true_A, label="True A")
+    plot_epoch = Plots.plot!(-20.0:0.0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)",
                         ylabel="A", ylims=(2e-17,8e-16),
                         legend=:topleft)
-    savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
+    Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
 
     false
@@ -161,7 +161,7 @@ function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series)
         Vx_ref = PDE_refs["V̄x_refs"][i]
         Vy_ref = PDE_refs["V̄y_refs"][i]
         # Get ice velocities from the UDE predictions
-        V̄x_pred, V̄y_pred = avg_surface_V(H_preds[i], B, mean(temp_series[i])) # Average velocity with average temperature
+        V̄x_pred, V̄y_pred = avg_surface_V(H_preds[i], B, mean(temp_series[i]), "UDE") # Average velocity with average temperature
 
         if random_sampling_loss
             # sample random indices for which V_ref is non-zero
@@ -341,7 +341,7 @@ end
 
 Computes the average ice velocity for a given input temperature
 """
-function avg_surface_V(H, B, temp)
+function avg_surface_V(H, B, temp, sim)
 
     # Update glacier surface altimetry
     S = B .+ H
@@ -352,7 +352,12 @@ function avg_surface_V(H, B, temp)
     dSdy = diff_y(S) / Δy
     ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
     
-    A = predict_A̅(UA, θ, [temp])      # FastChain prediction requires explicit parameters
+    @assert (sim == "UDE" || sim == "PDE") "Wrong type of simulation. Needs to be 'UDE' or 'PDE'."
+    if sim == "UDE"
+        A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
+    elseif sim == "PDE"
+        A = A_fake(temp, noise)
+    end
     Γ₂ = 2 * A * (ρ * g)^n / (n+1)     # 1 / m^3 s 
     D = Γ₂ .* avg(H).^(n + 1) .* ∇S
     
@@ -402,6 +407,10 @@ function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,
 
     return temps, norm_temps
 end
+
+
+
+sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 
 end # @everywhere 
     
