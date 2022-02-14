@@ -9,8 +9,6 @@ Pkg.precompile()
 ## Set up Python environment
 # Choose own Python environment with OGGM's installation
 # Use same path as "which python" in shell
-# ENV["PYTHON"] = "/Users/Bolib001/miniconda3/envs/oggm_env/bin/python3.9" 
-
 ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # path in JupyterHub
 Pkg.build("PyCall") 
 
@@ -23,6 +21,7 @@ utils = pyimport("oggm.utils")
 workflow = pyimport("oggm.workflow")
 tasks = pyimport("oggm.tasks")
 graphics = pyimport("oggm.graphics")
+bedtopo = pyimport("oggm.shop.bedtopo")
 # MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline") # TODO: fix issue with Python version in Gemini HPC
 
 # Essential Python libraries
@@ -134,7 +133,7 @@ base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_fil
 (@isdefined gdirs) || (gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)) 
 # gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)
 
-gdir = gdirs[1]
+gdir = gdirs[2]
 println("Path to the DEM:", gdir.get_filepath("dem"))
 
 # Obtain ice thickness inversion
@@ -146,10 +145,11 @@ if !@isdefined glacier_gd
         # tasks.compute_downstream_line,
         tasks.gridded_attributes,
         tasks.gridded_mb_attributes,
-        tasks.prepare_for_inversion,  # This is a preprocessing task
-        tasks.mass_conservation_inversion,  # This gdirsdoes the actual job
+        # tasks.prepare_for_inversion,  # This is a preprocessing task
+        # tasks.mass_conservation_inversion,  # This gdirsdoes the actual job
         # tasks.filter_inversion_output,  # This smoothes the thicknesses at the tongue a little
-        tasks.distribute_thickness_per_altitude
+        # tasks.distribute_thickness_per_altitude,
+        bedtopo.add_consensus_thickness   # Use consensus ice thicknesses from Farinotti et al. (2019)
     ]
     for task in list_talks
         # The order matters!
@@ -157,7 +157,7 @@ if !@isdefined glacier_gd
     end
 end
 
-# Plot glacier domain
+# Plot glacier domain<
 # graphics.plot_domain(gdirs)
 # graphics.plot_distributed_thickness(gdir)     
 
@@ -188,22 +188,23 @@ MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
 # display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
 
 # Determine initial conditions
-(@isdefined H₀) || (const H₀ = glacier_gd.distributed_thickness.data) # initial ice thickness conditions for forward model
+(@isdefined H₀) || (const H₀ = glacier_gd.consensus_ice_thickness.data) # initial ice thickness conditions for forward model
 fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
 (@isdefined B) || (const B = glacier_gd.topo.data .- H₀) # bedrock
 
 # Run forward model for selected glaciers
 if create_ref_dataset 
     println("Generating reference dataset for training...")
-  
+ 
     # Compute reference dataset in parallel
     @everywhere solver = Ralston()
     H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, H₀)
         
     println("Saving reference data")
     jldsave(joinpath(root_dir, "data/PDE_refs_ODINN.jld2"); H_refs, V̄x_refs, V̄y_refs)
-
 end
 
+# Load stored PDE reference datasets
+PDE_refs = load(joinpath(root_dir, "data/PDE_refs_ODINN.jld2"))
 
 

@@ -52,3 +52,14 @@ function fillNaN!(x, fill=0)
         @inbounds x[i] = ifelse(isnan(x[i]), fill, x[i])
     end
 end
+
+"""
+    smooth!(A)
+
+Smooth data contained in a matrix with one time step (CFL) of diffusion.
+"""
+@views function smooth!(A)
+    A[2:end-1,2:end-1] .= A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    A[1,:]=A[2,:]; A[end,:]=A[end-1,:]; A[:,1]=A[:,2]; A[:,end]=A[:,end-1]
+    return
+end
