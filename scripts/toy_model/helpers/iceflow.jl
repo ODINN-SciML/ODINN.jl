@@ -96,12 +96,12 @@ callback = function (θ,l) # callback function to observe training
     pred_A = [pred_A...] # flatten
     true_A = A_fake(-20.0:0.0, noise)
 
-    scatter(-20.0:0.0, true_A, label="True A")
-    plot_epoch = plot!(-20.0:0.0, pred_A, label="Predicted A", 
+    Plots.scatter(-20.0:0.0, true_A, label="True A")
+    plot_epoch = Plots.plot!(-20.0:0.0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)",
                         ylabel="A", ylims=(2e-17,8e-16),
                         legend=:topleft)
-    savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
+    Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
 
     false
@@ -407,6 +407,10 @@ function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,
 
     return temps, norm_temps
 end
+
+
+
+sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
 
 end # @everywhere 
     

@@ -113,7 +113,8 @@ PARAMS["use_multiprocessing"] = true # Let's use multiprocessing for OGGM
 # Defining glaciers to be modelled with RGI IDs
 # RGI60-11.03638 # Argentière glacier
 # RGI60-11.01450 # Aletsch glacier
-rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+# RGI60-11.03646 # Bossons glacier
+rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.03646"]
 
 ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
 # Where to fetch the pre-processed directories
@@ -133,7 +134,7 @@ base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_fil
 (@isdefined gdirs) || (gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)) 
 # gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)
 
-gdir = gdirs[2]
+gdir = gdirs[1]
 println("Path to the DEM:", gdir.get_filepath("dem"))
 
 # Obtain ice thickness inversion
@@ -170,8 +171,8 @@ sendto(workers(), gdir=gdir)
 @everywhere begin
 nx = glacier_gd.y.size # glacier extent
 ny = glacier_gd.x.size # really weird, but this is inversed 
-const Δx = gdir.grid.dx
-const Δy = gdir.grid.dy
+Δx = gdir.grid.dx
+Δy = gdir.grid.dy
 end # @everywhere
 
 MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
@@ -190,6 +191,7 @@ MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
 # Determine initial conditions
 (@isdefined H₀) || (const H₀ = glacier_gd.consensus_ice_thickness.data) # initial ice thickness conditions for forward model
 fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+smooth!(H₀)  # Smooth initial ice thickness to help the solver
 (@isdefined B) || (const B = glacier_gd.topo.data .- H₀) # bedrock
 
 # Run forward model for selected glaciers
@@ -206,5 +208,52 @@ end
 
 # Load stored PDE reference datasets
 PDE_refs = load(joinpath(root_dir, "data/PDE_refs_ODINN.jld2"))
+
+#######################################################################################################
+#############################             Train UDE            ########################################
+#######################################################################################################
+
+UA = FastChain(
+        FastDense(1,3, x->softplus.(x)),
+        FastDense(3,10, x->softplus.(x)),
+        FastDense(10,3, x->softplus.(x)),
+        FastDense(3,1, sigmoid_A)
+    )
+    
+θ = initial_params(UA)
+current_epoch = 1
+batch_size = length(temp_series)
+
+cd(@__DIR__)
+const root_plots = cd(pwd, "../../plots")
+# Train iceflow UDE in parallel
+# First train with ADAM to move the parameters into a favourable space
+@everywhere solver = ROCK4()
+train_settings = (ADAM(0.05), 20) # optimizer, epochs
+iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
+θ_trained = iceflow_trained.minimizer
+
+# Continue training with a smaller learning rate
+# train_settings = (ADAM(0.001), 20) # optimizer, epochs
+# iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
+# θ_trained = iceflow_trained.minimizer
+
+# Continue training with BFGS
+train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
+iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, PDE_refs, temp_series)
+θ_trained = iceflow_trained.minimizer
+
+# Save trained NN weights
+save(joinpath(root_dir, "data/trained_weights.jld"), "θ_trained", θ_trained)
+
+# Plot the final trained model
+data_range = -20.0:0.0
+pred_A = predict_A̅(UA, θ_trained, collect(data_range)')
+pred_A = [pred_A...] # flatten
+true_A = A_fake(data_range) 
+
+scatter(true_A, label="True A")
+train_final = plot!(pred_A, label="Predicted A")
+savefig(train_final,joinpath(root_plots,"training","final_model.png"))
 
 

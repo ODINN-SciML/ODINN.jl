@@ -10,3 +10,7 @@ It uses neural networks and differential equations in order to combine mechanist
 ## Running the toy model
 
 A demostration of our method is included in `scripts/Glacier_UDE`. The `Manifest.toml` and `Project.toml`include all the requiered dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. 
+
+## Integration with OGGM
+
+ODINN works as a back-end of OGGM, utilizing all its tools to retrieve RGI data, topographical data, climate data and other datasets from the OGGM shop. This allows us to run tests with this toy model for any glacier on Earth. In order to choose a glacier, you just need to specify the RGI ID, which you can find [here](https://www.glims.org/maps/glims). 
