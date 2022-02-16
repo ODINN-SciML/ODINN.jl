@@ -8,9 +8,10 @@ const minA = 3e-17
 const maxT = 1
 const minT = -25
 
-create_ref_dataset = true          # Run reference PDE to generate reference dataset
+create_ref_dataset = false          # Run reference PDE to generate reference dataset
 # loss_type = "H"                   # Loss function based on ice thickness
-loss_type = "V"                     # Loss function based on ice surface velocities
+# loss_type = "V"                   # Loss function based on ice surface velocities
+loss_type = "HV"                    # Combined loss function based on ice surface velocities and ice thickness
 const random_sampling_loss = false  # Use random subset of matrix samples for the loss
 const noise = true                  # Add random noise to fake A law
 rng_seed() = MersenneTwister(123)   # Random seed
