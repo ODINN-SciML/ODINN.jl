@@ -9,7 +9,7 @@ It uses neural networks and differential equations in order to combine mechanist
 
 ## Running the toy model
 
-A demostration of our method is included in `scripts/Glacier_UDE`. The `Manifest.toml` and `Project.toml`include all the requiered dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. 
+A demostration of our method is included in `scripts/ODINN.jl`. The `Manifest.toml` and `Project.toml`include all the requiered dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. 
 
 ## Integration with OGGM
 
