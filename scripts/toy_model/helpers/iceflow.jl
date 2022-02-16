@@ -71,14 +71,7 @@ function train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
     epochs = train_settings[2]
     # Tuple with all the temp series and H_refs
     context = (B, H)
-    @assert (loss_type == "H" || loss_type == "V") "Invalid loss_type. Needs to be 'H' or 'V'"
-    if loss_type == "H"
-        refs = PDE_refs["H_refs"]
-    elseif loss_type == "V"
-        refs = PDE_refs
-    end
-
-    loss(θ) = loss_iceflow(θ, context, UA, refs, temp_series) # closure
+    loss(θ) = loss_iceflow(θ, context, UA, PDE_refs, temp_series) # closure
 
     println("Training iceflow UDE...")
     # println("Using solver: ", solver)
@@ -108,55 +101,21 @@ callback = function (θ,l) # callback function to observe training
 end
 
 """
-    loss_iceflow(θ, context, UA, H_refs::Vector{Any}, temp_series)
-
-Loss function based on glacier ice thickness
-"""
-function loss_iceflow(θ, context, UA, H_refs::Vector{Any}, temp_series) 
-    H_preds = predict_iceflow(θ, UA, context, temp_series)
-
-    # Compute loss function for the full batch
-    l_H = 0.0
-    for i in 1:length(H_refs)
-        H_ref = H_refs[i]
-        H = H_preds[i][1]
-
-        if random_sampling_loss
-            # sample random indices for which H_ref is non-zero
-            n_sample = 10
-            n_counts = 0 
-            while n_counts < n_sample
-                i, j = rand(1:nx), rand(1:ny)
-                if H_ref[i,j] != 0.0
-                    #println("New non-zero count for loss function: ", i, j)
-                    n_counts += 1
-                    l_H += ( H[i,j] - H_ref[i,j] )^2
-                    # what about trying a percentual error?
-                    # l_H += ( (H[i,j] - H_ref[i,j]) / H_ref[i,j] )^2
-                end
-            end
-            l_H = l_H / n_sample
-        else
-            # Classic loss function with the full matrix
-            l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean)
-        end
-    end
-
-    l_H_avg = l_H/length(H_V_preds)
-    return l_H_avg
-end
-
-"""
     loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series) 
 
-Loss function based on glacier ice velocities
+Loss function based on glacier ice velocities and/or ice thickness
 """
 function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series) 
     H_preds = predict_iceflow(θ, UA, context, temp_series)
-    
+   
     # Compute loss function for the full batch
-    l_Vx, l_Vy = 0.0, 0.0
+    l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
     for i in 1:length(H_preds)
+
+        # Get ice thickness from the reference dataset
+        H_ref = PDE_refs["H_refs"][i]
+        # Get ice thickness from the UDE predictions
+        H = H_preds[i]
         # Get ice velocities for the reference dataset
         Vx_ref = PDE_refs["V̄x_refs"][i]
         Vy_ref = PDE_refs["V̄y_refs"][i]
@@ -182,13 +141,21 @@ function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series)
             l_Vy = l_Vy / n_sample
         else
             # Classic loss function with the full matrix
+            l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean)
             l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)
             l_Vy += Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)
         end
     end
 
-    l_V_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]))/2
-    return l_V_avg
+    @assert (loss_type == "H" || loss_type == "V" || loss_type == "HV") "Invalid loss_type. Needs to be 'H', 'V' or 'HV'"
+    if loss_type == "H"
+        l_avg = l_H/length(H_preds)
+    elseif loss_type == "V"
+        l_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]))/2
+    elseif loss_type == "HV"
+        l_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]) + l_H/length(H_preds))/3
+    end
+    return l_avg
 end
 
 """

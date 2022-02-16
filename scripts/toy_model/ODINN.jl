@@ -70,7 +70,6 @@ using Dates # to provide correct Julian time slices
 using PyCall
 using ParallelDataTransfer
 
-
 ###############################################
 #############    PARAMETERS     ###############
 ###############################################
@@ -134,7 +133,9 @@ base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_fil
 (@isdefined gdirs) || (gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)) 
 # gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)
 
-gdir = gdirs[1]
+glacier_filter = 1
+gdir = gdirs[glacier_filter]
+rgi_id = rgi_ids[glacier_filter]
 println("Path to the DEM:", gdir.get_filepath("dem"))
 
 # Obtain ice thickness inversion
@@ -158,11 +159,22 @@ if !@isdefined glacier_gd
     end
 end
 
-# Plot glacier domain<
-# graphics.plot_domain(gdirs)
-# graphics.plot_distributed_thickness(gdir)     
-
 (@isdefined glacier_gd) || (glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data")))
+
+# Plot glacier domain
+graphics.plot_domain(gdirs)
+
+# plot the salem map background, make countries in grey
+# smap = glacier_gd.salem.get_map(countries=false)
+# smap.set_shapefile(gdir.read_shapefile("outlines"))
+# smap.set_topography(glacier_gd.topo.data);
+# f, ax = plt.subplots(figsize=(9, 9))
+# smap.set_data(glacier_gd.consensus_ice_thickness)
+# smap.set_cmap("Blues")
+# smap.plot(ax=ax)
+# smap.append_colorbar(ax=ax, label="Ice thickness (m)")
+# smap.visualize()["imshow"]
+# plt.show()
 
 # Broadcast necessary variables to all workers
 sendto(workers(), glacier_gd=glacier_gd)
@@ -203,11 +215,11 @@ if create_ref_dataset
     H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, H₀)
         
     println("Saving reference data")
-    jldsave(joinpath(root_dir, "data/PDE_refs_ODINN.jld2"); H_refs, V̄x_refs, V̄y_refs)
+    jldsave(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"); H_refs, V̄x_refs, V̄y_refs)
 end
 
 # Load stored PDE reference datasets
-PDE_refs = load(joinpath(root_dir, "data/PDE_refs_ODINN.jld2"))
+PDE_refs = load(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"))
 
 #######################################################################################################
 #############################             Train UDE            ########################################
