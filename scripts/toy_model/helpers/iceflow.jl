@@ -30,14 +30,14 @@ function generate_ref_dataset(temp_series, H₀)
     H_refs  = @showprogress pmap(temps -> prob_iceflow_PDE(H, temps, context), temp_series)
 
     # Compute average ice surface velocities for the simulated period
-    V̄x_refs, V̄y_refs = [],[]
-    for (H_ref, temps) in zip(H_refs, temp_series) 
-        V̄x_ref, V̄y_ref = avg_surface_V(H_ref, B, mean(temps)) # Average velocity with average temperature
-        push!(V̄x_refs, V̄x_ref)
-        push!(V̄y_refs, V̄y_ref)
-    end
+    #V̄x_refs, V̄y_refs = [],[]
+    #for (H_ref, temps) in zip(H_refs, temp_series) 
+    #    V̄x_ref, V̄y_ref = avg_surface_V(H_ref, B, mean(temps)) # Average velocity with average temperature
+    #    push!(V̄x_refs, V̄x_ref)
+    #    push!(V̄y_refs, V̄y_ref)
+    #end
 
-    return H_refs, V̄x_refs, V̄y_refs
+    return H_refs#, V̄x_refs, V̄y_refs
 end
 
 @everywhere begin
