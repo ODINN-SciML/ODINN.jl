@@ -117,11 +117,7 @@ rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.03646"]
 
 ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
 # Where to fetch the pre-processed directories
-
-# TODO: make this constant
-base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands")
-
-# Where to fetch the pre-processed directories
+(@isdefined gdirs) || (const base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands"))
 
 # TODO: change to Lilian's version in notebook (ODINN_MB.ipynb)
 # use elevation band  flowlines
@@ -131,12 +127,10 @@ base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_fil
 #                                           prepro_rgi_version="62")
 
 (@isdefined gdirs) || (gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)) 
-# gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)
 
-glacier_filter = 1
+glacier_filter = 1 # For now, choose an individual glacier from the list
 gdir = gdirs[glacier_filter]
 rgi_id = rgi_ids[glacier_filter]
-println("Path to the DEM:", gdir.get_filepath("dem"))
 
 # Obtain ice thickness inversion
 if !@isdefined glacier_gd
