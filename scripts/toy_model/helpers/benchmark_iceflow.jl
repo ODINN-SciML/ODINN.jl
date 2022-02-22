@@ -75,7 +75,7 @@ function train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
 
     println("Training iceflow UDE...")
     # println("Using solver: ", solver)
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = 1)
 
     return iceflow_trained
 end
@@ -85,16 +85,16 @@ end
 callback = function (θ,l) # callback function to observe training
     println("Epoch #$current_epoch - Loss $loss_type: ", l)
 
-    pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
-    pred_A = [pred_A...] # flatten
-    true_A = A_fake(-20.0:0.0, noise)
+    # pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
+    # pred_A = [pred_A...] # flatten
+    # true_A = A_fake(-20.0:0.0, noise)
 
-    Plots.scatter(-20.0:0.0, true_A, label="True A")
-    plot_epoch = Plots.plot!(-20.0:0.0, pred_A, label="Predicted A", 
-                        xlabel="Long-term air temperature (°C)",
-                        ylabel="A", ylims=(2e-17,8e-16),
-                        legend=:topleft)
-    Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
+    # Plots.scatter(-20.0:0.0, true_A, label="True A")
+    # plot_epoch = Plots.plot!(-20.0:0.0, pred_A, label="Predicted A", 
+    #                     xlabel="Long-term air temperature (°C)",
+    #                     ylabel="A", ylims=(2e-17,8e-16),
+    #                     legend=:topleft)
+    # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
 
     false
@@ -106,21 +106,63 @@ end
 Loss function based on glacier ice velocities and/or ice thickness
 """
 function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series) 
-    H_preds = predict_iceflow(θ, UA, context, temp_series)
-   
+    if multibatch
+        H_preds = predict_iceflow(θ, UA, context, temp_series)
+    else
+        H_preds = predict_iceflow_onebatch(θ, UA, context, temp_series)
+    end
+    
     # Compute loss function for the full batch
     l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
-    for i in 1:length(H_preds)
 
+    if multibatch
+        for i in 1:length(H_preds)
+
+            # Get ice thickness from the reference dataset
+            H_ref = PDE_refs["H_refs"][i]
+            # Get ice thickness from the UDE predictions
+            H = H_preds[i]
+            # Get ice velocities for the reference dataset
+            Vx_ref = PDE_refs["V̄x_refs"][i]
+            Vy_ref = PDE_refs["V̄y_refs"][i]
+            # Get ice velocities from the UDE predictions
+            V̄x_pred, V̄y_pred = avg_surface_V(H_preds[i], B, mean(temp_series[i]), "UDE") # Average velocity with average temperature
+
+            if random_sampling_loss
+                # sample random indices for which V_ref is non-zero
+                n_sample = 10
+                n_counts = 0 
+                while n_counts < n_sample
+                    i, j = rand(1:nx), rand(1:ny)
+                    if Vx_ref[i,j] != 0.0
+                        #println("New non-zero count for loss function: ", i, j)
+                        n_counts += 1
+                        l_Vx += (V̄x_pred[i,j] - Vx_ref[i,j] )^2
+                        l_Vy += (V̄y_pred[i,j] - Vy_ref[i,j] )^2
+                        # what about trying a percentual error?
+                        # l_H += ( (H[i,j] - H_ref[i,j]) / H_ref[i,j] )^2
+                    end
+                end
+                l_Vx = l_Vx / n_sample
+                l_Vy = l_Vy / n_sample
+            else
+                # Classic loss function with the full matrix
+                l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean)
+                l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)
+                l_Vy += Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)
+            end
+        end
+    else 
+        i = 1
         # Get ice thickness from the reference dataset
         H_ref = PDE_refs["H_refs"][i]
         # Get ice thickness from the UDE predictions
-        H = H_preds[i]
+        H = H_preds
         # Get ice velocities for the reference dataset
         Vx_ref = PDE_refs["V̄x_refs"][i]
         Vy_ref = PDE_refs["V̄y_refs"][i]
         # Get ice velocities from the UDE predictions
-        V̄x_pred, V̄y_pred = avg_surface_V(H_preds[i], B, mean(temp_series[i]), "UDE") # Average velocity with average temperature
+        V̄x_pred, V̄y_pred = avg_surface_V(H_preds, B, mean(temp_series[i]), "UDE") # Average velocity with average temperature
 
         if random_sampling_loss
             # sample random indices for which V_ref is non-zero
@@ -139,15 +181,17 @@ function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series)
                 V̄y_pred_f = V̄y_pred[Vy_ref .!= 0.0]
 
                 if norm_loss
-                    normH = H_ref_f[j]  .+ ϵ
-                    normVx = Vx_ref_f[j] .+ ϵ
-                    normVy = Vy_ref_f[j] .+ ϵ
+                    normH = H_ref[H_ref .!= 0.0] .+ ϵ
+                    normVx = Vx_ref[Vx_ref .!= 0.0] .+ ϵ
+                    normVy = Vy_ref[Vy_ref .!= 0.0] .+ ϵ
+                    l_H += Flux.Losses.mse(H_f[j] ./normH, H_ref_f[j]  ./normH; agg=mean) 
+                    l_Vx += Flux.Losses.mse(V̄x_pred_f[j] ./normVx, Vx_ref_f[j]  ./normVx; agg=mean)
+                    l_Vy += Flux.Losses.mse(V̄y_pred_f[j] ./normVy, Vy_ref_f[j]  ./normVy; agg=mean)
                 else
-                    normH, normH, normVy = 1, 1, 1
+                    l_H += Flux.Losses.mse(H_f[j], H_ref_f[j]; agg=mean) 
+                    l_Vx += Flux.Losses.mse(V̄x_pred_f[j], Vx_ref_f[j]; agg=mean)
+                    l_Vy += Flux.Losses.mse(V̄y_pred_f[j], Vy_ref_f[j]; agg=mean)
                 end
-                l_H += Flux.Losses.mse(H_f[j]  ./normH, H_ref_f[j]  ./normH; agg=mean) 
-                l_Vx += Flux.Losses.mse(V̄x_pred_f[j]  ./normVx, Vx_ref_f[j]  ./normVx; agg=mean)
-                l_Vy += Flux.Losses.mse(V̄y_pred_f[j]  ./normVy, Vy_ref_f[j]  ./normVy; agg=mean)
 
                 n_counts += 1
             end
@@ -193,6 +237,16 @@ function predict_iceflow(θ, UA, context, temp_series)
 
     # Train UDE in parallel
     H_preds = pmap(temps -> prob_iceflow_UDE(θ, H, temps, context, UA), temp_series)
+
+    return H_preds
+end
+
+function predict_iceflow_onebatch(θ, UA, context, temp_series)
+    # (B, H)
+    H = context[2]
+
+    # Train UDE in parallel
+    H_preds = prob_iceflow_UDE(θ, H, temp_series[1], context, UA)
 
     return H_preds
 end
@@ -350,6 +404,10 @@ function avg_surface_V(H, B, temp, sim)
         A = A_fake(temp, noise)
     end
     Γ₂ = 2 * A * (ρ * g)^n / (n+1)     # 1 / m^3 s 
+    # Zygote.ignore() do 
+    #     @infiltrate
+        
+    # end
     D = Γ₂ .* avg(H).^(n + 1) .* ∇S
     
     # Compute averaged surface velocities

@@ -69,6 +69,7 @@ using ProgressMeter
 using Dates # to provide correct Julian time slices 
 using PyCall
 using ParallelDataTransfer
+using BenchmarkTools
 
 ###############################################
 #############    PARAMETERS     ###############
@@ -89,7 +90,7 @@ end # @everywhere
 
 ### Iceflow forward model  ###
 # (includes utils.jl as well)
-include("helpers/iceflow.jl")
+include("helpers/benchmark_iceflow.jl")
 
 ###############################
 ####  OGGM configuration  #####
@@ -117,7 +118,11 @@ rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.03646"]
 
 ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
 # Where to fetch the pre-processed directories
-(@isdefined gdirs) || (const base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands"))
+
+# TODO: make this constant
+base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands")
+
+# Where to fetch the pre-processed directories
 
 # TODO: change to Lilian's version in notebook (ODINN_MB.ipynb)
 # use elevation band  flowlines
@@ -127,10 +132,12 @@ rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.03646"]
 #                                           prepro_rgi_version="62")
 
 (@isdefined gdirs) || (gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)) 
+# gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)
 
-glacier_filter = 1 # For now, choose an individual glacier from the list
+glacier_filter = 1
 gdir = gdirs[glacier_filter]
 rgi_id = rgi_ids[glacier_filter]
+println("Path to the DEM:", gdir.get_filepath("dem"))
 
 # Obtain ice thickness inversion
 if !@isdefined glacier_gd
@@ -153,22 +160,11 @@ if !@isdefined glacier_gd
     end
 end
 
+# Plot glacier domain<
+# graphics.plot_domain(gdirs)
+# graphics.plot_distributed_thickness(gdir)     
+
 (@isdefined glacier_gd) || (glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data")))
-
-# Plot glacier domain
-graphics.plot_domain(gdirs)
-
-# plot the salem map background, make countries in grey
-# smap = glacier_gd.salem.get_map(countries=false)
-# smap.set_shapefile(gdir.read_shapefile("outlines"))
-# smap.set_topography(glacier_gd.topo.data);
-# f, ax = plt.subplots(figsize=(9, 9))
-# smap.set_data(glacier_gd.consensus_ice_thickness)
-# smap.set_cmap("Blues")
-# smap.plot(ax=ax)
-# smap.append_colorbar(ax=ax, label="Ice thickness (m)")
-# smap.visualize()["imshow"]
-# plt.show()
 
 # Broadcast necessary variables to all workers
 sendto(workers(), glacier_gd=glacier_gd)
@@ -226,40 +222,22 @@ UA = FastChain(
         FastDense(3,1, sigmoid_A)
     )
     
-θ = initial_params(UA)
+# θ = initial_params(UA)
+
+θ = load(joinpath(root_dir, "data/benchmark_weights.jld"))["θ_benchmark"]
+
 current_epoch = 1
 batch_size = length(temp_series)
+
+multibatch = false
 
 cd(@__DIR__)
 const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
+# @everywhere solver = TRBDF2()
+
 train_settings = (ADAM(0.05), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
-θ_trained = iceflow_trained.minimizer
 
-# Continue training with a smaller learning rate
-# train_settings = (ADAM(0.001), 20) # optimizer, epochs
-# iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
-# θ_trained = iceflow_trained.minimizer
-
-# Continue training with BFGS
-train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, PDE_refs, temp_series)
-θ_trained = iceflow_trained.minimizer
-
-# Save trained NN weights
-save(joinpath(root_dir, "data/trained_weights.jld"), "θ_trained", θ_trained)
-
-# Plot the final trained model
-data_range = -20.0:0.0
-pred_A = predict_A̅(UA, θ_trained, collect(data_range)')
-pred_A = [pred_A...] # flatten
-true_A = A_fake(data_range) 
-
-scatter(true_A, label="True A")
-train_final = plot!(pred_A, label="Predicted A")
-savefig(train_final,joinpath(root_plots,"training","final_model.png"))
-
-
+iceflow_trained = @btime train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
