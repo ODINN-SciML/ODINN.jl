@@ -236,6 +236,8 @@ const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
+# @everywhere solver = TRBDF2()
+
 train_settings = (ADAM(0.05), 20) # optimizer, epochs
 
 iceflow_trained = @btime train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)

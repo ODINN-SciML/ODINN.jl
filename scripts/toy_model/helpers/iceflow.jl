@@ -138,9 +138,13 @@ function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series)
                 V̄x_pred_f = V̄x_pred[Vx_ref .!= 0.0]
                 V̄y_pred_f = V̄y_pred[Vy_ref .!= 0.0]
 
-                normH = H_ref_f[j]  .+ ϵ
-                normVx = Vx_ref_f[j] .+ ϵ
-                normVy = Vy_ref_f[j] .+ ϵ
+                if norm_loss
+                    normH = H_ref_f[j]  .+ ϵ
+                    normVx = Vx_ref_f[j] .+ ϵ
+                    normVy = Vy_ref_f[j] .+ ϵ
+                else
+                    normH, normH, normVy = 1, 1, 1
+                end
                 l_H += Flux.Losses.mse(H_f[j]  ./normH, H_ref_f[j]  ./normH; agg=mean) 
                 l_Vx += Flux.Losses.mse(V̄x_pred_f[j]  ./normVx, Vx_ref_f[j]  ./normVx; agg=mean)
                 l_Vy += Flux.Losses.mse(V̄y_pred_f[j]  ./normVy, Vy_ref_f[j]  ./normVy; agg=mean)
@@ -152,12 +156,18 @@ function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series)
             l_Vy = l_Vy / n_sample
         else
             # Classic loss function with the full matrix
-            normH = H_ref[H_ref .!= 0.0] .+ ϵ
-            normVx = Vx_ref[Vx_ref .!= 0.0] .+ ϵ
-            normVy = Vy_ref[Vy_ref .!= 0.0] .+ ϵ
-            l_H += Flux.Losses.mse(H[H_ref .!= 0.0] ./normH, H_ref[H_ref.!= 0.0] ./normH; agg=mean) 
-            l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0] ./normVx, Vx_ref[Vx_ref.!= 0.0] ./normVx; agg=mean)
-            l_Vy += Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0] ./normVy, Vy_ref[Vy_ref.!= 0.0] ./normVy; agg=mean)
+            if norm_loss
+                normH = H_ref[H_ref .!= 0.0] .+ ϵ
+                normVx = Vx_ref[Vx_ref .!= 0.0] .+ ϵ
+                normVy = Vy_ref[Vy_ref .!= 0.0] .+ ϵ
+                l_H += Flux.Losses.mse(H[H_ref .!= 0.0] ./normH, H_ref[H_ref.!= 0.0] ./normH; agg=mean) 
+                l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0] ./normVx, Vx_ref[Vx_ref.!= 0.0] ./normVx; agg=mean)
+                l_Vy += Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0] ./normVy, Vy_ref[Vy_ref.!= 0.0] ./normVy; agg=mean)
+            else
+                l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean) 
+                l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)
+                l_Vy += Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)
+            end
         end
     end
 
