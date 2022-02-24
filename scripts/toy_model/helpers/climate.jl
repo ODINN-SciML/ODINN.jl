@@ -90,7 +90,7 @@ function plot_monthly_map(climate, variable, year)
 end
 
 function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5", dim="2D")
-    @assert any(dim .== ["1D, 2D"]) "Wrong number of dimensions $dim !. Needs to be either `1D` or `2D`."
+    @assert any(dim .== ["1D", "2D"]) "Wrong number of dimensions $dim !. Needs to be either `1D` or `2D`."
     PARAMS["hydro_month_nh"]=1
     MBsandbox.process_w5e5_data(gdir, climate_type=climate, temporal_resol=temp_resolution) 
     fpath = gdir.get_filepath("climate_historical", filesuffix="_daily_W5E5")
@@ -143,6 +143,36 @@ function create_2D_climate_data(climate, g_dem)
 
 end
 
+function to_hydro_period(mass_balance::PyObject, trim_edges=true)
+    # Select hydro period between October 1st and 30th of September
+    if trim_edges
+        hydro_period = collect(Date(mass_balance.index[1],10,1):Day(1):Date(mass_balance.index[end]-1,09,30))
+    else
+        hydro_period = collect(Date(mass_balance.index[1]-1,10,1):Day(1):Date(mass_balance.index[end],09,30))
+    end
+
+    return hydro_period
+end
+
+function to_hydro_period(years::Array)
+    # Select hydro period between October 1st and 30th of September
+    hydro_period = collect(Date(years[1]-1,10,1):Day(1):Date(years[end],09,30))
+
+    return hydro_period
+end
+
+function trim_period(period, climate)
+    if any(climate.time[1].dt.date.data[1] > period[1])
+        head = jldate(climate.time[1])
+        period = Date(year(head), 10, 1):Day(1):period[end] # make it a hydrological year
+    end
+    if any(climate.time[end].dt.date.data[1] < period[end])
+        tail = jldate(climate.time[end])
+        period = period[1]:Day(1):Date(year(tail), 9, 30) # make it a hydrological year
+    end
+
+    return period
+end
 
 function is_abl(month)
     return (month >= 4) & (month <= 10)

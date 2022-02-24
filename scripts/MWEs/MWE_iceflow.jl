@@ -10,10 +10,9 @@ println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
 
 @everywhere begin 
-    cd(@__DIR__)
-    using Pkg 
-    Pkg.activate("../../.");
-    Pkg.instantiate()
+    import Pkg
+    Pkg.activate(dirname(Base.current_project()))
+    Pkg.precompile()
 end
 
 @everywhere begin 
@@ -29,7 +28,7 @@ using RecursiveArrayTools
 using Infiltrator
 using Plots
 
-const t₁ = 5                 # number of simulation years 
+const t₁ = 2                 # number of simulation years 
 const ρ = 900                     # Ice density [kg / m^3]
 const g = 9.81                    # Gravitational acceleration [m / s^2]
 const n = 3                      # Glen's flow law exponent
@@ -114,15 +113,13 @@ callback = function (θ,l) # callback function to observe training
     # plot(true_A, label="True A")
     # plot_epoch = plot!(pred_A, label="Predicted A")
     # savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
-    # global current_epoch += 1
+    global current_epoch += 1
 
     false
 end
 
 function loss_iceflow(θ, context, UA, H_refs) 
     H_preds = predict_iceflow(θ, UA, context)
-    
-    println("After predict")
 
     # Zygote.ignore() do
     #     A_pred = predict_A̅(UA, θ, [mean(temp_series[5])])
@@ -148,7 +145,7 @@ function loss_iceflow(θ, context, UA, H_refs)
 
     l_H_avg = l_H/length(H_preds)
 
-    println("l_H_avg: ", l_H_avg)
+    # println("l_H_avg: ", l_H_avg)
     
     return l_H_avg
 end
@@ -160,7 +157,7 @@ function predict_iceflow(θ, UA, context, ensemble=ensemble)
         # B, H, current_year, temp_series)  
         temp_series = context[4]
     
-        println("Processing temp series #$i ≈ ", mean(temp_series[i]))
+        # println("Processing temp series #$i ≈ ", mean(temp_series[i]))
         # We add the ith temperature series 
         iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temp_series[i], UA) # closure
         
@@ -343,19 +340,19 @@ UA = FastChain(
         FastDense(3,1, sigmoid_A)
     )
 θ = initial_params(UA)
-const epochs = 30
+const epochs = 5
 current_epoch = 1
-const η = 0.005
+const η = 0.01
 
 # Train iceflow UDE in parallel
 @time iceflow_trained = train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
-pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
-pred_A = [pred_A...] # flatten
-true_A = A_fake(-20:0.0)
+# pred_A = predict_A̅(UA, θ_trained, collect(-20.0:0.0)')
+# pred_A = [pred_A...] # flatten
+# true_A = A_fake(-20:0.0)
 
-const root_plots = cd(pwd, "plots")
-plot(true_A, label="True A")
-train_final = plot!(pred_A, label="Predicted A")
-savefig(train_final,joinpath(root_plots,"training","final_model.png"))
+# const root_plots = cd(pwd, "plots")
+# plot(true_A, label="True A")
+# train_final = plot!(pred_A, label="Predicted A")
+# savefig(train_final,joinpath(root_plots,"training","final_model.png"))

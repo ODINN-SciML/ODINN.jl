@@ -16,13 +16,14 @@ using PyCall
 using PyPlot # needed for Matplotlib plots
 
 # Import OGGM sub-libraries in Julia
+netCDF4 = pyimport("netCDF4")
 cfg = pyimport("oggm.cfg")
 utils = pyimport("oggm.utils")
 workflow = pyimport("oggm.workflow")
 tasks = pyimport("oggm.tasks")
 graphics = pyimport("oggm.graphics")
 bedtopo = pyimport("oggm.shop.bedtopo")
-# MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline") # TODO: fix issue with Python version in Gemini HPC
+MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
 
 # Essential Python libraries
 np = pyimport("numpy")
@@ -122,7 +123,7 @@ rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.03646"]
 # TODO: change to Lilian's version in notebook (ODINN_MB.ipynb)
 # use elevation band  flowlines
 # gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=2,
-#                                           prepro_border=10,
+#                                           prepro_border=40,
 #                                           prepro_base_url=base_url,
 #                                           prepro_rgi_version="62")
 
@@ -153,22 +154,11 @@ if !@isdefined glacier_gd
     end
 end
 
+# Load glacier gridded data
 (@isdefined glacier_gd) || (glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data")))
 
 # Plot glacier domain
 graphics.plot_domain(gdirs)
-
-# plot the salem map background, make countries in grey
-# smap = glacier_gd.salem.get_map(countries=false)
-# smap.set_shapefile(gdir.read_shapefile("outlines"))
-# smap.set_topography(glacier_gd.topo.data);
-# f, ax = plt.subplots(figsize=(9, 9))
-# smap.set_data(glacier_gd.consensus_ice_thickness)
-# smap.set_cmap("Blues")
-# smap.plot(ax=ax)
-# smap.append_colorbar(ax=ax, label="Ice thickness (m)")
-# smap.visualize()["imshow"]
-# plt.show()
 
 # Broadcast necessary variables to all workers
 sendto(workers(), glacier_gd=glacier_gd)
@@ -181,7 +171,24 @@ ny = glacier_gd.x.size # really weird, but this is inversed
 Δy = gdir.grid.dy
 end # @everywhere
 
-MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
+#########################################
+###########  CLIMATE DATA  ##############
+#########################################
+
+# Generate downscaled climate data
+if !ispath(joinpath(gdir.dir, "annual_temps.jld2"))
+    const mb_type = "mb_real_daily"
+    const grad_type = "var_an_cycle" # could use here as well 'cte'
+    # fs = "_daily_".*climate
+    const fs = "_daily_W5E5"
+    MB_ds, climate_ds = gen_MB_train_dataset(gdir, fs)
+    # Convert to annual values to force UDE
+    annual_temps = climate_ds.annual.temp.groupby("time.year").mean(dim=["time", "x", "y"])
+    yb,ye = annual_temps.year.data[1], annual_temps.year.data[end]
+    jldsave(joinpath(gdir.dir, "annual_temps.jld2"); annual_temps)
+else
+    annual_temps = load(joinpath(gdir.dir, "annual_temps.jld2"))
+end
 
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
@@ -194,6 +201,9 @@ MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
 # display(Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
 # display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
 
+#########################################
+#########  TOPOGRAPHICAL DATA  ##########
+#########################################
 # Determine initial conditions
 (@isdefined H₀) || (const H₀ = glacier_gd.consensus_ice_thickness.data) # initial ice thickness conditions for forward model
 fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions

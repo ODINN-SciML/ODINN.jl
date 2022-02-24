@@ -335,7 +335,7 @@ Computes the average ice velocity for a given input temperature
 function avg_surface_V(H, B, temp, sim)
 
     # Update glacier surface altimetry
-    S = B .+ H
+    S = B .+ (H₀ .+ H)./2 # Use average ice thickness for the simulated period
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -349,8 +349,8 @@ function avg_surface_V(H, B, temp, sim)
     elseif sim == "PDE"
         A = A_fake(temp, noise)
     end
-    Γ₂ = 2 * A * (ρ * g)^n / (n+1)     # 1 / m^3 s 
-    D = Γ₂ .* avg(H).^(n + 1) .* ∇S
+    Γꜛ = 2 * A * (ρ * g)^n / (n+1) # surface stress (not average)  # 1 / m^3 s 
+    D = Γꜛ .* avg(H).^(n + 1) .* ∇S
     
     # Compute averaged surface velocities
     Vx = - D .* avg_y(dSdx)
