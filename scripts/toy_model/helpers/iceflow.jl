@@ -360,13 +360,17 @@ function avg_surface_V(H, B, temp, sim)
         
 end
 
+# Polynomial fit for Cuffey and Paterson data 
+A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
+
 """
     A_fake(temp, noise=false)
 
 Fake law establishing a theoretical relationship between ice viscosity (A) and long-term air temperature.
 """
 function A_fake(temp, noise=false)
-    A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    A = A_f.(temp) # polynomial fit
     if noise
         A = A .+ randn(rng_seed(), length(temp)).*4e-17
     end

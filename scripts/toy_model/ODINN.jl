@@ -57,6 +57,7 @@ end
 using Statistics
 using LinearAlgebra
 using Random
+using Polynomials
 using HDF5  
 using JLD2
 using OrdinaryDiffEq
