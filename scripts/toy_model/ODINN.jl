@@ -155,23 +155,6 @@ if !@isdefined glacier_gd
     end
 end
 
-# Load glacier gridded data
-(@isdefined glacier_gd) || (glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data")))
-
-# Plot glacier domain
-graphics.plot_domain(gdirs)
-
-# Broadcast necessary variables to all workers
-sendto(workers(), glacier_gd=glacier_gd)
-sendto(workers(), gdir=gdir)
-
-@everywhere begin
-nx = glacier_gd.y.size # glacier extent
-ny = glacier_gd.x.size # really weird, but this is inversed 
-Δx = gdir.grid.dx
-Δy = gdir.grid.dy
-end # @everywhere
-
 #########################################
 ###########  CLIMATE DATA  ##############
 #########################################
@@ -194,7 +177,7 @@ end
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-(@isdefined temp_series) || (const temp_series, norm_temp_series = fake_temp_series(t₁))
+temp_series, norm_temp_series = fake_temp_series(t₁)
 # A_series = []
 # for temps in temp_series
 #     push!(A_series, A_fake.(temps))
@@ -202,22 +185,13 @@ end
 # display(Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
 # display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
 
-#########################################
-#########  TOPOGRAPHICAL DATA  ##########
-#########################################
-# Determine initial conditions
-(@isdefined H₀) || (const H₀ = glacier_gd.consensus_ice_thickness.data) # initial ice thickness conditions for forward model
-fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
-smooth!(H₀)  # Smooth initial ice thickness to help the solver
-(@isdefined B) || (const B = glacier_gd.topo.data .- H₀) # bedrock
-
 # Run forward model for selected glaciers
 if create_ref_dataset 
     println("Generating reference dataset for training...")
  
     # Compute reference dataset in parallel
     @everywhere solver = Ralston()
-    H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, H₀)
+    H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, gdir)
         
     println("Saving reference data")
     jldsave(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"); H_refs, V̄x_refs, V̄y_refs)
@@ -230,14 +204,7 @@ PDE_refs = load(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"))
 #############################             Train UDE            ########################################
 #######################################################################################################
 
-UA = FastChain(
-        FastDense(1,3, x->softplus.(x)),
-        FastDense(3,10, x->softplus.(x)),
-        FastDense(10,3, x->softplus.(x)),
-        FastDense(3,1, sigmoid_A)
-    )
-    
-θ = initial_params(UA)
+# Training setup
 current_epoch = 1
 batch_size = length(temp_series)
 
@@ -246,8 +213,8 @@ const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
-train_settings = (ADAM(0.05), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
+train_settings = (ADAM(0.03), 10) # optimizer, epochs
+iceflow_trained = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 # Continue training with a smaller learning rate
@@ -256,8 +223,9 @@ iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs
 # θ_trained = iceflow_trained.minimizer
 
 # Continue training with BFGS
-train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, PDE_refs, temp_series)
+# train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
+train_settings = (ADAM(0.002), 20) # optimizer, epochs
+iceflow_trained = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained) # retrain
 θ_trained = iceflow_trained.minimizer
 
 # Save trained NN weights
