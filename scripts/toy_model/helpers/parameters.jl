@@ -7,7 +7,7 @@ const maxA = 8e-17
 const minA = 8.5e-20
 const maxT = 1
 const minT = -25
-const minA_out = 8.5e-3
+const minA_out = 8.5e-3 # /!\     # these depend on predict_A̅, so careful when changin them!
 const maxA_out = 8
 # From Cuffey and Paterson
 (@isdefined A_values_sec) || (const A_values_sec = [0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;

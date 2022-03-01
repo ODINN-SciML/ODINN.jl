@@ -10,7 +10,6 @@ function generate_ref_dataset(temp_series, gdir)
 
     # Determine initial geometry conditions
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
-    
     # Initialize all matrices for the solver
     nx, ny = nxy
     S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
@@ -81,15 +80,16 @@ function train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_train
     # println("Using solver: ", solver)
     iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
 
-    return iceflow_trained
+    return iceflow_trained, UA
 end
 
 @everywhere begin 
 
-callback = function (θ,l) # callback function to observe training
+callback = function (θ, l, UA) # callback function to observe training
     println("Epoch #$current_epoch - Loss $loss_type: ", l)
 
     pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
+    println("pred_A: ", mean(pred_A))
     pred_A = [pred_A...] # flatten
     true_A = A_fake(-20.0:0.0, noise)
 
@@ -124,15 +124,13 @@ function loss_iceflow(θ, context, PDE_refs::Dict{String, Any}, temp_series)
         Vx_ref = PDE_refs["V̄x_refs"][i]
         Vy_ref = PDE_refs["V̄y_refs"][i]
         # Get ice velocities from the UDE predictions
-        V̄x_pred, V̄y_pred = avg_surface_V(context, H_preds[i], mean(temp_series[i]), "UDE") # Average velocity with average temperature
+        V̄x_pred, V̄y_pred = avg_surface_V(context, H_preds[i], mean(temp_series[i]), "UDE", θ) # Average velocity with average temperature
 
         if random_sampling_loss
             # sample random indices for which V_ref is non-zero
             n_sample, n_counts = 50, 0
             nxy = length(H_ref[H_ref .!= 0.0])
-            # Zygote.ignore() do 
-            #     @infiltrate
-            # end
+
             while n_counts < n_sample
                 j = rand(1:nxy-2)
                 H_ref_f = H_ref[H_ref .!= 0.0]
@@ -183,7 +181,8 @@ function loss_iceflow(θ, context, PDE_refs::Dict{String, Any}, temp_series)
     elseif loss_type == "HV"
         l_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]) + l_H/length(H_preds))/3
     end
-    return l_avg
+    UA = context[6]
+    return l_avg, UA
 end
 
 """
@@ -341,7 +340,7 @@ end
 
 Computes the average ice velocity for a given input temperature
 """
-function avg_surface_V(context, H, temp, sim)
+function avg_surface_V(context, H, temp, sim, θ=[])
     # context = (B, H₀, H, nxy, Δxy)
     B, H₀, Δx, Δy, UA = retrieve_context(context)
 
@@ -393,7 +392,7 @@ end
 
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
-predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-19
+predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-17
 
 function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
     temps, norm_temps, norm_temps_flat = [],[],[]

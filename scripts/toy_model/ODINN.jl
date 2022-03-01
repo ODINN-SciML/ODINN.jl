@@ -135,7 +135,7 @@ gdir = gdirs[glacier_filter]
 rgi_id = rgi_ids[glacier_filter]
 
 # Obtain ice thickness inversion
-if !@isdefined glacier_gd
+if !isfile(joinpath(gdir.dir, "inversion_flowlines.pkl"))
     list_talks = [
         # tasks.glacier_masks,
         # tasks.compute_centerlines,
@@ -160,7 +160,7 @@ end
 #########################################
 
 # Generate downscaled climate data
-if !ispath(joinpath(gdir.dir, "annual_temps.jld2"))
+if !isfile(joinpath(gdir.dir, "annual_temps.jld2"))
     const mb_type = "mb_real_daily"
     const grad_type = "var_an_cycle" # could use here as well 'cte'
     # fs = "_daily_".*climate
@@ -213,8 +213,8 @@ const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
-train_settings = (ADAM(0.03), 10) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series)
+train_settings = (ADAM(0.05), 10) # optimizer, epochs
+iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 # Continue training with a smaller learning rate
@@ -225,7 +225,7 @@ iceflow_trained = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_s
 # Continue training with BFGS
 # train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
 train_settings = (ADAM(0.002), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained) # retrain
+iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained) # retrain
 θ_trained = iceflow_trained.minimizer
 
 # Save trained NN weights
