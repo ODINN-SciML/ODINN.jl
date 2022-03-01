@@ -6,14 +6,15 @@
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(temp_series, H₀)
-    # Compute reference dataset in parallel
-    H = deepcopy(H₀)
-    
+function generate_ref_dataset(temp_series, gdir)
+
+    # Determine initial geometry conditions
+    H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
     # Initialize all matrices for the solver
+    nx, ny = nxy
     S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
     dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
-    D, dH, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-2,ny-2),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
+    D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
     A = 2e-16
     α = 0                       # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
@@ -21,18 +22,17 @@ function generate_ref_dataset(temp_series, H₀)
     
     # Gather simulation parameters
     current_year = 0
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, copy(temp_series[5]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year])
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, copy(temp_series[1]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀)
 
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
     # Train batches in parallel
-    # Fetch reference simulated ice thickness
     H_refs  = @showprogress pmap(temps -> prob_iceflow_PDE(H, temps, context), temp_series)
 
     # Compute average ice surface velocities for the simulated period
     V̄x_refs, V̄y_refs = [],[]
     for (H_ref, temps) in zip(H_refs, temp_series) 
-        V̄x_ref, V̄y_ref = avg_surface_V(H_ref, B, mean(temps), "PDE") # Average velocity with average temperature
+        V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(temps), "PDE") # Average velocity with average temperature
         push!(V̄x_refs, V̄x_ref)
         push!(V̄y_refs, V̄y_ref)
     end
@@ -65,34 +65,38 @@ end # @everywhere
 
 Train the Shallow Ice Approximation iceflow UDE
 """
-function train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
-    H = deepcopy(H₀)
+function train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained=[])
+    # Determine initial geometry conditions
+    H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
     optimizer = train_settings[1]
     epochs = train_settings[2]
+    # Define the neural network to be trained
+    UA, θ = get_NN(θ_trained)
     # Tuple with all the temp series and H_refs
-    context = (B, H)
-    loss(θ) = loss_iceflow(θ, context, UA, PDE_refs, temp_series) # closure
+    context = (B, H₀, H, nxy, Δxy, UA)
+    loss(θ) = loss_iceflow(θ, context, PDE_refs, temp_series) # closure
 
     println("Training iceflow UDE...")
     # println("Using solver: ", solver)
     iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
 
-    return iceflow_trained
+    return iceflow_trained, UA
 end
 
 @everywhere begin 
 
-callback = function (θ,l) # callback function to observe training
+callback = function (θ, l, UA) # callback function to observe training
     println("Epoch #$current_epoch - Loss $loss_type: ", l)
 
     pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
+    println("pred_A: ", mean(pred_A))
     pred_A = [pred_A...] # flatten
     true_A = A_fake(-20.0:0.0, noise)
 
     Plots.scatter(-20.0:0.0, true_A, label="True A")
     plot_epoch = Plots.plot!(-20.0:0.0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)",
-                        ylabel="A", ylims=(2e-17,8e-16),
+                        ylabel="A", ylims=(minA,maxA),
                         legend=:topleft)
     Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
@@ -105,8 +109,8 @@ end
 
 Loss function based on glacier ice velocities and/or ice thickness
 """
-function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series) 
-    H_preds = predict_iceflow(θ, UA, context, temp_series)
+function loss_iceflow(θ, context, PDE_refs::Dict{String, Any}, temp_series) 
+    H_preds = predict_iceflow(θ, context, temp_series)
    
     # Compute loss function for the full batch
     l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
@@ -120,15 +124,13 @@ function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series)
         Vx_ref = PDE_refs["V̄x_refs"][i]
         Vy_ref = PDE_refs["V̄y_refs"][i]
         # Get ice velocities from the UDE predictions
-        V̄x_pred, V̄y_pred = avg_surface_V(H_preds[i], B, mean(temp_series[i]), "UDE") # Average velocity with average temperature
+        V̄x_pred, V̄y_pred = avg_surface_V(context, H_preds[i], mean(temp_series[i]), "UDE", θ) # Average velocity with average temperature
 
         if random_sampling_loss
             # sample random indices for which V_ref is non-zero
             n_sample, n_counts = 50, 0
             nxy = length(H_ref[H_ref .!= 0.0])
-            # Zygote.ignore() do 
-            #     @infiltrate
-            # end
+
             while n_counts < n_sample
                 j = rand(1:nxy-2)
                 H_ref_f = H_ref[H_ref .!= 0.0]
@@ -179,7 +181,8 @@ function loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series)
     elseif loss_type == "HV"
         l_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]) + l_H/length(H_preds))/3
     end
-    return l_avg
+    UA = context[6]
+    return l_avg, UA
 end
 
 """
@@ -187,20 +190,20 @@ end
 
 Makes a prediction of glacier evolution with the UDE for a given temperature series
 """
-function predict_iceflow(θ, UA, context, temp_series)
-    # (B, H)
-    H = context[2]
+function predict_iceflow(θ, context, temp_series)
+    # (B, H, nxy, Δxy)
+    H = context[3]
 
     # Train UDE in parallel
-    H_preds = pmap(temps -> prob_iceflow_UDE(θ, H, temps, context, UA), temp_series)
+    H_preds = pmap(temps -> prob_iceflow_UDE(θ, H, temps, context), temp_series)
 
     return H_preds
 end
 
-function prob_iceflow_UDE(θ, H, temps, context, UA) 
+function prob_iceflow_UDE(θ, H, temps, context) 
         
     # println("Processing temp series ≈ ", mean(temps))
-    iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temps, UA) # closure
+    iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, temps) # closure
     iceflow_prob = ODEProblem(iceflow_UDE_batch,H,(0.0,t₁),θ)
     iceflow_sol = solve(iceflow_prob, solver, u0=H, p=θ,
                     reltol=1e-6, save_everystep=false, 
@@ -237,7 +240,7 @@ end
 
 Runs a single time step of the iceflow UDE model 
 """
-function iceflow_NN(H, θ, t, context, temps, UA)
+function iceflow_NN(H, θ, t, context, temps)
 
     year = floor(Int, t) + 1
     if year <= t₁
@@ -245,7 +248,7 @@ function iceflow_NN(H, θ, t, context, temps, UA)
     else
         temp = temps[year-1]
     end
-
+    UA = context[6]
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
@@ -259,7 +262,7 @@ Compute an in-place step of the Shallow Ice Approximation PDE in a forward model
 """
 function SIA!(dH, H, context)
     # Retrieve parameters
-    #A, B, S, dSdx, dSdy, D, norm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year, H_ref, H, UA, θ
+    #[A], B, S, dSdx, dSdy, D, copy(temp_series[1]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy
     A = context.x[1]
     B = context.x[2]
     S = context.x[3]
@@ -271,7 +274,9 @@ function SIA!(dH, H, context)
     ∇S = context.x[10]
     Fx = context.x[11]
     Fy = context.x[12]
-    
+    Δx = context.x[20][1]
+    Δy = context.x[20][2]
+
     # Update glacier surface altimetry
     S .= B .+ H
 
@@ -301,7 +306,10 @@ Compute a step of the Shallow Ice Approximation UDE in a forward model. Allocate
 """
 function SIA(H, A, context)
     # Retrieve parameters
+    # context = (B, H₀, H, nxy, Δxy)
     B = context[1]
+    Δx = context[5][1]
+    Δy = context[5][2]
 
     # Update glacier surface altimetry
     S = B .+ H
@@ -332,10 +340,12 @@ end
 
 Computes the average ice velocity for a given input temperature
 """
-function avg_surface_V(H, B, temp, sim)
+function avg_surface_V(context, H, temp, sim, θ=[])
+    # context = (B, H₀, H, nxy, Δxy)
+    B, H₀, Δx, Δy, UA = retrieve_context(context)
 
     # Update glacier surface altimetry
-    S = B .+ H
+    S = B .+ (H₀ .+ H)./2 # Use average ice thickness for the simulated period
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -349,8 +359,8 @@ function avg_surface_V(H, B, temp, sim)
     elseif sim == "PDE"
         A = A_fake(temp, noise)
     end
-    Γ₂ = 2 * A * (ρ * g)^n / (n+1)     # 1 / m^3 s 
-    D = Γ₂ .* avg(H).^(n + 1) .* ∇S
+    Γꜛ = 2 * A * (ρ * g)^n / (n+1) # surface stress (not average)  # 1 / m^3 s 
+    D = Γꜛ .* avg(H).^(n + 1) .* ∇S
     
     # Compute averaged surface velocities
     Vx = - D .* avg_y(dSdx)
@@ -360,17 +370,20 @@ function avg_surface_V(H, B, temp, sim)
         
 end
 
+# Polynomial fit for Cuffey and Paterson data 
+A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
+
 """
     A_fake(temp, noise=false)
 
 Fake law establishing a theoretical relationship between ice viscosity (A) and long-term air temperature.
 """
 function A_fake(temp, noise=false)
-    A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    A = A_f.(temp) # polynomial fit
     if noise
-        A = A .+ randn(rng_seed(), length(temp)).*4e-17
+        A = A .+ randn(rng_seed(), length(temp)).*6e-18
     end
-
     return A
 end
 
@@ -379,7 +392,7 @@ end
 
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
-predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-16
+predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-17
 
 function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
     temps, norm_temps, norm_temps_flat = [],[],[]
@@ -399,6 +412,78 @@ function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,
     return temps, norm_temps
 end
 
+"""
+    get_initial_geometry(glacier_gd)
+
+Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier.
+"""
+function get_initial_geometry(gdir, smooth=true)
+    # Load glacier gridded data
+    glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
+    H₀ = glacier_gd.consensus_ice_thickness.data # initial ice thickness conditions for forward model
+    fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+    if smooth 
+        smooth!(H₀)  # Smooth initial ice thickness to help the solver
+    end
+    H = deepcopy(H₀)
+    B = glacier_gd.topo.data .- H₀ # bedrock
+
+    nx = glacier_gd.y.size # glacier extent
+    ny = glacier_gd.x.size # really weird, but this is inversed 
+    Δx = abs(gdir.grid.dx)
+    Δy = abs(gdir.grid.dy)
+
+
+    return H₀, H, B, (nx,ny), (Δx,Δy)
+end
+
+"""
+    retrieve_context(context::Tuple)
+
+Retrieves context variables for computing the surface velocities of the UDE.
+"""
+function retrieve_context(context::Tuple)
+    B = context[1]
+    H₀ = context[2]
+    Δx = context[5][1]
+    Δy = context[5][2]
+    UA = context[6]
+    return B, H₀, Δx, Δy, UA
+end
+
+"""
+    retrieve_context(context::ArrayPartition)
+
+Retrieves context variables for computing the surface velocities of the PDE.
+"""
+function retrieve_context(context::ArrayPartition)
+    B = context.x[2]
+    H₀ = context.x[21]
+    Δx = context.x[20][1]
+    Δy = context.x[20][2]
+    return B, H₀, Δx, Δy, nothing
+end
+
+"""
+    get_NN()
+
+Generates a neural network.
+"""
+function get_NN(θ_trained)
+    UA = FastChain(
+        FastDense(1,3, x->softplus.(x)),
+        FastDense(3,10, x->softplus.(x)),
+        FastDense(10,3, x->softplus.(x)),
+        FastDense(3,1, sigmoid_A)
+    )
+    # See if parameters need to be retrained or not
+    if isempty(θ_trained)
+        θ = initial_params(UA)
+    else
+        θ = θ_trained
+    end
+    return UA, θ
+end
 
 
 sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )

@@ -16,13 +16,14 @@ using PyCall
 using PyPlot # needed for Matplotlib plots
 
 # Import OGGM sub-libraries in Julia
+netCDF4 = pyimport("netCDF4")
 cfg = pyimport("oggm.cfg")
 utils = pyimport("oggm.utils")
 workflow = pyimport("oggm.workflow")
 tasks = pyimport("oggm.tasks")
 graphics = pyimport("oggm.graphics")
 bedtopo = pyimport("oggm.shop.bedtopo")
-# MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline") # TODO: fix issue with Python version in Gemini HPC
+MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
 
 # Essential Python libraries
 np = pyimport("numpy")
@@ -56,6 +57,7 @@ end
 using Statistics
 using LinearAlgebra
 using Random
+using Polynomials
 using HDF5  
 using JLD2
 using OrdinaryDiffEq
@@ -122,7 +124,7 @@ rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.03646"]
 # TODO: change to Lilian's version in notebook (ODINN_MB.ipynb)
 # use elevation band  flowlines
 # gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=2,
-#                                           prepro_border=10,
+#                                           prepro_border=40,
 #                                           prepro_base_url=base_url,
 #                                           prepro_rgi_version="62")
 
@@ -133,7 +135,7 @@ gdir = gdirs[glacier_filter]
 rgi_id = rgi_ids[glacier_filter]
 
 # Obtain ice thickness inversion
-if !@isdefined glacier_gd
+if !isfile(joinpath(gdir.dir, "inversion_flowlines.pkl"))
     list_talks = [
         # tasks.glacier_masks,
         # tasks.compute_centerlines,
@@ -153,40 +155,29 @@ if !@isdefined glacier_gd
     end
 end
 
-(@isdefined glacier_gd) || (glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data")))
+#########################################
+###########  CLIMATE DATA  ##############
+#########################################
 
-# Plot glacier domain
-graphics.plot_domain(gdirs)
-
-# plot the salem map background, make countries in grey
-# smap = glacier_gd.salem.get_map(countries=false)
-# smap.set_shapefile(gdir.read_shapefile("outlines"))
-# smap.set_topography(glacier_gd.topo.data);
-# f, ax = plt.subplots(figsize=(9, 9))
-# smap.set_data(glacier_gd.consensus_ice_thickness)
-# smap.set_cmap("Blues")
-# smap.plot(ax=ax)
-# smap.append_colorbar(ax=ax, label="Ice thickness (m)")
-# smap.visualize()["imshow"]
-# plt.show()
-
-# Broadcast necessary variables to all workers
-sendto(workers(), glacier_gd=glacier_gd)
-sendto(workers(), gdir=gdir)
-
-@everywhere begin
-nx = glacier_gd.y.size # glacier extent
-ny = glacier_gd.x.size # really weird, but this is inversed 
-Δx = gdir.grid.dx
-Δy = gdir.grid.dy
-end # @everywhere
-
-MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
+# Generate downscaled climate data
+if !isfile(joinpath(gdir.dir, "annual_temps.jld2"))
+    const mb_type = "mb_real_daily"
+    const grad_type = "var_an_cycle" # could use here as well 'cte'
+    # fs = "_daily_".*climate
+    const fs = "_daily_W5E5"
+    MB_ds, climate_ds = gen_MB_train_dataset(gdir, fs)
+    # Convert to annual values to force UDE
+    annual_temps = climate_ds.annual.temp.groupby("time.year").mean(dim=["time", "x", "y"])
+    yb,ye = annual_temps.year.data[1], annual_temps.year.data[end]
+    jldsave(joinpath(gdir.dir, "annual_temps.jld2"); annual_temps)
+else
+    annual_temps = load(joinpath(gdir.dir, "annual_temps.jld2"))
+end
 
 ### Generate fake annual long-term temperature time series  ###
 # This represents the long-term average air temperature, which will be used to 
 # drive changes in the `A` value of the SIA
-(@isdefined temp_series) || (const temp_series, norm_temp_series = fake_temp_series(t₁))
+temp_series, norm_temp_series = fake_temp_series(t₁)
 # A_series = []
 # for temps in temp_series
 #     push!(A_series, A_fake.(temps))
@@ -194,19 +185,13 @@ MBsandbox = pyimport("MBsandbox.mbmod_daily_oneflowline")
 # display(Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
 # display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
 
-# Determine initial conditions
-(@isdefined H₀) || (const H₀ = glacier_gd.consensus_ice_thickness.data) # initial ice thickness conditions for forward model
-fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
-smooth!(H₀)  # Smooth initial ice thickness to help the solver
-(@isdefined B) || (const B = glacier_gd.topo.data .- H₀) # bedrock
-
 # Run forward model for selected glaciers
 if create_ref_dataset 
     println("Generating reference dataset for training...")
  
     # Compute reference dataset in parallel
     @everywhere solver = Ralston()
-    H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, H₀)
+    H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, gdir)
         
     println("Saving reference data")
     jldsave(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"); H_refs, V̄x_refs, V̄y_refs)
@@ -219,14 +204,7 @@ PDE_refs = load(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"))
 #############################             Train UDE            ########################################
 #######################################################################################################
 
-UA = FastChain(
-        FastDense(1,3, x->softplus.(x)),
-        FastDense(3,10, x->softplus.(x)),
-        FastDense(10,3, x->softplus.(x)),
-        FastDense(3,1, sigmoid_A)
-    )
-    
-θ = initial_params(UA)
+# Training setup
 current_epoch = 1
 batch_size = length(temp_series)
 
@@ -235,8 +213,8 @@ const root_plots = cd(pwd, "../../plots")
 # Train iceflow UDE in parallel
 # First train with ADAM to move the parameters into a favourable space
 @everywhere solver = ROCK4()
-train_settings = (ADAM(0.05), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
+train_settings = (ADAM(0.05), 10) # optimizer, epochs
+iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series)
 θ_trained = iceflow_trained.minimizer
 
 # Continue training with a smaller learning rate
@@ -245,8 +223,9 @@ iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs
 # θ_trained = iceflow_trained.minimizer
 
 # Continue training with BFGS
-train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ_trained, train_settings, PDE_refs, temp_series)
+# train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
+train_settings = (ADAM(0.002), 20) # optimizer, epochs
+iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained) # retrain
 θ_trained = iceflow_trained.minimizer
 
 # Save trained NN weights
