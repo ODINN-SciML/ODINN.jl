@@ -6,12 +6,25 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 Pkg.precompile()
 
+## Environment and packages
+using Distributed
+using ProgressMeter
+const processes = 10
+
+if nprocs() < processes
+    addprocs(processes - nprocs(); exeflags="--project")
+end
+
+println("Number of cores: ", nprocs())
+println("Number of workers: ", nworkers())
+
 ## Set up Python environment
 # Choose own Python environment with OGGM's installation
 # Use same path as "which python" in shell
 ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # path in JupyterHub
 Pkg.build("PyCall") 
 
+@everywhere begin
 using PyCall
 using PyPlot # needed for Matplotlib plots
 
@@ -30,27 +43,16 @@ np = pyimport("numpy")
 xr = pyimport("xarray")
 # matplotlib = pyimport("matplotlib")
 # matplotlib.use("Qt5Agg") 
+end # @everywhere
 
 ###############################################
 ############  JULIA ENVIRONMENT  ##############
 ###############################################
 
-## Environment and packages
-using Distributed
-using ProgressMeter
-const processes = 10
-
-if nprocs() < processes
-    addprocs(processes - nprocs(); exeflags="--project")
-end
-
-println("Number of cores: ", nprocs())
-println("Number of workers: ", nworkers())
-
 @everywhere begin 
     import Pkg
     Pkg.activate(dirname(Base.current_project()))
-    Pkg.precompile()
+    # Pkg.precompile()
 end
 
 @everywhere begin 
@@ -87,158 +89,98 @@ root_dir = dirname(Base.current_project())
 
 ### Climate data processing  ###
 include("helpers/climate.jl")
+### OGGM configuration settings  ###
+include("helpers/oggm.jl")
 end # @everywhere
 
-### Iceflow forward model  ###
+### Iceflow modelling functions  ###
 # (includes utils.jl as well)
 include("helpers/iceflow.jl")
 
-###############################
-####  OGGM configuration  #####
-###############################
-cfg.initialize() # initialize OGGM configuration
+function main()
+    # Configure OGGM settings
+    @everywhere oggm_config()
 
-PATHS = PyDict(cfg."PATHS")  # OGGM PATHS
-home_dir = cd(pwd, "../../../../..")
-PATHS["working_dir"] = joinpath(home_dir, "Python/OGGM_data")  # Choose own custom path for the OGGM data
-PARAMS = PyDict(cfg."PARAMS")
+    ###############################################################
+    ###########################  MAIN #############################
+    ###############################################################
 
-# Multiprocessing 
-PARAMS["prcp_scaling_factor"], PARAMS["ice_density"], PARAMS["continue_on_error"]
-PARAMS["use_multiprocessing"] = true # Let's use multiprocessing for OGGM
+    # Defining glaciers to be modelled with RGI IDs
+    # RGI60-11.03638 # Argentière glacier
+    # RGI60-11.01450 # Aletsch glacier
+    # RGI60-11.03646 # Bossons glacier
+    # RGI60-08.00213 # Storglaciaren
+    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213"]
 
-###############################################################
-###########################  MAIN #############################
-###############################################################
+    ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
+    gdirs = init_gdirs(rgi_ids)
 
-# Defining glaciers to be modelled with RGI IDs
-# RGI60-11.03638 # Argentière glacier
-# RGI60-11.01450 # Aletsch glacier
-# RGI60-11.03646 # Bossons glacier
-rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.03646"]
+    #########################################
+    ###########  CLIMATE DATA  ##############
+    #########################################
 
-### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-# Where to fetch the pre-processed directories
-(@isdefined gdirs) || (const base_url = ("https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/elev_bands"))
+    # Process climate data for glaciers
+    climate_raw = get_climate(gdirs)
+    climate = filter_climate(climate_raw)
 
-# TODO: change to Lilian's version in notebook (ODINN_MB.ipynb)
-# use elevation band  flowlines
-# gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=2,
-#                                           prepro_border=40,
-#                                           prepro_base_url=base_url,
-#                                           prepro_rgi_version="62")
-
-(@isdefined gdirs) || (gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)) 
-
-glacier_filter = 1 # For now, choose an individual glacier from the list
-gdir = gdirs[glacier_filter]
-rgi_id = rgi_ids[glacier_filter]
-
-# Obtain ice thickness inversion
-if !isfile(joinpath(gdir.dir, "inversion_flowlines.pkl"))
-    list_talks = [
-        # tasks.glacier_masks,
-        # tasks.compute_centerlines,
-        # tasks.initialize_flowlines,
-        # tasks.compute_downstream_line,
-        tasks.gridded_attributes,
-        tasks.gridded_mb_attributes,
-        # tasks.prepare_for_inversion,  # This is a preprocessing task
-        # tasks.mass_conservation_inversion,  # This gdirsdoes the actual job
-        # tasks.filter_inversion_output,  # This smoothes the thicknesses at the tongue a little
-        # tasks.distribute_thickness_per_altitude,
-        bedtopo.add_consensus_thickness   # Use consensus ice thicknesses from Farinotti et al. (2019)
-    ]
-    for task in list_talks
-        # The order matters!
-        workflow.execute_entity_task(task, gdirs)
+    # Run forward model for selected glaciers
+    if create_ref_dataset 
+        println("Generating reference dataset for training...")
+    
+        # Compute reference dataset in parallel
+        @everywhere solver = Ralston()
+        H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(climate, gdirs)
+            
+        println("Saving reference data")
+        jldsave(joinpath(root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs)
     end
+
+    # Load stored PDE reference datasets
+    PDE_refs = load(joinpath(root_dir, "data/PDE_refs.jld2"))
+
+    #######################################################################################################
+    #############################             Train UDE            ########################################
+    #######################################################################################################
+
+    # Training setup
+    current_epoch = 1
+    batch_size = length(climate)
+
+    cd(@__DIR__)
+    root_plots = cd(pwd, "../../plots")
+    # Train iceflow UDE in parallel
+    # First train with ADAM to move the parameters into a favourable space
+    @everywhere solver = ROCK4()
+    train_settings = (ADAM(0.05), 10) # optimizer, epochs
+    iceflow_trained, UA = @time train_iceflow_UDE(gdirs, train_settings, PDE_refs, climate)
+    θ_trained = iceflow_trained.minimizer
+
+    # Continue training with a smaller learning rate
+    # train_settings = (ADAM(0.001), 20) # optimizer, epochs
+    # iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
+    # θ_trained = iceflow_trained.minimizer
+
+    # Continue training with BFGS
+    # train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
+    train_settings = (ADAM(0.002), 20) # optimizer, epochs
+    iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained) # retrain
+    θ_trained = iceflow_trained.minimizer
+
+    # Save trained NN weights
+    save(joinpath(root_dir, "data/trained_weights.jld"), "θ_trained", θ_trained)
+
+    ##########################################
+    ####  Plot the final trained model  ######
+    ##########################################
+    data_range = -20.0:0.0
+    pred_A = predict_A̅(UA, θ_trained, collect(data_range)')
+    pred_A = [pred_A...] # flatten
+    true_A = A_fake(data_range) 
+
+    Plots.scatter(true_A, label="True A")
+    train_final = Plots.plot!(pred_A, label="Predicted A")
+    Plots.savefig(train_final,joinpath(root_plots,"training","final_model.png"))
 end
 
-#########################################
-###########  CLIMATE DATA  ##############
-#########################################
-
-# Generate downscaled climate data
-if !isfile(joinpath(gdir.dir, "annual_temps.jld2"))
-    const mb_type = "mb_real_daily"
-    const grad_type = "var_an_cycle" # could use here as well 'cte'
-    # fs = "_daily_".*climate
-    const fs = "_daily_W5E5"
-    MB_ds, climate_ds = gen_MB_train_dataset(gdir, fs)
-    # Convert to annual values to force UDE
-    annual_temps = climate_ds.annual.temp.groupby("time.year").mean(dim=["time", "x", "y"])
-    yb,ye = annual_temps.year.data[1], annual_temps.year.data[end]
-    jldsave(joinpath(gdir.dir, "annual_temps.jld2"); annual_temps)
-else
-    annual_temps = load(joinpath(gdir.dir, "annual_temps.jld2"))
-end
-
-### Generate fake annual long-term temperature time series  ###
-# This represents the long-term average air temperature, which will be used to 
-# drive changes in the `A` value of the SIA
-temp_series, norm_temp_series = fake_temp_series(t₁)
-# A_series = []
-# for temps in temp_series
-#     push!(A_series, A_fake.(temps))
-# end
-# display(Plots.plot(temp_series, xaxis="Years", yaxis="Long-term average air temperature", title="Fake air temperature time series"))
-# display(Plots.plot(A_series, xaxis="Years", yaxis="A", title="Fake A reference time series"))
-
-# Run forward model for selected glaciers
-if create_ref_dataset 
-    println("Generating reference dataset for training...")
- 
-    # Compute reference dataset in parallel
-    @everywhere solver = Ralston()
-    H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(temp_series, gdir)
-        
-    println("Saving reference data")
-    jldsave(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"); H_refs, V̄x_refs, V̄y_refs)
-end
-
-# Load stored PDE reference datasets
-PDE_refs = load(joinpath(root_dir, "data/PDE_refs_$rgi_id.jld2"))
-
-#######################################################################################################
-#############################             Train UDE            ########################################
-#######################################################################################################
-
-# Training setup
-current_epoch = 1
-batch_size = length(temp_series)
-
-cd(@__DIR__)
-const root_plots = cd(pwd, "../../plots")
-# Train iceflow UDE in parallel
-# First train with ADAM to move the parameters into a favourable space
-@everywhere solver = ROCK4()
-train_settings = (ADAM(0.05), 10) # optimizer, epochs
-iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series)
-θ_trained = iceflow_trained.minimizer
-
-# Continue training with a smaller learning rate
-# train_settings = (ADAM(0.001), 20) # optimizer, epochs
-# iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
-# θ_trained = iceflow_trained.minimizer
-
-# Continue training with BFGS
-# train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-train_settings = (ADAM(0.002), 20) # optimizer, epochs
-iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained) # retrain
-θ_trained = iceflow_trained.minimizer
-
-# Save trained NN weights
-save(joinpath(root_dir, "data/trained_weights.jld"), "θ_trained", θ_trained)
-
-# Plot the final trained model
-data_range = -20.0:0.0
-pred_A = predict_A̅(UA, θ_trained, collect(data_range)')
-pred_A = [pred_A...] # flatten
-true_A = A_fake(data_range) 
-
-scatter(true_A, label="True A")
-train_final = plot!(pred_A, label="Predicted A")
-savefig(train_final,joinpath(root_plots,"training","final_model.png"))
-
-
+# Run main
+main()

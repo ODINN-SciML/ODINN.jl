@@ -6,7 +6,8 @@ using Flux
 
 function gen_MB_train_dataset(gdir, fs)
     # Retrieve reference MB data
-    println("Downloading climate data for glacier...")
+    rgi_id = gdir.rgi_id
+    println("Downloading climate data for $rgi_id...")
     climate = get_raw_climate_data(gdir)
 
     println("Fetching mass balance reference data...")
@@ -91,7 +92,6 @@ end
 
 function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5", dim="2D")
     @assert any(dim .== ["1D", "2D"]) "Wrong number of dimensions $dim !. Needs to be either `1D` or `2D`."
-    PARAMS["hydro_month_nh"]=1
     MBsandbox.process_w5e5_data(gdir, climate_type=climate, temporal_resol=temp_resolution) 
     fpath = gdir.get_filepath("climate_historical", filesuffix="_daily_W5E5")
     climate = xr.open_dataset(fpath)
@@ -119,9 +119,10 @@ end
 # Function to convert the baseline OGGM climate dataset to 2D
 function create_2D_climate_data(climate, g_dem)
     # Create dummy 2D arrays to have a base to apply gradients afterwards
-    temp_2D = climate.temp.data .* ones(size(permutedims(g_dem.data, (1,2,3))))
-    snow_2D = climate.prcp.data .* ones(size(permutedims(g_dem.data, (1,2,3))))
-    rain_2D = climate.prcp.data .* ones(size(permutedims(g_dem.data, (1,2,3))))
+    dummy_grid = ones(size(permutedims(g_dem.data, (1,2,3))))
+    temp_2D = climate.temp.data .* dummy_grid
+    snow_2D = climate.prcp.data .* dummy_grid
+    rain_2D = climate.prcp.data .* dummy_grid
 
     # We generate a new dataset with the scaled data
     climate_2D = xr.Dataset(
@@ -211,6 +212,51 @@ function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20
 
     return temps, norm_temps
 end
+
+function get_climate(gdirs, full=false)
+    # Retrieve and compute climate data in parallel
+    climate = pmap(gdir -> get_climate_glacier(gdir, full), gdirs)
+    return climate
+end
+
+function get_climate_glacier(gdir, full=false)
+    # Generate downscaled climate data
+    if !isfile(joinpath(gdir.dir, "annual_temps.nc")) || full # Retrieve unless you require the full dataset
+        mb_type = "mb_real_daily"
+        grad_type = "var_an_cycle" # could use here as well 'cte'
+        # fs = "_daily_".*climate
+        fs = "_daily_W5E5"
+        MB_ds, climate_ds = gen_MB_train_dataset(gdir, fs)
+        # Convert to annual values to force UDE
+        annual_temps = climate_ds.annual.temp.groupby("time.year").mean(dim=["time", "x", "y"])
+        # yb,ye = annual_temps.year.data[1], annual_temps.year.data[end]
+        println("Storing climate data in: ", joinpath(gdir.dir, "annual_temps.nc"))
+        annual_temps.to_netcdf(joinpath(gdir.dir, "annual_temps.nc"))
+    else
+        annual_temps = xr.open_dataset(joinpath(gdir.dir, "annual_temps.nc"))
+        MB_ds, climate_ds = nothing, nothing # dummy empty variables
+    end
+    # Compute a 20-year rolling mean for long-term air temperature variability
+    longterm_temps = annual_temps.rolling(year=20).mean().dropna("year")
+
+    # return longterm_temps, annual_temps, MB_ds, climate_ds
+    climate = Dict("longterm_temps"=>longterm_temps, "annual_temps"=>annual_temps,
+                    "MB_dataset"=>MB_ds, "climate_dataset"=>climate_ds)
+    return climate
+end
+
+function filter_climate(climate)
+    updated_climate = []
+    for climate_batch in climate
+        if length(climate_batch["longterm_temps"].temp.data) >= t₁ 
+            push!(updated_climate, climate_batch)
+        else
+            println("Filtered glacier due to short climate series")
+        end
+    end
+    return updated_climate
+end
+
 
 end # @everywhere
 
