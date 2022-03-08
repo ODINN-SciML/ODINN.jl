@@ -257,6 +257,17 @@ function filter_climate(climate)
     return updated_climate
 end
 
+function get_gdir_climate_tuple(gdirs, climate)
+    dates, longterm_temps, annual_temps = [],[],[]
+    for climate_batch in climate
+        push!(dates, climate_batch["longterm_temps"].year.data)
+        push!(longterm_temps, climate_batch["longterm_temps"].temp.data)
+        push!(annual_temps, climate_batch["annual_temps"].temp.data)
+    end
+    gdirs_climate = (dates, gdirs, longterm_temps, annual_temps)
+    return gdirs_climate
+end
+
 
 end # @everywhere
 

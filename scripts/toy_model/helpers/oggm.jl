@@ -7,11 +7,11 @@
 
 Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier.
 """
-function oggm_config(home_dir = cd(pwd, "../../../../.."), multiprocessing=true)
+function oggm_config(multiprocessing=true)
     cfg.initialize() # initialize OGGM configuration
 
     global PATHS = PyDict(cfg."PATHS")  # OGGM PATHS
-    PATHS["working_dir"] = joinpath(home_dir, "Python/OGGM_data")  # Choose own custom path for the OGGM data
+    PATHS["working_dir"] = joinpath(homedir(), "Python/OGGM_data")  # Choose own custom path for the OGGM data
     global PARAMS = PyDict(cfg."PARAMS")
     PARAMS["hydro_month_nh"]=1
 

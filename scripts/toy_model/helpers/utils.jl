@@ -47,10 +47,14 @@ fillNaN!(x, fill)
 
 Convert empty matrix grid cells into fill value
 """
-function fillNaN!(x, fill=0)
-    for i in eachindex(x)
-        @inbounds x[i] = ifelse(isnan(x[i]), fill, x[i])
+function fillNaN!(A, fill=zero(eltype(A)))
+    for i in eachindex(A)
+        @inbounds A[i] = ifelse(isnan(A[i]), fill, A[i])
     end
+end
+
+function fillNaN(A, fill=zero(eltype(A)))
+    return @. ifelse(isnan(A), fill, A)
 end
 
 """
@@ -62,4 +66,10 @@ Smooth data contained in a matrix with one time step (CFL) of diffusion.
     A[2:end-1,2:end-1] .= A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
     A[1,:]=A[2,:]; A[end,:]=A[end-1,:]; A[:,1]=A[:,2]; A[:,end]=A[:,end-1]
     return
+end
+
+function smooth(A)
+    A_smooth = A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    @tullio A_smooth_pad[i,j] := A_smooth[pad(i-1,1,1),pad(j-1,1,1)] # Fill borders 
+    return A_smooth_pad
 end

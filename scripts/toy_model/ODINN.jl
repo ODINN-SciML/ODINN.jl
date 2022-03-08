@@ -3,6 +3,7 @@
 ################################################
 
 import Pkg
+cd(@__DIR__)
 Pkg.activate(dirname(Base.current_project()))
 Pkg.precompile()
 
@@ -64,6 +65,7 @@ using HDF5
 using JLD2
 using OrdinaryDiffEq
 using DiffEqFlux
+using Zygote: @ignore
 using Flux
 using Tullio
 using RecursiveArrayTools
@@ -122,6 +124,7 @@ function main()
     # Process climate data for glaciers
     climate_raw = get_climate(gdirs)
     climate = filter_climate(climate_raw)
+    gdirs_climate = get_gdir_climate_tuple(gdirs, climate)
 
     # Run forward model for selected glaciers
     if create_ref_dataset 
@@ -129,7 +132,7 @@ function main()
     
         # Compute reference dataset in parallel
         @everywhere solver = Ralston()
-        H_refs, V̄x_refs, V̄y_refs = generate_ref_dataset(climate, gdirs)
+        H_refs, V̄x_refs, V̄y_refs = @time generate_ref_dataset(gdirs_climate)
             
         println("Saving reference data")
         jldsave(joinpath(root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs)
@@ -143,16 +146,15 @@ function main()
     #######################################################################################################
 
     # Training setup
-    current_epoch = 1
-    batch_size = length(climate)
+    global current_epoch = 1
 
     cd(@__DIR__)
-    root_plots = cd(pwd, "../../plots")
+    global root_plots = cd(pwd, "../../plots")
     # Train iceflow UDE in parallel
     # First train with ADAM to move the parameters into a favourable space
     @everywhere solver = ROCK4()
     train_settings = (ADAM(0.05), 10) # optimizer, epochs
-    iceflow_trained, UA = @time train_iceflow_UDE(gdirs, train_settings, PDE_refs, climate)
+    iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs)
     θ_trained = iceflow_trained.minimizer
 
     # Continue training with a smaller learning rate
@@ -163,7 +165,7 @@ function main()
     # Continue training with BFGS
     # train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
     train_settings = (ADAM(0.002), 20) # optimizer, epochs
-    iceflow_trained, UA = @time train_iceflow_UDE(gdir, train_settings, PDE_refs, temp_series, θ_trained) # retrain
+    iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained) # retrain
     θ_trained = iceflow_trained.minimizer
 
     # Save trained NN weights
