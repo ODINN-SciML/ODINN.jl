@@ -4,23 +4,53 @@ using Flux
 ############  FUNCTIONS   #####################
 ###############################################
 
-function gen_MB_train_dataset(gdir, fs)
+# Get the corresponding climate dataset for each gdir
+function get_gdirs_with_climate(gdirs, plot=true)
+    climate_raw = get_climate(gdirs)
+    climate = filter_climate(climate_raw)
+    if plot
+        plot_avg_longterm_temps(climate, gdirs)
+    end
+    gdirs_climate = get_gdir_climate_tuple(gdirs, climate)
+    return gdirs_climate
+end
+
+function get_MB_climate_datasets(gdir, mb, period_y, fs)
     # Retrieve reference MB data
     rgi_id = gdir.rgi_id
     println("Downloading climate data for $rgi_id...")
     climate = get_raw_climate_data(gdir)
 
-    println("Fetching mass balance reference data...")
-    mb_glaciological = gdir.get_ref_mb_data(input_filesuffix=fs)
-    # Get hydrological period matching the reference MB data
-    hydro_period = to_hydro_period(mb_glaciological)
+    if mb
+        println("Fetching mass balance reference data...")
+        try
+            # Building MB and climate datasets
+            mb_glaciological = gdir.get_ref_mb_data(input_filesuffix=fs)
+            # Get hydrological period matching the reference MB data
+            hydro_period = to_hydro_period(mb_glaciological)
+            climate_ds, MB_ds = build_MB_climate_ds(hydro_period, climate, gdir, mb_glaciological)
+            return MB_ds, climate_ds   
+        catch error
+            @warn "$error: Error retrieving reference mass balance data. Retrieving only climate data."
+            # Building only climate dataset
+            hydro_period = collect(Date(period_y[1],10,1):Day(1):Date(period_y[2],09,30))
+            climate_ds, MB_ds = build_climate_ds(hydro_period, climate, gdir)
+            return MB_ds, climate_ds  
+        end
+    else
+        # Building only climate dataset
+        hydro_period = collect(Date(period_y[1],10,1):Day(1):Date(period_y[2],09,30))
+        climate_ds, MB_ds = build_climate_ds(hydro_period, climate, gdir)
+        return MB_ds, climate_ds
+    end     
+end
 
+function build_MB_climate_ds(hydro_period, climate, gdir, mb_glaciological)
     println("Processing data for reference period ", hydro_period[1], " - ", hydro_period[end])
+    # Build the training and reference dataset including annual and seasonal data
     # Get the climate forcings for the MB data
     seasons = ["annual", "accumulation", "ablation"]
     balances = ["ANNUAL_BALANCE", "WINTER_BALANCE", "SUMMER_BALANCE"]
-
-    # Build the training and reference dataset including annual and seasonal data
     ds_clim_buffer, ds_MB_buffer = [],[]
     for (season, balance) in zip(seasons, balances)
         season_MB = mb_glaciological[balance]
@@ -28,13 +58,25 @@ function gen_MB_train_dataset(gdir, fs)
         push!(ds_MB_buffer, season_MB) 
         push!(ds_clim_buffer, MB_clim)
     end
-
     # Store everything in a global dataset 
     println("Storing data in metadataset")
     MB_ds = Dataset(ds_MB_buffer...) # splat it!!!
     climate_ds = Dataset(ds_clim_buffer...)
+    return climate_ds, MB_ds
+end
 
-    return MB_ds, climate_ds        
+function build_climate_ds(hydro_period, climate, gdir)
+    ds_clim_buffer = []
+    println("Processing data for reference period ", hydro_period[1], " - ", hydro_period[end])
+    MB_clim = get_climate_forcing(gdir, climate, hydro_period, "annual")
+    push!(ds_clim_buffer, MB_clim)
+    push!(ds_clim_buffer, nothing)
+    push!(ds_clim_buffer, nothing)
+    # Store everything in a global dataset 
+    println("Storing data in metadataset")
+    climate_ds = Dataset(ds_clim_buffer...)
+    MB_ds = nothing
+    return climate_ds, MB_ds
 end
 
 # Compute climate forcings for a given period to feed MB model
@@ -44,24 +86,40 @@ function get_climate_forcing(gdir, climate, period, season)
     # Make sure the desired period is covered by the climate data
     period = trim_period(period, climate) 
     @assert any((climate.time[1].dt.date.data[1] <= period[1]) & any(climate.time[end].dt.date.data[1] >= period[end])) "No overlapping period available between climate and MB data!" 
-    clim_period = climate.sel(time=period) # Crop desired time period
+    climate = climate.sel(time=period) # Crop desired time period
 
     if season == "accumulation"
-        clim_period = clim_period.sel(time=is_acc.(clim_period.time.dt.month.data))
+        climate = climate.sel(time=is_acc.(clim_period.time.dt.month.data))
     elseif season == "ablation"
-        clim_period = clim_period.sel(time=is_abl.(clim_period.time.dt.month.data))
+        climate = climate.sel(time=is_abl.(clim_period.time.dt.month.data))
     end
-        
-    # Get glacier DEM
-    g_dem = xr.open_rasterio(gdir.get_filepath("dem"))
-    # Apply temperature gradients and compute snow/rain fraction for the selected period
-    apply_t_grad!(clim_period, g_dem)
-    # Obtained PDDs and cumulative snowfall and rain
-    # clim_period.temp.data = clim_period.temp.where(clim_period.temp.data .> 0, 0) # PDDs
-    clim_period = clim_period.drop("gradient") #.sum() # Accumulate everything
 
-    return clim_period
+    # Transform climate to cumulative PDDs, snowfall and rainfall
+    climate = get_cumulative_climate(climate)
+
+    # Convert climate dataset to 2D based on the glacier's DEM
+    g_dem = xr.open_rasterio(gdir.get_filepath("dem"))
+    climate = create_2D_climate_data(climate, g_dem)
+        
+    # Apply temperature gradients and compute snow/rain fraction for the selected period
+    apply_t_grad!(climate, g_dem)
+    climate = climate.drop("gradient") 
+
+    return climate
      
+end
+
+function get_cumulative_climate(climate, gradient_bounds=[-0.009, -0.003], default_grad=-0.0065)
+    avg_temp = climate.temp.resample(time="1M").mean() 
+    avg_gradients = climate.gradient.resample(time="1M").mean() 
+    climate.temp.data = climate.temp.where(climate.temp > 0, 0).data # get PDDs
+    climate.gradient.data = utils.clip_array(climate.gradient.data, gradient_bounds[1], gradient_bounds[2]) # Clip gradients within plausible values
+    attributes = climate.attrs
+    climate_sum = climate.resample(time="1M").sum() # get monthly cumulative values
+    climate_sum_avg1 = climate_sum.assign(Dict("avg_temp"=>avg_temp)) 
+    climate_sum_avg2 = climate_sum_avg1.assign(Dict("avg_gradient"=>avg_gradients))
+    climate_sum_avg2.attrs = attributes
+    return climate_sum_avg2
 end
 
 # TODO: correctly retrieve the glacier coordinates to plot them in `imshow` as an extent
@@ -90,27 +148,18 @@ function plot_monthly_map(climate, variable, year)
     end
 end
 
-function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5", dim="2D")
-    @assert any(dim .== ["1D", "2D"]) "Wrong number of dimensions $dim !. Needs to be either `1D` or `2D`."
+function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5")
     MBsandbox.process_w5e5_data(gdir, climate_type=climate, temporal_resol=temp_resolution) 
     fpath = gdir.get_filepath("climate_historical", filesuffix="_daily_W5E5")
     climate = xr.open_dataset(fpath)
-
-    if dim == "2D"
-        # Convert climate dataset to 2D based on the glacier's DEM
-        g_dem = xr.open_rasterio(gdir.get_filepath("dem"))
-        climate = create_2D_climate_data(climate, g_dem)
-    end
-
     return climate
 end
 
 # Function to apply temperature lapse rates to the full matrix of a glacier
-function apply_t_grad!(climate, g_dem, gradient_bounds=[-0.009, -0.003], default_grad=-0.0065)
-    gradients = utils.clip_array(climate.gradient, gradient_bounds[1], gradient_bounds[2]) # Clip gradients within plausible values
-
+function apply_t_grad!(climate, g_dem)
     # We apply the gradients to the temperature
-    climate.temp.data = climate.temp.data .+ gradients.data .* (g_dem.data .- climate.ref_hgt)
+    climate.temp.data = climate.temp.data .+ climate.avg_gradient.data .* (g_dem.data .- climate.ref_hgt)
+    climate.PDD.data = climate.PDD.data .+ climate.gradient.data .* (g_dem.data .- climate.ref_hgt)
     # We adjust the rain/snow fractions with the updated temperature
     climate.snow.data = climate.snow.where(climate.temp < 0, 0).data
     climate.rain.data = climate.rain.where(climate.temp > 0, 0).data
@@ -120,7 +169,8 @@ end
 function create_2D_climate_data(climate, g_dem)
     # Create dummy 2D arrays to have a base to apply gradients afterwards
     dummy_grid = ones(size(permutedims(g_dem.data, (1,2,3))))
-    temp_2D = climate.temp.data .* dummy_grid
+    temp_2D = climate.avg_temp.data .* dummy_grid
+    PDD_2D = climate.temp.data .* dummy_grid
     snow_2D = climate.prcp.data .* dummy_grid
     rain_2D = climate.prcp.data .* dummy_grid
 
@@ -128,9 +178,11 @@ function create_2D_climate_data(climate, g_dem)
     climate_2D = xr.Dataset(
         data_vars=Dict([
             ("temp", (["time","y","x"], temp_2D)),
+            ("PDD", (["time","y","x"], PDD_2D)),
             ("snow", (["time","y","x"], snow_2D)),
             ("rain", (["time","y","x"], rain_2D)),
-            ("gradient", (["time"], climate.gradient.data))
+            ("gradient", (["time"], climate.gradient.data)),
+            ("avg_gradient", (["time"], climate.avg_gradient.data))
             ]),
         coords=Dict([
             ("time", climate.time),
@@ -183,7 +235,6 @@ function is_acc(month)
     return (month <= 4) | (month >= 10)
 end
 
-
 # Metastructure to store xarray dataset with MB and climate data for training
 struct Dataset
     annual
@@ -213,32 +264,34 @@ function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20
     return temps, norm_temps
 end
 
-function get_climate(gdirs, full=false)
+function get_climate(gdirs)
+    println("Getting climate data...")
     # Retrieve and compute climate data in parallel
-    climate = pmap(gdir -> get_climate_glacier(gdir, full), gdirs)
+    # /!\ Keep batch size small in order to avoid memory problems
+    climate = pmap(gdir -> get_climate_glacier(gdir), gdirs; batch_size=10) 
     return climate
 end
 
-function get_climate_glacier(gdir, full=false)
+function get_climate_glacier(gdir, mb=true, period_y=(1979,2019), full=false)
     # Generate downscaled climate data
-    if !isfile(joinpath(gdir.dir, "annual_temps.nc")) || full # Retrieve unless you require the full dataset
+    if !isfile(joinpath(gdir.dir, "annual_temps.nc")) || overwrite_climate # Retrieve unless overwrite
         mb_type = "mb_real_daily"
         grad_type = "var_an_cycle" # could use here as well 'cte'
         # fs = "_daily_".*climate
         fs = "_daily_W5E5"
-        MB_ds, climate_ds = gen_MB_train_dataset(gdir, fs)
+        MB_ds, climate_ds = get_MB_climate_datasets(gdir, mb, period_y, fs)
         # Convert to annual values to force UDE
         annual_temps = climate_ds.annual.temp.groupby("time.year").mean(dim=["time", "x", "y"])
         # yb,ye = annual_temps.year.data[1], annual_temps.year.data[end]
         println("Storing climate data in: ", joinpath(gdir.dir, "annual_temps.nc"))
         annual_temps.to_netcdf(joinpath(gdir.dir, "annual_temps.nc"))
+        annual_temps = xr.open_dataset(joinpath(gdir.dir, "annual_temps.nc"))
     else
         annual_temps = xr.open_dataset(joinpath(gdir.dir, "annual_temps.nc"))
         MB_ds, climate_ds = nothing, nothing # dummy empty variables
     end
     # Compute a 20-year rolling mean for long-term air temperature variability
     longterm_temps = annual_temps.rolling(year=20).mean().dropna("year")
-
     # return longterm_temps, annual_temps, MB_ds, climate_ds
     climate = Dict("longterm_temps"=>longterm_temps, "annual_temps"=>annual_temps,
                     "MB_dataset"=>MB_ds, "climate_dataset"=>climate_ds)
@@ -247,11 +300,11 @@ end
 
 function filter_climate(climate)
     updated_climate = []
-    for climate_batch in climate
-        if length(climate_batch["longterm_temps"].temp.data) >= t₁ 
-            push!(updated_climate, climate_batch)
+    for climate_glacier in climate
+        if length(climate_glacier["longterm_temps"].temp.data) >= t₁ 
+            push!(updated_climate, climate_glacier)
         else
-            println("Filtered glacier due to short climate series")
+            @warn "Filtered glacier due to short climate series"
         end
     end
     return updated_climate
@@ -271,4 +324,13 @@ end
 
 end # @everywhere
 
-
+function plot_avg_longterm_temps(climate, gdirs)
+    mean_longterm_temps, labels = [],[]
+    for (climate_glacier, gdir) in zip(climate, gdirs)
+        push!(mean_longterm_temps, climate_glacier["longterm_temps"].temp.data)
+        push!(labels, gdir.rgi_id)
+    end
+    display(Plots.plot(mean_longterm_temps, label=permutedims(labels), 
+                        xlabel="Years", ylabel="Mean longterm air temperature (°C)";
+                        palette=palette(:tab10,15), legend=:topright))
+end

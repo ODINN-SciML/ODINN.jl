@@ -21,14 +21,16 @@ function oggm_config(multiprocessing=true)
 end
 
 function init_gdirs(rgi_ids)
-    # Retrieve glacier gdirs if they are available
-    if length(readdir(joinpath(PATHS["working_dir"], "per_glacier"))) > 0
+    # Try to retrieve glacier gdirs if they are available
+    try
         gdirs = workflow.init_glacier_directories(rgi_ids)
-    end
-    # Generate all gdirs if needed
-    if (!@isdefined gdirs) || ((@isdefined gdirs) && !isfile(joinpath(gdirs[1].dir, "gridded_data.nc")))  # check if data is already present
+        return gdirs
+    catch 
+        @warn "Cannot retrieve gdirs from disk."
+        println("Generating gdirs from scratch.")
+        # Generate all gdirs if needed
+        # Check if some of the gdirs is missing files
         gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40, reset=false)
-    
         list_talks = [
             # tasks.glacier_masks,
             # tasks.compute_centerlines,
@@ -47,9 +49,8 @@ function init_gdirs(rgi_ids)
             # The order matters!
             workflow.execute_entity_task(task, gdirs)
         end
+        return gdirs
     end
-
-    return gdirs
 end
 
 

@@ -1,7 +1,3 @@
-################################################
-############  PYTHON ENVIRONMENT  ##############
-################################################
-
 import Pkg
 cd(@__DIR__)
 Pkg.activate(dirname(Base.current_project()))
@@ -10,14 +6,17 @@ Pkg.precompile()
 ## Environment and packages
 using Distributed
 using ProgressMeter
-const processes = 10
-
+const processes = 16
 if nprocs() < processes
     addprocs(processes - nprocs(); exeflags="--project")
 end
 
 println("Number of cores: ", nprocs())
 println("Number of workers: ", nworkers())
+
+################################################
+############  PYTHON ENVIRONMENT  ##############
+################################################
 
 ## Set up Python environment
 # Choose own Python environment with OGGM's installation
@@ -53,7 +52,6 @@ end # @everywhere
 @everywhere begin 
     import Pkg
     Pkg.activate(dirname(Base.current_project()))
-    # Pkg.precompile()
 end
 
 @everywhere begin 
@@ -100,7 +98,7 @@ end # @everywhere
 include("helpers/iceflow.jl")
 
 function main()
-    # Configure OGGM settings
+    # Configure OGGM settings in all workers
     @everywhere oggm_config()
 
     ###############################################################
@@ -108,11 +106,21 @@ function main()
     ###############################################################
 
     # Defining glaciers to be modelled with RGI IDs
-    # RGI60-11.03638 # Argentière glacier
-    # RGI60-11.01450 # Aletsch glacier
-    # RGI60-11.03646 # Bossons glacier
-    # RGI60-08.00213 # Storglaciaren
-    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213"]
+    # RGI60-11.03638 # Argentière glacier (European Alps)
+    # RGI60-11.01450 # Aletsch glacier (European Alps)
+    # RGI60-08.00213 # Storglaciaren (Scandinavia)
+    # RGI60-02.05098 # Peyto Glacier
+    # RGI60-01.01104 # Lemon Creek Glacier (Alaska)
+    # RGI60-01.09162 # Wolverine Glacier (Alaska)
+    # RGI60-01.00570 # Gulkana Glacier (Alaska)
+    # RGI60-07.00274 # Edvardbreen (Svalbard)
+    # RGI60-07.01323 # Biskayerfonna (Svalbard)
+    # RGI60-03.04207 # Canadian Arctic
+    # RGI60-03.03533 # Canadian Arctic
+    # RGI60-01.17316 # Twaharpies Glacier (Alaska)
+    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", 
+                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570",                	
+                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
     gdirs = init_gdirs(rgi_ids)
@@ -122,9 +130,7 @@ function main()
     #########################################
 
     # Process climate data for glaciers
-    climate_raw = get_climate(gdirs)
-    climate = filter_climate(climate_raw)
-    gdirs_climate = get_gdir_climate_tuple(gdirs, climate)
+    gdirs_climate = get_gdirs_with_climate(gdirs, true)
 
     # Run forward model for selected glaciers
     if create_ref_dataset 

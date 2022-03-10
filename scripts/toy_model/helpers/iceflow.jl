@@ -49,7 +49,6 @@ function batch_iceflow_PDE(gdir, longterm_temp)
 
     return refs
 end
-end # @everywhere
 
 """
     train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
@@ -57,21 +56,20 @@ end # @everywhere
 Train the Shallow Ice Approximation iceflow UDE
 """
 function train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained=[])
-
     optimizer = train_settings[1]
     epochs = train_settings[2]
     UA, θ = get_NN(θ_trained)
-
-    loss(θ) = loss_iceflow(θ, UA, gdirs_climate, PDE_refs) # closure
+    gdirs = gdirs_climate[2]
+    # Build context for all the batches before training
+    println("Building context...")
+    context_batches = pmap(gdir -> build_UDE_context(gdir), gdirs)
+    loss(θ) = loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs) # closure
 
     println("Training iceflow UDE...")
-    # println("Using solver: ", solver)
     iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
 
     return iceflow_trained, UA
 end
-
-@everywhere begin 
 
 callback = function (θ, l, UA) # callback function to observe training
     println("Epoch #$current_epoch - Loss $loss_type: ", l)
@@ -96,8 +94,8 @@ end
 
 Loss function based on glacier ice velocities and/or ice thickness
 """
-function loss_iceflow(θ, UA, gdirs_climate, PDE_refs::Dict{String, Any}) 
-    H_V_preds = predict_iceflow(θ, UA, gdirs_climate)
+function loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs::Dict{String, Any}) 
+    H_V_preds = predict_iceflow(θ, UA, gdirs_climate, context_batches)
 
     # Compute loss function for the full batch
     l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
@@ -169,7 +167,6 @@ function loss_iceflow(θ, UA, gdirs_climate, PDE_refs::Dict{String, Any})
     elseif loss_type == "HV"
         l_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]) + l_H/length(PDE_refs["H_refs"]))/3
     end
-
     return l_avg, UA
 end
 
@@ -178,14 +175,12 @@ end
 
 Makes a prediction of glacier evolution with the UDE for a given temperature series
 """
-function predict_iceflow(θ, UA, gdirs_climate)
+function predict_iceflow(θ, UA, gdirs_climate, context_batches)
 
     # Train UDE in parallel
     # gdirs_climate = (dates, gdirs, longterm_temps, annual_temps)
-    gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
-    H_V_pred = pmap((gdir, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA, gdir, longterm_temps_batch), gdirs, longterm_temps)
-
+    H_V_pred = pmap((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA, context, longterm_temps_batch), context_batches, longterm_temps)
     return H_V_pred
 end
 
@@ -194,20 +189,17 @@ end
 
 Solve the Shallow Ice Approximation iceflow UDE for a given temperature series batch
 """
-function batch_iceflow_UDE(θ, UA, gdir, longterm_temps_batch) 
+function batch_iceflow_UDE(θ, UA, context, longterm_temps_batch) 
     # Retrieve long-term temperature series
-    # Build context for batch
-    context, H = @ignore build_UDE_context(gdir, UA)
-
-    iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, context, longterm_temps_batch) # closure
+    H = context[3]
+    iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA, context, longterm_temps_batch) # closure
     iceflow_prob = ODEProblem(iceflow_UDE_batch,H,(0.0,t₁),θ)
     iceflow_sol = solve(iceflow_prob, solver, u0=H, p=θ,
                     reltol=1e-6, save_everystep=false, 
                     progress=true, progress_steps = 10)
-
     # Get ice velocities from the UDE predictions
     H_pred = iceflow_sol.u[end]
-    V̄x_pred, V̄y_pred = avg_surface_V(context, H_pred, mean(longterm_temps_batch), "UDE", θ) # Average velocity with average temperature
+    V̄x_pred, V̄y_pred = avg_surface_V(context, H_pred, mean(longterm_temps_batch), "UDE", θ, UA) # Average velocity with average temperature
     H_V_pred = (H_pred, V̄x_pred, V̄y_pred)
     return H_V_pred
 end
@@ -240,7 +232,7 @@ end
 
 Runs a single time step of the iceflow UDE model 
 """
-function iceflow_NN(H, θ, t, context, temps)
+function iceflow_NN(H, θ, t, UA, context, temps)
 
     year = floor(Int, t) + 1
     if year <= t₁
@@ -248,7 +240,6 @@ function iceflow_NN(H, θ, t, context, temps)
     else
         temp = temps[year-1]
     end
-    UA = context[6]
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # Compute the Shallow Ice Approximation in a staggered grid
@@ -340,9 +331,9 @@ end
 
 Computes the average ice velocity for a given input temperature
 """
-function avg_surface_V(context, H, temp, sim, θ=[])
+function avg_surface_V(context, H, temp, sim, θ=[], UA=[])
     # context = (B, H₀, H, nxy, Δxy)
-    B, H₀, Δx, Δy, UA = retrieve_context(context)
+    B, H₀, Δx, Δy = retrieve_context(context)
 
     # Update glacier surface altimetry
     S = B .+ (H₀ .+ H)./2 # Use average ice thickness for the simulated period
@@ -455,13 +446,13 @@ function build_PDE_context(gdir, longterm_temp)
     return context, H
 end
 
-function build_UDE_context(gdir, UA)
+function build_UDE_context(gdir)
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
 
     # Tuple with all the temp series and H_refs
-    context = (B, H₀, H, nxy, Δxy, UA)
+    context = (B, H₀, H, nxy, Δxy)
 
-    return context, H
+    return context
 end
 
 """
@@ -474,8 +465,7 @@ function retrieve_context(context::Tuple)
     H₀ = context[2]
     Δx = context[5][1]
     Δy = context[5][2]
-    UA = context[6]
-    return B, H₀, Δx, Δy, UA
+    return B, H₀, Δx, Δy
 end
 
 """
