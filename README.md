@@ -1,6 +1,6 @@
 # ODINN
 
-<img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo.png" width="250">
+<img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo_final.png" width="250">
 
 ## OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
 
