@@ -16,8 +16,9 @@ const maxA_out = 8
 
 overwrite_climate = false          # Force re-computing climate data for glaciers
 create_ref_dataset = false          # Run reference PDE to generate reference dataset
-loss_type = "H"                   # Loss function based on ice thickness
-# loss_type = "V"                   # Loss function based on ice surface velocities
+retrain = true                     # Re-use previous NN weights to continue training
+# loss_type = "H"                   # Loss function based on ice thickness
+loss_type = "V"                   # Loss function based on ice surface velocities
 # loss_type = "HV"                    # Combined loss function based on ice surface velocities and ice thickness
 const random_sampling_loss = false  # Use random subset of matrix samples for the loss
 const norm_loss = false

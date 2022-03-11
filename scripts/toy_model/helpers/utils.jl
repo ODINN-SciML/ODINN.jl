@@ -57,6 +57,16 @@ function fillNaN(A, fill=zero(eltype(A)))
     return @. ifelse(isnan(A), fill, A)
 end
 
+function fillZeros!(A, fill=NaN)
+    for i in eachindex(A)
+        @inbounds A[i] = ifelse(iszero(A[i]), fill, A[i])
+    end
+end
+
+function fillZeros(A, fill=NaN)
+    return @. ifelse(iszero(A), fill, A)
+end
+
 """
     smooth!(A)
 
@@ -73,3 +83,4 @@ function smooth(A)
     @tullio A_smooth_pad[i,j] := A_smooth[pad(i-1,1,1),pad(j-1,1,1)] # Fill borders 
     return A_smooth_pad
 end
+
