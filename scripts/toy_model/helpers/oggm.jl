@@ -28,9 +28,10 @@ function init_gdirs(rgi_ids)
     catch 
         @warn "Cannot retrieve gdirs from disk."
         println("Generating gdirs from scratch.")
+        global create_ref_dataset = true # we force the creation of the reference dataset
         # Generate all gdirs if needed
         # Check if some of the gdirs is missing files
-        gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40, reset=false)
+        gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=40)
         list_talks = [
             # tasks.glacier_masks,
             # tasks.compute_centerlines,

@@ -7,7 +7,7 @@ using Flux
 # Get the corresponding climate dataset for each gdir
 function get_gdirs_with_climate(gdirs, plot=true)
     climate_raw = get_climate(gdirs)
-    climate = filter_climate(climate_raw)
+    climate = filter_climate(climate_raw) 
     if plot
         plot_avg_longterm_temps(climate, gdirs)
     end
@@ -120,32 +120,6 @@ function get_cumulative_climate(climate, gradient_bounds=[-0.009, -0.003], defau
     climate_sum_avg2 = climate_sum_avg1.assign(Dict("avg_gradient"=>avg_gradients))
     climate_sum_avg2.attrs = attributes
     return climate_sum_avg2
-end
-
-# TODO: correctly retrieve the glacier coordinates to plot them in `imshow` as an extent
-function plot_monthly_map(climate, variable, year)
-    climate = climate[variable].where(climate.time.dt.year == year, drop=true).groupby("time.month")
-    fig_clim, ax_clim = pplt.subplots([1:6, 7:12], axheight=2)
-    fig_clim.format(
-        abc=true, abcloc="ul", suptitle= ("$year - monthly $variable")
-    )
-    for mon in 1:12
-        if variable == "temp"
-            m_var = ax_clim[mon].imshow(climate.mean()[mon], cmap="Thermal", 
-                    vmin=minimum(climate.mean().data), vmax=maximum(climate.mean().data)) # set common min max temp
-        else
-            m_var = ax_clim[mon].imshow(climate.sum()[mon], cmap="DryWet", 
-                    vmin=climate.sum().min().data, vmax=climate.sum().max().data) # set common min max precipitation
-        end
-        ax_clim[mon].set_title(Dates.monthname(mon))
-        if(mon == 12)
-            if variable == "temp"
-                fig_clim.colorbar(m_var, label="Air temperature (°C)")
-            else
-                fig_clim.colorbar(m_var, label="Accumulated $variable (mm)")
-            end
-        end
-    end
 end
 
 function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5")
@@ -324,13 +298,3 @@ end
 
 end # @everywhere
 
-function plot_avg_longterm_temps(climate, gdirs)
-    mean_longterm_temps, labels = [],[]
-    for (climate_glacier, gdir) in zip(climate, gdirs)
-        push!(mean_longterm_temps, climate_glacier["longterm_temps"].temp.data)
-        push!(labels, gdir.rgi_id)
-    end
-    display(Plots.plot(mean_longterm_temps, label=permutedims(labels), 
-                        xlabel="Years", ylabel="Mean longterm air temperature (°C)";
-                        palette=palette(:tab10,15), legend=:topright))
-end

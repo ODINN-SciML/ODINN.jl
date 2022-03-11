@@ -26,7 +26,7 @@ Pkg.build("PyCall")
 
 @everywhere begin
 using PyCall
-using PyPlot # needed for Matplotlib plots
+# using PyPlot # needed for Matplotlib plots
 
 # Import OGGM sub-libraries in Julia
 netCDF4 = pyimport("netCDF4")
@@ -55,24 +55,19 @@ end # @everywhere
 end
 
 @everywhere begin 
-using Statistics
-using LinearAlgebra
-using Random
-using Polynomials
+using Statistics, LinearAlgebra, Random, Polynomials
 using HDF5  
 using JLD2
-using OrdinaryDiffEq
-using DiffEqFlux
+using OrdinaryDiffEq, DiffEqFlux
 using Zygote: @ignore
 using Flux
-using Tullio
-using RecursiveArrayTools
+using Tullio, RecursiveArrayTools
 using Infiltrator
 using Plots
-using ProgressMeter
+using ProgressMeter, ParallelDataTransfer
 using Dates # to provide correct Julian time slices 
 using PyCall
-using ParallelDataTransfer
+using Makie, CairoMakie
 
 ###############################################
 #############    PARAMETERS     ###############
@@ -86,11 +81,14 @@ include("helpers/parameters.jl")
 
 cd(@__DIR__)
 root_dir = dirname(Base.current_project())
+global root_plots = cd(pwd, "../../plots")
 
 ### Climate data processing  ###
 include("helpers/climate.jl")
 ### OGGM configuration settings  ###
 include("helpers/oggm.jl")
+#### Plotting functions  ###
+include("helpers/plotting.jl")
 end # @everywhere
 
 ### Iceflow modelling functions  ###
@@ -113,13 +111,16 @@ function main()
     # RGI60-01.01104 # Lemon Creek Glacier (Alaska)
     # RGI60-01.09162 # Wolverine Glacier (Alaska)
     # RGI60-01.00570 # Gulkana Glacier (Alaska)
+    # RGI60-01.02170 # Esetuk Glacier (Alaska)
     # RGI60-07.00274 # Edvardbreen (Svalbard)
     # RGI60-07.01323 # Biskayerfonna (Svalbard)
     # RGI60-03.04207 # Canadian Arctic
     # RGI60-03.03533 # Canadian Arctic
+    # RGI60-04.07051 # Canadian Arctic
+    # RGI60-04.04351 # Canadian Arctic
     # RGI60-01.17316 # Twaharpies Glacier (Alaska)
-    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", 
-                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570",                	
+    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
+                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
                 "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
@@ -146,6 +147,8 @@ function main()
 
     # Load stored PDE reference datasets
     PDE_refs = load(joinpath(root_dir, "data/PDE_refs.jld2"))
+    # Plot training dataset of glaciers
+    plot_glacier_dataset(gdirs_climate, PDE_refs)
 
     #######################################################################################################
     #############################             Train UDE            ########################################
@@ -154,28 +157,38 @@ function main()
     # Training setup
     global current_epoch = 1
 
-    cd(@__DIR__)
-    global root_plots = cd(pwd, "../../plots")
     # Train iceflow UDE in parallel
     # First train with ADAM to move the parameters into a favourable space
     @everywhere solver = ROCK4()
-    train_settings = (ADAM(0.05), 10) # optimizer, epochs
-    iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs)
-    θ_trained = iceflow_trained.minimizer
 
-    # Continue training with a smaller learning rate
-    # train_settings = (ADAM(0.001), 20) # optimizer, epochs
-    # iceflow_trained = @time train_iceflow_UDE(H₀, UA, θ, train_settings, H_refs, temp_series)
-    # θ_trained = iceflow_trained.minimizer
+    if retrain
+        println("Retraining from previous NN weights...")
+        trained_weights = load(joinpath(root_dir, "data/trained_weights.jld2"))
+        current_epoch = trained_weights["current_epoch"]
+        θ_trained = trained_weights["θ_trained"]
+        train_settings = (ADAM(0.02), 20) # optimizer, epochs
+        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained) # retrain
+        θ_trained = iceflow_trained.minimizer
 
-    # Continue training with BFGS
-    # train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-    train_settings = (ADAM(0.002), 20) # optimizer, epochs
-    iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained) # retrain
-    θ_trained = iceflow_trained.minimizer
+        # Save trained NN weights
+        println("Saving NN weights...")
+        jldsave(joinpath(root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
+    else
+        train_settings = (ADAM(0.05), 10) # optimizer, epochs
+        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs)
+        θ_trained = iceflow_trained.minimizer
+        println("Saving NN weights...")
+        jldsave(joinpath(root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
 
-    # Save trained NN weights
-    save(joinpath(root_dir, "data/trained_weights.jld"), "θ_trained", θ_trained)
+        # Continue training with BFGS
+        # train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
+        train_settings = (ADAM(0.02), 20) # optimizer, epochs
+        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained) # retrain
+        θ_trained = iceflow_trained.minimizer
+        # Save trained NN weights
+        println("Saving NN weights...")
+        jldsave(joinpath(root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
+    end
 
     ##########################################
     ####  Plot the final trained model  ######
