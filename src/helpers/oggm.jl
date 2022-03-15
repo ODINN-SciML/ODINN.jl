@@ -18,6 +18,11 @@ function oggm_config(multiprocessing=true)
     # Multiprocessing 
     # PARAMS["prcp_scaling_factor"], PARAMS["ice_density"], PARAMS["continue_on_error"]
     global PARAMS["use_multiprocessing"] = multiprocessing # Let's use multiprocessing for OGGM
+
+    if multiprocessing
+        @everywhere cfg.initialize()
+        sendto(workers(), PATHS=PATHS, PARAMS=PARAMS)
+    end
 end
 
 function init_gdirs(rgi_ids)
@@ -53,5 +58,4 @@ function init_gdirs(rgi_ids)
         return gdirs
     end
 end
-
 

@@ -1,4 +1,3 @@
-
 # Helper functions for the staggered grid
 """
     avg(A)
