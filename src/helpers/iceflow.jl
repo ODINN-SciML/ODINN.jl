@@ -1,6 +1,9 @@
 
 include("utils.jl")
 
+export generate_ref_dataset, train_iceflow_UDE
+export predict_A̅, A_fake
+
 """
     generate_ref_dataset(temp_series, H₀)
 
@@ -55,6 +58,9 @@ end
 Train the Shallow Ice Approximation iceflow UDE
 """
 function train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained=[], solver = ROCK4(), loss_history=[])
+    if length(θ_trained) == 0
+        global current_epoch = 1 # reset epoch count
+    end
     optimizer = train_settings[1]
     epochs = train_settings[2]
     UA, θ = get_NN(θ_trained)

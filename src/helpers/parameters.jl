@@ -1,3 +1,5 @@
+export t₁
+
 const t₁ = 5.0                      # number of simulation years 
 const ρ = 900.0                     # Ice density [kg / m^3]
 const g = 9.81                    # Gravitational acceleration [m / s^2]
@@ -22,3 +24,6 @@ const random_sampling_loss = false  # Use random subset of matrix samples for th
 const scale_loss = true
 const noise = true                  # Add random noise to fake A law
 rng_seed() = MersenneTwister(123)   # Random seed
+
+# Machine learning training
+current_epoch = 1

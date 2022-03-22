@@ -1,3 +1,5 @@
+export plot_avg_longterm_temps, plot_glacier_dataset
+
 function plot_glacier_dataset(gdirs_climate, PDE_refs)
     if plots
         # gdirs_climate = (dates, gdirs, longterm_temps, annual_temps)

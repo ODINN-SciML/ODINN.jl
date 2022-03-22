@@ -2,9 +2,17 @@
 ############  FUNCTIONS   #####################
 ###############################################
 
-# Get the corresponding climate dataset for each gdir
-function get_gdirs_with_climate(gdirs, plot=true)
-    climate_raw = get_climate(gdirs)
+using ODINN, Dates # to provide correct Julian time slices 
+
+export get_gdirs_with_climate
+
+"""
+    get_gdirs_with_climate(gdirs; overwrite=false, plot=true)
+
+Gets the climate data for a given number of gdirs. Returns a tuple of `(gdirs, climate`.
+"""
+function get_gdirs_with_climate(gdirs; overwrite=false, plot=true)
+    climate_raw = get_climate(gdirs, overwrite)
     climate = filter_climate(climate_raw) 
     if plot
         plot_avg_longterm_temps(climate, gdirs)
@@ -13,18 +21,31 @@ function get_gdirs_with_climate(gdirs, plot=true)
     return gdirs_climate
 end
 
-function get_climate(gdirs)
+"""
+    get_climate(gdirs, overwrite)
+
+Gets the climate data for multiple gdirs in parallel.
+"""
+function get_climate(gdirs, overwrite)
     println("Getting climate data...")
     # Retrieve and compute climate data in parallel
     # /!\ Keep batch size small in order to avoid memory problems
-    climate = pmap(gdir -> get_climate_glacier(gdir), gdirs; batch_size=10) 
-    # climate = map(gdir -> get_climate_glacier(gdir), gdirs) 
+    climate = pmap(gdir -> get_climate_glacier(gdir, overwrite), gdirs; batch_size=10) 
+    # climate = map(gdir -> get_climate_glacier(gdir, overwrite), gdirs) 
     return climate
 end
 
-function get_climate_glacier(gdir::PyObject, mb=true, period_y=(1979,2019))
+"""
+    get_climate_glacier(gdir::PyObject, overwrite; mb=true, period_y=(1979,2019))
+
+Gets the W5E5 climate data for a single gdir. Returns a dictionary with the following format: 
+    
+    Dict("longterm_temps"=>longterm_temps, "annual_temps"=>annual_temps,
+    "MB_dataset"=>MB_ds, "climate_dataset"=>climate_ds)
+"""
+function get_climate_glacier(gdir::PyObject, overwrite; mb=true, period_y=(1979,2019))
     # Generate downscaled climate data
-    if !isfile(joinpath(gdir.dir, "annual_temps.nc")) || overwrite_climate # Retrieve unless overwrite
+    if !isfile(joinpath(gdir.dir, "annual_temps.nc")) || overwrite # Retrieve unless overwrite
         mb_type = "mb_real_daily"
         grad_type = "var_an_cycle" # could use here as well 'cte'
         # fs = "_daily_".*climate
@@ -48,6 +69,12 @@ function get_climate_glacier(gdir::PyObject, mb=true, period_y=(1979,2019))
     return climate
 end
 
+
+"""
+    get_MB_climate_datasets(gdir, mb, period_y, fs)
+
+Downloads the climate and mass balance data for a single gdir.
+"""
 function get_MB_climate_datasets(gdir, mb, period_y, fs)
     # Retrieve reference MB data
     rgi_id = gdir.rgi_id

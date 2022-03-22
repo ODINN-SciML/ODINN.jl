@@ -1,12 +1,7 @@
 module ODINN
 
 ###############################################
-##############       EXPORTS   ################
-###############################################
-
-
-###############################################
-############  JULIA ENVIRONMENT  ##############
+############       PACKAGES     ##############
 ###############################################
 
 using Statistics, LinearAlgebra, Random, Polynomials
@@ -17,8 +12,7 @@ using Flux
 using Tullio, RecursiveArrayTools
 using Infiltrator
 using Plots
-using ParallelDataTransfer, Distributed
-using Dates # to provide correct Julian time slices 
+using Distributed
 using Makie, CairoMakie
 import Pkg
 using Distributed
@@ -36,7 +30,7 @@ include("helpers/parameters.jl")
 
 cd(@__DIR__)
 global root_dir = dirname(Base.current_project())
-global root_plots = cd(joinpath(root_dir, "plots"))
+global root_plots = joinpath(root_dir, "plots")
 
 #### Plotting functions  ###
 include("helpers/plotting.jl")
