@@ -10,6 +10,7 @@ function generate_ref_dataset(gdirs_climate)
   
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
+
     # Run batches in parallel
     gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
@@ -23,7 +24,7 @@ function generate_ref_dataset(gdirs_climate)
         push!(V̄y_refs, ref["Vy"])
     end
 
-    return H_refs, V̄x_refs, V̄y_refs
+
 end
 
 @everywhere begin
