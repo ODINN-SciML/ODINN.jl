@@ -1,5 +1,12 @@
 # ODINN
 
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/stable)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/dev)
+[![Build Status](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Build Status](https://travis-ci.com/JordiBolibar/ODINN.jl.svg?branch=main)](https://travis-ci.com/JordiBolibar/ODINN.jl)
+[![Coverage](https://codecov.io/gh/JordiBolibar/ODINN.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JordiBolibar/ODINN.jl)
+
+
 <img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo_final.png" width="250">
 
 ## OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
@@ -10,19 +17,14 @@ It uses neural networks and differential equations in order to combine mechanist
 
 ## Running the toy model
 
-A demostration of our method is included in `scripts/toy_model/ODINN.jl`. The `Manifest.toml` and `Project.toml` include all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `scripts/toy_model/ODINN.jl` to 
+A demostration of our method is included in `src/scripts/toy_model.jl`. The `Manifest.toml` and `Project.toml` include all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
 ```
-	import Pkg
-	cd(@__DIR__)
-	Pkg.activate(dirname(Base.current_project()))
-	Pkg.precompile()
-	Pkg.instantiate()
+import Pkg
+cd(@__DIR__)
+Pkg.activate(dirname(Base.current_project()))
+Pkg.precompile()
+Pkg.instantiate()
 ```
-You may also need to create the reference dataset the first time you execute the code. In order to do this, insert 
-```
-	create_ref_dataset = true 
-```
-inside `scripts/toy_model/helpers/parameters.jl`.
 
 ## Integration with OGGM
 

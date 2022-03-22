@@ -1,4 +1,6 @@
 
+module iceflow
+
 @everywhere include("utils.jl")
 
 """
@@ -55,14 +57,17 @@ end
 
 Train the Shallow Ice Approximation iceflow UDE
 """
-function train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained=[])
+function train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained=[], loss_history=[])
     optimizer = train_settings[1]
     epochs = train_settings[2]
     UA, θ = get_NN(θ_trained)
     gdirs = gdirs_climate[2]
+    H_refs = PDE_refs["H_refs"]
+    Vx_refs = PDE_refs["V̄x_refs"]
+    Vy_refs = PDE_refs["V̄y_refs"]
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = pmap(gdir -> build_UDE_context(gdir), gdirs)
+    context_batches = map((gdir, H_ref, Vx_ref, Vy_ref) -> build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref), gdirs, H_refs, Vx_refs, Vy_refs)
     loss(θ) = loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs) # closure
 
     println("Training iceflow UDE...")
@@ -144,7 +149,7 @@ function loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs::Dict{Str
             l_Vy = l_Vy / n_sample
         else
             # Classic loss function with the full matrix
-            if norm_loss
+            if scale_loss
                 normH = H_ref[H_ref .!= 0.0] .+ ϵ
                 normVx = Vx_ref[Vx_ref .!= 0.0] .+ ϵ
                 normVy = Vy_ref[Vy_ref .!= 0.0] .+ ϵ
@@ -277,8 +282,8 @@ function SIA!(dH, H, context)
     dSdy .= diff_y(S) ./ Δy
     ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
 
-    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
-    D .= Γ .* avg(H).^(n + 2) .* ∇S
+    Γ = 2.0 * A * (ρ * g)^n / (n+2.0) # 1 / m^3 s 
+    D .= Γ .* avg(H).^(n + 2.0) .* ∇S
 
     # Compute flux components
     dSdx_edges .= diff_x(S[:,2:end - 1]) ./ Δx
@@ -309,10 +314,10 @@ function SIA(H, A, context)
     # Compute surface gradients on edges
     dSdx = diff_x(S) ./ Δx
     dSdy = diff_y(S) ./ Δy
-    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
+    ∇S = (avg_y(dSdx).^2.0 .+ avg_x(dSdy).^2.0).^((n - 1.0)/2.0) 
 
-    Γ = 2 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
-    D = Γ .* avg(H).^(n + 2) .* ∇S
+    Γ = 2.0 * A * (ρ * g)^n / (n+2.0) # 1 / m^3 s 
+    D = Γ .* avg(H).^(n + 2.0) .* ∇S
 
     # Compute flux components
     dSdx_edges = diff_x(S[:,2:end - 1]) ./ Δx
@@ -336,13 +341,13 @@ function avg_surface_V(context, H, temp, sim, θ=[], UA=[])
     B, H₀, Δx, Δy = retrieve_context(context)
 
     # Update glacier surface altimetry
-    S = B .+ (H₀ .+ H)./2 # Use average ice thickness for the simulated period
+    S = B .+ (H₀ .+ H)./2.0 # Use average ice thickness for the simulated period
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
     dSdx = diff_x(S) / Δx
     dSdy = diff_y(S) / Δy
-    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
+    ∇S = (avg_y(dSdx).^2.0 .+ avg_x(dSdy).^2.0).^((n - 1.0)/2.0) 
     
     @assert (sim == "UDE" || sim == "PDE") "Wrong type of simulation. Needs to be 'UDE' or 'PDE'."
     if sim == "UDE"
@@ -350,8 +355,8 @@ function avg_surface_V(context, H, temp, sim, θ=[], UA=[])
     elseif sim == "PDE"
         A = A_fake(temp, noise)
     end
-    Γꜛ = 2 * A * (ρ * g)^n / (n+1) # surface stress (not average)  # 1 / m^3 s 
-    D = Γꜛ .* avg(H).^(n + 1) .* ∇S
+    Γꜛ = 2.0 * A * (ρ * g)^n / (n+1.0) # surface stress (not average)  # 1 / m^3 s 
+    D = Γꜛ .* avg(H).^(n + 1.0) .* ∇S
     
     # Compute averaged surface velocities
     Vx = - D .* avg_y(dSdx)
@@ -383,9 +388,11 @@ end
 
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
-predict_A̅(UA, θ, temp) = UA(temp, θ) .* 1e-17
+function predict_A̅(UA, θ, temp)
+    return UA(temp, θ) .* 1e-17
+end
 
-function fake_temp_series(t, means=Array{Float64}([0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
+function fake_temp_series(t, means=Array{Float64}([0.0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
     temps, norm_temps, norm_temps_flat = [],[],[]
     for mean in means
         push!(temps, mean .+ rand(t).*1e-1) # static
@@ -446,7 +453,7 @@ function build_PDE_context(gdir, longterm_temp)
     return context, H
 end
 
-function build_UDE_context(gdir)
+function build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref)
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
 
     # Tuple with all the temp series and H_refs
@@ -502,8 +509,11 @@ function get_NN(θ_trained)
     return UA, θ
 end
 
-
-sigmoid_A(x) = minA_out + (maxA_out - minA_out) / ( 1 + exp(-x) )
+function sigmoid_A(x) 
+    minA_out = 8.5e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 8.0
+    return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
+end
 
 end # @everywhere 
-    
+end # module
