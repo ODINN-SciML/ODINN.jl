@@ -1,5 +1,11 @@
 export initialize_ODINN
 
+"""
+    Initialize_ODINN(processes, python_path)
+
+Initializes ODINN by configuring PyCall based on a given Python path. It also configures multiprocessing
+for a given number of processes. 
+"""
 function initialize_ODINN(processes, python_path)
     
     ################################################
