@@ -32,6 +32,8 @@ cd(@__DIR__)
 global root_dir = dirname(Base.current_project())
 global root_plots = joinpath(root_dir, "plots")
 
+include("helpers/utils.jl")
+
 #### Plotting functions  ###
 include("helpers/plotting.jl")
 ### Iceflow modelling functions  ###
