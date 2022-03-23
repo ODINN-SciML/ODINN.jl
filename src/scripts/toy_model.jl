@@ -10,7 +10,7 @@ using Infiltrator
 using Distributed
 using JLD2
 
-create_ref_dataset = false          # Run reference PDE to generate reference dataset
+create_ref_dataset = true          # Run reference PDE to generate reference dataset
 retrain = true                     # Re-use previous NN weights to continue training
 
 simulation_years = 5

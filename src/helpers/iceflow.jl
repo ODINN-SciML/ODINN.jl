@@ -1,6 +1,4 @@
 
-include("utils.jl")
-
 export generate_ref_dataset, train_iceflow_UDE
 export predict_A̅, A_fake
 
@@ -156,6 +154,9 @@ function loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs::Dict{Str
                 normH = H_ref[H_ref .!= 0.0] .+ ϵ
                 normVx = Vx_ref[Vx_ref .!= 0.0] .+ ϵ
                 normVy = Vy_ref[Vy_ref .!= 0.0] .+ ϵ
+                # @ignore @infiltrate
+                println("size(H): ", size(H))
+                println("size(H_ref): ", size(H_ref))
                 l_H += Flux.Losses.mse(H[H_ref .!= 0.0] ./normH, H_ref[H_ref.!= 0.0] ./normH; agg=mean) 
                 l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0] ./normVx, Vx_ref[Vx_ref.!= 0.0] ./normVx; agg=mean)
                 l_Vy += Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0] ./normVy, Vy_ref[Vy_ref.!= 0.0] ./normVy; agg=mean)
