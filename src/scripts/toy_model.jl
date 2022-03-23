@@ -103,7 +103,7 @@ function run()
 
     Plots.scatter(true_A, label="True A")
     train_final = Plots.plot!(pred_A, label="Predicted A")
-    Plots.savefig(train_final,joinpath(root_plots,"training","final_model.png"))
+    Plots.savefig(train_final,joinpath(ODINN.root_plots,"training","final_model.png"))
 end
 
 # Run main
