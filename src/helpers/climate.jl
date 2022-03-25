@@ -11,9 +11,9 @@ export get_gdirs_with_climate
 
 Gets the climate data for a given number of gdirs. Returns a tuple of `(gdirs, climate`.
 """
-function get_gdirs_with_climate(gdirs; overwrite=false, plot=true)
+function get_gdirs_with_climate(gdirs, tspan; overwrite=false, plot=true)
     climate_raw = get_climate(gdirs, overwrite)
-    climate = filter_climate(climate_raw) 
+    climate = filter_climate(climate_raw, tspan) 
     if plot
         plot_avg_longterm_temps(climate, gdirs)
     end
@@ -365,10 +365,10 @@ end
 
 Filters pairs of Glacier Directory/Climate series which have climate series shorter than the simulation period. 
 """
-function filter_climate(climate)
+function filter_climate(climate, tspan)
     updated_climate = []
     for climate_glacier in climate
-        if length(climate_glacier["longterm_temps"].temp.data) >= t₁ 
+        if length(climate_glacier["longterm_temps"].temp.data) >= tspan[end] 
             push!(updated_climate, climate_glacier)
         else
             @warn "Filtered glacier due to short climate series"
