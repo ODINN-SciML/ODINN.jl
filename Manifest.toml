@@ -864,6 +864,18 @@ git-tree-sha1 = "9b02998aba7bf074d14de89f9d37ca24a1a0b046"
 uuid = "78b55507-aeef-58d4-861c-77aaff3498b1"
 version = "0.21.0+0"
 
+[[deps.Git]]
+deps = ["Git_jll"]
+git-tree-sha1 = "d7bffc3fe097e9589145493c08c41297b457e5d0"
+uuid = "d7ba0133-e1db-5d97-8f8c-041e4b3a1eb2"
+version = "1.2.1"
+
+[[deps.Git_jll]]
+deps = ["Artifacts", "Expat_jll", "Gettext_jll", "JLLWrappers", "LibCURL_jll", "Libdl", "Libiconv_jll", "OpenSSL_jll", "PCRE2_jll", "Pkg", "Zlib_jll"]
+git-tree-sha1 = "6e93d42b97978709e9c941fa43d0f01701f0d290"
+uuid = "f8c6e375-362e-5223-8a59-34ff63f689eb"
+version = "2.34.1+0"
+
 [[deps.Glib_jll]]
 deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE_jll", "Pkg", "Zlib_jll"]
 git-tree-sha1 = "a32d672ac2c967f3deb8a81d828afc739c838a06"
@@ -1115,6 +1127,12 @@ deps = ["Dates", "Mmap", "Parsers", "Unicode"]
 git-tree-sha1 = "3c837543ddb02250ef42f4738347454f95079d4e"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.3"
+
+[[deps.JSON3]]
+deps = ["Dates", "Mmap", "Parsers", "StructTypes", "UUIDs"]
+git-tree-sha1 = "8c1f668b24d999fb47baf80436194fdccec65ad2"
+uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+version = "1.9.4"
 
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1706,6 +1724,10 @@ git-tree-sha1 = "aab86872f5dccb1a6251ae7935b286e784dadba0"
 uuid = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 version = "5.71.0"
 
+[[deps.PCRE2_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
+
 [[deps.PCRE_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "b2a7af664e098055a7529ad1a900ded962bca488"
@@ -1729,6 +1751,12 @@ deps = ["Artifacts", "JLLWrappers", "LibCURL_jll", "Libdl", "Libtiff_jll", "Pkg"
 git-tree-sha1 = "59c43648bf081f732eae1e44b8883f713d2ca1b6"
 uuid = "58948b4f-47e0-5654-a9ad-f609743f8632"
 version = "800.200.100+0"
+
+[[deps.PackageCompatUI]]
+deps = ["Dates", "Downloads", "Git", "JSON3", "Pkg", "REPL", "Scratch", "Test"]
+git-tree-sha1 = "64dd9132b360484fc0a220ac3f73c3e1c966873b"
+uuid = "65465c31-362d-417a-a2f0-7fa38ae507b9"
+version = "1.0.2"
 
 [[deps.Packing]]
 deps = ["GeometryBasics"]
@@ -1902,6 +1930,12 @@ deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization
 git-tree-sha1 = "1fc929f47d7c151c839c5fc1375929766fb8edcc"
 uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 version = "1.93.1"
+
+[[deps.PyCallJLD]]
+deps = ["JLD", "PyCall"]
+git-tree-sha1 = "8b7f68cb3bfcdb3526e9f82a0795ae17842bc9de"
+uuid = "de320387-30cd-5f83-91a8-a6e0ae8b8444"
+version = "0.2.1"
 
 [[deps.PyPlot]]
 deps = ["Colors", "LaTeXStrings", "PyCall", "Sockets", "Test", "VersionParsing"]
@@ -2292,6 +2326,12 @@ deps = ["Test"]
 git-tree-sha1 = "010dc73c7146869c042b49adcdb6bf528c12e859"
 uuid = "53d494c1-5632-5724-8f4c-31dff12d585f"
 version = "0.3.0"
+
+[[deps.StructTypes]]
+deps = ["Dates", "UUIDs"]
+git-tree-sha1 = "d24a825a95a6d98c385001212dc9020d609f2d4f"
+uuid = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+version = "1.8.1"
 
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]

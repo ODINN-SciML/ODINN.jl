@@ -7,14 +7,14 @@ export predict_A̅, A_fake
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(gdirs_climate, solver = Ralston())
+function generate_ref_dataset(gdirs_climate, tspan, solver = Ralston())
   
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
     # Run batches in parallel
     gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
-    refs = @showprogress pmap((gdir, longterm_temp) -> batch_iceflow_PDE(gdir, longterm_temp, solver), gdirs, longterm_temps)
+    refs = @showprogress pmap((gdir, longterm_temp) -> batch_iceflow_PDE(gdir, longterm_temp, tspan, solver), gdirs, longterm_temps)
 
     # Split into different vectors
     H_refs, V̄x_refs, V̄y_refs = [],[],[]
@@ -32,12 +32,23 @@ end
 
 Solve the Shallow Ice Approximation iceflow PDE for a given temperature series batch
 """
-function batch_iceflow_PDE(gdir, longterm_temp, solver) 
+function batch_iceflow_PDE(gdir, longterm_temp, tspan, solver) 
     println("Processing glacier: ", gdir.rgi_id)
 
-    context, H = build_PDE_context(gdir, longterm_temp)
+    context, H = build_PDE_context(gdir, longterm_temp, tspan)
+    refs = simulate_iceflow_PDE(H, context, solver)
 
-    iceflow_prob = ODEProblem(iceflow!,H,(0.0,t₁),context)
+    return refs
+end
+
+"""
+    simulate_iceflow_PDE(H, context, solver) 
+
+Make forward simulation of the SIA PDE.
+"""
+function simulate_iceflow_PDE(H, context, solver)
+    tspan = context.x[22]
+    iceflow_prob = ODEProblem(iceflow!,H,tspan,context)
     iceflow_sol = solve(iceflow_prob, solver,
                     reltol=1e-6, save_everystep=false, 
                     progress=true, progress_steps = 10)
@@ -46,7 +57,6 @@ function batch_iceflow_PDE(gdir, longterm_temp, solver)
     temps = context.x[7]
     V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(temps), "PDE") # Average velocity with average temperature
     refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref)
-
     return refs
 end
 
@@ -55,7 +65,7 @@ end
 
 Train the Shallow Ice Approximation iceflow UDE
 """
-function train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained=[], solver = ROCK4(), loss_history=[])
+function train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained=[], solver = ROCK4(), loss_history=[])
     if length(θ_trained) == 0
         global current_epoch = 1 # reset epoch count
     end
@@ -68,7 +78,7 @@ function train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained=[
     Vy_refs = PDE_refs["V̄y_refs"]
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = map((gdir, H_ref, Vx_ref, Vy_ref) -> build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref), gdirs, H_refs, Vx_refs, Vy_refs)
+    context_batches = pmap((gdir, H_ref, Vx_ref, Vy_ref) -> build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref, tspan), gdirs, H_refs, Vx_refs, Vy_refs)
     loss(θ) = loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs, solver) # closure
 
     println("Training iceflow UDE...")
@@ -201,8 +211,9 @@ Solve the Shallow Ice Approximation iceflow UDE for a given temperature series b
 function batch_iceflow_UDE(θ, UA, context, longterm_temps_batch, solver) 
     # Retrieve long-term temperature series
     H = context[3]
+    tspan = context[6]
     iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA, context, longterm_temps_batch) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE_batch,H,(0.0,t₁),θ)
+    iceflow_prob = ODEProblem(iceflow_UDE_batch,H,tspan,θ)
     iceflow_sol = solve(iceflow_prob, solver, u0=H, p=θ,
                     reltol=1e-6, save_everystep=false, 
                     progress=true, progress_steps = 10)
@@ -223,6 +234,7 @@ function iceflow!(dH, H, context,t)
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
     current_year = Ref(context.x[18])
     A = Ref(context.x[1])
+    t₁ = context.x[22][end]
     
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
@@ -244,6 +256,7 @@ Runs a single time step of the iceflow UDE model
 function iceflow_NN(H, θ, t, UA, context, temps)
 
     year = floor(Int, t) + 1
+    t₁ = context[6][end]
     if year <= t₁
         temp = temps[year]
     else
@@ -396,23 +409,23 @@ function predict_A̅(UA, θ, temp)
     return UA(temp, θ) .* 1e-17
 end
 
-function fake_temp_series(t, means=Array{Float64}([0.0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
-    temps, norm_temps, norm_temps_flat = [],[],[]
-    for mean in means
-        push!(temps, mean .+ rand(t).*1e-1) # static
-        append!(norm_temps_flat, mean .+ rand(t).*1e-1) # static
-    end
+# function fake_temp_series(t, means=Array{Float64}([0.0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
+#     temps, norm_temps, norm_temps_flat = [],[],[]
+#     for mean in means
+#         push!(temps, mean .+ rand(t).*1e-1) # static
+#         append!(norm_temps_flat, mean .+ rand(t).*1e-1) # static
+#     end
 
-    # Normalise temperature series
-    norm_temps_flat = Flux.normalise([norm_temps_flat...]) # requires splatting
+#     # Normalise temperature series
+#     norm_temps_flat = Flux.normalise([norm_temps_flat...]) # requires splatting
 
-    # Re-create array of arrays 
-    for i in 1:t₁:length(norm_temps_flat)
-        push!(norm_temps, norm_temps_flat[i:i+(t₁-1)])
-    end
+#     # Re-create array of arrays 
+#     for i in 1:t₁:length(norm_temps_flat)
+#         push!(norm_temps, norm_temps_flat[i:i+(t₁-1)])
+#     end
 
-    return temps, norm_temps
-end
+#     return temps, norm_temps
+# end
 
 """
     get_initial_geometry(glacier_gd)
@@ -438,7 +451,7 @@ function get_initial_geometry(gdir, smoothing=true)
     return H₀, H, B, (nx,ny), (Δx,Δy)
 end
 
-function build_PDE_context(gdir, longterm_temp)
+function build_PDE_context(gdir, longterm_temp, tspan)
     # Determine initial geometry conditions
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
     # Initialize all matrices for the solver
@@ -453,15 +466,15 @@ function build_PDE_context(gdir, longterm_temp)
     
     # Gather simulation parameters
     current_year = 0 
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀)
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan)
     return context, H
 end
 
-function build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref)
+function build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref, tspan)
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
 
     # Tuple with all the temp series and H_refs
-    context = (B, H₀, H, nxy, Δxy)
+    context = (B, H₀, H, nxy, Δxy, tspan)
 
     return context
 end

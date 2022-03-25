@@ -30,9 +30,9 @@ function initialize_ODINN(processes, python_path)
             println("Number of cores: ", nprocs())
             println("Number of workers: ", nworkers())
         end
-        
-        @everywhere begin   
+         
         @eval ODINN begin
+        @everywhere begin  
         import Pkg
         using ODINN, Infiltrator
         ### PyCall configuration and Python libraries  ###
@@ -41,8 +41,8 @@ function initialize_ODINN(processes, python_path)
         include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
         ### OGGM configuration settings  ###
         include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
-        end # @eval
         end # @everywhere
+        end # @eval
     end
 
 end
