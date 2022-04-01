@@ -8,12 +8,13 @@ using Flux
 using Plots
 using Infiltrator
 using Distributed
-using JLD2
+# using JLD2
+using PyCall, JLD, PyCallJLD
 
-create_ref_dataset = false          # Run reference PDE to generate reference dataset
+create_ref_dataset = true          # Run reference PDE to generate reference dataset
 retrain = true                     # Re-use previous NN weights to continue training
 
-simulation_years = 5
+tspan = (0.0,5.0) # period in years for simulation
 processes = 16
 python_path = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python"
 # The first step is ALWAYS to initialize ODINN. 
@@ -37,14 +38,23 @@ function run()
     #########################################
 
     # Process climate data for glaciers
-    gdirs_climate = get_gdirs_with_climate(gdirs, overwrite=false, plot=true)
+    gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=true)
+
+    ########### TO BE REMOVED
+    # @infiltrate
+    JLD.save(joinpath(ODINN.root_dir, "test/data/gdirs.jld"), "gdirs", gdirs[1])
+    # @infiltrate
+    climate_raw = get_climate(gdirs, false)
+    climate = filter_climate(climate_raw) 
+    JLD.save(joinpath(ODINN.root_dir, "test/data/climate.jld"), "climate", climate)
+    ###########
 
     # Run forward model for selected glaciers
     if create_ref_dataset 
         println("Generating reference dataset for training...")
     
         # Compute reference dataset in parallel
-        H_refs, V̄x_refs, V̄y_refs = @time generate_ref_dataset(gdirs_climate)
+        H_refs, V̄x_refs, V̄y_refs = @time generate_ref_dataset(gdirs_climate, tspan)
             
         println("Saving reference data")
         jldsave(joinpath(ODINN.root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs)
@@ -69,7 +79,7 @@ function run()
         θ_trained = trained_weights["θ_trained"]
         # train_settings = (BFGS(initial_stepnorm=0.05), 20) # optimizer, epochs
         train_settings = (ADAM(0.01), 20) # optimizer, epochs
-        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained) # retrain
+        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
         θ_trained = iceflow_trained.minimizer
 
         # Save trained NN weights
@@ -78,7 +88,7 @@ function run()
     else
         println("Training from scratch...")
         train_settings = (ADAM(0.05), 10) # optimizer, epochs
-        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs)
+        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs)
         θ_trained = iceflow_trained.minimizer
         println("Saving NN weights...")
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
@@ -86,7 +96,7 @@ function run()
         # Continue training with BFGS
         # train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
         train_settings = (ADAM(0.02), 20) # optimizer, epochs
-        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, train_settings, PDE_refs, θ_trained) # retrain
+        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
         θ_trained = iceflow_trained.minimizer
         # Save trained NN weights
         println("Saving NN weights...")
@@ -103,7 +113,7 @@ function run()
 
     Plots.scatter(true_A, label="True A")
     train_final = Plots.plot!(pred_A, label="Predicted A")
-    Plots.savefig(train_final,joinpath(root_plots,"training","final_model.png"))
+    Plots.savefig(train_final,joinpath(ODINN.root_plots,"training","final_model.png"))
 end
 
 # Run main

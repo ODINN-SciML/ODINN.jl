@@ -11,9 +11,9 @@ export get_gdirs_with_climate
 
 Gets the climate data for a given number of gdirs. Returns a tuple of `(gdirs, climate`.
 """
-function get_gdirs_with_climate(gdirs; overwrite=false, plot=true)
+function get_gdirs_with_climate(gdirs, tspan; overwrite=false, plot=true)
     climate_raw = get_climate(gdirs, overwrite)
-    climate = filter_climate(climate_raw) 
+    climate = filter_climate(climate_raw, tspan) 
     if plot
         plot_avg_longterm_temps(climate, gdirs)
     end
@@ -105,6 +105,11 @@ function get_MB_climate_datasets(gdir, mb, period_y, fs)
     end     
 end
 
+"""
+    build_MB_climate_ds(hydro_period, climate, gdir, mb_glaciological)
+
+Builds a Dataset with the mass balance and climate data for a glacier. It stores "annual", "accumulation" and/or "ablation" series. 
+"""
 function build_MB_climate_ds(hydro_period, climate, gdir, mb_glaciological)
     println("Processing data for reference period ", hydro_period[1], " - ", hydro_period[end])
     # Build the training and reference dataset including annual and seasonal data
@@ -125,6 +130,11 @@ function build_MB_climate_ds(hydro_period, climate, gdir, mb_glaciological)
     return climate_ds, MB_ds
 end
 
+"""
+    build_climate_ds(hydro_period, climate, gdir)
+
+Builds a Dataset with only the climate data for a glacier. It stores "annual" series. 
+"""
 function build_climate_ds(hydro_period, climate, gdir)
     ds_clim_buffer = []
     println("Processing data for reference period ", hydro_period[1], " - ", hydro_period[end])
@@ -139,7 +149,12 @@ function build_climate_ds(hydro_period, climate, gdir)
     return climate_ds, MB_ds
 end
 
-# Compute climate forcings for a given period to feed MB model
+"""
+    get_climate_forcing(gdir, climate, period, season)
+
+Processes raw climate data to seasonal data, with PDDs, snowfall and rainfall. 
+It projects the climate data into the glacier matrix by applying temperature gradients and precipitation lapse rates.
+"""
 function get_climate_forcing(gdir, climate, period, season)
     @assert any(season .== ["annual","accumulation", "ablation"]) "Wrong season type, must be `annual`, `accumulation` or `ablation`"
 
@@ -169,6 +184,11 @@ function get_climate_forcing(gdir, climate, period, season)
      
 end
 
+"""
+    get_cumulative_climate(climate, gradient_bounds=[-0.009, -0.003], default_grad=-0.0065)
+
+Computes Positive Degree Days (PDDs) and cumulative rainfall and snowfall from climate data.
+"""
 function get_cumulative_climate(climate, gradient_bounds=[-0.009, -0.003], default_grad=-0.0065)
     avg_temp = climate.temp.resample(time="1M").mean() 
     avg_gradients = climate.gradient.resample(time="1M").mean() 
@@ -182,6 +202,11 @@ function get_cumulative_climate(climate, gradient_bounds=[-0.009, -0.003], defau
     return climate_sum_avg2
 end
 
+"""
+    get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5")
+
+Downloads the raw W5E5 climate data with a given resolution (daily by default). Returns an xarray Dataset. 
+"""
 function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5")
     MBsandbox.process_w5e5_data(gdir, climate_type=climate, temporal_resol=temp_resolution) 
     fpath = gdir.get_filepath("climate_historical", filesuffix="_daily_W5E5")
@@ -189,7 +214,11 @@ function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5")
     return climate
 end
 
-# Function to apply temperature lapse rates to the full matrix of a glacier
+"""
+    apply_t_grad!(climate, g_dem)
+
+Applies temperature gradients to the glacier 2D climate data based on a DEM.  
+"""
 function apply_t_grad!(climate, g_dem)
     # We apply the gradients to the temperature
     climate.temp.data = climate.temp.data .+ climate.avg_gradient.data .* (g_dem.data .- climate.ref_hgt)
@@ -199,7 +228,12 @@ function apply_t_grad!(climate, g_dem)
     climate.rain.data = climate.rain.where(climate.temp > 0, 0).data
 end
 
-# Function to convert the baseline OGGM climate dataset to 2D
+"""
+    create_2D_climate_data(climate, g_dem)
+
+Projects climate data to the glacier matrix by simply copying the closest gridpoint to all matrix gridpoints.
+Generates a new xarray Dataset which is returned.   
+"""
 function create_2D_climate_data(climate, g_dem)
     # Create dummy 2D arrays to have a base to apply gradients afterwards
     dummy_grid = ones(size(permutedims(g_dem.data, (1,2,3))))
@@ -230,6 +264,11 @@ function create_2D_climate_data(climate, g_dem)
 
 end
 
+"""
+    to_hydro_period(mass_balance::PyObject, trim_edges=true)
+
+Converts the dates of mass balance series to hydrological periods. 
+"""
 function to_hydro_period(mass_balance::PyObject, trim_edges=true)
     # Select hydro period between October 1st and 30th of September
     if trim_edges
@@ -241,6 +280,11 @@ function to_hydro_period(mass_balance::PyObject, trim_edges=true)
     return hydro_period
 end
 
+"""
+    to_hydro_period(mass_balance::PyObject, trim_edges=true)
+
+Generates a Date range based the hydrological period for an Array of years. 
+"""
 function to_hydro_period(years::Array)
     # Select hydro period between October 1st and 30th of September
     hydro_period = collect(Date(years[1]-1,10,1):Day(1):Date(years[end],09,30))
@@ -248,6 +292,11 @@ function to_hydro_period(years::Array)
     return hydro_period
 end
 
+"""
+    trim_period(period, climate)
+
+Trims a time period based on the time range of a climate series. 
+"""
 function trim_period(period, climate)
     if any(climate.time[1].dt.date.data[1] > period[1])
         head = jldate(climate.time[1])
@@ -261,10 +310,20 @@ function trim_period(period, climate)
     return period
 end
 
+"""
+    is_abl(month)
+
+Determines if the month belongs the the ablation season or not. 
+"""
 function is_abl(month)
     return (month >= 4) & (month <= 10)
 end
 
+"""
+    is_acc(month)
+
+Determines if the month belongs the the accumulation season or not. 
+"""
 function is_acc(month)
     return (month <= 4) | (month >= 10)
 end
@@ -276,6 +335,11 @@ struct Dataset
     ablation
 end
 
+"""
+    fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0])
+
+Generates fake random temperature series based on an array of mean temperature values. 
+"""
 function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0])
     temps, norm_temps, norm_temps_flat = [],[],[]
     for mean in means
@@ -296,12 +360,15 @@ function fake_temp_series(t, means=[0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20
     return temps, norm_temps
 end
 
+"""
+    filter_climate(climate)
 
-
-function filter_climate(climate)
+Filters pairs of Glacier Directory/Climate series which have climate series shorter than the simulation period. 
+"""
+function filter_climate(climate, tspan)
     updated_climate = []
     for climate_glacier in climate
-        if length(climate_glacier["longterm_temps"].temp.data) >= t₁ 
+        if length(climate_glacier["longterm_temps"].temp.data) >= tspan[end] 
             push!(updated_climate, climate_glacier)
         else
             @warn "Filtered glacier due to short climate series"
@@ -310,6 +377,11 @@ function filter_climate(climate)
     return updated_climate
 end
 
+"""
+    get_gdir_climate_tuple(gdirs, climate)
+
+Generates a tuple with all the Glacier directories and climate series for the simulations.  
+"""
 function get_gdir_climate_tuple(gdirs, climate)
     dates, longterm_temps, annual_temps = [],[],[]
     for climate_batch in climate

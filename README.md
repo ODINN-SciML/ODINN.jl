@@ -11,26 +11,34 @@
 
 ## OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
 
-Global glacier model using Neural Differential Equations to model and discover climate-glacier interactions.  
+Global glacier model using Neural Differential Equations to model and discover processes of climate-glacier interactions.  
 
-It uses neural networks and differential equations in order to combine mechanistic models describing glaciological processes (e.g. enhanced temperature-index model or the Shallow Ice Approximation) with machine learning. Neural networks are used to learn parts of the equations, which then can be interpreted in a mathematical form in order to update the original equation from the process. The goal of this toy model is to provide a proof of concept for the discovery and modelling framework before scaling it up with OGGM. 
+It uses neural networks and differential equations in order to combine mechanistic models describing glaciological processes (e.g. enhanced temperature-index model or the Shallow Ice Approximation) with machine learning. Neural networks are used to learn parts of the equations, which then can be interpreted in a mathematical form (e.g. using SINDy) in order to update the original equation from the process. ODINN uses the Open Global Glacier Model (OGGM, Maussion et al., 2019) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. This is done calling Python from Julia using PyCall. Then, all the simulations and processing are performed in Julia, benefitting from the high performance and the SciML ecosystem. 
 
 ## Running the toy model
 
-A demostration of our method is included in `src/scripts/toy_model.jl`. The `Manifest.toml` and `Project.toml` include all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
+A demostration with a toy model is showcased in `src/scripts/toy_model.jl`. The `Manifest.toml` and `Project.toml` include all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
+
 ```
 import Pkg
-cd(@__DIR__)
 Pkg.activate(dirname(Base.current_project()))
 Pkg.precompile()
 Pkg.instantiate()
 ```
+## ODINN initialization: integration with OGGM and multiprocessing
 
-## Integration with OGGM
+In order to call OGGM in Python from Julia, a Python installation is needed, which then can be used in Julia using [PyCall](https://github.com/JuliaPy/PyCall.jl). We recommend splitting the Julia (i.e. ODINN) and Python (i.e. OGGM) files in separate folders, which we chose to name `Julia` and `Python`, both placed at root level. As indicated in the [OGGM documentation](https://docs.oggm.org/en/stable/installing-oggm.html), when installing OGGM it is best to create a new dedicated conda environment for it (e.g. `oggm_env`). In the same environment, install also the [OGGM Mass-Balance sandbox](https://github.com/OGGM/massbalance-sandbox) following the instructions in the repository.
 
-In order to call OGGM in Python from Julia, a Python installation is needed, which then can be used in Julia using [PyCall](https://github.com/JuliaPy/PyCall.jl). We recommend splitting the Julia (i.e. ODINN) and Python (i.e. OGGM) files in separate folders, which we chose to name `Julia` and `Python`, both placed at root level. As indicated in the [OGGM documentation](https://docs.oggm.org/en/stable/installing-oggm.html), when installing OGGM it is best to create a new dedicated conda environment for it (e.g. `oggm_env`). The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. After specifying the path, it is necessary to build PyCall using `Pkg.build("PyCall")`. 
-In the same environment, install also the [OGGM Mass-Balance sandbox](https://github.com/OGGM/massbalance-sandbox) following the instructions in the repository.
-From this point, it is possible to run Python from Julia running the different commands available in the PyCall documentation. In order to get a better idea on how this works, we recommend checking the toy model interface [ODINN.jl](https://github.com/ODINN-SciML/ODINN_toy/blob/main/scripts/toy_model/ODINN.jl). 
+The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement in ODINN, with the following function automatically setting up the PyCall and multiprocessing configurations:
+
+```
+processes = 16
+python_path = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python"
+# The first step is ALWAYS to initialize ODINN. 
+initialize_ODINN(processes, python_path)
+```
+
+From this point, it is possible to run Python from Julia running the different commands available in the PyCall documentation. In order to get a better idea on how this works, we recommend checking the toy model example [toy_model.jl](https://github.com/ODINN-SciML/ODINN/blob/main/src/scripts/toy_model.jl). 
 
 ### Using OGGM for the initial conditions of the training/simulations
 

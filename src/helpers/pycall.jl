@@ -1,5 +1,7 @@
 using PyCall
 
+export xr, np
+
 # Import OGGM sub-libraries in Julia
 netCDF4 = pyimport("netCDF4")
 cfg = pyimport("oggm.cfg")

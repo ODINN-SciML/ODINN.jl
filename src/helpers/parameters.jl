@@ -1,6 +1,6 @@
 export t₁
 
-const t₁ = 5.0                      # number of simulation years 
+# const t₁ = 5.0                      # number of simulation years 
 const ρ = 900.0                     # Ice density [kg / m^3]
 const g = 9.81                    # Gravitational acceleration [m / s^2]
 const n = 3.0                       # Glen's flow law exponent

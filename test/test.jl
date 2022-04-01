@@ -4,34 +4,37 @@ import Pkg
 Pkg.activate(dirname(Base.current_project())) # activate project
 Pkg.precompile()
 #Pkg.resolve()
-Pkg.instantiate()
+# Pkg.instantiate()
 
+using ODINN
 using Test
-using Random
-using Distributed
-using Statistics, LinearAlgebra, Random, Polynomials
-using HDF5  
-using JLD2
-using OrdinaryDiffEq, DiffEqFlux
-using Zygote: @ignore
-using Flux
-using Tullio, RecursiveArrayTools
-using Infiltrator
-using Plots
-using ProgressMeter, ParallelDataTransfer
-using Dates 
-using PyCall
-using Makie, CairoMakie
+# using Random
+# using Distributed
+# using Statistics, LinearAlgebra, Random, Polynomials
+# using HDF5  
+# using JLD2
+# using OrdinaryDiffEq, DiffEqFlux
+# using Zygote: @ignore
+# using Flux
+# using Tullio, RecursiveArrayTools
+# using Infiltrator
+# using Plots
+# using ProgressMeter, ParallelDataTransfer
+# using Dates 
+# using PyCall
+# using Makie, CairoMakie
 
-@everywhere begin 
-    import Pkg
-    Pkg.activate(dirname(Base.current_project()))
-end
+# @everywhere begin 
+#     import Pkg
+#     Pkg.activate(dirname(Base.current_project()))
+# end
 
 # include all functions 
-include("../scripts/toy_model/helpers/parameters.jl")
-include("../test/utils_test.jl")
-include("../scripts/toy_model/helpers/iceflow.jl")
+# include("../scripts/toy_model/helpers/parameters.jl")
+# include("../test/utils_test.jl")
+# include("../scripts/toy_model/helpers/iceflow.jl")
+
+@testset "Halfar" begin
 
 # ######################################################################################################
 # ######################             Testing Forward SIA Model            ##############################
@@ -143,3 +146,5 @@ temp = temps[1]
 UA(0.0, θ)
 
 predict_A̅(UA, θ, temp_series[1])
+
+end
