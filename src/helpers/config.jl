@@ -12,6 +12,12 @@ function initialize_ODINN(processes, python_path)
     ############  PYTHON ENVIRONMENT  ##############
     ################################################
 
+    # Create structural folders if needed
+    OGGM_path = joinpath(homedir(), "Python/OGGM_data")
+    if !isdir(OGGM_path)
+        mkpath(OGGM_path)
+    end
+
     ## Set up Python environment
     global ENV["PYTHON"] = python_path 
 
@@ -31,7 +37,7 @@ function initialize_ODINN(processes, python_path)
         end
          
         @everywhere begin  
-        @eval ODINN begin 
+        @eval ODINN begin # evaluate in ODINN module to ensure accessibility
         import Pkg
         using ODINN, Infiltrator
         ### PyCall configuration and Python libraries  ###
