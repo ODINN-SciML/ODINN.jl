@@ -8,7 +8,7 @@ using Flux
 using Plots
 using Infiltrator
 using Distributed
-# using JLD2
+using JLD2
 using PyCall, JLD, PyCallJLD
 
 create_ref_dataset = true          # Run reference PDE to generate reference dataset
@@ -39,15 +39,6 @@ function run()
 
     # Process climate data for glaciers
     gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=true)
-
-    ########### TO BE REMOVED
-    # @infiltrate
-    JLD.save(joinpath(ODINN.root_dir, "test/data/gdirs.jld"), "gdirs", gdirs[1])
-    # @infiltrate
-    climate_raw = get_climate(gdirs, false)
-    climate = filter_climate(climate_raw) 
-    JLD.save(joinpath(ODINN.root_dir, "test/data/climate.jld"), "climate", climate)
-    ###########
 
     # Run forward model for selected glaciers
     if create_ref_dataset 

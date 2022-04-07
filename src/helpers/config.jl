@@ -12,12 +12,17 @@ function initialize_ODINN(processes, python_path)
     ############  PYTHON ENVIRONMENT  ##############
     ################################################
 
+    # Create structural folders if needed
+    OGGM_path = joinpath(homedir(), "Python/OGGM_data")
+    if !isdir(OGGM_path)
+        mkpath(OGGM_path)
+    end
+
     ## Set up Python environment
-    # Choose own Python environment with OGGM's installation
-    # Use same path as "which python" in shell
     global ENV["PYTHON"] = python_path 
 
-    @eval begin
+    @eval begin  
+    using PyCall
     Pkg.build("PyCall") 
     include(joinpath(ODINN.root_dir, "src/helpers/pycall.jl"))
     include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
@@ -31,8 +36,8 @@ function initialize_ODINN(processes, python_path)
             println("Number of workers: ", nworkers())
         end
          
-        @eval ODINN begin
         @everywhere begin  
+        @eval ODINN begin # evaluate in ODINN module to ensure accessibility
         import Pkg
         using ODINN, Infiltrator
         ### PyCall configuration and Python libraries  ###
@@ -41,8 +46,8 @@ function initialize_ODINN(processes, python_path)
         include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
         ### OGGM configuration settings  ###
         include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
-        end # @everywhere
         end # @eval
+        end # @everywhere
     end
 
 end
