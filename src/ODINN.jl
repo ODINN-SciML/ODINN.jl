@@ -12,7 +12,6 @@ using Flux
 using Tullio, RecursiveArrayTools
 using Infiltrator
 using Plots
-using Distributed
 using Makie, CairoMakie
 import Pkg
 using Distributed

@@ -12,7 +12,6 @@ export oggm_config, init_gdirs, PARAMS, PATHS
 Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier.
 """
 function oggm_config()
-    # sendto(workers(), multiprocessing=multiprocessing)
     @everywhere begin
     cfg.initialize() # initialize OGGM configuration
     

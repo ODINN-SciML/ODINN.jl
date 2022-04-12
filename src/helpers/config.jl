@@ -6,7 +6,7 @@ export initialize_ODINN
 Initializes ODINN by configuring PyCall based on a given Python path. It also configures multiprocessing
 for a given number of processes. 
 """
-function initialize_ODINN(processes, python_path)
+function initialize_ODINN(procs, python_path)
     
     ################################################
     ############  PYTHON ENVIRONMENT  ##############
@@ -21,33 +21,37 @@ function initialize_ODINN(processes, python_path)
     ## Set up Python environment
     global ENV["PYTHON"] = python_path 
 
-    @eval begin  
-    using PyCall
-    Pkg.build("PyCall") 
-    include(joinpath(ODINN.root_dir, "src/helpers/pycall.jl"))
-    include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
-    include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
-    end # @eval
+    # @eval begin
+    #     using PyCall
+    #     Pkg.build("PyCall") 
+    #     include(joinpath(ODINN.root_dir, "src/helpers/pycall.jl"))
+    #     include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
+    #     include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
+    # end # @eval
 
-    if processes > 1
-        if nprocs() < processes
+    if procs > 1
+        if nprocs() < procs
+            global processes = procs
+            @eval begin
             addprocs(processes - nprocs(); exeflags="--project")
             println("Number of cores: ", nprocs())
             println("Number of workers: ", nworkers())
+            end # @eval
         end
          
-        @everywhere begin  
-        @eval ODINN begin # evaluate in ODINN module to ensure accessibility
-        import Pkg
-        using ODINN, Infiltrator
-        ### PyCall configuration and Python libraries  ###
-        include(joinpath(ODINN.root_dir, "src/helpers/pycall.jl"))
-        ### Climate data processing  ###
-        include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
-        ### OGGM configuration settings  ###
-        include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
-        end # @eval
-        end # @everywhere
+        @eval begin
+            @everywhere begin 
+            using ODINN, PyCall, Infiltrator
+            @eval ODINN begin
+                ### PyCall configuration and Python libraries  ###
+                include(joinpath(ODINN.root_dir, "src/helpers/pycall.jl"))
+                ### Climate data processing  ###
+                include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
+                ### OGGM configuration settings  ###
+                include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
+            end # @eval ODINN
+            end # @everywhere
+        end # @eval  
     end
 
 end
