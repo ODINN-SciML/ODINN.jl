@@ -1,5 +1,4 @@
 import Pkg
-cd(@__DIR__)
 Pkg.activate(dirname(Base.current_project()))
 Pkg.precompile()
 
@@ -38,7 +37,7 @@ function run()
     #########################################
 
     # Process climate data for glaciers
-    gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=true)
+    gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=true, plot=true)
 
     # Run forward model for selected glaciers
     if create_ref_dataset 

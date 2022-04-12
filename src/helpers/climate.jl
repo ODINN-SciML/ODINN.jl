@@ -2,7 +2,7 @@
 ############  FUNCTIONS   #####################
 ###############################################
 
-using ODINN, Dates # to provide correct Julian time slices 
+using Dates # to provide correct Julian time slices 
 
 export get_gdirs_with_climate
 
