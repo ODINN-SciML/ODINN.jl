@@ -12,7 +12,10 @@ export oggm_config, init_gdirs, PARAMS, PATHS
 Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier.
 """
 function oggm_config()
+    @eval begin
     @everywhere begin
+    @eval ODINN begin
+    println("module oggm: ", @__MODULE__)
     cfg.initialize() # initialize OGGM configuration
     
     global PATHS = PyDict(cfg."PATHS")  # OGGM PATHS
@@ -23,12 +26,9 @@ function oggm_config()
     # Multiprocessing 
     # PARAMS["prcp_scaling_factor"], PARAMS["ice_density"], PARAMS["continue_on_error"]
     PARAMS["use_multiprocessing"] = true # Let's use multiprocessing for OGGM
+    end # @eval ODINN
     end # @everywhere
-
-    # if multiprocessing
-    #     @everywhere cfg.initialize()
-    #     sendto(workers(), PATHS=PATHS, PARAMS=PARAMS)
-    # end
+    end # @eval
 end
 
 """

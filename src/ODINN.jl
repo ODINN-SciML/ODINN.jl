@@ -1,3 +1,4 @@
+__precompile__() # this module is safe to precompile
 module ODINN
 
 ###############################################
@@ -16,6 +17,7 @@ using Makie, CairoMakie
 import Pkg
 using Distributed
 using ProgressMeter
+using PyCall
 
 ###############################################
 #############    PARAMETERS     ###############
@@ -39,7 +41,32 @@ include("helpers/plotting.jl")
 # (includes utils.jl as well)
 include("helpers/iceflow.jl")
 
-include("helpers/config.jl")
+###############################################
+#############  PYTHON LIBRARIES  ##############
+###############################################
+
+const netCDF4 = PyNULL()
+const cfg = PyNULL()
+const utils = PyNULL()
+const workflow = PyNULL()
+const tasks = PyNULL()
+const graphics = PyNULL()
+const bedtopo = PyNULL()
+const MBsandbox = PyNULL()
+
+# Essential Python libraries
+const np = PyNULL()
+const xr = PyNULL()
+
+###############################################
+######### PYTHON JULIA INTERACTIONS  ##########
+###############################################
+
+include(joinpath(ODINN.root_dir, "src/helpers/config.jl"))
+### Climate data processing  ###
+include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
+### OGGM configuration settings  ###
+include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
 
 end # module
 
