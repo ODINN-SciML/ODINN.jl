@@ -25,17 +25,23 @@ Pkg.activate(dirname(Base.current_project()))
 Pkg.precompile()
 Pkg.instantiate()
 ```
-## ODINN initialization: integration with OGGM and multiprocessing
+### ODINN initialization: integration with OGGM and multiprocessing
 
 In order to call OGGM in Python from Julia, a Python installation is needed, which then can be used in Julia using [PyCall](https://github.com/JuliaPy/PyCall.jl). We recommend splitting the Julia (i.e. ODINN) and Python (i.e. OGGM) files in separate folders, which we chose to name `Julia` and `Python`, both placed at root level. As indicated in the [OGGM documentation](https://docs.oggm.org/en/stable/installing-oggm.html), when installing OGGM it is best to create a new dedicated conda environment for it (e.g. `oggm_env`). In the same environment, install also the [OGGM Mass-Balance sandbox](https://github.com/OGGM/massbalance-sandbox) following the instructions in the repository.
 
-The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement in ODINN, with the following function automatically setting up the PyCall and multiprocessing configurations:
+The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement, it just requires to run the following command during the first time you run ODINN in your machine using your conda environment Python path. IMPORTANT: after running this command remember to restart your Julia session (closing the REPL and opening a new one) in order to access the right Python path:
 
 ```
+global ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as your conda enviornment path containing OGGM
+Pkg.build("PyCall")
+```
+
+Once you have restarted your Julia session, the next step is to import `ODINN`, and if you want to run ODINN using multiprocessing you can enable it using the following command:
+
+```
+using ODINN
 processes = 16
-python_path = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python"
-# The first step is ALWAYS to initialize ODINN. 
-initialize_ODINN(processes, python_path)
+ODINN.enable_multiprocessing(processes)
 ```
 
 From this point, it is possible to run Python from Julia running the different commands available in the PyCall documentation. In order to get a better idea on how this works, we recommend checking the toy model example [toy_model.jl](https://github.com/ODINN-SciML/ODINN/blob/main/src/scripts/toy_model.jl). 

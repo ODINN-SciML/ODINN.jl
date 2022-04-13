@@ -19,7 +19,7 @@ create_ref_dataset = true          # Run reference PDE to generate reference dat
 retrain = true                     # Re-use previous NN weights to continue training
 
 tspan = (0.0,5.0) # period in years for simulation
-processes = 3
+processes = 16
 # We enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 
