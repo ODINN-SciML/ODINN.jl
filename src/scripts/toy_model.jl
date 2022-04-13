@@ -2,23 +2,26 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 Pkg.precompile()
 
+## Set up Python environment
+global ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python" 
+Pkg.build("PyCall")
+# Run code until here and then RESTART Julia the first time you run this code in your machine
+
 using ODINN
 using Flux
 using Plots
 using Infiltrator
 using Distributed
 using JLD2
-using PyCall, JLD, PyCallJLD
+using JLD, PyCallJLD
 
 create_ref_dataset = true          # Run reference PDE to generate reference dataset
 retrain = true                     # Re-use previous NN weights to continue training
 
 tspan = (0.0,5.0) # period in years for simulation
 processes = 16
-python_path = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python"
-# The first step is ALWAYS to initialize ODINN. 
-# This configures the Python path for PyCall and multiprocessing
-initialize_ODINN(processes, python_path)
+# We enable multiprocessing
+ODINN.enable_multiprocessing(processes)
 
 function run()
     # Configure OGGM settings in all workers
@@ -30,7 +33,7 @@ function run()
                 "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-    gdirs = init_gdirs(rgi_ids, force=false)
+    gdirs = init_gdirs(rgi_ids, force=true)
 
     #########################################
     ###########  CLIMATE DATA  ##############
