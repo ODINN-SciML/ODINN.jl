@@ -15,7 +15,6 @@ function oggm_config()
     @eval begin
     @everywhere begin
     @eval ODINN begin
-    println("module oggm: ", @__MODULE__)
     cfg.initialize() # initialize OGGM configuration
     
     global PATHS = PyDict(cfg."PATHS")  # OGGM PATHS

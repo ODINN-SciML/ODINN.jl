@@ -1,11 +1,12 @@
+## IMPORTANT: run this in the REPL before using ODINN! 
+## Set up Python environment
+# global ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python" 
+# import Pkg; Pkg.build("PyCall")
+# exit()
+
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 Pkg.precompile()
-
-## Set up Python environment
-global ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python" 
-Pkg.build("PyCall")
-# Run code until here and then RESTART Julia the first time you run this code in your machine
 
 using ODINN
 using Flux
@@ -33,14 +34,14 @@ function run()
                 "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-    gdirs = init_gdirs(rgi_ids, force=true)
+    gdirs = init_gdirs(rgi_ids, force=false)
 
     #########################################
     ###########  CLIMATE DATA  ##############
     #########################################
 
     # Process climate data for glaciers
-    gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=true, plot=true)
+    gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=true)
 
     # Run forward model for selected glaciers
     if create_ref_dataset 

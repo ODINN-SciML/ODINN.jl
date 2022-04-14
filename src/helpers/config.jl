@@ -1,14 +1,18 @@
 
 function __init__()
+    if myid() == 1
+        @info "Before importing ODINN, make sure you have configured PyCall and restarted the Julia session!"
 
-    # Create structural folders if needed
-    OGGM_path = joinpath(homedir(), "Python/OGGM_data")
-    if !isdir(OGGM_path)
-        mkpath(OGGM_path)
+        # Create structural folders if needed
+        OGGM_path = joinpath(homedir(), "Python/OGGM_data")
+        if !isdir(OGGM_path)
+            mkpath(OGGM_path)
+        end
+
+        println("Initializing Python libraries...")
     end
 
     # Load Python packages
-    println("Initializing Python libraries...")
     copy!(netCDF4, pyimport_conda("netCDF4", "netCDF4"))
     copy!(cfg, pyimport_conda("oggm.cfg", "oggm"))
     copy!(utils, pyimport_conda("oggm.utils", "oggm"))
@@ -20,6 +24,13 @@ function __init__()
     copy!(np, pyimport_conda("numpy", "numpy"))
     copy!(xr, pyimport_conda("xarray", "xarray"))
 end
+
+function clean()
+    atexit() do
+        run(`$(Base.julia_cmd())`)
+    end
+    exit()
+ end
 
 """
     Initialize_ODINN(processes, python_path)
