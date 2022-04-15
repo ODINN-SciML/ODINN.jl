@@ -1,4 +1,4 @@
-export t₁
+export t₁, current_epoch, loss_history
 
 # const t₁ = 5.0                      # number of simulation years 
 const ρ = 900.0                     # Ice density [kg / m^3]
@@ -27,3 +27,4 @@ rng_seed() = MersenneTwister(123)   # Random seed
 
 # Machine learning training
 current_epoch = 1
+loss_history = []
