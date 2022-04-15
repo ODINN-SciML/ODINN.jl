@@ -101,6 +101,7 @@ callback = function (θ, l, UA) # callback function to observe training
                         legend=:topleft)
     Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
+    push!(loss_history, l)
 
     false
 end
