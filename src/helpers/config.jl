@@ -3,26 +3,47 @@ function __init__()
     if myid() == 1
         @info "Before importing ODINN, make sure you have configured PyCall and restarted the Julia session!"
 
-        # Create structural folders if needed
+        # Create structural folders if needed
         OGGM_path = joinpath(homedir(), "Python/OGGM_data")
         if !isdir(OGGM_path)
             mkpath(OGGM_path)
+        end
+
+        # If Python path not specified, configure PyCall. Otherwise go on. 
+        if !haskey(ENV, "PYTHON")
+            initPycall()
         end
 
         println("Initializing Python libraries...")
     end
 
     # Load Python packages
-    copy!(netCDF4, pyimport_conda("netCDF4", "netCDF4"))
-    copy!(cfg, pyimport_conda("oggm.cfg", "oggm"))
-    copy!(utils, pyimport_conda("oggm.utils", "oggm"))
-    copy!(workflow, pyimport_conda("oggm.workflow", "oggm"))
-    copy!(tasks, pyimport_conda("oggm.tasks", "oggm"))
-    copy!(graphics, pyimport_conda("oggm.graphics", "oggm"))
-    copy!(bedtopo, pyimport_conda("oggm.shop.bedtopo", "oggm"))
-    copy!(MBsandbox, pyimport_conda("MBsandbox.mbmod_daily_oneflowline", "MBsandbox"))
-    copy!(np, pyimport_conda("numpy", "numpy"))
-    copy!(xr, pyimport_conda("xarray", "xarray"))
+    copy!(netCDF4, pyimport("netCDF4"))
+    copy!(cfg, pyimport("oggm.cfg"))
+    copy!(utils, pyimport("oggm.utils"))
+    copy!(workflow, pyimport("oggm.workflow"))
+    copy!(tasks, pyimport("oggm.tasks"))
+    copy!(graphics, pyimport("oggm.graphics"))
+    copy!(bedtopo, pyimport("oggm.shop.bedtopo"))
+    copy!(MBsandbox, pyimport("MBsandbox.mbmod_daily_oneflowline"))
+    copy!(np, pyimport("numpy"))
+    copy!(xr, pyimport("xarray"))
+end
+
+function initPycall()
+    # @info "Enter Python conda environment name including OGGM. Press ENTER to use the current conda environment path. Enter `path` in order to insert a specific Python path: "
+    # @info "Enter Python conda environment path including OGGM. Press ENTER to use the current conda environment path: "
+    @eval begin
+        # python_path = readline()
+        # if python_path == ""
+        #     python_path = read(`which python`, String)[1:end-1] # trim backspace
+        # end
+        python_path = read(`which python`, String)[1:end-1] # trim backspace
+        println("Configuring PyCall with Python path: $python_path")
+        global ENV["PYTHON"] = python_path # same as your conda enviornment path containing OGGM
+        Pkg.build("PyCall")
+    end
+    # exit()
 end
 
 function clean()
