@@ -13,16 +13,16 @@ function __init__()
     end
 
     # Load Python packages
-    copy!(netCDF4, pyimport_conda("netCDF4", "netCDF4"))
-    copy!(cfg, pyimport_conda("oggm.cfg", "oggm"))
-    copy!(utils, pyimport_conda("oggm.utils", "oggm"))
-    copy!(workflow, pyimport_conda("oggm.workflow", "oggm"))
-    copy!(tasks, pyimport_conda("oggm.tasks", "oggm"))
-    copy!(graphics, pyimport_conda("oggm.graphics", "oggm"))
-    copy!(bedtopo, pyimport_conda("oggm.shop.bedtopo", "oggm"))
-    copy!(MBsandbox, pyimport_conda("MBsandbox.mbmod_daily_oneflowline", "MBsandbox"))
-    copy!(np, pyimport_conda("numpy", "numpy"))
-    copy!(xr, pyimport_conda("xarray", "xarray"))
+    copy!(netCDF4, pyimport("netCDF4"))
+    copy!(cfg, pyimport("oggm.cfg"))
+    copy!(utils, pyimport("oggm.utils"))
+    copy!(workflow, pyimport("oggm.workflow"))
+    copy!(tasks, pyimport("oggm.tasks"))
+    copy!(graphics, pyimport("oggm.graphics"))
+    copy!(bedtopo, pyimport("oggm.shop.bedtopo"))
+    copy!(MBsandbox, pyimport("MBsandbox.mbmod_daily_oneflowline"))
+    copy!(np, pyimport("numpy"))
+    copy!(xr, pyimport("xarray"))
 end
 
 function clean()
