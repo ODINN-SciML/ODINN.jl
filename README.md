@@ -16,32 +16,41 @@ Global glacier model using Neural Differential Equations to model and discover p
 
 It uses neural networks and differential equations in order to combine mechanistic models describing glaciological processes (e.g. enhanced temperature-index model or the Shallow Ice Approximation) with machine learning. Neural networks are used to learn parts of the equations, which then can be interpreted in a mathematical form (e.g. using SINDy) in order to update the original equation from the process. ODINN uses the Open Global Glacier Model (OGGM, Maussion et al., 2019) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. This is done calling Python from Julia using PyCall. Then, all the simulations and processing are performed in Julia, benefitting from the high performance and the SciML ecosystem. 
 
-## Running the toy model
+## Installing ODINN
 
-A demostration with a toy model is showcased in `src/scripts/toy_model.jl`. The `Manifest.toml` and `Project.toml` include all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
+In order to install `ODINN` in a given environment, just do in the REPL:
+```julia
+julia> ] # enter Pkg mode
+(@v1.7) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
+(MyEnvironment) pkg> add ODINN
+```
 
-```
-import Pkg
-Pkg.activate(dirname(Base.current_project()))
-Pkg.precompile()
-Pkg.instantiate()
-```
-### ODINN initialization: integration with OGGM and multiprocessing
+## ODINN initialization: integration with OGGM and multiprocessing
 
 In order to call OGGM in Python from Julia, a Python installation is needed, which then can be used in Julia using [PyCall](https://github.com/JuliaPy/PyCall.jl). We recommend splitting the Julia (i.e. ODINN) and Python (i.e. OGGM) files in separate folders, which we chose to name `Julia` and `Python`, both placed at root level. As indicated in the [OGGM documentation](https://docs.oggm.org/en/stable/installing-oggm.html), when installing OGGM it is best to create a new dedicated conda environment for it (e.g. `oggm_env`). In the same environment, install also the [OGGM Mass-Balance sandbox](https://github.com/OGGM/massbalance-sandbox) following the instructions in the repository.
 
-The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement, it just requires to run the following command during the first time you run ODINN in your machine using your conda environment Python path:
+The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement, it just requires activating the conda environment before the first time you run ODINN in your machine. In the terminal (not in a Julia session), run:
 
 ```
-global ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as your conda enviornment path containing OGGM
-import Pkg; Pkg.build("PyCall")
-exit()
+conda activate oggm_env # replace `oggm_env` with whatever conda environment where you have installed OGGM and the MBSandbox
 ```
 
-This will exit your Julia session. So now you can start working with ODINN with PyCall correctly configured. The next step is to start a new Julia session and import `ODINN` (or just run your script which uses ODINN, e.g. `toy_model.jl`). If you want to run ODINN using multiprocessing you can enable it using the following command:
+Then, you need to configure PyCall to use the Python path for that conda environment:
 
-```
+```julia
+julia # start Julia session
+
+julia> global ENV["PYTHON"] = read(`which python`, String)[1:end-1] # trim backspace
+julia> import Pkg; Pkg.build("PyCall")
+julia> exit()
+
+# Now you can run your code using ODINN in a new Julia session; e.g.:
 using ODINN
+```
+
+So now you can start working with ODINN with PyCall correctly configured. These configuration step only needs to be done the first time, so from now on ODINN should be able to correctly find your Python libraries. If you ever want to change your conda environment, you would just need to repeat the steps above. The next step is to start a new Julia session and import `ODINN` (or just run your script which uses ODINN, e.g. `toy_model.jl`). If you want to run ODINN using multiprocessing you can enable it using the following command in Julia:
+
+```julia
 processes = 16
 ODINN.enable_multiprocessing(processes)
 ```
@@ -51,3 +60,14 @@ From this point, it is possible to use ODINN with multiprocessing and to run Pyt
 ### Using OGGM for the initial conditions of the training/simulations
 
 ODINN works as a back-end of OGGM, utilizing all its tools to retrieve RGI data, topographical data, climate data and other datasets from the OGGM shop. We use these data to specify the initial state of the simulations, and to retrieve the climate data to force the model. Everything related to the mass balance and ice flow dynamics models is written 100% in Julia. This allows us to run tests with this toy model for any glacier on Earth. In order to choose a glacier, you just need to specify the RGI ID, which you can find [here](https://www.glims.org/maps/glims). 
+
+## Running the toy model
+
+A demostration with a toy model is showcased in `src/scripts/toy_model.jl`. The `Manifest.toml` and `Project.toml` include all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
+
+```julia
+import Pkg
+Pkg.activate(dirname(Base.current_project()))
+Pkg.precompile()
+Pkg.instantiate()
+```
