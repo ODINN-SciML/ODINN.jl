@@ -18,6 +18,7 @@ import Pkg
 using Distributed
 using ProgressMeter
 using PyCall
+using HDF5
 
 ###############################################
 #############    PARAMETERS     ###############
@@ -52,6 +53,7 @@ const workflow = PyNULL()
 const tasks = PyNULL()
 const graphics = PyNULL()
 const bedtopo = PyNULL()
+const its_live = PyNULL()
 const MBsandbox = PyNULL()
 
 # Essential Python libraries
@@ -67,6 +69,5 @@ include(joinpath(ODINN.root_dir, "src/helpers/config.jl"))
 include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
 ### OGGM configuration settings  ###
 include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
-
 end # module
 
