@@ -16,8 +16,8 @@ using Distributed
 using JLD2
 using JLD, PyCallJLD
 
-create_ref_dataset = true          # Run reference PDE to generate reference dataset
-retrain = true                     # Re-use previous NN weights to continue training
+create_ref_dataset = false          # Run reference PDE to generate reference dataset
+retrain = false                     # Re-use previous NN weights to continue training
 
 tspan = (0.0,5.0) # period in years for simulation
 processes = 16
@@ -49,7 +49,7 @@ function run()
     
         # Compute reference dataset in parallel
         H_refs, V̄x_refs, V̄y_refs = @time generate_ref_dataset(gdirs_climate, tspan)
-            
+
         println("Saving reference data")
         jldsave(joinpath(ODINN.root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs)
     end

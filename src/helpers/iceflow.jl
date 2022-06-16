@@ -14,7 +14,8 @@ function generate_ref_dataset(gdirs_climate, tspan, solver = Ralston())
     # Run batches in parallel
     gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
-    refs = @showprogress pmap((gdir, longterm_temp) -> batch_iceflow_PDE(gdir, longterm_temp, tspan, solver), gdirs, longterm_temps)
+    A_noises = randn(rng_seed(), length(gdirs)) .* 10e-18
+    refs = @showprogress pmap((gdir, longterm_temp, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver), gdirs, longterm_temps, A_noises)
 
     # Split into different vectors
     H_refs, V̄x_refs, V̄y_refs = [],[],[]
@@ -32,10 +33,10 @@ end
 
 Solve the Shallow Ice Approximation iceflow PDE for a given temperature series batch
 """
-function batch_iceflow_PDE(gdir, longterm_temp, tspan, solver) 
+function batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver) 
     println("Processing glacier: ", gdir.rgi_id)
 
-    context, H = build_PDE_context(gdir, longterm_temp, tspan)
+    context, H = build_PDE_context(gdir, longterm_temp, A_noise, tspan)
     refs = simulate_iceflow_PDE(H, context, solver)
 
     return refs
@@ -82,20 +83,27 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_tr
     loss(θ) = loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs, solver) # closure
 
     println("Training iceflow UDE...")
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
+    temps = gdirs_climate[3]
+    A_noise = randn(rng_seed(), length(gdirs)).*6e-18
+    cb(θ, l, UA) = callback(θ, l, UA, temps, A_noise)
+    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=cb, maxiters = epochs)
+    # iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
 
     return iceflow_trained, UA
 end
 
-callback = function (θ, l, UA) # callback function to observe training
+callback = function (θ, l, UA, temps, A_noise) # callback function to observe training
     println("Epoch #$current_epoch - Loss $loss_type: ", l)
 
-    pred_A = predict_A̅(UA, θ, collect(-20.0:0.0)')
+    avg_temps = [mean(temps[i]) for i in 1:length(temps)]
+    p = sortperm(avg_temps)
+    avg_temps = avg_temps[p]
+    pred_A = predict_A̅(UA, θ, collect(-23:1:0)')
     pred_A = [pred_A...] # flatten
-    true_A = A_fake(-20.0:0.0, noise)
+    true_A = A_fake(avg_temps, A_noise[p], noise)
 
-    Plots.scatter(-20.0:0.0, true_A, label="True A")
-    plot_epoch = Plots.plot!(-20.0:0.0, pred_A, label="Predicted A", 
+    Plots.scatter(avg_temps, true_A, label="True A")
+    plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)",
                         ylabel="A", ylims=(minA,maxA),
                         legend=:topleft)
@@ -233,12 +241,13 @@ function iceflow!(dH, H, context,t)
     current_year = Ref(context.x[18])
     A = Ref(context.x[1])
     t₁ = context.x[22][end]
+    A_noise = context.x[23]
     
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
     if year != current_year[] && year <= t₁
         temp = Ref{Float64}(context.x[7][year])
-        A[] .= A_fake(temp[], noise)
+        A[] .= A_fake(temp[], A_noise, noise)
         current_year[] .= year
     end
 
@@ -353,7 +362,7 @@ Computes the average ice velocity for a given input temperature
 """
 function avg_surface_V(context, H, temp, sim, θ=[], UA=[])
     # context = (B, H₀, H, nxy, Δxy)
-    B, H₀, Δx, Δy = retrieve_context(context)
+    B, H₀, Δx, Δy, A_noise = retrieve_context(context)
 
     # Update glacier surface altimetry
     S = B .+ (H₀ .+ H)./2.0 # Use average ice thickness for the simulated period
@@ -368,7 +377,7 @@ function avg_surface_V(context, H, temp, sim, θ=[], UA=[])
     if sim == "UDE"
         A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
     elseif sim == "PDE"
-        A = A_fake(temp, noise)
+        A = A_fake(temp, A_noise, noise)
     end
     Γꜛ = 2.0 * A * (ρ * g)^n / (n+1.0) # surface stress (not average)  # 1 / m^3 s 
     D = Γꜛ .* avg(H).^(n + 1.0) .* ∇S
@@ -389,11 +398,11 @@ A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
 
 Fake law establishing a theoretical relationship between ice viscosity (A) and long-term air temperature.
 """
-function A_fake(temp, noise=false)
+function A_fake(temp, A_noise=nothing, noise=false)
     # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
     A = A_f.(temp) # polynomial fit
     if noise
-        A = A .+ randn(rng_seed(), length(temp)).*6e-18
+        A = abs.(A .+ A_noise)
     end
     return A
 end
@@ -449,7 +458,7 @@ function get_initial_geometry(gdir, smoothing=true)
     return H₀, H, B, (nx,ny), (Δx,Δy)
 end
 
-function build_PDE_context(gdir, longterm_temp, tspan)
+function build_PDE_context(gdir, longterm_temp, A_noise, tspan)
     # Determine initial geometry conditions
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
     # Initialize all matrices for the solver
@@ -464,7 +473,7 @@ function build_PDE_context(gdir, longterm_temp, tspan)
     
     # Gather simulation parameters
     current_year = 0 
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan)
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan, A_noise)
     return context, H
 end
 
@@ -487,7 +496,7 @@ function retrieve_context(context::Tuple)
     H₀ = context[2]
     Δx = context[5][1]
     Δy = context[5][2]
-    return B, H₀, Δx, Δy
+    return B, H₀, Δx, Δy, nothing
 end
 
 """
@@ -500,7 +509,8 @@ function retrieve_context(context::ArrayPartition)
     H₀ = context.x[21]
     Δx = context.x[20][1]
     Δy = context.x[20][2]
-    return B, H₀, Δx, Δy, nothing
+    A_noise = context.x[23]
+    return B, H₀, Δx, Δy, A_noise
 end
 
 """

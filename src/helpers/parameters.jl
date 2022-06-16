@@ -21,9 +21,9 @@ overwrite_climate = false          # Force re-computing climate data for glacie
 loss_type = "V"                   # Loss function based on ice surface velocities
 # loss_type = "HV"                    # Combined loss function based on ice surface velocities and ice thickness
 const random_sampling_loss = false  # Use random subset of matrix samples for the loss
-const scale_loss = true
+const scale_loss = false
 const noise = true                  # Add random noise to fake A law
-rng_seed() = MersenneTwister(123)   # Random seed
+rng_seed() = MersenneTwister(1234)   # Random seed
 
 # Machine learning training
 current_epoch = 1
