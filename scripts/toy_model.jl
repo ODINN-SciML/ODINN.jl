@@ -16,11 +16,11 @@ using Distributed
 using JLD2
 using JLD, PyCallJLD
 
-create_ref_dataset = false          # Run reference PDE to generate reference dataset
+create_ref_dataset = false           # Run reference PDE to generate reference dataset
 retrain = false                     # Re-use previous NN weights to continue training
 
 tspan = (0.0,5.0) # period in years for simulation
-processes = 16
+processes = 15
 # We enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 
@@ -80,21 +80,29 @@ function run()
         println("Saving NN weights...")
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
     else
+        n_ADAM = 200
+        n_BFGS = 0
+
         println("Training from scratch...")
-        train_settings = (ADAM(0.05), 10) # optimizer, epochs
+        #train_settings = (ADAM(0.01), n_ADAM) # optimizer, epochs
+        train_settings = (BFGS(initial_stepnorm=0.02f0), 100)
         iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs)
         θ_trained = iceflow_trained.minimizer
         println("Saving NN weights...")
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
 
-        # Continue training with BFGS
-        # train_settings = (BFGS(initial_stepnorm=0.02f0), 20) # optimizer, epochs
-        train_settings = (ADAM(0.02), 20) # optimizer, epochs
-        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
-        θ_trained = iceflow_trained.minimizer
-        # Save trained NN weights
-        println("Saving NN weights...")
-        jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
+        if n_BFGS > 0
+            # Continue training with BFGS
+            #current_epoch = n_ADAM + 1
+            train_settings = (BFGS(initial_stepnorm=0.02f0), n_BFGS) # optimizer, epochs
+            #train_settings = (ADAM(0.02), 20) # optimizer, epochs
+            iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
+            θ_trained = iceflow_trained.minimizer
+            # Save trained NN weights
+            println("Saving NN weights...")
+            println("Current Epoch: ", current_epoch)
+            jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
+        end
     end
 
     ##########################################
