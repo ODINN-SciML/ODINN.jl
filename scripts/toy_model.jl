@@ -10,13 +10,15 @@ Pkg.precompile()
 
 using ODINN
 using Flux
+using Optim
 using Plots
 using Infiltrator
 using Distributed
 using JLD2
 using JLD, PyCallJLD
+using Statistics 
 
-create_ref_dataset = false           # Run reference PDE to generate reference dataset
+create_ref_dataset = true          # Run reference PDE to generate reference dataset
 retrain = false                     # Re-use previous NN weights to continue training
 
 tspan = (0.0,5.0) # period in years for simulation
@@ -80,29 +82,27 @@ function run()
         println("Saving NN weights...")
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
     else
-        n_ADAM = 200
-        n_BFGS = 0
+        n_ADAM = 10
+        n_BFGS = 80
+
+        current_epoch = 1
 
         println("Training from scratch...")
-        #train_settings = (ADAM(0.01), n_ADAM) # optimizer, epochs
-        train_settings = (BFGS(initial_stepnorm=0.02f0), 100)
+        train_settings = (ADAM(0.005), n_ADAM) # optimizer, epochs
         iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs)
         θ_trained = iceflow_trained.minimizer
         println("Saving NN weights...")
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
 
-        if n_BFGS > 0
-            # Continue training with BFGS
-            #current_epoch = n_ADAM + 1
-            train_settings = (BFGS(initial_stepnorm=0.02f0), n_BFGS) # optimizer, epochs
-            #train_settings = (ADAM(0.02), 20) # optimizer, epochs
-            iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
-            θ_trained = iceflow_trained.minimizer
-            # Save trained NN weights
-            println("Saving NN weights...")
-            println("Current Epoch: ", current_epoch)
-            jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
-        end
+        # Continue training with BFGS
+        #current_epoch = n_ADAM + 1
+        train_settings = (BFGS(initial_stepnorm=0.02f0), n_BFGS) # optimizer, epochs
+        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
+        θ_trained = iceflow_trained.minimizer
+        # Save trained NN weights
+        println("Saving NN weights...")
+        jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
+
     end
 
     ##########################################
@@ -114,8 +114,13 @@ function run()
     true_A = A_fake(data_range) 
 
     Plots.scatter(true_A, label="True A")
-    train_final = Plots.plot!(pred_A, label="Predicted A")
+    train_final = Plots.plot!(pred_A, label="Predicted A", ylims=(0.0,maxA))
     Plots.savefig(train_final,joinpath(ODINN.root_plots,"training","final_model.png"))
+
+    # Plot and save loss history
+    train_loss = Plots.plot(loss_history)
+    Plots.savefig(train_loss, joinpath(ODINN.root_plots,"training","final_loss.png"))
+    jldsave(joinpath(ODINN.root_dir, "data/loss_history.jld2"); loss_history)
 end
 
 # Run main

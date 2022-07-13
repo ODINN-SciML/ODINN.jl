@@ -23,6 +23,7 @@ function generate_ref_dataset(gdirs_climate, tspan, solver = Ralston())
         push!(H_refs, ref["H"])
         push!(V̄x_refs, ref["Vx"])
         push!(V̄y_refs, ref["Vy"])
+        #printlm("Maximum desviation", maximum(ref["H"] .- ))
     end
 
     return H_refs, V̄x_refs, V̄y_refs
@@ -105,12 +106,16 @@ callback = function (θ, l, UA, temps, A_noise) # callback function to observe t
     Plots.scatter(avg_temps, true_A, label="True A")
     plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)",
-                        ylabel="A", ylims=(minA,maxA),
+                        ylabel="A", ylims=(0.0,maxA),
                         legend=:topleft)
+    Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
     Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
     push!(loss_history, l)
 
+    plot_loss = Plots.plot(loss_history)
+    Plots.savefig(plot_loss,joinpath(root_plots,"training","loss$current_epoch.png"))
+    
     false
 end
 
@@ -241,7 +246,17 @@ function iceflow!(dH, H, context,t)
     current_year = Ref(context.x[18])
     A = Ref(context.x[1])
     t₁ = context.x[22][end]
+    B₀ = context.x[2]
+    H₀ = context.x[21]
     A_noise = context.x[23]
+
+    # Add mass balance 
+    max_S = maximum(B₀ .+ H₀)
+    min_S = minimum(B₀ .+ H₀)
+    #max_MB = 10
+    #min_MB = -10
+    # Define the mass balance as line between minimum and maximum surface
+    MB = inn(min_MB .+ (B₀ .+ H₀ .- min_S) .* (max_MB / (max_S - min_S)))
     
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
@@ -252,7 +267,7 @@ function iceflow!(dH, H, context,t)
     end
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    SIA!(dH, H, context)
+    SIA!(dH, H, context) .+ MB
 end    
 
 """
@@ -264,6 +279,13 @@ function iceflow_NN(H, θ, t, UA, context, temps)
 
     year = floor(Int, t) + 1
     t₁ = context[6][end]
+    B₀ = context[1]
+    H₀ = context[2]
+    #S₀ .= B₀ .+ H₀
+    #println("Maximum surface: ", maximum(S₀))
+
+    #println("Mean slope, max, min: ", minimum(B₀ .+ H₀), mean(B₀ .+ H₀), maximum(B₀ .+ H₀))
+
     if year <= t₁
         temp = temps[year]
     else
@@ -271,8 +293,17 @@ function iceflow_NN(H, θ, t, UA, context, temps)
     end
     A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
 
+    # maybe this operation just takes a lot of time?
+    max_S = maximum(B₀ .+ H₀)
+    min_S = minimum(B₀ .+ H₀)
+    #max_MB = 0.10
+    #min_MB = -0.10
+
+    # Define the mass balance as line between minimum and maximum surface
+    MB = min_MB .+ (B₀ .+ H₀ .- min_S) .* (max_MB / (max_S - min_S))
+
     # Compute the Shallow Ice Approximation in a staggered grid
-    return SIA(H, A, context)
+    return SIA(H, A, context) .+ MB
 end  
 
 """
