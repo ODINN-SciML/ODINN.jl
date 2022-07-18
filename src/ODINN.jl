@@ -7,7 +7,8 @@ module ODINN
 
 using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
-using OrdinaryDiffEq, DiffEqFlux
+using OrdinaryDiffEq
+using SciMLSensitivity, Optimization
 using Zygote: @ignore
 using Flux
 using Tullio, RecursiveArrayTools

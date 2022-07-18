@@ -18,15 +18,16 @@ function generate_ref_dataset(gdirs_climate, tspan, solver = Ralston())
     refs = @showprogress pmap((gdir, longterm_temp, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver), gdirs, longterm_temps, A_noises)
 
     # Split into different vectors
-    H_refs, V̄x_refs, V̄y_refs = [],[],[]
+    H_refs, V̄x_refs, V̄y_refs, S_refs, B_refs = [],[],[],[],[]
     for ref in refs
         push!(H_refs, ref["H"])
         push!(V̄x_refs, ref["Vx"])
         push!(V̄y_refs, ref["Vy"])
-        #printlm("Maximum desviation", maximum(ref["H"] .- ))
+        push!(S_refs, ref["S"])
+        push!(B_refs, ref["B"])
     end
 
-    return H_refs, V̄x_refs, V̄y_refs
+    return H_refs, V̄x_refs, V̄y_refs, S_refs, B_refs
 end
 
 """
@@ -57,13 +58,15 @@ function simulate_iceflow_PDE(H, context, solver)
     # Compute average ice surface velocities for the simulated period
     H_ref = iceflow_sol.u[end]
     temps = context.x[7]
+    B = context.x[2]
     V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(temps), "PDE") # Average velocity with average temperature
-    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref)
+    S = B .+ H_ref # Surface topography
+    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B)
     return refs
 end
 
 """
-    train_iceflow_UDE(H₀, UA, θ, train_settings, PDE_refs, temp_series)
+    train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained=[], solver = ROCK4(), loss_history=[])
 
 Train the Shallow Ice Approximation iceflow UDE
 """
@@ -73,7 +76,7 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_tr
     end
     optimizer = train_settings[1]
     epochs = train_settings[2]
-    UA, θ = get_NN(θ_trained)
+    UA_f, θ = get_NN(θ_trained)
     gdirs = gdirs_climate[2]
     H_refs = PDE_refs["H_refs"]
     Vx_refs = PDE_refs["V̄x_refs"]
@@ -81,25 +84,29 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_tr
     # Build context for all the batches before training
     println("Building context...")
     context_batches = pmap((gdir, H_ref, Vx_ref, Vy_ref) -> build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref, tspan), gdirs, H_refs, Vx_refs, Vy_refs)
-    loss(θ) = loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs, solver) # closure
+    loss(θ) = loss_iceflow(θ, UA_f, gdirs_climate, context_batches, PDE_refs, solver) # closure
 
     println("Training iceflow UDE...")
     temps = gdirs_climate[3]
     A_noise = randn(rng_seed(), length(gdirs)).* noise_A_magnitude
-    cb(θ, l, UA) = callback(θ, l, UA, temps, A_noise)
-    iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=cb, maxiters = epochs)
+    cb(θ, l, UA_f) = callback(θ, l, UA_f, temps, A_noise)
+
+    optf = OptimizationFunction((θ,_)->loss(θ),Optimization.AutoZygote())
+    optprob = OptimizationProblem(optf, θ)
+    iceflow_trained = solve(optprob, optimizer, callback = cb, maxiters = epochs)
+    #iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=cb, maxiters = epochs)
     # iceflow_trained = DiffEqFlux.sciml_train(loss, θ, optimizer, cb=callback, maxiters = epochs)
 
-    return iceflow_trained, UA
+    return iceflow_trained, UA_f
 end
 
-callback = function (θ, l, UA, temps, A_noise) # callback function to observe training
+callback = function (θ, l, UA_f, temps, A_noise) # callback function to observe training
     println("Epoch #$current_epoch - Loss $loss_type: ", l)
 
     avg_temps = [mean(temps[i]) for i in 1:length(temps)]
     p = sortperm(avg_temps)
     avg_temps = avg_temps[p]
-    pred_A = predict_A̅(UA, θ, collect(-23:1:0)')
+    pred_A = predict_A̅(UA_f, θ, collect(-23:1:0)')
     pred_A = [pred_A...] # flatten
     true_A = A_fake(avg_temps, A_noise[p], noise)
 
@@ -120,12 +127,12 @@ callback = function (θ, l, UA, temps, A_noise) # callback function to observe t
 end
 
 """
-    loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series) 
+    loss_iceflow(θ, UA_f, gdirs_climate, context_batches, PDE_refs::Dict{String, Any}, solver)  
 
 Loss function based on glacier ice velocities and/or ice thickness
 """
-function loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs::Dict{String, Any}, solver) 
-    H_V_preds = predict_iceflow(θ, UA, gdirs_climate, context_batches, solver)
+function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, PDE_refs::Dict{String, Any}, solver) 
+    H_V_preds = predict_iceflow(θ, UA_f, gdirs_climate, context_batches, solver)
 
     # Compute loss function for the full batch
     l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
@@ -175,12 +182,12 @@ function loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs::Dict{Str
         else
             # Classic loss function with the full matrix
             if scale_loss
-                normH  = mean(H_ref[H_ref .!= 0.0].^2)^0.5 #.+ ϵ
-                normVx = mean(Vx_ref[Vx_ref .!= 0.0].^2)^0.5 #.+ ϵ
-                normVy = mean(Vy_ref[Vy_ref .!= 0.0].^2)^0.5  #.+ ϵ
-                l_H  += normH^(-2)  * Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean) 
-                l_Vx += normVx^(-2) * Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)
-                l_Vy += normVy^(-2) * Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)
+                normH  = mean(H_ref[H_ref .!= 0.0].^2.0)^0.5 #.+ ϵ
+                normVx = mean(Vx_ref[Vx_ref .!= 0.0].^2.0)^0.5 #.+ ϵ
+                normVy = mean(Vy_ref[Vy_ref .!= 0.0].^2.0)^0.5  #.+ ϵ
+                l_H  += normH^(-2.0)  * Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean) 
+                l_Vx += normVx^(-2.0) * Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)
+                l_Vy += normVy^(-2.0) * Flux.Losses.mse(V̄y_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)
             else
                 l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean) 
                 l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)
@@ -197,20 +204,21 @@ function loss_iceflow(θ, UA, gdirs_climate, context_batches, PDE_refs::Dict{Str
     elseif loss_type == "HV"
         l_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]) + l_H/length(PDE_refs["H_refs"]))/3
     end
-    return l_avg, UA
+    return l_avg, UA_f
 end
 
 """
-    predict_iceflow(θ, UA, context, temp_series) 
+    predict_iceflow(θ, UA_f, context, temp_series) 
 
 Makes a prediction of glacier evolution with the UDE for a given temperature series
 """
-function predict_iceflow(θ, UA, gdirs_climate, context_batches, solver)
+function predict_iceflow(θ, UA_f, gdirs_climate, context_batches, solver)
 
     # Train UDE in parallel
     # gdirs_climate = (dates, gdirs, longterm_temps, annual_temps)
     longterm_temps = gdirs_climate[3]
-    H_V_pred = pmap((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA, context, longterm_temps_batch, solver), context_batches, longterm_temps)
+    #H_V_pred = map((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, solver), context_batches, longterm_temps)
+    H_V_pred = pmap((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, solver), context_batches, longterm_temps)
     return H_V_pred
 end
 
@@ -219,18 +227,19 @@ end
 
 Solve the Shallow Ice Approximation iceflow UDE for a given temperature series batch
 """
-function batch_iceflow_UDE(θ, UA, context, longterm_temps_batch, solver) 
+function batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, solver) 
     # Retrieve long-term temperature series
     H = context[3]
     tspan = context[6]
-    iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA, context, longterm_temps_batch) # closure
+    iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA_f, context, longterm_temps_batch) # closure
     iceflow_prob = ODEProblem(iceflow_UDE_batch,H,tspan,θ)
     iceflow_sol = solve(iceflow_prob, solver, u0=H, p=θ,
+                    sensealg=QuadratureAdjoint(autojacvec=ZygoteVJP()),
                     reltol=1e-6, save_everystep=false, 
-                    progress=true, progress_steps = 10)
+                    progress=true, progress_steps = 100)
     # Get ice velocities from the UDE predictions
     H_pred = iceflow_sol.u[end]
-    V̄x_pred, V̄y_pred = avg_surface_V(context, H_pred, mean(longterm_temps_batch), "UDE", θ, UA) # Average velocity with average temperature
+    V̄x_pred, V̄y_pred = avg_surface_V(context, H_pred, mean(longterm_temps_batch), "UDE", θ, UA_f) # Average velocity with average temperature
     H_V_pred = (H_pred, V̄x_pred, V̄y_pred)
     return H_V_pred
 end
@@ -249,33 +258,33 @@ function iceflow!(dH, H, context,t)
     B₀ = context.x[2]
     H₀ = context.x[21]
     A_noise = context.x[23]
-
-    # Add mass balance 
-    max_S = maximum(B₀ .+ H₀)
-    min_S = minimum(B₀ .+ H₀)
-    #max_MB = 10
-    #min_MB = -10
-    # Define the mass balance as line between minimum and maximum surface
-    MB = inn(min_MB .+ (B₀ .+ H₀ .- min_S) .* (max_MB / (max_S - min_S)))
     
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
-    if year != current_year[] && year <= t₁
+    if year != current_year[] && year <= t₁ 
         temp = Ref{Float64}(context.x[7][year])
         A[] .= A_fake(temp[], A_noise, noise)
         current_year[] .= year
     end
 
+    # Add mass balance 
+    max_S = maximum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
+    min_S = minimum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
+    #max_MB = 10
+    #min_MB = -10
+    # Define the mass balance as line between minimum and maximum surface
+    MB = inn(min_MB .+ (B₀ .+ H₀ .- min_S) .* (max_MB / (max_S - min_S)) .* Float64.(Matrix(H₀.>0.0)))
+    
     # Compute the Shallow Ice Approximation in a staggered grid
     SIA!(dH, H, context) .+ MB
 end    
 
 """
-    iceflow_NN(H, θ, t, context, temps, UA)
+    iceflow_NN(H, θ, t, UA_f, context, temps)
 
 Runs a single time step of the iceflow UDE model 
 """
-function iceflow_NN(H, θ, t, UA, context, temps)
+function iceflow_NN(H, θ, t, UA_f, context, temps)
 
     year = floor(Int, t) + 1
     t₁ = context[6][end]
@@ -291,16 +300,16 @@ function iceflow_NN(H, θ, t, UA, context, temps)
     else
         temp = temps[year-1]
     end
-    A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
+    A = predict_A̅(UA_f, θ, [temp]) # FastChain prediction requires explicit parameters
 
     # maybe this operation just takes a lot of time?
-    max_S = maximum(B₀ .+ H₀)
-    min_S = minimum(B₀ .+ H₀)
+    max_S = maximum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
+    min_S = minimum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
     #max_MB = 0.10
     #min_MB = -0.10
 
     # Define the mass balance as line between minimum and maximum surface
-    MB = min_MB .+ (B₀ .+ H₀ .- min_S) .* (max_MB / (max_S - min_S))
+    MB = min_MB .+ (B₀ .+ H₀ .- min_S) .* (max_MB / (max_S - min_S)) .* Float64.(Matrix(H₀.>0.0))
 
     # Compute the Shallow Ice Approximation in a staggered grid
     return SIA(H, A, context) .+ MB
@@ -391,7 +400,7 @@ end
 
 Computes the average ice velocity for a given input temperature
 """
-function avg_surface_V(context, H, temp, sim, θ=[], UA=[])
+function avg_surface_V(context, H, temp, sim, θ=[], UA_f=[])
     # context = (B, H₀, H, nxy, Δxy)
     B, H₀, Δx, Δy, A_noise = retrieve_context(context)
 
@@ -406,7 +415,7 @@ function avg_surface_V(context, H, temp, sim, θ=[], UA=[])
     
     @assert (sim == "UDE" || sim == "PDE") "Wrong type of simulation. Needs to be 'UDE' or 'PDE'."
     if sim == "UDE"
-        A = predict_A̅(UA, θ, [temp]) # FastChain prediction requires explicit parameters
+        A = predict_A̅(UA_f, θ, [temp]) # FastChain prediction requires explicit parameters
     elseif sim == "PDE"
         A = A_fake(temp, A_noise, noise)
     end
@@ -439,12 +448,13 @@ function A_fake(temp, A_noise=nothing, noise=false)
 end
 
 """
-    predict_A̅(UA, θ, temp)
+    predict_A̅(UA_f, θ, temp)
 
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
-function predict_A̅(UA, θ, temp)
-    return UA(temp, θ) .* 1e-17
+function predict_A̅(UA_f, θ, temp)
+    UA = UA_f(θ)
+    return UA(temp) .* 1e-17
 end
 
 # function fake_temp_series(t, means=Array{Float64}([0.0,-2.0,-3.0,-5.0,-10.0,-12.0,-14.0,-15.0,-20.0]))
@@ -550,19 +560,19 @@ end
 Generates a neural network.
 """
 function get_NN(θ_trained)
-    UA = FastChain(
-        FastDense(1,3, x->softplus.(x)),
-        FastDense(3,10, x->softplus.(x)),
-        FastDense(10,3, x->softplus.(x)),
-        FastDense(3,1, sigmoid_A)
+    UA = Chain(
+        Dense(1,3, x->softplus.(x)),
+        Dense(3,10, x->softplus.(x)),
+        Dense(10,3, x->softplus.(x)),
+        Dense(3,1, sigmoid_A)
     )
     # See if parameters need to be retrained or not
     if isempty(θ_trained)
-        θ = initial_params(UA)
+        θ, UA_f = Flux.destructure(UA)
     else
         θ = θ_trained
     end
-    return UA, θ
+    return UA_f, θ
 end
 
 function sigmoid_A(x) 

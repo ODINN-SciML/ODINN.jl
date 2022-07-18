@@ -11,18 +11,20 @@ Pkg.precompile()
 using ODINN
 using Flux
 using Optim
+import OptimizationOptimisers.Adam
 using Plots
 using Infiltrator
 using Distributed
 using JLD2
 using JLD, PyCallJLD
 using Statistics 
+using AbbreviatedStackTraces
 
-create_ref_dataset = true          # Run reference PDE to generate reference dataset
+create_ref_dataset = false          # Run reference PDE to generate reference dataset
 retrain = false                     # Re-use previous NN weights to continue training
 
 tspan = (0.0,5.0) # period in years for simulation
-processes = 15
+processes = 16
 # We enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 
@@ -50,10 +52,10 @@ function run()
         println("Generating reference dataset for training...")
     
         # Compute reference dataset in parallel
-        H_refs, V̄x_refs, V̄y_refs = @time generate_ref_dataset(gdirs_climate, tspan)
+        H_refs, V̄x_refs, V̄y_refs, S_refs, B_refs = @time generate_ref_dataset(gdirs_climate, tspan)
 
         println("Saving reference data")
-        jldsave(joinpath(ODINN.root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs)
+        jldsave(joinpath(ODINN.root_dir, "data/PDE_refs.jld2"); H_refs, V̄x_refs, V̄y_refs, S_refs, B_refs)
     end
 
     # Load stored PDE reference datasets
@@ -74,7 +76,7 @@ function run()
         current_epoch = trained_weights["current_epoch"]
         θ_trained = trained_weights["θ_trained"]
         # train_settings = (BFGS(initial_stepnorm=0.05), 20) # optimizer, epochs
-        train_settings = (ADAM(0.01), 20) # optimizer, epochs
+        train_settings = (Adam(0.01), 20) # optimizer, epochs
         iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
         θ_trained = iceflow_trained.minimizer
 
@@ -88,8 +90,8 @@ function run()
         current_epoch = 1
 
         println("Training from scratch...")
-        train_settings = (ADAM(0.005), n_ADAM) # optimizer, epochs
-        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs)
+        train_settings = (Adam(0.005), n_ADAM) # optimizer, epochs
+        iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs)
         θ_trained = iceflow_trained.minimizer
         println("Saving NN weights...")
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
@@ -97,7 +99,7 @@ function run()
         # Continue training with BFGS
         #current_epoch = n_ADAM + 1
         train_settings = (BFGS(initial_stepnorm=0.02f0), n_BFGS) # optimizer, epochs
-        iceflow_trained, UA = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
+        iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
         θ_trained = iceflow_trained.minimizer
         # Save trained NN weights
         println("Saving NN weights...")
@@ -109,7 +111,7 @@ function run()
     ####  Plot the final trained model  ######
     ##########################################
     data_range = -20.0:0.0
-    pred_A = predict_A̅(UA, θ_trained, collect(data_range)')
+    pred_A = predict_A̅(UA_f, θ_trained, collect(data_range)')
     pred_A = [pred_A...] # flatten
     true_A = A_fake(data_range) 
 
