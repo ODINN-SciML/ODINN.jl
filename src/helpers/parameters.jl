@@ -18,10 +18,10 @@ const A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60*60*24*365.25)'
 noise_A_magnitude = 5e-18  # magnitude of noise to be added to A
 
 # Mass balance parameters
-max_MB = 2.0
-min_MB = -2.0
+max_MB = 5.0
+min_MB = -5.0
 
-plots = false                      # Display plots 
+plots = false                      # Make reference plots 
 overwrite_climate = false          # Force re-computing climate data for glaciers
 # loss_type = "H"                   # Loss function based on ice thickness
 loss_type = "V"                   # Loss function based on ice surface velocities
