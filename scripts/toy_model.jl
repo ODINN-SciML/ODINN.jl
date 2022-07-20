@@ -12,6 +12,7 @@ using ODINN
 using Flux
 using Optim
 import OptimizationOptimisers.Adam
+using OrdinaryDiffEq
 using Plots
 using Infiltrator
 using Distributed
@@ -91,7 +92,7 @@ function run()
 
         println("Training from scratch...")
         train_settings = (Adam(0.005), n_ADAM) # optimizer, epochs
-        iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs)
+        iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs; solver=Ralston())
         θ_trained = iceflow_trained.minimizer
         println("Saving NN weights...")
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)

@@ -7,7 +7,7 @@ export predict_A̅, A_fake
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(gdirs_climate, tspan, solver = Ralston())
+function generate_ref_dataset(gdirs_climate, tspan; solver = Ralston())
   
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
@@ -133,6 +133,7 @@ Loss function based on glacier ice velocities and/or ice thickness
 """
 function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, PDE_refs::Dict{String, Any}, solver) 
     H_V_preds = predict_iceflow(θ, UA_f, gdirs_climate, context_batches, solver)
+    println("iceflow predicted")
 
     # Compute loss function for the full batch
     l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
@@ -204,6 +205,7 @@ function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, PDE_refs::Dict{S
     elseif loss_type == "HV"
         l_avg = (l_Vx/length(PDE_refs["V̄x_refs"]) + l_Vy/length(PDE_refs["V̄y_refs"]) + l_H/length(PDE_refs["H_refs"]))/3
     end
+    println("loss computed")
     return l_avg, UA_f
 end
 
@@ -219,6 +221,7 @@ function predict_iceflow(θ, UA_f, gdirs_climate, context_batches, solver)
     longterm_temps = gdirs_climate[3]
     #H_V_pred = map((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, solver), context_batches, longterm_temps)
     H_V_pred = pmap((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, solver), context_batches, longterm_temps)
+    println("all batches predicted")
     return H_V_pred
 end
 
@@ -238,8 +241,11 @@ function batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, solver)
                     reltol=1e-6, save_everystep=false, 
                     progress=true, progress_steps = 100)
     # Get ice velocities from the UDE predictions
+    println("iceflow_solved")
     H_pred = iceflow_sol.u[end]
+    println("computing avg v")
     V̄x_pred, V̄y_pred = avg_surface_V(context, H_pred, mean(longterm_temps_batch), "UDE", θ, UA_f) # Average velocity with average temperature
+    println("avg v computed")
     H_V_pred = (H_pred, V̄x_pred, V̄y_pred)
     return H_V_pred
 end
@@ -290,21 +296,21 @@ function iceflow_NN(H, θ, t, UA_f, context, temps)
     t₁ = context[6][end]
     B₀ = context[1]
     H₀ = context[2]
-    #S₀ .= B₀ .+ H₀
+    S₀ = B₀ .+ H₀
     #println("Maximum surface: ", maximum(S₀))
 
     #println("Mean slope, max, min: ", minimum(B₀ .+ H₀), mean(B₀ .+ H₀), maximum(B₀ .+ H₀))
-
+    
     if year <= t₁
         temp = temps[year]
     else
         temp = temps[year-1]
     end
-    A = predict_A̅(UA_f, θ, [temp]) # FastChain prediction requires explicit parameters
+    A = predict_A̅(UA_f, θ, [temp]) 
 
     # maybe this operation just takes a lot of time?
-    max_S = maximum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
-    min_S = minimum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
+    max_S = maximum(S₀[H₀ .!= 0.0])
+    min_S = minimum(S₀[H₀ .!= 0.0])
     #max_MB = 0.10
     #min_MB = -0.10
 
@@ -312,7 +318,14 @@ function iceflow_NN(H, θ, t, UA_f, context, temps)
     MB = min_MB .+ (B₀ .+ H₀ .- min_S) .* (max_MB / (max_S - min_S)) .* Float64.(Matrix(H₀.>0.0))
 
     # Compute the Shallow Ice Approximation in a staggered grid
-    return SIA(H, A, context) .+ MB
+    dH = SIA(H, A, context) .+ MB
+    
+    # years = collect(1:t₁)
+    # if any(isapprox.(t,years;atol=1e-1))
+    #     println("t: ", t)
+    # end
+    
+    return dH
 end  
 
 """
@@ -415,7 +428,7 @@ function avg_surface_V(context, H, temp, sim, θ=[], UA_f=[])
     
     @assert (sim == "UDE" || sim == "PDE") "Wrong type of simulation. Needs to be 'UDE' or 'PDE'."
     if sim == "UDE"
-        A = predict_A̅(UA_f, θ, [temp]) # FastChain prediction requires explicit parameters
+        A = predict_A̅(UA_f, θ, [temp]) 
     elseif sim == "PDE"
         A = A_fake(temp, A_noise, noise)
     end
@@ -567,16 +580,15 @@ function get_NN(θ_trained)
         Dense(3,1, sigmoid_A)
     )
     # See if parameters need to be retrained or not
-    if isempty(θ_trained)
-        θ, UA_f = Flux.destructure(UA)
-    else
+    θ, UA_f = Flux.destructure(UA)
+    if !isempty(θ_trained)
         θ = θ_trained
     end
     return UA_f, θ
 end
 
 function sigmoid_A(x) 
-    minA_out = 8.5e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
+    minA_out = 8.0e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
     maxA_out = 8.0
     return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
 end

@@ -9,16 +9,18 @@ export oggm_config, init_gdirs, PARAMS, PATHS
 """
     oggm_config()
 
-Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier.
+Configures the basic paths and parameters for OGGM.
 """
-function oggm_config()
+function oggm_config(working_dir_i=joinpath(homedir(), "Python/OGGM_data"))
+    global working_dir = working_dir_i
     @eval begin
     @everywhere begin
     @eval ODINN begin
     cfg.initialize() # initialize OGGM configuration
     
     global PATHS = PyDict(cfg."PATHS")  # OGGM PATHS
-    PATHS["working_dir"] = joinpath(homedir(), "Python/OGGM_data")  # Choose own custom path for the OGGM data
+    working_dir = @getfrom 1 working_dir ODINN
+    PATHS["working_dir"] = working_dir # Choose own custom path for the OGGM data
     global PARAMS = PyDict(cfg."PARAMS")
     PARAMS["hydro_month_nh"]=1
 
