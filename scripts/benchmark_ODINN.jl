@@ -6,7 +6,7 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 using ODINN
-using OrdinaryDiffEq, Optim
+using OrdinaryDiffEq, Optim, Optimization, SciMLSensitivity
 import OptimizationOptimisers.Adam
 using JLD2
 using BenchmarkTools
@@ -69,18 +69,21 @@ function run_benchmark()
 
     θ_bm = load(joinpath(ODINN.root_dir, "data/benchmark_weights.jld"))["θ_benchmark"]
 
-    current_epoch = 1
-    bsolver = ROCK4()
+    # Solvers 
     # bsolver = Ralston()
     # bsolver = TRBDF2()
+    bsolver = ROCK4()
 
-    n_ADAM = 5
     current_epoch = 1
+    reltol = 10e-6
+    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP())
+    train_settings = (Adam(0.005), 2) # optimizer, epochs
+    UDE_settings = Dict("reltol"=>reltol,
+                        "solver"=>bsolver,
+                        "sensealg"=>sensealg)
 
-    println("Training from scratch...")
-    println("Benchmarking solver: ", bsolver)
-    train_settings = (Adam(0.005), n_ADAM) # optimizer, epochs
-    iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_bm, bsolver)
+    println("Benchmarking UDE settings: ", UDE_settings)
+    @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $PDE_refs, $θ_bm, $UDE_settings)
 
 end
 
