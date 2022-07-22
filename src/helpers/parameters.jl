@@ -17,9 +17,9 @@ const A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60*60*24*365.25)'
 
 noise_A_magnitude = 5e-18  # magnitude of noise to be added to A
 
-# Mass balance parameters
-max_MB = 10.0
-min_MB = -10.0
+# Mass balance references for max and min values, used for random MB generation
+ref_max_MB = 10.0
+ref_min_MB = -10.0
 
 plots = false                      # Make reference plots 
 overwrite_climate = false          # Force re-computing climate data for glaciers

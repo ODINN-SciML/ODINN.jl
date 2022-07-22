@@ -13,7 +13,8 @@ using Zygote: @ignore
 using Flux
 using Tullio, RecursiveArrayTools
 using Infiltrator
-using Plots
+using Plots, PlotThemes
+theme(:wong2) # sets overall theme for Plots
 using Makie, CairoMakie
 import Pkg
 using Distributed
@@ -41,6 +42,8 @@ include("helpers/plotting.jl")
 ### Iceflow modelling functions  ###
 # (includes utils.jl as well)
 include("helpers/iceflow.jl")
+### Mass balance modelling functions ###
+include("helpers/mass_balance.jl")
 
 ###############################################
 #############  PYTHON LIBRARIES  ##############

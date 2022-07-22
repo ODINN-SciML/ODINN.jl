@@ -12,13 +12,13 @@ using JLD2
 using BenchmarkTools
 using Infiltrator
 
-create_ref_dataset = false  # Run reference PDE to generate reference dataset
+create_ref_dataset = true  # Run reference PDE to generate reference dataset
 
 tspan = (0.0,5.0) # period in years for simulation
-processes = 16
+processes = 3
 
 # We enable multiprocessing
-#ODINN.enable_multiprocessing(processes)
+ODINN.enable_multiprocessing(processes)
 
 ###############################################################
 ###########################  MAIN #############################

@@ -7,7 +7,7 @@ export predict_A̅, A_fake
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(gdirs_climate, tspan; solver = Ralston())
+function generate_ref_dataset(gdirs_climate, tspan; solver = Ralston(), random_MB=nothing)
   
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
@@ -15,7 +15,11 @@ function generate_ref_dataset(gdirs_climate, tspan; solver = Ralston())
     gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
-    refs = @showprogress pmap((gdir, longterm_temp, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver), gdirs, longterm_temps, A_noises)
+    if isnothing(random_MB)
+        refs = @showprogress pmap((gdir, longterm_temp, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver), gdirs, longterm_temps, A_noises)
+    else
+        refs = @showprogress pmap((gdir, longterm_temp, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver; random_MB=MB), gdirs, longterm_temps, A_noises, random_MB)
+    end
 
     # Split into different vectors
     H_refs, V̄x_refs, V̄y_refs, S_refs, B_refs = [],[],[],[],[]
@@ -35,10 +39,10 @@ end
 
 Solve the Shallow Ice Approximation iceflow PDE for a given temperature series batch
 """
-function batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver) 
+function batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver; random_MB=nothing) 
     println("Processing glacier: ", gdir.rgi_id)
 
-    context, H = build_PDE_context(gdir, longterm_temp, A_noise, tspan)
+    context, H = build_PDE_context(gdir, longterm_temp, A_noise, tspan; random_MB=random_MB)
     refs = simulate_iceflow_PDE(H, context, solver)
 
     return refs
@@ -71,16 +75,18 @@ end
 Train the Shallow Ice Approximation iceflow UDE. UDE_settings is optional, and requires a Dict specifiying the `reltol`, 
 `sensealg` and `solver` for the UDE.  
 """
-function train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained=[], UDE_settings=nothing, loss_history=[])
+function train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, 
+                           θ_trained=[], UDE_settings=nothing, loss_history=[]; random_MB=nothing)
     # Setup default parameters
     if length(θ_trained) == 0
         global current_epoch = 1 # reset epoch count
+        global loss_history = []
     end
 
     if isnothing(UDE_settings)
         UDE_settings = Dict("reltol"=>10e-6,
                         "solver"=>ROCK4(),
-                        "sensealg"=>QuadratureAdjoint(autojacvec=ZygoteVJP()))
+                        "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP()))
     end
 
     optimizer = train_settings[1]
@@ -92,7 +98,7 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_tr
     Vy_refs = PDE_refs["V̄y_refs"]
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = pmap((gdir, H_ref, Vx_ref, Vy_ref) -> build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref, tspan), gdirs, H_refs, Vx_refs, Vy_refs)
+    context_batches = pmap((gdir, H_ref, Vx_ref, Vy_ref) -> build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref, tspan; random_MB=random_MB), gdirs, H_refs, Vx_refs, Vy_refs)
     loss(θ) = loss_iceflow(θ, UA_f, gdirs_climate, context_batches, PDE_refs, UDE_settings) # closure
 
     println("Training iceflow UDE...")
@@ -119,17 +125,18 @@ callback = function (θ, l, UA_f, temps, A_noise) # callback function to observe
     pred_A = [pred_A...] # flatten
     true_A = A_fake(avg_temps, A_noise[p], noise)
 
-    Plots.scatter(avg_temps, true_A, label="True A")
+    Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
     plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)",
-                        ylabel="A", ylims=(0.0,maxA),
+                        ylabel="A", ylims=(0.0,maxA), lw = 3, c=:dodgerblue4,
                         legend=:topleft)
-    Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
+    # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
     Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.png"))
     global current_epoch += 1
     push!(loss_history, l)
 
-    plot_loss = Plots.plot(loss_history)
+    plot_loss = Plots.plot(loss_history, xlabel="Epoch",
+                ylabel="Loss (V)", lw = 3, c=:darkslategray3)
     Plots.savefig(plot_loss,joinpath(root_plots,"training","loss$current_epoch.png"))
     
     false
@@ -142,7 +149,7 @@ Loss function based on glacier ice velocities and/or ice thickness
 """
 function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, PDE_refs::Dict{String, Any}, UDE_settings) 
     H_V_preds = predict_iceflow(θ, UA_f, gdirs_climate, context_batches, UDE_settings)
-
+    # println("iceflow predicted")
     # Compute loss function for the full batch
     l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
     for i in 1:length(H_V_preds)
@@ -264,28 +271,36 @@ function iceflow!(dH, H, context,t)
     current_year = Ref(context.x[18])
     A = Ref(context.x[1])
     t₁ = context.x[22][end]
-    B₀ = context.x[2]
-    H₀ = context.x[21]
-    A_noise = context.x[23]
+    B₀ = Ref(context.x[2])
+    H₀ = Ref(context.x[21])
+    A_noise = Ref(context.x[23])
+    MB_series = Ref(context.x[24])
+    MB = Ref(context.x[25])
+    if !isnothing(MB_series[])
+        # MB array has tuples with (RGI_ID, MB_max, MB_min)
+        max_MB = Ref(MB_series[][2])
+        min_MB = Ref(MB_series[][3]) 
+    end
     
     # Get current year for MB and ELA
     year = floor(Int, t) + 1
     if year != current_year[] && year <= t₁ 
         temp = Ref{Float64}(context.x[7][year])
-        A[] .= A_fake(temp[], A_noise, noise)
+        A[] .= A_fake(temp[], A_noise[], noise)
         current_year[] .= year
+
+        if !isnothing(MB_series)
+            # Add mass balance based on gradient
+            max_S = maximum(B₀[][H₀[] .!= 0.0] .+ H₀[][H₀[] .!= 0.0])
+            min_S = minimum(B₀[][H₀[] .!= 0.0] .+ H₀[][H₀[] .!= 0.0])
+            # Define the mass balance as line between minimum and maximum surface
+            MB[] .= inn((min_MB[][year] .+ (B₀[] .+ H₀[] .- min_S) .* 
+                        ((max_MB[][year] - min_MB[][year]) / (max_S - min_S))) .* Float64.(Matrix(H₀[].>0.0)))
+        end
     end
 
-    # Add mass balance 
-    max_S = maximum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
-    min_S = minimum(B₀[H₀ .!= 0.0] .+ H₀[H₀ .!= 0.0])
-    #max_MB = 10
-    #min_MB = -10
-    # Define the mass balance as line between minimum and maximum surface
-    MB = inn((min_MB .+ (B₀ .+ H₀ .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Float64.(Matrix(H₀.>0.0)))
-    
     # Compute the Shallow Ice Approximation in a staggered grid
-    SIA!(dH, H, context) .+ MB
+    SIA!(dH, H, context) .+ MB[]
 end    
 
 """
@@ -311,24 +326,27 @@ function iceflow_NN(H, θ, t, UA_f, context, temps)
     end
     A = predict_A̅(UA_f, θ, [temp]) 
 
-    # maybe this operation just takes a lot of time?
-    max_S = maximum(S₀[H₀ .!= 0.0])
-    min_S = minimum(S₀[H₀ .!= 0.0])
-    #max_MB = 0.10
-    #min_MB = -0.10
-
     # Define the mass balance as line between minimum and maximum surface
-    MB = (min_MB .+ (S₀ .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Float64.(Matrix(H₀.>0.0))
-    # println("MB max: ", maximum(MB))
-    # println("MB min: ", minimum(MB))
-    # println("MB med: ", median(MB))
+    if !isnothing(context[7])
+        max_MB = context[7][2][year]
+        min_MB = context[7][3][year]
+        max_S = maximum(S₀[H₀ .!= 0.0])
+        min_S = minimum(S₀[H₀ .!= 0.0])
+        MB = (min_MB .+ (S₀ .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Float64.(Matrix(H₀.>0.0))
+        # println("MB max: ", maximum(MB))
+        # println("MB min: ", minimum(MB))
+        # println("MB med: ", median(MB))
+    else
+        MB = 0.0
+    end
 
     # Compute the Shallow Ice Approximation in a staggered grid
     dH = SIA(H, A, context) .+ MB
     
     # years = collect(1:t₁)
-    # if any(isapprox.(t,0.0;atol=1e-1))
-    #     display(Plots.heatmap(MB))
+    # if any(isapprox.(t,years;atol=5e-2))
+    #     println("t: ", t)
+    #     # display(Plots.heatmap(MB))
     # end
     
     return dH
@@ -518,7 +536,7 @@ function get_initial_geometry(gdir, smoothing=true)
     return H₀, H, B, (nx,ny), (Δx,Δy)
 end
 
-function build_PDE_context(gdir, longterm_temp, A_noise, tspan)
+function build_PDE_context(gdir, longterm_temp, A_noise, tspan; random_MB=nothing)
     # Determine initial geometry conditions
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
     # Initialize all matrices for the solver
@@ -527,21 +545,22 @@ function build_PDE_context(gdir, longterm_temp, A_noise, tspan)
     dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
     D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
+    MB = zeros(Float64,nx-2,ny-2)
     A = 2e-16
     α = 0                       # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
     C = 15e-14                  # Sliding factor, between (0 - 25) [m⁸ N⁻³ a⁻¹]
     
     # Gather simulation parameters
     current_year = 0 
-    context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan, A_noise)
+    context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan, A_noise, random_MB, MB)
     return context, H
 end
 
-function build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref, tspan)
+function build_UDE_context(gdir, H_ref, Vx_ref, Vy_ref, tspan; random_MB=nothing)
     H₀, H, B, nxy, Δxy = get_initial_geometry(gdir)
 
     # Tuple with all the temp series and H_refs
-    context = (B, H₀, H, nxy, Δxy, tspan)
+    context = (B, H₀, H, nxy, Δxy, tspan, random_MB)
 
     return context
 end
