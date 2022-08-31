@@ -84,39 +84,39 @@ function smooth(A)
 end
 
 function reset_epochs()
-    @everywhere global current_epoch = 1
+    @everywhere @eval ODINN global current_epoch = 1
 end
 
 function set_current_epoch(epoch)
-    @everywhere global current_epoch = $epoch
+    @everywhere @eval ODINN global current_epoch = $epoch
 end
 
 function make_plots(plots_i)
-    @everywhere global plots = $plots_i
+    @everywhere @eval ODINN global plots = $plots_i
 end
 
 function set_use_MB(use_MB_i)
-    @everywhere global use_MB = $use_MB_i
+    @everywhere @eval ODINN global use_MB = $use_MB_i
 end
 
 function set_run_spinup(run_spinup_i)
-    @everywhere global run_spinup = $run_spinup_i
+    @everywhere @eval ODINN global run_spinup = $run_spinup_i
 end
 
 function set_use_spinup(use_spinup_i)
-    @everywhere global use_spinup = $use_spinup_i
+    @everywhere @eval ODINN global use_spinup = $use_spinup_i
 end
 
 function set_create_ref_dataset(create_ref_dataset_i)
-    @everywhere global create_ref_dataset = $create_ref_dataset_i
+    @everywhere @eval ODINN global create_ref_dataset = $create_ref_dataset_i
 end
 
 function set_train(train_i)
-    @everywhere global train = $train_i
+    @everywhere @eval ODINN global train = $train_i
 end
 
 function set_retrain(retrain_i)
-    @everywhere global retrain = $retrain_i
+    @everywhere @eval ODINN global retrain = $retrain_i
 end
 
 function get_gdir_refs(refs, gdirs)

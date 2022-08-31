@@ -12,8 +12,8 @@ function generate_random_MB(gdirs_climate, tspan; plot=true)
         scaling = 1.0f0
         clim = scaling*(1.0f0/abs(mean(climate)))^(1.0f0/7.0f0) # climate driver to adapt random MB
         # clim = (clim <= 1.1)*clim # clip large values
-        MB_max = (ref_max_MB .+ randn(MersenneTwister(1),floor(Int,tspan[2]))).*clim
-        MB_min = (ref_min_MB .+ randn(MersenneTwister(2),floor(Int,tspan[2]))).*clim
+        MB_max = Float32.((ref_max_MB .+ randn(MersenneTwister(1),floor(Int,tspan[2]))).*clim)
+        MB_min = Float32.((ref_min_MB .+ randn(MersenneTwister(2),floor(Int,tspan[2]))).*clim)
         # MB_min = ifelse.(MB_min.>=-15.0f0, MB_min, -15.0f0)
         push!(random_MB, (gdir.rgi_id, MB_max, MB_min))
     end
@@ -57,11 +57,11 @@ function compute_MB_matrix!(context, B, H_y, year)
                 ((max_MB[year] .- min_MB[year]) ./ (max_S .- min_S))) .* Matrix(H_y.>0.0f0))
 end
 
-function compute_MB_matrix(context, S, H)
-    max_MB = context[7][2][year]
-    min_MB = context[7][3][year]
-    max_S = maximum(S[H .> 0.0f0])
-    min_S = minimum(S[H .> 0.0f0])
-    MB = (min_MB .+ (S .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Matrix(H.>0.0f0)
+function compute_MB_matrix(context, S, H, year)
+    max_MB = context[7][1][2][year]
+    min_MB = context[7][1][3][year]
+    max_S = maximum(getindex(S, H .> 0.0f0))
+    min_S = minimum(getindex(S, H .> 0.0f0))
+    MB = (min_MB .+ (S .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Matrix{Float32}(H.>0.0f0)
     return MB
 end

@@ -17,6 +17,7 @@ using BenchmarkTools
 using Infiltrator
 
 # We enable multiprocessing
+# processes = 1
 # ODINN.enable_multiprocessing(processes)
 
 # Flags
@@ -26,10 +27,9 @@ ODINN.set_run_spinup(false) # Run the spin-up simulation
 ODINN.set_use_spinup(false) # Use the updated spinup
 ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
 # UDE training
-ODINN.set_train(true)    # Train UDE
+ODINN.set_train(true)    # Train UDE 
 
 tspan = (0.0f0,5.0f0) # period in years for simulation
-processes = 3
 
 ###############################################################
 ###########################  MAIN #############################
@@ -60,10 +60,10 @@ function run_benchmark()
     # Process climate data for glaciers
     gdirs_climate = get_gdirs_with_climate(gdir, tspan, overwrite=false, plot=false)
 
-    random_MB = generate_random_MB(gdirs_climate, tspan; plot=true)
+    random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)
 
     # Run forward model for selected glaciers
-    if ODINN.create_ref_dataset[] 
+    if ODINN.create_ref_dataset
         println("Generating reference dataset for training...")
         solver = RDPK3Sp35()
         # Compute reference dataset in parallel
@@ -74,7 +74,7 @@ function run_benchmark()
     end
 
     # Load stored PDE reference datasets
-    gdir_refs = load(joinpath(ODINN.root_dir, "data/PDE_refs_benchmark.jld2"))
+    gdir_refs = load(joinpath(ODINN.root_dir, "data/PDE_refs_benchmark.jld2"))["gdir_refs"]
 
     #######################################################################################################
     #############################             Train UDE            ########################################
@@ -84,9 +84,11 @@ function run_benchmark()
     
     # Solvers 
     # bsolver = Ralston()
-    # bsolver = TRBDF2()
-    bsolver = ROCK4()
-
+    # bsolver = CKLLSRK54_3C()
+    bsolver = RDPK3Sp35()
+    # bsolver = RDPK3SpFSAL35()
+    # bsolver = ROCK4()
+ 
     ODINN.reset_epochs()
     reltol = 10f-6
     sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP())
@@ -98,7 +100,12 @@ function run_benchmark()
                         "sensealg"=>sensealg)
 
     println("Benchmarking UDE settings: ", UDE_settings)
-    @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $gdir_refs, $θ_bm, $UDE_settings; random_MB=$random_MB)
+
+    # @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $gdir_refs, $θ_bm, $UDE_settings)
+
+    # @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $gdir_refs, $θ_bm, $UDE_settings; random_MB=$random_MB)
+
+    @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs, θ_bm, UDE_settings; random_MB=random_MB)
 
 end
 

@@ -104,13 +104,17 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs,
                         "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP()))
     end
 
+    if random_MB == nothing
+        ODINN.set_use_MB(false) 
+    end
+
     optimizer = train_settings[1]
     epochs = train_settings[2]
     UA_f, θ = get_NN(θ_trained)
     gdirs = gdirs_climate[2]
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan; run_spinup=false, random_MB=random_MB), gdirs)
+    context_batches = map((gdir) -> build_UDE_context(gdir, tspan; run_spinup=false, random_MB=random_MB), gdirs)
     loss(θ) = loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_settings) # closure
 
     println("Training iceflow UDE...")
@@ -126,7 +130,7 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs,
 end
 
 callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to observe training
-    println("Epoch #$current_epoch - Loss $loss_type: ", l)
+    println("Epoch #$current_epoch - Loss $(loss_type[]): ", l)
 
     avg_temps = [mean(temps[i]) for i in 1:length(temps)]
     p = sortperm(avg_temps)
@@ -143,7 +147,7 @@ callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to o
                         ylabel="A", ylims=(0.0f0,maxA[]), lw = 3, c=:dodgerblue4,
                         legend=:topleft)
     training_path = joinpath(root_plots,"training")
-    if !isdir(training_path)
+    if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
         mkpath(joinpath(training_path,"png"))
         mkpath(joinpath(training_path,"pdf"))
     end
@@ -254,6 +258,9 @@ Runs a single time step of the iceflow PDE model in-place
 function iceflow!(dH, H, context,t)
     # First, enforce values to be positive
     H[H.<0.0f0] .= H[H.<0.0f0] .* 0.0f0
+    # Then, clip values if they get too high due to solver instabilities
+    H₀ = context.x[21]
+    H[H.>(1.5f0 * maximum(H₀))] .= 1.5f0 * maximum(H₀)
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
     current_year = context.x[18]
@@ -290,17 +297,18 @@ Runs a single time step of the iceflow UDE model
 """
 function iceflow_NN(H, θ, t, UA_f, context, temps)
     t₁ = context[6][end]
+    H₀ = context[2]
     H_buf = Buffer(H)
     @views H_buf .= ifelse.(H.<0.0f0, 0.0f0, H) # prevent values from going negative
+    @views H_buf .= ifelse.(H.>(1.5f0 * maximum(H₀)), 1.5f0 * maximum(H₀), H) # prevent values from becoming too large
     H = copy(H_buf)
     B = context[1]
     S = B .+ H
     year = floor(Int, t) + 1
-    # rgi_id = context[8]
 
     # Define the mass balance as line between minimum and maximum surface
     if use_MB[]
-        MB = compute_MB_matrix(context, S, H)
+        MB = compute_MB_matrix(context, S, H, year)
     else
         MB = 0.0f0
     end
@@ -317,6 +325,7 @@ function iceflow_NN(H, θ, t, UA_f, context, temps)
 
     # years = collect(1:t₁)
     # if any(isapprox.(t,years;atol=1e-4))
+    #     rgi_id = context[8]
     #     println("$rgi_id - t: ", t, " - dH: ", maximum(dH))
     # end
     
