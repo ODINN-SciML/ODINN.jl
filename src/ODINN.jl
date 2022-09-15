@@ -7,15 +7,17 @@ module ODINN
 
 using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
-using OrdinaryDiffEq, DiffEqFlux
-using Zygote: @ignore
+using OrdinaryDiffEq, DiffEqCallbacks
+using SciMLSensitivity, Optimization
+using Zygote: @ignore, Buffer 
 using Flux
 using Tullio, RecursiveArrayTools
 using Infiltrator
-using Plots
-using Makie, CairoMakie
+using Plots, PlotThemes
+Plots.theme(:wong2) # sets overall theme for Plots
+using Makie, CairoMakie, GeoMakie
 import Pkg
-using Distributed
+using Distributed, ParallelDataTransfer
 using ProgressMeter
 using PyCall
 using HDF5
@@ -41,6 +43,8 @@ include("helpers/plotting.jl")
 ### Iceflow modelling functions  ###
 # (includes utils.jl as well)
 include("helpers/iceflow.jl")
+### Mass balance modelling functions ###
+include("helpers/mass_balance.jl")
 
 ###############################################
 #############  PYTHON LIBRARIES  ##############
