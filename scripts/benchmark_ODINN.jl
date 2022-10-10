@@ -5,20 +5,31 @@
 import Pkg 
 Pkg.activate(dirname(Base.current_project()))
 
+using Logging: global_logger
+using TerminalLoggers: TerminalLogger
+global_logger(TerminalLogger())
+
 using ODINN
-using OrdinaryDiffEq, Optim, Optimization, SciMLSensitivity
+using OrdinaryDiffEq, Optim, Optimization, OptimizationOptimJL, SciMLSensitivity
 import OptimizationOptimisers.Adam
 using JLD2
 using BenchmarkTools
 using Infiltrator
 
-create_ref_dataset = true  # Run reference PDE to generate reference dataset
-
-tspan = (0.0,5.0) # period in years for simulation
-processes = 3
-
 # We enable multiprocessing
-ODINN.enable_multiprocessing(processes)
+# processes = 1
+# ODINN.enable_multiprocessing(processes)
+
+# Flags
+ODINN.set_use_MB(true) 
+# Spin up and reference simulations
+ODINN.set_run_spinup(false) # Run the spin-up simulation
+ODINN.set_use_spinup(false) # Use the updated spinup
+ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
+# UDE training
+ODINN.set_train(true)    # Train UDE 
+
+tspan = (0.0f0,5.0f0) # period in years for simulation
 
 ###############################################################
 ###########################  MAIN #############################
@@ -49,41 +60,52 @@ function run_benchmark()
     # Process climate data for glaciers
     gdirs_climate = get_gdirs_with_climate(gdir, tspan, overwrite=false, plot=false)
 
-    # Run forward model for selected glaciers
-    if create_ref_dataset 
-        println("Generating reference dataset for training...")
+    random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)
 
+    # Run forward model for selected glaciers
+    if ODINN.create_ref_dataset
+        println("Generating reference dataset for training...")
+        solver = RDPK3Sp35()
         # Compute reference dataset in parallel
-        H_refs, V̄x_refs, V̄y_refs, S_refs, B_refs = @time generate_ref_dataset(gdirs_climate, tspan)
+        gdir_refs = @time generate_ref_dataset(gdirs_climate, tspan; solver=solver, random_MB=random_MB)
 
         println("Saving reference benchmark data")
-        jldsave(joinpath(ODINN.root_dir, "data/PDE_refs_benchmark.jld2"); H_refs, V̄x_refs, V̄y_refs, S_refs, B_refs)
+        jldsave(joinpath(ODINN.root_dir, "data/PDE_refs_benchmark.jld2"); gdir_refs)
     end
 
     # Load stored PDE reference datasets
-    PDE_refs = load(joinpath(ODINN.root_dir, "data/PDE_refs_benchmark.jld2"))
+    gdir_refs = load(joinpath(ODINN.root_dir, "data/PDE_refs_benchmark.jld2"))["gdir_refs"]
 
     #######################################################################################################
     #############################             Train UDE            ########################################
     #######################################################################################################
 
     θ_bm = load(joinpath(ODINN.root_dir, "data/benchmark_weights.jld"))["θ_benchmark"]
-
+    
     # Solvers 
     # bsolver = Ralston()
-    # bsolver = TRBDF2()
-    bsolver = ROCK4()
-
-    current_epoch = 1
-    reltol = 10e-6
+    # bsolver = CKLLSRK54_3C()
+    bsolver = RDPK3Sp35()
+    # bsolver = RDPK3SpFSAL35()
+    # bsolver = ROCK4()
+ 
+    ODINN.reset_epochs()
+    reltol = 10f-6
     sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP())
-    train_settings = (Adam(0.005), 2) # optimizer, epochs
+    opt = Adam(0.005)
+    # opt = BFGS(initial_stepnorm=0.02f0)
+    train_settings = (opt, 1) # optimizer, epochs
     UDE_settings = Dict("reltol"=>reltol,
                         "solver"=>bsolver,
                         "sensealg"=>sensealg)
 
     println("Benchmarking UDE settings: ", UDE_settings)
-    @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $PDE_refs, $θ_bm, $UDE_settings)
+
+    # @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $gdir_refs, $θ_bm, $UDE_settings)
+
+    # @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $gdir_refs, $θ_bm, $UDE_settings; random_MB=$random_MB)
+
+    @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs, θ_bm, UDE_settings; random_MB=random_MB)
 
 end
 

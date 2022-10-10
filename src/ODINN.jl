@@ -7,17 +7,17 @@ module ODINN
 
 using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
-using OrdinaryDiffEq
+using OrdinaryDiffEq, DiffEqCallbacks
 using SciMLSensitivity, Optimization
-using Zygote: @ignore
+using Zygote: @ignore, Buffer 
 using Flux
 using Tullio, RecursiveArrayTools
 using Infiltrator
 using Plots, PlotThemes
-theme(:wong2) # sets overall theme for Plots
-using Makie, CairoMakie
+Plots.theme(:wong2) # sets overall theme for Plots
+using Makie, CairoMakie, GeoMakie
 import Pkg
-using Distributed
+using Distributed, ParallelDataTransfer
 using ProgressMeter
 using PyCall
 
