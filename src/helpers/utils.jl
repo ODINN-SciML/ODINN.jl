@@ -131,3 +131,52 @@ function get_gdir_refs(refs, gdirs)
     end
     return gdir_refs
 end
+
+
+"""
+    get_NN()
+
+Generates a neural network.
+"""
+function get_NN(θ_trained)
+    UA = Chain(
+        Dense(1,3, x->softplus.(x)),
+        Dense(3,10, x->softplus.(x)),
+        Dense(10,3, x->softplus.(x)),
+        Dense(3,1, sigmoid_A)
+    )
+    # See if parameters need to be retrained or not
+    θ, UA_f = Flux.destructure(UA)
+    if !isempty(θ_trained)
+        θ = θ_trained
+    end
+    return UA_f, θ
+end
+
+# TODO: determine input features!!!
+function get_NN_inversion_D(θ_trained)
+    UA = Chain(
+        Dense(1,20, x->softplus.(x)),
+        Dense(20,15, x->softplus.(x)),
+        Dense(15,10, x->softplus.(x)),
+        Dense(10,5, x->softplus.(x)),
+        Dense(5,1, relu) # force diffusivity to be positive
+    )
+    # See if parameters need to be retrained or not
+    θ, UA_f = Flux.destructure(UA)
+    if !isempty(θ_trained)
+        θ = θ_trained
+    end
+    return UA_f, θ
+end
+
+function sigmoid_A(x) 
+    minA_out = 8.0f-3 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 8.0f0
+    return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
+end
+
+# Convert Pythonian date to Julian date
+function jldate(pydate)
+    return Date(pydate.dt.year.data[1], pydate.dt.month.data[1], pydate.dt.day.data[1])
+end

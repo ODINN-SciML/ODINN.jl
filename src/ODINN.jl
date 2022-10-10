@@ -21,10 +21,13 @@ using Distributed, ParallelDataTransfer
 using ProgressMeter
 using PyCall
 using HDF5
+using SnoopPrecompile 
 
 ###############################################
 #############    PARAMETERS     ###############
 ###############################################
+
+@precompile_setup begin
 
 include("helpers/parameters.jl")
 
@@ -36,8 +39,11 @@ cd(@__DIR__)
 global root_dir = dirname(Base.current_project())
 global root_plots = joinpath(root_dir, "plots")
 
-include("helpers/utils.jl")
+@precompile_all_calls begin
 
+include("helpers/utils.jl")
+# Functions to retrieve data for the simulation's initial conditions
+include("helpers/initial_conditions.jl")
 #### Plotting functions  ###
 include("helpers/plotting.jl")
 ### Iceflow modelling functions  ###
@@ -45,10 +51,19 @@ include("helpers/plotting.jl")
 include("helpers/iceflow.jl")
 ### Mass balance modelling functions ###
 include("helpers/mass_balance.jl")
+### Ice rheology inversion functions ###
+include("helpers/inversions.jl")
+
+end # @precompile_setup
+end # @precompile_all_calls
+
+
 
 ###############################################
 #############  PYTHON LIBRARIES  ##############
 ###############################################
+
+@precompile_setup begin
 
 const netCDF4 = PyNULL()
 const cfg = PyNULL()
@@ -57,7 +72,7 @@ const workflow = PyNULL()
 const tasks = PyNULL()
 const graphics = PyNULL()
 const bedtopo = PyNULL()
-const its_live = PyNULL()
+const millan22 = PyNULL()
 const MBsandbox = PyNULL()
 
 # Essential Python libraries
@@ -68,10 +83,15 @@ const xr = PyNULL()
 ######### PYTHON JULIA INTERACTIONS  ##########
 ###############################################
 
+@precompile_all_calls begin
+
 include(joinpath(ODINN.root_dir, "src/helpers/config.jl"))
 ### Climate data processing  ###
 include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
 ### OGGM configuration settings  ###
 include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
+
+end # @precompile_setup
+end # @precompile_all_calls
 end # module
 

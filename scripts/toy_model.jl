@@ -7,6 +7,7 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
+using Revise
 using ODINN
 using Optim, OptimizationOptimJL
 import OptimizationOptimisers.Adam

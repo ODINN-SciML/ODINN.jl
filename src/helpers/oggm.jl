@@ -21,6 +21,7 @@ function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"))
     PATHS["working_dir"] = $working_dir # Choose own custom path for the OGGM data
     global PARAMS = PyDict(cfg."PARAMS")
     PARAMS["hydro_month_nh"]=1
+    PARAMS["dl_verify"] = false
 
     # Multiprocessing 
     PARAMS["use_multiprocessing"] = true # Let's use multiprocessing for OGGM
@@ -62,38 +63,25 @@ function init_gdirs_scratch(rgi_ids)
     # Check if some of the gdirs is missing files
     gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=10)
     list_talks = [
-        # tasks.glacier_masks,
-        # tasks.compute_centerlines,
+        tasks.glacier_masks,
+        tasks.compute_centerlines,
         # tasks.initialize_flowlines,
         # tasks.compute_downstream_line,
         tasks.catchment_area,
         tasks.gridded_attributes,
-        tasks.gridded_mb_attributes,
+        # tasks.gridded_mb_attributes,
         # tasks.prepare_for_inversion,  # This is a preprocessing task
         # tasks.mass_conservation_inversion,  # This gdirsdoes the actual job
         # tasks.filter_inversion_output,  # This smoothes the thicknesses at the tongue a little
         # tasks.distribute_thickness_per_altitude,
         bedtopo.add_consensus_thickness,   # Use consensus ice thicknesses from Farinotti et al. (2019)
-        its_live.velocity_to_gdir     # ITS_LIVE NASA ice surface velocities
+       # tasks.get_topo_predictors,
+        millan22.velocity_to_gdir
     ]
     for task in list_talks
         # The order matters!
         workflow.execute_entity_task(task, gdirs)
     end
-
-    # Get Glathida ice thickness data
-    gtd_file_path = utils.file_downloader("https://cluster.klima.uni-bremen.de/~oggm/glathida/glathida-v3.1.0/data/TTT_per_rgi_id.h5")
-    gtd_file = h5open(gtd_file_path, "r")
-
-    @infiltrate
-
-
-    # with pd.HDFStore(gtd_file) as store:
-    #     rgi_ids = list(store.keys())
-    # rgi_ids = np.array([s[1:] for s in rgi_ids])
-    # print(rgi_ids)
-
-
 
     return gdirs
 end
