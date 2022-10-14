@@ -20,7 +20,7 @@ import Pkg
 using Distributed, ParallelDataTransfer
 using ProgressMeter
 using PyCall
-using HDF5
+using HDF5, Downloads
 using SnoopPrecompile 
 
 ###############################################
@@ -42,8 +42,6 @@ global root_plots = joinpath(root_dir, "plots")
 @precompile_all_calls begin
 
 include("helpers/utils.jl")
-# Functions to retrieve data for the simulation's initial conditions
-include("helpers/initial_conditions.jl")
 #### Plotting functions  ###
 include("helpers/plotting.jl")
 ### Iceflow modelling functions  ###
@@ -74,10 +72,12 @@ const graphics = PyNULL()
 const bedtopo = PyNULL()
 const millan22 = PyNULL()
 const MBsandbox = PyNULL()
+const salem = PyNULL()
 
 # Essential Python libraries
 const np = PyNULL()
 const xr = PyNULL()
+const pd = PyNULL()
 
 ###############################################
 ######### PYTHON JULIA INTERACTIONS  ##########
@@ -90,6 +90,8 @@ include(joinpath(ODINN.root_dir, "src/helpers/config.jl"))
 include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
 ### OGGM configuration settings  ###
 include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
+# Functions to retrieve data for the simulation's initial conditions
+include(joinpath(ODINN.root_dir, "src/helpers/initial_conditions.jl"))
 
 end # @precompile_setup
 end # @precompile_all_calls

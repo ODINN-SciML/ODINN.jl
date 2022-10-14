@@ -5,16 +5,19 @@ invert_iceflow(gdirs, train_settings, θ_trained=[], loss_history=[])
 
 Performs an inversion on the SIA to train a NN on the ice flow law
 """
-function train_iceflow_inversion(rgi_ids, glathida, tspan, train_settings, θ_trained=[], loss_history=[])
+function train_iceflow_inversion(rgi_ids, gtd_file, tspan, train_settings, θ_trained=[]; target="A")
     println("Training ice rheology inversion...")
     # Initialize gdirs with ice thickness data
     gdirs = init_gdirs(rgi_ids, force=false)
     # Process climate data for glaciers
     gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, massbalance=false, plot=false)
+    # Produce Glathida dataset
+    gtd_grids = get_glathida(gtd_file, gdirs; force=false)
 
     # Perform inversion with the given gdirs and climate data
-    invert_iceflow(glathida, gdirs_climate, tspan, train_settings, θ_trained, loss_history)
+    rheology_trained = invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trained, target)
 
+    return rheology_trained
 end
 
 """
@@ -22,66 +25,108 @@ invert_iceflow(gdirs, train_settings, θ_trained=[], loss_history=[])
 
 Performs an inversion on the SIA to train a NN on the ice flow law
 """
-function invert_iceflow(glathida, gdirs_climate, tspan, train_settings, θ_trained, loss_history)
+function invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trained, target)
     if length(θ_trained) == 0
-        global current_epoch = 1 # reset epoch count
+        global current_epoch[] = 1 # reset epoch count
     end
     optimizer = train_settings[1]
     epochs = train_settings[2]
-    UD, θ = get_NN_inversion_D(θ_trained)
+    UD, θ = get_NN_inversion(θ_trained, target)
     gdirs = gdirs_climate[2]
 
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = pmap(gdir -> build_UDE_context(gdir, tspan), gdirs)
-    loss(θ) = loss_iceflow_inversion(θ, UD, gdirs_climate, context_batches) # closure
+    context_batches = pmap(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
+    loss(θ) = loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target) # closure
     
     println("Training iceflow rheology inversion...")
-    temps = gdirs_climate[3]
-    cb_plots(θ, l, UA_f) = callback_plots(θ, l, UA_f, temps, A_noise)
+    cb_plots_inv(θ, l, UD) = callback_plots_inv(θ, l, UD)
+
     # Setup optimization of the problem
     optf = OptimizationFunction((θ,_)->loss(θ), Optimization.AutoZygote())
     optprob = OptimizationProblem(optf, θ)
-    iceflow_trained = solve(optprob, optimizer, callback = cb_plots, maxiters = epochs)
+    rheology_trained = solve(optprob, optimizer, maxiters=epochs, allow_f_increases=true, show_trace=true, callback=cb_plots_inv, progress=true)
 
-    return iceflow_trained
+    return rheology_trained
 
 end
 
 """
-    loss_iceflow(θ, context, UA, PDE_refs::Dict{String, Any}, temp_series) 
+    loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches)
 
 Loss function based on glacier ice velocities and/or ice thickness
 """
-function loss_iceflow_inversion(θ, UD, gdirs_climate, context_batches)
-    
-    V_pred = perform_V_inversion(θ, UD, gdirs_climate, context_batches)
+function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
+
+    V_preds = perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
 
     # Compute loss function for the full batch
     l_V = 0.0f0
-    for i in 1:length(H_V_preds)
+    for i in 1:length(V_preds)
+        # Get ice velocities from Millan et al. (2022)
+        V_ref = avg(context_batches[i][6])
 
-        # Get ice velocities from ITS_LIVE or Millan et al. (2022)
-        V_ref = context_batches[i][10]
-
-        if scale_loss
-            normV = V_ref[V_ref .!= 0.0] .+ ϵ
-            l_V += Flux.Losses.mse(V_pred[V_ref .!= 0.0] ./normVx, V_ref[V_ref.!= 0.0] ./normV; agg=mean)
+        if scale_loss[]
+            # We only evaluate the loss where there are ice thickness obs
+            normV = V_ref[inn1(gtd_grids[i]) .!= 0.0] .+ ϵ
+            l_V += Flux.Losses.mse(V_preds[i] ./normV, V_ref[inn1(gtd_grids[i]) .!= 0.0] ./normV; agg=mean)
         else
-            l_V += Flux.Losses.mse(V_pred[V_ref .!= 0.0], V_ref[V_ref.!= 0.0]; agg=mean)
+            l_V += Flux.Losses.mse(V_preds[i], V_ref[inn1(gtd_grids[i]) .!= 0.0]; agg=mean)
         end
     end 
 
-    return l_V
+    return l_V, UD
 end
 
 """
-    perform_iceflow_inversion(θ, UA, gdirs_climate, context_batches)
+    perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches)
 
 Performs an inversion of the iceflow law with a UDE in different batches
 """
-function perform_V_inversion(θ, UD, gdirs_climate, context_batches)
+function perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
     T_batches = gdirs_climate[3]
-    V = pmap((context, T) -> SIA(T, context, θ, UD), context_batches, T_batches)
+    years = gdirs_climate[1][1]
+    V = pmap((H, context, T) -> SIA(H, T, context, years, θ, UD, target), gtd_grids, context_batches, T_batches)
     return V
+end
+
+callback_plots_inv = function (θ, l, UD_f) # callback function to observe training
+    println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", l)
+    # Let's explore the NN's output
+    H = collect(20.0:100.0:1000.0)
+    T = collect(-40.0:5.0:5.0)
+    ∇S = collect(0.0:0.06:0.6) # 0 to 35 º (in rad)
+    D_preds = []
+    for (h,t,∇s) in zip(H,T,∇S)
+        X = build_D_features(h, t, ∇s)
+        push!(D_preds, predict_diffusivity(UD_f, θ, X)[1])
+    end
+
+    # TODO: make 3 plots with all combinations
+    # Let's plot this in 3D   
+    hs = collect(LinRange(minimum(H), maximum(H), length(H)))
+    ts = collect(LinRange(minimum(T), maximum(T), length(H)))
+    ss = collect(LinRange(minimum(∇S), maximum(∇S), length(H)))
+
+    pHT = Plots.plot(hs, ts, D_preds, zcolor = reverse(D_preds), cbar = true, w = 3, 
+                            xlabel="H", ylabel="T", zlabel="D")
+
+    pH∇S = Plots.plot(hs, ss, D_preds, zcolor = reverse(D_preds), cbar = true, w = 3, 
+                        xlabel="H", ylabel="∇S", zlabel="D")
+
+    training_path = joinpath(root_plots,"inversions")
+    generate_plot_folders(training_path)
+
+    save_plot(pHT, training_path, "HT") 
+    save_plot(pH∇S, training_path, "H∇S") 
+
+    global current_epoch[] += 1
+    push!(loss_history, l)
+
+    plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
+                ylabel="Loss (V)", lw = 3, c=:darkslategray3)
+
+    save_plot(plot_loss, training_path, "loss") 
+
+    false
 end

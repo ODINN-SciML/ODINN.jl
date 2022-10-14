@@ -40,5 +40,5 @@ const noise = Ref{Bool}(true)                  # Add random noise to fake A law
 rng_seed() = MersenneTwister(1010)   # Random seed
 
 # Machine learning training
-const current_epoch = 1
+const current_epoch = Ref{Int}(1)
 loss_history = []

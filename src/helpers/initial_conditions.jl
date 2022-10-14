@@ -90,12 +90,12 @@ function build_UDE_context(gdir, tspan; run_spinup=false, random_MB=nothing)
 end
 
 # UDE  context using Glathida for H
-function build_UDE_context(gdir, glathida, tspan)
+function build_UDE_context_inv(gdir, tspan)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
 
     # Tuple with all the temp series
-    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V)
+    context = (nxy, Δxy, tspan, rgi_id, S, V)
 
     return context
 end
@@ -129,3 +129,64 @@ function retrieve_context(context::ArrayPartition)
     return B, H₀, Δx, Δy, A_noise
 end
 
+function get_glathida_path_and_IDs()
+    # Download all data from Glathida
+    # TODO: make Download work with specific path
+    gtd_file = Downloads.download("https://cluster.klima.uni-bremen.de/~oggm/glathida/glathida-v3.1.0/data/TTT_per_rgi_id.h5")
+    # gtd_file = Downloads.download("https://cluster.klima.uni-bremen.de/~oggm/glathida/glathida-v3.1.0/data/TTT_per_rgi_id.h5", gtd_path)
+
+    glathida = pd.HDFStore(gtd_file)
+    rgi_ids = glathida.keys()
+    rgi_ids = [id[2:end] for id in rgi_ids]
+
+    # glathida = h5open(gtd_path, "r")
+    # # Retrieve RGI IDs with Glathida data
+    # rgi_ids = keys(glathida)
+    # Delete Greenland and Antarctic glaciers, for now
+    deleteat!(rgi_ids, findall(x->x[begin:8]=="RGI60-05",rgi_ids))
+    deleteat!(rgi_ids, findall(x->x[begin:8]=="RGI60-19",rgi_ids))  
+
+    return gtd_file, rgi_ids
+end
+
+"""
+    get_glathida(gdirs)
+
+Downloads and creates distributed ice thickness matrices for each gdir based on the Glathida observations.
+"""
+function get_glathida(gtd_file, gdirs; force=false)
+    glathida = pd.HDFStore(gtd_file)
+    # TODO: make this work in a pmap
+    gtd_grids = map(gdir -> get_glathida_glacier(gdir, glathida, force), gdirs) 
+    return gtd_grids
+end
+
+"""
+    get_glathida(gdir, glathida)
+
+Either retrieves computes and writes the Glathida ice thickness matrix for a given gdir.
+"""
+function get_glathida_glacier(gdir, glathida, force)
+    gtd_path = joinpath(gdir.dir, "glathida.h5")
+    if isfile(gtd_path) && !force
+        gtd_grid = h5read(gtd_path, "gtd_grid")
+    else
+        df_gtd = glathida[gdir.rgi_id]
+        jj, ii = gdir.grid.transform(df_gtd["POINT_LON"], df_gtd["POINT_LAT"], crs=salem.wgs84, nearest=true)
+
+        gtd_grid = zeros((gdir.grid.ny,gdir.grid.nx))
+        for (thick, i, j) in zip(df_gtd["THICKNESS"], ii, jj)
+            if gtd_grid[i,j] != 0.0
+                gtd_grid[i,j] = (gtd_grid[i,j] + thick)/2.0 # average
+            else
+                gtd_grid[i,j] = thick
+            end
+        end
+        # Save file 
+        h5open(joinpath(gdir.dir, "glathida.h5"), "w") do file
+            write(file, "gtd_grid", gtd_grid)  
+        end
+    end
+
+    return gtd_grid
+end

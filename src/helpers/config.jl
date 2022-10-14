@@ -22,6 +22,8 @@ function __init__()
     copy!(bedtopo, pyimport("oggm.shop.bedtopo"))
     copy!(millan22, pyimport("oggm.shop.millan22"))
     copy!(MBsandbox, pyimport("MBsandbox.mbmod_daily_oneflowline"))
+    copy!(salem, pyimport("salem"))
+    copy!(pd, pyimport("pandas"))
     copy!(np, pyimport("numpy"))
     copy!(xr, pyimport("xarray"))
 end

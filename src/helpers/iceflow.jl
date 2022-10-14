@@ -129,8 +129,10 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs,
     return iceflow_trained, UA_f, loss_history
 end
 
+
+
 callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to observe training
-    println("Epoch #$current_epoch - Loss $(loss_type[]): ", l)
+    println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", l)
 
 
 
@@ -154,15 +156,15 @@ callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to o
         mkpath(joinpath(training_path,"pdf"))
     end
     # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$current_epoch.png"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$current_epoch.pdf"))
+    Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch[]).png"))
+    Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch[]).pdf"))
     global current_epoch += 1
     push!(loss_history, l)
 
     plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
                 ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-    Plots.savefig(plot_loss,joinpath(training_path,"png","loss$current_epoch.png"))
-    Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$current_epoch.pdf"))
+    Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch[]).png"))
+    Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch[]).pdf"))
     
     false
 end
@@ -290,8 +292,6 @@ function iceflow!(dH, H, context,t)
 
     # Compute the Shallow Ice Approximation in a staggered grid
     SIA!(dH, H, context)
-    # @show maximum(H)
-    # @show minimum(H)
 end    
 
 """
@@ -427,52 +427,34 @@ end
 
 Compute a step of the Shallow Ice Approximation, constrained by surface velocity observations. Allocates memory.
 """
-function SIA(H::Matrix{Float32}, T, context, θ, UD_f)
+function SIA(H, T, context, years, θ, UD_f, target)
+    @assert (target == "A" || target == "D") "Functional inversion target needs to be either A or D!"
     # Retrieve parameters
-    # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan, rgi_id, S)
-    Δx = context[6][1]
-    Δy = context[6][2]
-    S = context[9] # TODO: update this to Millan et al.(2022) DEM
+    # context = (nxy, Δxy, tspan, rgi_id, S, V)
+    Δx = context[2][1]
+    Δy = context[2][2]
+    S = context[5] # TODO: update this to Millan et al.(2022) DEM
+
+    # Get long term temperature for the Millan et al.(2022) dataset
+    temp = T[years .== 2017]
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
     dSdx = diff_x(S) ./ Δx
     dSdy = diff_y(S) ./ Δy
-    ∇S = (avg_y(dSdx).^2.0f0 .+ avg_x(dSdy).^2.0f0).^((n[] - 1.0f0)/2.0f0) 
+    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2.0f0) 
     
-    # Compute averaged surface velocities
-    D = predict_diffusivity(UD_f, θ, H, T, g, ρ)
-    V = D .* abs.(∇S)
-
+    if target == "D"
+        X = build_D_features(H, temp, ∇S)
+        D = predict_diffusivity(UD_f, θ, X)
+    elseif target == "A"
+        A = predict_A̅(UD_f, θ, temp)
+        Γ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2.0f0) # 1 / m^3 s 
+        D = Γ .* inn1(H).^(n[] + 2.0f0) .* ∇S
+    end
+    V = D .* abs.(∇S[inn1(H) .!= 0.0])
     return V
 end
-
-# """
-#     SIA(H, V::Matrix, context)
-
-# Compute a step of the Shallow Ice Approximation, constrained by surface velocity observations. Allocates memory.
-# """
-# function SIA(V::Matrix{Float32}, context, θ, UA)
-#     # Retrieve parameters
-#     # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan, rgi_id, S)
-#     Δx = context[6][1]
-#     Δy = context[6][2]
-#     S = context[9] # TODO: update this to Millan et al.(2022) DEM
-
-#     # All grid variables computed in a staggered grid
-#     # Compute surface gradients on edges
-#     dSdx = diff_x(S) ./ Δx
-#     dSdy = diff_y(S) ./ Δy
-#     ∇S = (avg_y(dSdx).^2.0f0 .+ avg_x(dSdy).^2.0f0).^((n[] - 1.0f0)/2.0f0) 
-
-#     # Invert H
-#     # Facu
-#     H = ((((n[]+2)/(ρ[]*g[])^n[])^(1/(n[]+2))) .* abs.(V).^(1/n[]+2)) ./ abs.(∇S)
-#     # Jordi
-#     # H = (abs.(V).^(1/n[]+2)) ./ (((2*A)^(1/(n[]+2))) * ((ρ[]*g[])^(n[]/(n[]+2))) .* abs.(∇S))
-
-#     return H
-# end
 
 """
     avg_surface_V(H, B, temp)
@@ -553,10 +535,22 @@ function predict_A̅(UA_f, θ, temp)
     return UA(temp) .* 1f-17
 end
 
-function predict_diffusivity(UD_f, θ, H, T, g, ρ)
-    UD = UD_f(θ)
-    return UD(H, T, g, ρ)
+function build_D_features(H::Matrix, temp, ∇S)
+    ∇S_flat = ∇S[inn1(H) .!= 0.0] # flatten
+    H_flat = H[H .!= 0.0] # flatten
+    T_flat = repeat(temp,length(H_flat))
+    X = Flux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
+    return X
+end
 
+function build_D_features(H::Float64, temp::Float64, ∇S::Float64)
+    X = Flux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
+    return X
+end
+
+function predict_diffusivity(UD_f, θ, X)
+    UD = UD_f(θ)
+    return UD(X)[1,:]
 end
 
 
