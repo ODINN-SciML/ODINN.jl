@@ -9,6 +9,7 @@ using Logging: global_logger
 using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
 
+using Revise
 using ODINN
 using OrdinaryDiffEq, Optim, Optimization, OptimizationOptimJL, SciMLSensitivity
 import OptimizationOptimisers.Adam

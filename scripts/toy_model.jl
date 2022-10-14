@@ -7,6 +7,7 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
+using Revise
 using ODINN
 using Optim, OptimizationOptimJL
 import OptimizationOptimisers.Adam
@@ -45,7 +46,7 @@ function run()
                 "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-    gdirs = init_gdirs(rgi_ids, force=false)
+    gdirs = init_gdirs(rgi_ids, force=true)
 
     #########################################
     ###########  CLIMATE DATA  ##############

@@ -7,7 +7,7 @@ rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351
 "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
 "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
-gdirs = init_gdirs(rgi_ids, force=false)
+gdirs = init_gdirs(rgi_ids, force=true)
 tspan = (0.0,5.0) # period in years for simulation
 gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=false)
 

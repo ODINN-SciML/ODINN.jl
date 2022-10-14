@@ -11,9 +11,9 @@ export get_gdirs_with_climate
 
 Gets the climate data for a given number of gdirs. Returns a tuple of `(gdirs, climate`.
 """
-function get_gdirs_with_climate(gdirs, tspan; overwrite=false, plot=true)
-    climate_raw = get_climate(gdirs, overwrite)
-    climate = filter_climate(climate_raw, tspan) 
+function get_gdirs_with_climate(gdirs, tspan; overwrite=false, massbalance=true, plot=true)
+    climate_raw = get_climate(gdirs, massbalance, overwrite)
+    climate = filter_climate!(climate_raw, gdirs, tspan) 
     if plot
         plot_avg_longterm_temps(climate, gdirs)
     end
@@ -26,11 +26,12 @@ end
 
 Gets the climate data for multiple gdirs in parallel.
 """
-function get_climate(gdirs, overwrite)
+function get_climate(gdirs, massbalance, overwrite)
     println("Getting climate data...")
     # Retrieve and compute climate data in parallel
     # /!\ Keep batch size small in order to avoid memory problems
-    climate = pmap(gdir -> get_climate_glacier(gdir, overwrite), gdirs; batch_size=10) 
+    # climate = pmap(gdir -> get_climate_glacier(gdir, overwrite), gdirs; batch_size=6) 
+    climate = pmap(gdir -> get_climate_glacier(gdir, overwrite; mb=massbalance), gdirs) 
     # climate = map(gdir -> get_climate_glacier(gdir, overwrite), gdirs) 
     return climate
 end
@@ -40,32 +41,33 @@ end
 
 Gets the W5E5 climate data for a single gdir. Returns a dictionary with the following format: 
     
-    Dict("longterm_temps"=>longterm_temps, "annual_temps"=>annual_temps,
+    Dict("longterm_temps"=>longterm_temps, "annual_climate"=>annual_climate,
     "MB_dataset"=>MB_ds, "climate_dataset"=>climate_ds)
 """
 function get_climate_glacier(gdir::PyObject, overwrite; mb=true, period_y=(1979,2019))
     # Generate downscaled climate data
-    if !isfile(joinpath(gdir.dir, "annual_temps.nc")) || overwrite # Retrieve unless overwrite
+    if !isfile(joinpath(gdir.dir, "annual_climate.nc")) || overwrite # Retrieve unless overwrite
         mb_type = "mb_real_daily"
         grad_type = "var_an_cycle" # could use here as well 'cte'
         # fs = "_daily_".*climate
         fs = "_daily_W5E5"
         MB_ds, climate_ds = get_MB_climate_datasets(gdir, mb, period_y, fs)
         # Convert to annual values to force UDE
-        annual_temps = climate_ds.annual.temp.groupby("time.year").mean(dim=["time", "x", "y"])
-        # yb,ye = annual_temps.year.data[1], annual_temps.year.data[end]
-        println("Storing climate data in: ", joinpath(gdir.dir, "annual_temps.nc"))
-        annual_temps.to_netcdf(joinpath(gdir.dir, "annual_temps.nc"))
-        annual_temps = xr.open_dataset(joinpath(gdir.dir, "annual_temps.nc"))
+        annual_climate = climate_ds.annual.groupby("time.year").mean(dim=["time", "x", "y"])
+        # yb,ye = annual_climate.year.data[1], annual_climate.year.data[end]
+        # println("Storing climate data in: ", joinpath(gdir.dir, "annual_climate.nc"))
+        annual_climate.to_netcdf(joinpath(gdir.dir, "annual_climate.nc"))
+        annual_climate = xr.open_dataset(joinpath(gdir.dir, "annual_climate.nc"))
+        climate_ds = nothing # release memory (not sure if this works)
     else
-        annual_temps = xr.open_dataset(joinpath(gdir.dir, "annual_temps.nc"))
+        annual_climate = xr.open_dataset(joinpath(gdir.dir, "annual_climate.nc"))
         MB_ds, climate_ds = nothing, nothing # dummy empty variables
     end
     # Compute a 20-year rolling mean for long-term air temperature variability
-    longterm_temps = annual_temps.rolling(year=20).mean().dropna("year")
-    # return longterm_temps, annual_temps, MB_ds, climate_ds
-    climate = Dict("longterm_temps"=>longterm_temps, "annual_temps"=>annual_temps,
-                    "MB_dataset"=>MB_ds, "climate_dataset"=>climate_ds)
+    longterm_temps = annual_climate.rolling(year=20).mean().dropna("year")
+    climate = Dict("longterm_temps"=>longterm_temps, "annual_climate"=>annual_climate,
+                    "MB_dataset"=>MB_ds)
+    GC.gc() # run garbage collector to avoid memory overflow
     return climate
 end
 
@@ -94,13 +96,13 @@ function get_MB_climate_datasets(gdir, mb, period_y, fs)
             @warn "Error retrieving reference mass balance data. Retrieving only climate data."
             # Building only climate dataset
             hydro_period = collect(Date(period_y[1],10,1):Day(1):Date(period_y[2],09,30))
-            climate_ds, MB_ds = build_climate_ds(hydro_period, climate, gdir)
+            climate_ds, MB_ds = build_climate_ds(hydro_period, climate, gdir, mb)
             return MB_ds, climate_ds  
         end
     else
         # Building only climate dataset
         hydro_period = collect(Date(period_y[1],10,1):Day(1):Date(period_y[2],09,30))
-        climate_ds, MB_ds = build_climate_ds(hydro_period, climate, gdir)
+        climate_ds, MB_ds = build_climate_ds(hydro_period, climate, gdir, mb)
         return MB_ds, climate_ds
     end     
 end
@@ -124,7 +126,7 @@ function build_MB_climate_ds(hydro_period, climate, gdir, mb_glaciological)
         push!(ds_clim_buffer, MB_clim)
     end
     # Store everything in a global dataset 
-    println("Storing data in metadataset")
+    # println("Storing data in metadataset")
     MB_ds = Dataset(ds_MB_buffer...) # splat it!!!
     climate_ds = Dataset(ds_clim_buffer...)
     return climate_ds, MB_ds
@@ -135,15 +137,15 @@ end
 
 Builds a Dataset with only the climate data for a glacier. It stores "annual" series. 
 """
-function build_climate_ds(hydro_period, climate, gdir)
+function build_climate_ds(hydro_period, climate, gdir, mb)
     ds_clim_buffer = []
     println("Processing data for reference period ", hydro_period[1], " - ", hydro_period[end])
-    MB_clim = get_climate_forcing(gdir, climate, hydro_period, "annual")
+    MB_clim = get_climate_forcing(gdir, climate, hydro_period, mb, "annual")
     push!(ds_clim_buffer, MB_clim)
     push!(ds_clim_buffer, nothing)
     push!(ds_clim_buffer, nothing)
     # Store everything in a global dataset 
-    println("Storing data in metadataset")
+    # println("Storing data in metadataset")
     climate_ds = Dataset(ds_clim_buffer...)
     MB_ds = nothing
     return climate_ds, MB_ds
@@ -155,13 +157,20 @@ end
 Processes raw climate data to seasonal data, with PDDs, snowfall and rainfall. 
 It projects the climate data into the glacier matrix by applying temperature gradients and precipitation lapse rates.
 """
-function get_climate_forcing(gdir, climate, period, season)
+function get_climate_forcing(gdir, climate, period, mb, season)
     @assert any(season .== ["annual","accumulation", "ablation"]) "Wrong season type, must be `annual`, `accumulation` or `ablation`"
 
     # Make sure the desired period is covered by the climate data
     period = trim_period(period, climate) 
-    @assert any((climate.time[1].dt.date.data[1] <= period[1]) & any(climate.time[end].dt.date.data[1] >= period[end])) "No overlapping period available between climate and MB data!" 
-    climate = climate.sel(time=period) # Crop desired time period
+    if any((climate.time[1].dt.date.data[1] <= period[1]) & any(climate.time[end].dt.date.data[1] >= period[end]))
+        climate = climate.sel(time=period) # Crop desired time period
+    else
+        if mb 
+            @error "No overlapping period available between climate and mass balance data!" 
+        else
+            @warn "No overlapping period available between climate and target data!" 
+        end
+    end
 
     if season == "accumulation"
         climate = climate.sel(time=is_acc.(clim_period.time.dt.month.data))
@@ -299,6 +308,7 @@ Trims a time period based on the time range of a climate series.
 """
 function trim_period(period, climate)
     if any(climate.time[1].dt.date.data[1] > period[1])
+
         head = jldate(climate.time[1])
         period = Date(year(head), 10, 1):Day(1):period[end] # make it a hydrological year
     end
@@ -365,16 +375,18 @@ end
 
 Filters pairs of Glacier Directory/Climate series which have climate series shorter than the simulation period. 
 """
-function filter_climate(climate, tspan)
-    updated_climate = []
-    for climate_glacier in climate
-        if length(climate_glacier["longterm_temps"].temp.data) >= tspan[end] 
-            push!(updated_climate, climate_glacier)
-        else
+function filter_climate!(climate, gdirs, tspan)
+    let climate=climate, gdirs=gdirs
+    for i in 1:length(climate)
+        if !(length(climate[i]["longterm_temps"].temp.data) >= (tspan[end] - tspan[begin]))
+            # Remove gdir and climate pair
+            deleteat!(climate, i)
+            deleteat!(gdirs, i)
             @warn "Filtered glacier due to short climate series"
         end
     end
-    return updated_climate
+    end
+    return climate
 end
 
 """
@@ -383,12 +395,12 @@ end
 Generates a tuple with all the Glacier directories and climate series for the simulations.  
 """
 function get_gdir_climate_tuple(gdirs, climate)
-    dates, longterm_temps, annual_temps = [],[],[]
+    dates, longterm_temps, annual_climate = [],[],[]
     for climate_batch in climate
         push!(dates, climate_batch["longterm_temps"].year.data)
         push!(longterm_temps, climate_batch["longterm_temps"].temp.data)
-        push!(annual_temps, climate_batch["annual_temps"].temp.data)
+        push!(annual_climate, climate_batch["annual_climate"].temp.data)
     end
-    gdirs_climate = (dates, gdirs, longterm_temps, annual_temps)
+    gdirs_climate = (dates, gdirs, longterm_temps, annual_climate)
     return gdirs_climate
 end
