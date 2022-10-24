@@ -22,6 +22,7 @@ function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"))
     global PARAMS = PyDict(cfg."PARAMS")
     PARAMS["hydro_month_nh"]=1
     PARAMS["dl_verify"] = false
+    PARAMS["continue_on_error"] = true # avoid stopping when a task fails for a glacier (e.g. lack of data)
 
     # Multiprocessing 
     PARAMS["use_multiprocessing"] = true # Let's use multiprocessing for OGGM
@@ -43,6 +44,8 @@ function init_gdirs(rgi_ids; force=false)
         else
             gdirs = workflow.init_glacier_directories(rgi_ids)
         end
+        # Check which gdirs errored in the tasks (useful to filter those gdirs)
+        filter_missing_glaciers!(gdirs)
         return gdirs
     catch 
         @warn "Cannot retrieve gdirs from disk."
@@ -50,6 +53,8 @@ function init_gdirs(rgi_ids; force=false)
         global create_ref_dataset = true # we force the creation of the reference dataset
         # Generate all gdirs if needed
         gdirs = init_gdirs_scratch(rgi_ids)
+        # Check which gdirs errored in the tasks (useful to filter those gdirs)
+        filter_missing_glaciers!(gdirs)
         return gdirs
     end
 end

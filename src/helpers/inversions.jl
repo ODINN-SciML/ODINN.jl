@@ -7,13 +7,13 @@ Performs an inversion on the SIA to train a NN on the ice flow law
 """
 function train_iceflow_inversion(rgi_ids, gtd_file, tspan, train_settings, θ_trained=[]; target="A")
     println("Training ice rheology inversion...")
+    filter_missing_glaciers!(rgi_ids)
     # Initialize gdirs with ice thickness data
     gdirs = init_gdirs(rgi_ids, force=false)
     # Process climate data for glaciers
     gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, massbalance=false, plot=false)
     # Produce Glathida dataset
-    gtd_grids = get_glathida(gtd_file, gdirs; force=false)
-
+    gtd_grids = get_glathida!(gtd_file, gdirs; force=false)
     # Perform inversion with the given gdirs and climate data
     rheology_trained = invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trained, target)
 
@@ -36,7 +36,11 @@ function invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trai
 
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = pmap(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
+    context_batches = try 
+         pmap(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
+    catch error
+        @error "$error: Missing data for some glaciers. The list of missing_glaciers has been updated. Try again."
+    end
     loss(θ) = loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target) # closure
     
     println("Training iceflow rheology inversion...")
@@ -45,10 +49,9 @@ function invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trai
     # Setup optimization of the problem
     optf = OptimizationFunction((θ,_)->loss(θ), Optimization.AutoZygote())
     optprob = OptimizationProblem(optf, θ)
-    rheology_trained = solve(optprob, optimizer, maxiters=epochs, allow_f_increases=true, show_trace=true, callback=cb_plots_inv, progress=true)
+    rheology_trained = solve(optprob, optimizer, maxiters=epochs, allow_f_increases=true, callback=cb_plots_inv, progress=true)
 
     return rheology_trained
-
 end
 
 """

@@ -38,17 +38,23 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
         @assert found == true "Spin up glacier simulation not found for $(gdir.rgi_id)."
 
     end
+    try
+        H = deepcopy(H₀)
+        B = glacier_gd.topo.data .- H₀ # bedrock
+        S = glacier_gd.topo.data # surface elevation
+        V = glacier_gd.millan_v.data
+        nx = glacier_gd.y.size # glacier extent
+        ny = glacier_gd.x.size # really weird, but this is inversed 
+        Δx = Float32(abs(gdir.grid.dx))
+        Δy = Float32(abs(gdir.grid.dy))
 
-    H = deepcopy(H₀)
-    B = glacier_gd.topo.data .- H₀ # bedrock
-    S = glacier_gd.topo.data # surface elevation
-    V = glacier_gd.millan_v.data
-    nx = glacier_gd.y.size # glacier extent
-    ny = glacier_gd.x.size # really weird, but this is inversed 
-    Δx = Float32(abs(gdir.grid.dx))
-    Δy = Float32(abs(gdir.grid.dy))
-
-    return H₀, H, S, B, V, (nx,ny), (Δx,Δy)
+        return H₀, H, S, B, V, (nx,ny), (Δx,Δy)
+    catch
+        @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers..."
+        missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+        push!(missing_glaciers, gdir.rgi_id)
+        jldsave(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"); missing_glaciers)
+    end
 
 end
 
@@ -139,12 +145,19 @@ function get_glathida_path_and_IDs()
     rgi_ids = glathida.keys()
     rgi_ids = [id[2:end] for id in rgi_ids]
 
+    # missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+
     # glathida = h5open(gtd_path, "r")
     # # Retrieve RGI IDs with Glathida data
     # rgi_ids = keys(glathida)
     # Delete Greenland and Antarctic glaciers, for now
-    deleteat!(rgi_ids, findall(x->x[begin:8]=="RGI60-05",rgi_ids))
-    deleteat!(rgi_ids, findall(x->x[begin:8]=="RGI60-19",rgi_ids))  
+    # deleteat!(rgi_ids, findall(x->x[begin:8]=="RGI60-05",rgi_ids))
+    # deleteat!(rgi_ids, findall(x->x[begin:8]=="RGI60-19",rgi_ids))
+
+    # Delete missing glaciers in Glathida from the Millan 22 open_dataset
+    # for missing_glacier in missing_glaciers
+    #     deleteat!(rgi_ids, findall(x->x==missing_glacier,rgi_ids))  
+    # end
 
     return gtd_file, rgi_ids
 end
@@ -154,10 +167,24 @@ end
 
 Downloads and creates distributed ice thickness matrices for each gdir based on the Glathida observations.
 """
-function get_glathida(gtd_file, gdirs; force=false)
+function get_glathida!(gtd_file, gdirs; force=false)
     glathida = pd.HDFStore(gtd_file)
     # TODO: make this work in a pmap
     gtd_grids = map(gdir -> get_glathida_glacier(gdir, glathida, force), gdirs) 
+
+    # Update missing_glaciers list before removing them
+    missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+    for (gtd_grid, gdir) in zip(gtd_grids, gdirs)
+        if (length(gtd_grid[gtd_grid .!= 0.0]) == 0) && all(gdir.rgi_id .!= missing_glaciers)
+            push!(missing_glaciers, gdir.rgi_id)
+            @info "Glacier with all data at 0: $(gdir.rgi_id). Updating list of missing glaciers..."
+        end
+    end
+    jldsave(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"); missing_glaciers)
+
+    # Remove glaciers with all data points at 0
+    deleteat!(gtd_grids, findall(x->length(x[x .!= 0.0])==0, gtd_grids))
+    deleteat!(gdirs, findall(x->length(x[x .!= 0.0])==0, gtd_grids))
     return gtd_grids
 end
 
@@ -189,4 +216,47 @@ function get_glathida_glacier(gdir, glathida, force)
     end
 
     return gtd_grid
+end
+
+function filter_missing_glaciers!(gdirs::Vector{PyObject})
+    task_log = global_tasks.compile_task_log(gdirs, task_names=["velocity_to_gdir", "add_consensus_thickness"])
+    task_log.to_csv(joinpath(PATHS["working_dir"], "task_log.csv"))
+    glacier_filter = ((task_log.velocity_to_gdir != "SUCCESS").values .&& (task_log.add_consensus_thickness != "SUCCESS").values)
+    glacier_ids = []
+    for id in task_log.index
+        push!(glacier_ids, id)
+    end
+    missing_glaciers = glacier_ids[glacier_filter]
+
+    try
+        missing_glaciers_old = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+        for missing_glacier in missing_glaciers_old
+            if all(missing_glacier .!= missing_glaciers) # if the glacier is already not present, let's add it
+                push!(missing_glaciers, missing_glacier)
+            end
+        end
+    catch error
+        @warn "$error: No missing_glaciers.jld file available. Skipping..."
+    end
+
+    for id in missing_glaciers
+        deleteat!(gdirs, findall(x->x.rgi_id==id, gdirs))
+    end
+    # Save missing glaciers in a file
+    jldsave(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"); missing_glaciers)
+    @warn "Filtering out these glaciers from gdir list: $missing_glaciers"
+    
+    return missing_glaciers
+end
+
+function filter_missing_glaciers!(rgi_ids::Vector{String})
+    try
+        missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+        for missing_glacier in missing_glaciers
+            deleteat!(rgi_ids, findall(x->x == missing_glacier,rgi_ids))
+        end
+        @info "Filtering out these glaciers from RGI ID list: $missing_glaciers"
+    catch error
+        @warn "$error: No missing_glaciers.jld file available. Skipping..."
+    end
 end
