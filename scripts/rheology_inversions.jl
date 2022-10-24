@@ -39,17 +39,16 @@ function run()
     oggm_config(working_dir)    
 
     gtd_file, rgi_ids = ODINN.get_glathida_path_and_IDs()
-    rgi_ids = rgi_ids[1:10] # filter for tests
+    rgi_ids = rgi_ids[1:100] # filter for tests
 
     #######################################################################################################
     #############################         Train inversions         ########################################
     #######################################################################################################
 
     # Train iceflow UDE in parallel
-    epochs = 50
-    # optimizer = BFGS(initial_stepnorm=0.02f0)
-    optimizer = Adam(0.001)
-    train_settings = (BFGS(initial_stepnorm=0.05), epochs) # optimizer, epochs
+    epochs = 100
+    optimizer = BFGS(initial_stepnorm=0.02f0)
+    # optimizer = Adam(0.003)
     train_settings = (optimizer, epochs) # optimizer, epochs
 
     # Choose between "D" for diffusivity and "A" for Glen's coefficient
