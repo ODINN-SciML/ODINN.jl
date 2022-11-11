@@ -2,7 +2,7 @@
 export generate_ref_dataset, train_iceflow_UDE, spinup
 export predict_A̅, A_fake
 
-function spinup(gdirs_climate, tspan; solver = Ralston(), random_MB=nothing)
+function spinup(gdirs_climate, tspan; solver = RDPK3Sp35(), random_MB=nothing)
     println("Spin up simulation for $(tspan[2]) years...\n")
     # Run batches in parallel
     gdirs = gdirs_climate[2]
@@ -29,18 +29,19 @@ end
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(gdirs_climate, tspan; solver = Ralston(), random_MB=nothing)
+function generate_ref_dataset(gdirs_climate, tspan; solver = RDPK3Sp35(), random_MB=nothing)
   
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
     # Run batches in parallel
     gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
+    years_list = gdirs_climate[1]
     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
     if isnothing(random_MB)
-        refs = @showprogress pmap((gdir, longterm_temp, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver;run_spinup=false), gdirs, longterm_temps, A_noises)
+        refs = @showprogress pmap((gdir, longterm_temp, years, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver;run_spinup=false), gdirs, longterm_temps, years_list, A_noises)
     else
-        refs = @showprogress pmap((gdir, longterm_temp, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver; run_spinup=false,random_MB=MB), gdirs, longterm_temps, A_noises, random_MB)
+        refs = @showprogress pmap((gdir, longterm_temp, years, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; run_spinup=false,random_MB=MB), gdirs, longterm_temps, years_list, A_noises, random_MB)
     end
 
     # Gather information per gdir
@@ -54,10 +55,10 @@ end
 
 Solve the Shallow Ice Approximation iceflow PDE for a given temperature series batch
 """
-function batch_iceflow_PDE(gdir, longterm_temp, A_noise, tspan, solver; run_spinup=false, random_MB=nothing) 
+function batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; run_spinup=false, random_MB=nothing) 
     println("Processing glacier: ", gdir.rgi_id)
 
-    context, H = build_PDE_context(gdir, longterm_temp, A_noise, tspan; run_spinup=run_spinup, random_MB=random_MB)
+    context, H = build_PDE_context(gdir, longterm_temp, years, A_noise, tspan; run_spinup=run_spinup, random_MB=random_MB)
     refs = simulate_iceflow_PDE(H, context, solver)
 
     return refs
@@ -70,16 +71,18 @@ Make forward simulation of the SIA PDE.
 """
 function simulate_iceflow_PDE(H, context, solver)
     tspan = context.x[22]
-    iceflow_prob = ODEProblem(iceflow!,H,tspan,context)
+    iceflow_prob = ODEProblem{true,SciMLBase.FullSpecialize}(iceflow!,H,tspan,context)
     iceflow_sol = solve(iceflow_prob, solver,
                     reltol=1e-6, save_everystep=false, 
                     progress=true, progress_steps = 10)
     # Compute average ice surface velocities for the simulated period
     H_ref = iceflow_sol.u[end]
+    H_ref[H_ref.<0.0f0] .= H_ref[H_ref.<0.0f0] .* 0.0f0 # remove remaining negative values
     temps = context.x[7]
     B = context.x[2]
     V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(temps), "PDE") # Average velocity with average temperature
     S = B .+ H_ref # Surface topography
+    # @infiltrate
     refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B)
     return refs
 end
@@ -133,8 +136,6 @@ end
 
 callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to observe training
     println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", l)
-
-
 
     avg_temps = [mean(temps[i]) for i in 1:length(temps)]
     p = sortperm(avg_temps)
@@ -266,7 +267,7 @@ function iceflow!(dH, H, context,t)
     H[H.<0.0f0] .= H[H.<0.0f0] .* 0.0f0
     # Then, clip values if they get too high due to solver instabilities
     H₀ = context.x[21]
-    H[H.>(1.5f0 * maximum(H₀))] .= 1.5f0 * maximum(H₀)
+    H[H.>(2.0f0 * maximum(H₀))] .= 2.0f0 * maximum(H₀)
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
     current_year = context.x[18]
@@ -275,17 +276,26 @@ function iceflow!(dH, H, context,t)
     B = context.x[2]
     H_y = context.x[21]
     A_noise = context.x[23]
+    years = context.x[30]
 
     # Get current year for MB and ELA
-    year = floor(Int, t) + 1
+    year = floor(Int, t) 
     if year != current_year && year <= t₁ 
-        temp = context.x[7][year]
+        temp = context.x[7][year .== years]
         A .= A_fake(temp, A_noise, noise)
         current_year .= year
         # println("current_year: ", current_year[])
 
         if use_MB[]
             H_y .= H
+            # MB = context.x[25]
+            # @show H_y[end-2,end-4]
+            # if MB[end,end-2] == 0.0f0
+            #     @show MB[end,end-2]
+            # else
+            #     @show t
+            #     @infiltrate
+            # end
             compute_MB_matrix!(context, B, H_y, year)
         end
     end
@@ -378,11 +388,11 @@ function SIA!(dH, H, context)
     Fx .= .-avg_y(D) .* dSdx_edges
     Fy .= .-avg_x(D) .* dSdy_edges 
 
-    # println("MB: ", minimum(MB[]), " - ", maximum(MB[]))
-    # println("dH: ", minimum(.-(diff_x(Fx) ./ Δx .+ diff_y(Fy) ./ Δy)), " - ", maximum(.-(diff_x(Fx) ./ Δx .+ diff_y(Fy) ./ Δy)))
+    MB[inn(H).==0.0f0] .= MB[inn(H).==0.0f0] .* 0.0f0 # apply MB only over ice
 
     #  Flux divergence
     inn(dH) .= .-(diff_x(Fx) ./ Δx .+ diff_y(Fy) ./ Δy) .+ MB 
+
 end
 
 """
@@ -405,7 +415,6 @@ function SIA(H, A::Float32, context)
     dSdx = diff_x(S) ./ Δx
     dSdy = diff_y(S) ./ Δy
     ∇S = (avg_y(dSdx).^2.0f0 .+ avg_x(dSdy).^2.0f0).^((n[] - 1.0f0)/2.0f0) 
-
 
     Γ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2.0f0) # 1 / m^3 s 
     D = Γ .* avg(H).^(n[] + 2.0f0) .* ∇S
@@ -434,6 +443,10 @@ function SIA(H, T, context, years, θ, UD_f, target)
     Δx = context[2][1]
     Δy = context[2][2]
     S = context[5] # TODO: update this to Millan et al.(2022) DEM
+
+    if H==0.0 # Retrieve H from context if Glathida thickness is not present 
+        H = context[7]
+    end
 
     # Get long term temperature for the Millan et al.(2022) dataset
     temp = T[years .== 2017]
@@ -467,10 +480,7 @@ function avg_surface_V(context, H, temp, sim, θ=[], UA_f=[])
 
     # We compute the initial and final surface velocity and average them
     # TODO: Add more H datapoints to better interpolate this
-    Vx₀, Vy₀ = surface_V(H₀, B, Δx, Δy, temp, sim, θ, UA)
-    Vxₜ, Vyₜ = surface_V(H, B, Δx, Δy, temp, sim, θ, UA)
-    Vx = (Vx₀ .+ Vxₜ)./2.0
-    Vy = (Vy₀ .+ Vyₜ)./2.0
+    Vx, Vy = surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ, UA_f)
 
     return Vx, Vy
         
@@ -481,7 +491,7 @@ end
 
 Computes the ice surface velocity for a given input temperature
 """
-function surface_V(H, B, Δx, Δy, temp, sim, θ=[], UA=[])
+function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     # Update glacier surface altimetry
     S = B .+ (H₀ .+ H)./2.0f0 # Use average ice thickness for the simulated period
 

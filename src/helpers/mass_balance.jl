@@ -65,3 +65,12 @@ function compute_MB_matrix(context, S, H, year)
     MB = (min_MB .+ (S .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Matrix{Float32}(H.>0.0f0)
     return MB
 end
+
+function compute_MB_matrix(random_MB::Tuple{String, Vector{Float32}, Vector{Float32}}, S, H, year)
+    max_MB = random_MB[2][year]
+    min_MB = random_MB[3][year]
+    max_S = maximum(getindex(S, H .> 0.0f0))
+    min_S = minimum(getindex(S, H .> 0.0f0))
+    MB = (min_MB .+ (S .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Matrix{Float32}(H.>0.0f0)
+    return MB
+end

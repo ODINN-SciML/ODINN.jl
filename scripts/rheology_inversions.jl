@@ -35,11 +35,13 @@ function run()
     tspan = (2017, 2018) # period in years for simulation
 
     # Configure OGGM settings in all workers
-    working_dir = joinpath(homedir(), "Python/OGGM_data")
+    working_dir = joinpath(homedir(), "Python/OGGM_data_D")
     oggm_config(working_dir)    
 
     gtd_file, rgi_ids = ODINN.get_glathida_path_and_IDs()
-    rgi_ids = rgi_ids[1:100] # filter for tests
+    @infiltrate
+
+    # rgi_ids = rgi_ids[1:100] # filter for tests
 
     #######################################################################################################
     #############################         Train inversions         ########################################
@@ -52,7 +54,7 @@ function run()
     train_settings = (optimizer, epochs) # optimizer, epochs
 
     # Choose between "D" for diffusivity and "A" for Glen's coefficient
-    @time rheology_trained = train_iceflow_inversion(rgi_ids, gtd_file, tspan, train_settings; target="D")
+    @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; gtd_file=gtd_file, target="D")
     θ_trained = rheology_trained.minimizer
 
     # Save trained NN weights

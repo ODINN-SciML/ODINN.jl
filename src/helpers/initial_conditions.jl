@@ -12,7 +12,12 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
     glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
     if run_spinup || !use_spinup[]
         # Retrieve initial conditions from OGGM
-        H₀ = Float32.(glacier_gd.consensus_ice_thickness.data) # initial ice thickness conditions for forward model
+        # initial ice thickness conditions for forward model
+        if ice_thickness_source == "millan"
+            H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
+        elseif ice_thickness_source == "farinotti"
+            H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
+        end
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
         if smoothing 
             smooth!(H₀)  # Smooth initial ice thickness to help the solver
@@ -42,7 +47,8 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
         H = deepcopy(H₀)
         B = glacier_gd.topo.data .- H₀ # bedrock
         S = glacier_gd.topo.data # surface elevation
-        V = glacier_gd.millan_v.data
+        V = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
+        fillNaN!(V)
         nx = glacier_gd.y.size # glacier extent
         ny = glacier_gd.x.size # really weird, but this is inversed 
         Δx = Float32(abs(gdir.grid.dx))
@@ -50,15 +56,17 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
 
         return H₀, H, S, B, V, (nx,ny), (Δx,Δy)
     catch
-        @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers..."
-        missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+        missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         push!(missing_glaciers, gdir.rgi_id)
-        jldsave(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"); missing_glaciers)
+        jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
+        @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
     end
+
+    glacier_gd.close() # Release any resources linked to this object
 
 end
 
-function build_PDE_context(gdir, longterm_temp, A_noise, tspan; run_spinup=false, random_MB=nothing)
+function build_PDE_context(gdir, longterm_temp, years, A_noise, tspan; run_spinup=false, random_MB=nothing)
     # Determine initial geometry conditions
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
@@ -78,10 +86,10 @@ function build_PDE_context(gdir, longterm_temp, A_noise, tspan; run_spinup=false
     # Gather simulation parameters
     current_year = [0.0f0] 
     if isnothing(random_MB)
-        random_MB = zeros(Float32,Int(tspan[2]))
+        random_MB = zeros(Float32,Int(tspan[2]) - Int(tspan[1]))
     end
     context = ArrayPartition(A, B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
-                            current_year, nxy, Δxy, H₀, tspan, A_noise, random_MB, MB, rgi_id, Γ, maxS, minS)
+                            current_year, nxy, Δxy, H₀, tspan, A_noise, random_MB, MB, rgi_id, Γ, maxS, minS, years)
     return context, H
 end
 
@@ -89,7 +97,6 @@ function build_UDE_context(gdir, tspan; run_spinup=false, random_MB=nothing)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
 
-    # Tuple with all the temp series
     context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V)
 
     return context
@@ -100,8 +107,7 @@ function build_UDE_context_inv(gdir, tspan)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
 
-    # Tuple with all the temp series
-    context = (nxy, Δxy, tspan, rgi_id, S, V)
+    context = (nxy, Δxy, tspan, rgi_id, S, V, H₀)
 
     return context
 end
@@ -145,8 +151,6 @@ function get_glathida_path_and_IDs()
     rgi_ids = glathida.keys()
     rgi_ids = [id[2:end] for id in rgi_ids]
 
-    # missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
-
     # glathida = h5open(gtd_path, "r")
     # # Retrieve RGI IDs with Glathida data
     # rgi_ids = keys(glathida)
@@ -173,14 +177,14 @@ function get_glathida!(gtd_file, gdirs; force=false)
     gtd_grids = map(gdir -> get_glathida_glacier(gdir, glathida, force), gdirs) 
 
     # Update missing_glaciers list before removing them
-    missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+    missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
     for (gtd_grid, gdir) in zip(gtd_grids, gdirs)
         if (length(gtd_grid[gtd_grid .!= 0.0]) == 0) && all(gdir.rgi_id .!= missing_glaciers)
             push!(missing_glaciers, gdir.rgi_id)
             @info "Glacier with all data at 0: $(gdir.rgi_id). Updating list of missing glaciers..."
         end
     end
-    jldsave(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"); missing_glaciers)
+    jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
 
     # Remove glaciers with all data points at 0
     deleteat!(gtd_grids, findall(x->length(x[x .!= 0.0])==0, gtd_grids))
@@ -219,9 +223,12 @@ function get_glathida_glacier(gdir, glathida, force)
 end
 
 function filter_missing_glaciers!(gdirs::Vector{PyObject})
-    task_log = global_tasks.compile_task_log(gdirs, task_names=["velocity_to_gdir", "add_consensus_thickness"])
-    task_log.to_csv(joinpath(PATHS["working_dir"], "task_log.csv"))
-    glacier_filter = ((task_log.velocity_to_gdir != "SUCCESS").values .&& (task_log.add_consensus_thickness != "SUCCESS").values)
+    task_log = global_tasks.compile_task_log(gdirs, 
+                                            task_names=["gridded_attributes", "velocity_to_gdir", "thickness_to_gdir"])
+                                                        
+    task_log.to_csv(joinpath(ODINN.root_dir, "task_log.csv"))
+    glacier_filter = ((task_log.velocity_to_gdir != "SUCCESS").values .&& (task_log.gridded_attributes != "SUCCESS").values
+                        .&& (task_log.thickness_to_gdir != "SUCCESS").values)
     glacier_ids = []
     for id in task_log.index
         push!(glacier_ids, id)
@@ -229,7 +236,7 @@ function filter_missing_glaciers!(gdirs::Vector{PyObject})
     missing_glaciers = glacier_ids[glacier_filter]
 
     try
-        missing_glaciers_old = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+        missing_glaciers_old = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         for missing_glacier in missing_glaciers_old
             if all(missing_glacier .!= missing_glaciers) # if the glacier is already not present, let's add it
                 push!(missing_glaciers, missing_glacier)
@@ -243,15 +250,35 @@ function filter_missing_glaciers!(gdirs::Vector{PyObject})
         deleteat!(gdirs, findall(x->x.rgi_id==id, gdirs))
     end
     # Save missing glaciers in a file
-    jldsave(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"); missing_glaciers)
-    @warn "Filtering out these glaciers from gdir list: $missing_glaciers"
+    jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
+    # @warn "Filtering out these glaciers from gdir list: $missing_glaciers"
     
     return missing_glaciers
 end
 
 function filter_missing_glaciers!(rgi_ids::Vector{String})
+
+
+    # Check which glaciers we can actually process
+    rgi_stats = pd.read_csv(utils.file_downloader("https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62_stats.csv"), index_col=0)
+    # rgi_stats = rgi_stats.loc[rgi_ids]
+
+    # if any(rgi_stats.Connect .== 2)
+    #     @warn "You have some level 2 glaciers... Removing..."
+    #     rgi_ids = [rgi_stats.loc[rgi_stats.Connect .!= 2].index]
+    # end
+
+    indices = [rgi_stats.index...]
+    for rgi_id in rgi_ids
+        if rgi_stats.Connect.values[indices .== rgi_id] == 2
+            @warn "Filtering glacier $rgi_id..."
+            deleteat!(rgi_ids, rgi_ids .== rgi_id)
+        end
+
+    end
+
     try
-        missing_glaciers = load(joinpath(PATHS["working_dir"], "missing_glaciers.jld2"))["missing_glaciers"]
+        missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         for missing_glacier in missing_glaciers
             deleteat!(rgi_ids, findall(x->x == missing_glacier,rgi_ids))
         end
@@ -259,4 +286,5 @@ function filter_missing_glaciers!(rgi_ids::Vector{String})
     catch error
         @warn "$error: No missing_glaciers.jld file available. Skipping..."
     end
+    
 end

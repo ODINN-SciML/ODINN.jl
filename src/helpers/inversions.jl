@@ -5,17 +5,21 @@ invert_iceflow(gdirs, train_settings, θ_trained=[], loss_history=[])
 
 Performs an inversion on the SIA to train a NN on the ice flow law
 """
-function train_iceflow_inversion(rgi_ids, gtd_file, tspan, train_settings, θ_trained=[]; target="A")
+function train_iceflow_inversion(rgi_ids, tspan, train_settings; gdir_refs=nothing, gtd_file=nothing, θ_trained=[], target="D")
     println("Training ice rheology inversion...")
-    filter_missing_glaciers!(rgi_ids)
+    # filter_missing_glaciers!(rgi_ids) # already done in init_gdirs()
     # Initialize gdirs with ice thickness data
-    gdirs = init_gdirs(rgi_ids, force=false)
+    gdirs = init_gdirs(rgi_ids)
     # Process climate data for glaciers
     gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, massbalance=false, plot=false)
-    # Produce Glathida dataset
-    gtd_grids = get_glathida!(gtd_file, gdirs; force=false)
+    if !isnothing(gtd_file)
+        # Produce Glathida dataset
+        gtd_grids = get_glathida!(gtd_file, gdirs; force=false)
+    else
+        gtd_grids=nothing
+    end
     # Perform inversion with the given gdirs and climate data
-    rheology_trained = invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trained, target)
+    rheology_trained = invert_iceflow(gdirs_climate, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
 
     return rheology_trained
 end
@@ -25,7 +29,7 @@ invert_iceflow(gdirs, train_settings, θ_trained=[], loss_history=[])
 
 Performs an inversion on the SIA to train a NN on the ice flow law
 """
-function invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trained, target)
+function invert_iceflow(gdirs_climate, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
     if length(θ_trained) == 0
         global current_epoch[] = 1 # reset epoch count
     end
@@ -37,18 +41,18 @@ function invert_iceflow(gtd_grids, gdirs_climate, tspan, train_settings, θ_trai
     # Build context for all the batches before training
     println("Building context...")
     context_batches = try 
-         pmap(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
+         map(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
     catch error
         @error "$error: Missing data for some glaciers. The list of missing_glaciers has been updated. Try again."
     end
-    loss(θ) = loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target) # closure
+    loss(θ) = loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, context_batches, target) # closure
     
-    println("Training iceflow rheology inversion...")
     cb_plots_inv(θ, l, UD) = callback_plots_inv(θ, l, UD)
 
     # Setup optimization of the problem
     optf = OptimizationFunction((θ,_)->loss(θ), Optimization.AutoZygote())
     optprob = OptimizationProblem(optf, θ)
+    println("Training iceflow rheology inversion...")
     rheology_trained = solve(optprob, optimizer, maxiters=epochs, allow_f_increases=true, callback=cb_plots_inv, progress=true)
 
     return rheology_trained
@@ -59,15 +63,24 @@ end
 
 Loss function based on glacier ice velocities and/or ice thickness
 """
-function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
+function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, context_batches, target)
 
     V_preds = perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
 
     # Compute loss function for the full batch
     l_V = 0.0f0
     for i in 1:length(V_preds)
-        # Get ice velocities from Millan et al. (2022)
-        V_ref = avg(context_batches[i][6])
+        # TODO: choose between Millan22 or simulated reference V_preds
+        if isnothing(gtd_grids)
+            Vx_ref = gdir_refs[i]["Vx"]
+            Vy_ref = gdir_refs[i]["Vy"]
+            V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
+            @ignore @infiltrate
+            H = context_batches[i].x[21]
+        else
+            # Get ice velocities from Millan et al. (2022)
+            V_ref = avg(context_batches[i][6])
+        end
 
         if scale_loss[]
             # We only evaluate the loss where there are ice thickness obs
@@ -89,7 +102,10 @@ Performs an inversion of the iceflow law with a UDE in different batches
 function perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
     T_batches = gdirs_climate[3]
     years = gdirs_climate[1][1]
-    V = pmap((H, context, T) -> SIA(H, T, context, years, θ, UD, target), gtd_grids, context_batches, T_batches)
+    if isnothing(gtd_grids)
+        gtd_grids = zeros(size(T_batches))
+    end
+    V = map((H, context, T) -> SIA(H, T, context, years, θ, UD, target), gtd_grids, context_batches, T_batches)
     return V
 end
 
