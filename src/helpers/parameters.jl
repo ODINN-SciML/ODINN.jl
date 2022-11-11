@@ -10,6 +10,9 @@ const minA = Ref{Float32}(8.5f-20)
 const maxT = Ref{Float32}(1.0f0)
 const minT = Ref{Float32}(-25.0f0)
 
+# const base_url = "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/"
+const base_url = "https://cluster.klima.uni-bremen.de/~fmaussion/share/jordi/prepro_dir_v0/"
+
 # From Cuffey and Paterson
 const A_values_sec = ([0.0f0 -2.0f0 -5.0f0 -10.0f0 -15.0f0 -20.0f0 -25.0f0 -30.0f0 -35.0f0 -40.0f0 -45.0f0 -50.0f0;
                               2.4f-24 1.7f-24 9.3f-25 3.5f-25 2.1f-25 1.2f-25 6.8f-26 3.7f-26 2.0f-26 1.0f-26 5.2f-27 2.6f-27]) # s⁻¹Pa⁻³
@@ -38,6 +41,8 @@ const random_sampling_loss = Ref{Bool}(false)  # Use random subset of matrix sam
 const scale_loss = Ref{Bool}(true)
 const noise = Ref{Bool}(true)                  # Add random noise to fake A law
 rng_seed() = MersenneTwister(1010)   # Random seed
+
+ice_thickness_source = "farinotti" # choose between "farinotti" or "millan"
 
 # Machine learning training
 const current_epoch = Ref{Int}(1)

@@ -38,18 +38,18 @@ Initializes Glacier Directories using OGGM. Wrapper function calling `init_gdirs
 """
 function init_gdirs(rgi_ids; force=false)
     # Try to retrieve glacier gdirs if they are available
+    filter_missing_glaciers!(rgi_ids)
     try
         if force
             gdirs = init_gdirs_scratch(rgi_ids)
         else
             gdirs = workflow.init_glacier_directories(rgi_ids)
         end
-        # Check which gdirs errored in the tasks (useful to filter those gdirs)
         filter_missing_glaciers!(gdirs)
         return gdirs
-    catch 
+    catch error
         @warn "Cannot retrieve gdirs from disk."
-        println("Generating gdirs from scratch.")
+        println("Generating gdirs from scratch...")
         global create_ref_dataset = true # we force the creation of the reference dataset
         # Generate all gdirs if needed
         gdirs = init_gdirs_scratch(rgi_ids)
@@ -66,13 +66,14 @@ Initializes Glacier Directories from scratch using OGGM.
 """
 function init_gdirs_scratch(rgi_ids)
     # Check if some of the gdirs is missing files
-    gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3, prepro_border=10)
+    gdirs = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url, 
+                                                from_prepro_level=2, prepro_border=10)
     list_talks = [
         tasks.glacier_masks,
-        tasks.compute_centerlines,
+        # tasks.compute_centerlines,
         # tasks.initialize_flowlines,
         # tasks.compute_downstream_line,
-        tasks.catchment_area,
+        # tasks.catchment_area,
         tasks.gridded_attributes,
         # tasks.gridded_mb_attributes,
         # tasks.prepare_for_inversion,  # This is a preprocessing task
@@ -81,6 +82,7 @@ function init_gdirs_scratch(rgi_ids)
         # tasks.distribute_thickness_per_altitude,
         bedtopo.add_consensus_thickness,   # Use consensus ice thicknesses from Farinotti et al. (2019)
        # tasks.get_topo_predictors,
+        millan22.thickness_to_gdir,
         millan22.velocity_to_gdir
     ]
     for task in list_talks

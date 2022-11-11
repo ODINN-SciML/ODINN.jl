@@ -126,6 +126,10 @@ function set_retrain(retrain_i)
     @everywhere @eval ODINN global retrain = $retrain_i
 end
 
+function set_ice_thickness_source(it_source_i)
+    @everywhere @eval ODINN global ice_thickness_source = $it_source_i
+end
+
 function get_gdir_refs(refs, gdirs)
     gdir_refs = []
     for (ref, gdir) in zip(refs, gdirs)
@@ -190,7 +194,7 @@ function get_NN_inversion_D(θ_trained)
         Dense(20,15, x->softplus.(x)),
         Dense(15,10, x->softplus.(x)),
         Dense(10,5, x->softplus.(x)),
-        Dense(5,1) # force diffusivity to be positive
+        Dense(5,1, relu) # force diffusivity to be positive
     )
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)

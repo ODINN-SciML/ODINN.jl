@@ -85,7 +85,13 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
             rgi_id = gdirs[i].rgi_id
             name = gdirs[i].name
             ax.title = "$name - $rgi_id"
-            H = glacier_gd.consensus_ice_thickness.data # initial ice thickness conditions for forward model
+            if ice_thickness_source == "millan"
+                H = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
+            elseif ice_thickness_source == "farinotti"
+                H = Float32.(glacier_gd.consensus_ice_thickness.data)
+                # H = gdir_refs[i]["H"]
+                fillZeros!(H)
+            end
             smooth!(H)
             push!(Hs, fillNaN(H))
             push!(hm_Hs, Makie.heatmap!(ax, H, colormap=:ice))
@@ -117,17 +123,25 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
             name = gdirs[i].name
             ax.title = "$name - $rgi_id"
             S = gdir_refs[i]["S"] # final surface elevation
+            H = gdir_refs[i]["H"]
+            fillNaN!(H)
 
             # We get the spinup gdirs data
             if use_spinup[]
                 H = gdirs_spinup[i]["H"]
                 B = gdirs_spinup[i]["B"]
             else
-                H = glacier_gd.consensus_ice_thickness.data # initial ice thickness conditions for forward model
+                if ice_thickness_source == "millan"
+                    H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
+                    fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+                elseif ice_thickness_source == "farinotti"
+                    H₀ = Float32.(glacier_gd.consensus_ice_thickness.data)
+                    fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+                end
                 smooth!(H)
                 B = gdir_refs[i]["B"] 
             end
-            S₀ = B .+ H
+            S₀ = B .+ H₀
             S_diff = S .- S₀
 
             push!(Ss, fillNaN(S_diff))
@@ -166,13 +180,15 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
             rgi_id = gdirs[i].rgi_id
             name = gdirs[i].name
             ax.title = "$name - $rgi_id"
-            B = Ref(gdir_refs[i]["B"])
-            H = Ref(glacier_gd.consensus_ice_thickness.data) # initial ice thickness conditions for forward model
-            smooth!(H[])
-            MB = Ref(inn(similar(gdir_refs[i]["S"])))
-            compute_MB_matrix!(MB, Ref(random_MB[i]), B, H, 2)
+            B = gdir_refs[i]["B"]
+            H = glacier_gd.consensus_ice_thickness.data # initial ice thickness conditions for forward model
+            fillNaN!(H)
+            smooth!(H)
+            S = B .+ H
 
-            push!(MBs, fillNaN(MB[]))
+            MB = compute_MB_matrix(random_MB[i], S, H, 2)
+
+            push!(MBs, fillNaN(MB))
             push!(MBs_nan, MB)
             
         end
@@ -183,7 +199,7 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
 
         # Make heatmap and colorbars with common S limits
         for (i, ax) in enumerate(axsMB)
-            push!(hm_MBs, Makie.heatmap!(ax, MBs_nan[i][], colormap=Reverse(:balance), colorrange=(-absmaxMB,absmaxMB), clim=(-absmaxMB,absmaxMB)))
+            push!(hm_MBs, Makie.heatmap!(ax, MBs_nan[i], colormap=Reverse(:balance), colorrange=(-absmaxMB,absmaxMB), clim=(-absmaxMB,absmaxMB)))
         end
         Colorbar(figMB[2:3,m+1], colorrange=(-absmaxMB,absmaxMB),colormap=Reverse(:balance), label="Surface Mass Balance (m.w.e.)")
         Label(figMB[0, :], text = "Glacier dataset", textsize = 30)
@@ -195,7 +211,6 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
 
         println("Glacier dataset plots stored")
     end
-
 end
 
 
