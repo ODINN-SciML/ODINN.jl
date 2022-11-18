@@ -26,11 +26,11 @@ ODINN.set_use_MB(true)
 # Spin up and reference simulations
 ODINN.set_run_spinup(false) # Run the spin-up simulation
 ODINN.set_use_spinup(false) # Use the updated spinup
-ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
+ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
 # UDE training
 ODINN.set_train(true)    # Train UDE 
 
-tspan = (0.0f0,5.0f0) # period in years for simulation
+tspan = (2010.0f0,2015.0f0) # period in years for simulation
 
 ###############################################################
 ###########################  MAIN #############################
@@ -49,7 +49,7 @@ function run_benchmark()
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-    gdirs = init_gdirs(rgi_ids, force=false)
+    gdirs = init_gdirs(rgi_ids)
 
     glacier_filter = 1
     gdir = [gdirs[glacier_filter]]

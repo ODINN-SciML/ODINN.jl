@@ -12,6 +12,8 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
 
         names = ["Argentiere", "Peyto Glacier", "Edvardbreen", "Aletsch", "Lemon Creek Glacier", "Biskayerfonna",
                 "Storglaciaren", "Wolverine Glacier", "Gulkana Glacier", "Esetuk Glacier", ]
+
+        
         
         # Ice surface velocities
         figV = Makie.Figure(resolution=(1200, 1800))
@@ -212,6 +214,8 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
         println("Glacier dataset plots stored")
     end
 end
+
+
 
 
 function plot_avg_longterm_temps(climate, gdirs)

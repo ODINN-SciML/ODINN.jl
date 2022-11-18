@@ -3,7 +3,7 @@ export generate_ref_dataset, train_iceflow_UDE, spinup
 export predict_A̅, A_fake
 
 function spinup(gdirs_climate, tspan; solver = RDPK3Sp35(), random_MB=nothing)
-    println("Spin up simulation for $(tspan[2]) years...\n")
+    println("Spin up simulation for $(Int(tspan[2])) years...\n")
     # Run batches in parallel
     gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
@@ -36,16 +36,18 @@ function generate_ref_dataset(gdirs_climate, tspan; solver = RDPK3Sp35(), random
     # Run batches in parallel
     gdirs = gdirs_climate[2]
     longterm_temps = gdirs_climate[3]
-    years_list = gdirs_climate[1]
+    climate_years_list = gdirs_climate[1]
     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
     if isnothing(random_MB)
-        refs = @showprogress pmap((gdir, longterm_temp, years, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver;run_spinup=false), gdirs, longterm_temps, years_list, A_noises)
+        refs = @showprogress pmap((gdir, longterm_temp, climate_years, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver;run_spinup=false), gdirs, longterm_temps, climate_years_list, A_noises)
     else
-        refs = @showprogress pmap((gdir, longterm_temp, years, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; run_spinup=false,random_MB=MB), gdirs, longterm_temps, years_list, A_noises, random_MB)
+        refs = @showprogress pmap((gdir, longterm_temp, climate_years, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver; run_spinup=false,random_MB=MB), gdirs, longterm_temps, climate_years_list, A_noises, random_MB)
     end
 
     # Gather information per gdir
     gdir_refs = get_gdir_refs(refs, gdirs)
+
+    GC.gc() # run garbage collector to avoid memory overflow
 
     return gdir_refs
 end
@@ -59,7 +61,36 @@ function batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; r
     println("Processing glacier: ", gdir.rgi_id)
 
     context, H = build_PDE_context(gdir, longterm_temp, years, A_noise, tspan; run_spinup=run_spinup, random_MB=random_MB)
-    refs = simulate_iceflow_PDE(H, context, solver)
+
+    # Callback  
+    if use_MB[]
+        # Define stop times every one month
+        tmin_int = Int(tspan[1])
+        tmax_int = Int(tspan[2])+1
+        tstops = LinRange(tmin_int+1/12, tmax_int, 12*(tmax_int-tmin_int))
+        tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
+        B = context.x[2]
+        H_y = context.x[21]
+
+        function stop_condition(u,t,integrator) 
+            t in tstops
+        end
+        function action!(integrator)
+            # println("Time in cb: ", integrator.t[end])
+            year = floor(Int, integrator.t[end]) 
+            compute_MB_matrix!(context, B, H_y, year)
+            MB = context.x[25]
+            # MB = compute_MB_matrix(context, S, H_y, year) ./12
+            integrator.u .+= MB
+            # integrator.u .*= 1.0f0
+        end
+        cb_MB = DiscreteCallback(stop_condition, action!)
+    else
+        tstops = []
+        cb_MB = DiscreteCallback((u,t,integrator)->false, nothing)
+    end
+
+    refs = simulate_iceflow_PDE(H, context, solver, tstops, cb_MB)
 
     return refs
 end
@@ -69,12 +100,13 @@ end
 
 Make forward simulation of the SIA PDE.
 """
-function simulate_iceflow_PDE(H, context, solver)
+function simulate_iceflow_PDE(H, context, solver, tstops, cb_MB)
     tspan = context.x[22]
-    iceflow_prob = ODEProblem{true,SciMLBase.FullSpecialize}(iceflow!,H,tspan,context)
-    iceflow_sol = solve(iceflow_prob, solver,
-                    reltol=1e-6, save_everystep=false, 
-                    progress=true, progress_steps = 10)
+
+    iceflow_prob = ODEProblem{true,SciMLBase.FullSpecialize}(iceflow!, H, tspan, tstops=tstops, context)
+    iceflow_sol = solve(iceflow_prob, solver, callback=cb_MB, tstops=tstops, 
+                        reltol=1e-6, save_everystep=false, 
+                        progress=true, progress_steps = 10)
     # Compute average ice surface velocities for the simulated period
     H_ref = iceflow_sol.u[end]
     H_ref[H_ref.<0.0f0] .= H_ref[H_ref.<0.0f0] .* 0.0f0 # remove remaining negative values
@@ -82,7 +114,6 @@ function simulate_iceflow_PDE(H, context, solver)
     B = context.x[2]
     V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(temps), "PDE") # Average velocity with average temperature
     S = B .+ H_ref # Surface topography
-    # @infiltrate
     refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B)
     return refs
 end
@@ -115,9 +146,10 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs,
     epochs = train_settings[2]
     UA_f, θ = get_NN(θ_trained)
     gdirs = gdirs_climate[2]
+    climate_years_list = gdirs_climate[1]
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = map((gdir) -> build_UDE_context(gdir, tspan; run_spinup=false, random_MB=random_MB), gdirs)
+    context_batches = pmap((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
     loss(θ) = loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_settings) # closure
 
     println("Training iceflow UDE...")
@@ -135,7 +167,7 @@ end
 
 
 callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to observe training
-    println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", l)
+    println("Epoch #$(current_epoch) - Loss $(loss_type[]): ", l)
 
     avg_temps = [mean(temps[i]) for i in 1:length(temps)]
     p = sortperm(avg_temps)
@@ -157,15 +189,15 @@ callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to o
         mkpath(joinpath(training_path,"pdf"))
     end
     # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch[]).png"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch[]).pdf"))
+    Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
+    Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
     global current_epoch += 1
     push!(loss_history, l)
 
     plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
                 ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-    Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch[]).png"))
-    Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch[]).pdf"))
+    Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
+    Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
     
     false
 end
@@ -192,7 +224,7 @@ function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_s
         V̄x_pred = H_V_preds[i][2]
         V̄y_pred = H_V_preds[i][3]
 
-        if scale_loss
+        if scale_loss[]
             normH = H_ref[H_ref .!= 0.0] .+ ϵ
             normVx = Vx_ref[Vx_ref .!= 0.0] .+ ϵ
             normVy = Vy_ref[Vy_ref .!= 0.0] .+ ϵ
@@ -227,7 +259,7 @@ function predict_iceflow(θ, UA_f, gdirs_climate, context_batches, UDE_settings)
     # Train UDE in parallel
     # gdirs_climate = (dates, gdirs, longterm_temps, annual_temps)
     longterm_temps = gdirs_climate[3]
-    H_V_pred = pmap((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, UDE_settings), context_batches, longterm_temps)
+    H_V_pred = map((context, longterm_temps_batch) -> batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, UDE_settings), context_batches, longterm_temps)
     return H_V_pred
 end
 
@@ -241,15 +273,42 @@ function batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, UDE_settings
     # Retrieve long-term temperature series
     # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan)
     H = context[3]
-
     tspan = context[6]
     longterm_temps_batch = Float32.(longterm_temps_batch)
+
+    # Callback  
+    if use_MB[]
+        # Define stop times every one month
+        tmin_int = Int(tspan[1])
+        tmax_int = Int(tspan[2])+1
+        tstops = LinRange(tmin_int+1/12, tmax_int, 12*(tmax_int-tmin_int))
+        tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
+
+        function stop_condition(u,t,integrator) 
+            t in tstops
+        end
+        function action!(integrator)
+            # println("Time in cb: ", integrator.t[end])
+            year = floor(Int, integrator.t[end]) + 1   # this is the index of the year, no the actual year.
+            MB = compute_MB_matrix(context, S, H₀, year) ./12
+            integrator.u .+= MB
+            # integrator.u .*= 1.0f0
+        end
+        cb_MB = DiscreteCallback(stop_condition, action!)
+    else
+        tstops = []
+        cb_MB = DiscreteCallback((u,t,integrator)->false, nothing)
+    end
+
     iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA_f, context, longterm_temps_batch) # closure
-    iceflow_prob = ODEProblem(iceflow_UDE_batch,H,tspan,θ)
-    iceflow_sol = solve(iceflow_prob, UDE_settings["solver"], u0=H, p=θ,
-                    sensealg=UDE_settings["sensealg"],
-                    reltol=UDE_settings["reltol"], save_everystep=false, 
-                    progress=true, progress_steps = 100)
+    iceflow_prob = ODEProblem(iceflow_UDE_batch, H, tspan, tstops=tstops, θ)
+    iceflow_sol = solve(iceflow_prob, UDE_settings["solver"], 
+                        callback=cb_MB,
+                        tstops=tstops,
+                        u0=H, p=θ,
+                        sensealg=UDE_settings["sensealg"],
+                        reltol=UDE_settings["reltol"], save_everystep=false, 
+                        progress=true, progress_steps = 100)
     # Get ice velocities from the UDE predictions
     H_pred = iceflow_sol.u[end]
     V̄x_pred, V̄y_pred = avg_surface_V(context, H_pred, mean(longterm_temps_batch), "UDE", θ, UA_f) # Average velocity with average temperature
@@ -273,31 +332,15 @@ function iceflow!(dH, H, context,t)
     current_year = context.x[18]
     A = context.x[1]
     t₁ = context.x[22][end]
-    B = context.x[2]
-    H_y = context.x[21]
     A_noise = context.x[23]
-    years = context.x[30]
+    climate_years = context.x[30]
 
     # Get current year for MB and ELA
     year = floor(Int, t) 
     if year != current_year && year <= t₁ 
-        temp = context.x[7][year .== years]
+        temp = context.x[7][year .== climate_years]
         A .= A_fake(temp, A_noise, noise)
         current_year .= year
-        # println("current_year: ", current_year[])
-
-        if use_MB[]
-            H_y .= H
-            # MB = context.x[25]
-            # @show H_y[end-2,end-4]
-            # if MB[end,end-2] == 0.0f0
-            #     @show MB[end,end-2]
-            # else
-            #     @show t
-            #     @infiltrate
-            # end
-            compute_MB_matrix!(context, B, H_y, year)
-        end
     end
 
     # Compute the Shallow Ice Approximation in a staggered grid
@@ -318,30 +361,18 @@ function iceflow_NN(H, θ, t, UA_f, context, temps)
     H = copy(H_buf)
     B = context[1]
     S = B .+ H
+    climate_years = context[11]
     year = floor(Int, t) + 1
 
-    # Define the mass balance as line between minimum and maximum surface
-    if use_MB[]
-        MB = compute_MB_matrix(context, S, H, year)
-    else
-        MB = 0.0f0
-    end
-
     if year <= t₁
-        temp = temps[year]
+        temp = temps[year .== climate_years]
     else
-        temp = temps[year-1]
+        temp = temps[(year-1) .== climate_years]
     end
-    A = predict_A̅(UA_f, θ, [temp])
+    A = predict_A̅(UA_f, θ, temp)[1]
     
     # Compute the Shallow Ice Approximation in a staggered grid
-    dH = SIA(H, A, context) .+ MB
-
-    # years = collect(1:t₁)
-    # if any(isapprox.(t,years;atol=1e-4))
-    #     rgi_id = context[8]
-    #     println("$rgi_id - t: ", t, " - dH: ", maximum(dH))
-    # end
+    dH = SIA(H, A, context) 
     
     return dH
 end  
@@ -388,11 +419,8 @@ function SIA!(dH, H, context)
     Fx .= .-avg_y(D) .* dSdx_edges
     Fy .= .-avg_x(D) .* dSdy_edges 
 
-    MB[inn(H).==0.0f0] .= MB[inn(H).==0.0f0] .* 0.0f0 # apply MB only over ice
-
     #  Flux divergence
-    inn(dH) .= .-(diff_x(Fx) ./ Δx .+ diff_y(Fy) ./ Δy) .+ MB 
-
+    inn(dH) .= .-(diff_x(Fx) ./ Δx .+ diff_y(Fy) ./ Δy) 
 end
 
 """

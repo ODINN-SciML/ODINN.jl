@@ -19,21 +19,22 @@ using JLD2
 using Statistics  
 # using AbbreviatedStackTraces
 
-processes = 16
-# We enable multiprocessing
+processes = 14
+# Enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 # Flags
 ODINN.set_use_MB(true)
 ODINN.make_plots(true)    
-# Spin up and reference simulations
+# Spin up 
 ODINN.set_run_spinup(false) # Run the spin-up simulation
 ODINN.set_use_spinup(false) # Use the updated spinup
+# Reference simulations
 ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
 # UDE training
 ODINN.set_train(true)    # Train UDE
 ODINN.set_retrain(false) # Re-use previous NN weights to continue training
 
-tspan = (0.0f0, 5.0f0) # period in years for simulation
+tspan = (2010.0f0, 2015.0f0) # period in years for simulation
  
 function run()
     # Configure OGGM settings in all workers
@@ -46,7 +47,7 @@ function run()
                 "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-    gdirs = init_gdirs(rgi_ids, force=true)
+    gdirs = init_gdirs(rgi_ids)
 
     #########################################
     ###########  CLIMATE DATA  ##############
@@ -63,8 +64,7 @@ function run()
 
     if ODINN.run_spinup[]
         println("Spin up run to stabilize initial conditions...")
-        solver = Ralston()
-        @time spinup(gdirs_climate, tspan; solver=solver, random_MB=random_MB)
+        @time spinup(gdirs_climate, tspan; random_MB=random_MB)
     end
 
     # Run forward model for selected glaciers
@@ -82,7 +82,7 @@ function run()
     gdir_refs = load(joinpath(ODINN.root_dir, "data/gdir_refs.jld2"))["gdir_refs"]
 
     # Plot training dataset of glaciers
-    plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB)
+    # plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB)
 
     #######################################################################################################
     #############################             Train UDE            ########################################
