@@ -75,7 +75,6 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, con
             Vx_ref = gdir_refs[i]["Vx"]
             Vy_ref = gdir_refs[i]["Vy"]
             V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
-            @ignore @infiltrate
             H = context_batches[i].x[21]
         else
             # Get ice velocities from Millan et al. (2022)

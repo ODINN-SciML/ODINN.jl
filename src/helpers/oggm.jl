@@ -36,19 +36,15 @@ end
 
 Initializes Glacier Directories using OGGM. Wrapper function calling `init_gdirs_scratch(rgi_ids)`.
 """
-function init_gdirs(rgi_ids; force=false)
+function init_gdirs(rgi_ids)
     # Try to retrieve glacier gdirs if they are available
     filter_missing_glaciers!(rgi_ids)
     try
-        if force
-            gdirs = init_gdirs_scratch(rgi_ids)
-        else
-            gdirs = workflow.init_glacier_directories(rgi_ids)
-        end
+        gdirs = workflow.init_glacier_directories(rgi_ids)
         filter_missing_glaciers!(gdirs)
         return gdirs
     catch error
-        @warn "Cannot retrieve gdirs from disk."
+        @warn "Cannot retrieve gdirs from disk"
         println("Generating gdirs from scratch...")
         global create_ref_dataset = true # we force the creation of the reference dataset
         # Generate all gdirs if needed

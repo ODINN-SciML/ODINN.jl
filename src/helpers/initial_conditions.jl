@@ -16,7 +16,8 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
         if ice_thickness_source == "millan"
             H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
         elseif ice_thickness_source == "farinotti"
-            H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
+            H₀ = Float32.(glacier_gd.consensus_ice_thickness.data)
+            # H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
         end
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
         if smoothing 
@@ -66,7 +67,7 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
 
 end
 
-function build_PDE_context(gdir, longterm_temp, years, A_noise, tspan; run_spinup=false, random_MB=nothing)
+function build_PDE_context(gdir, longterm_temp, climate_years, A_noise, tspan; run_spinup=false, random_MB=nothing)
     # Determine initial geometry conditions
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
@@ -76,28 +77,29 @@ function build_PDE_context(gdir, longterm_temp, years, A_noise, tspan; run_spinu
     dSdx_edges, dSdy_edges, ∇S = zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1),zeros(Float32,nx-1,ny-1)
     D, Fx, Fy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1)
     V, Vx, Vy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1)
-    MB = zeros(Float32,nx-2,ny-2)
+    MB = zeros(Float32,nx,ny)
     A = [2f-16]
     α = [0.0f0]                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
     C = [15f-14]    
     Γ = [0.0f0]
     maxS, minS = [0.0f0], [0.0f0]     
+    simulation_years = collect(tspan[1]:tspan[2])
     
     # Gather simulation parameters
-    current_year = [0.0f0] 
+    current_year = [0] 
     if isnothing(random_MB)
         random_MB = zeros(Float32,Int(tspan[2]) - Int(tspan[1]))
     end
     context = ArrayPartition(A, B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
-                            current_year, nxy, Δxy, H₀, tspan, A_noise, random_MB, MB, rgi_id, Γ, maxS, minS, years)
+                            current_year, nxy, Δxy, H₀, tspan, A_noise, random_MB, MB, rgi_id, Γ, maxS, minS, climate_years, simulation_years)
     return context, H
 end
 
-function build_UDE_context(gdir, tspan; run_spinup=false, random_MB=nothing)
+function build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=nothing)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
 
-    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V)
+    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V, climate_years)
 
     return context
 end

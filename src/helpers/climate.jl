@@ -17,7 +17,7 @@ function get_gdirs_with_climate(gdirs, tspan; overwrite=false, massbalance=true,
     if plot
         plot_avg_longterm_temps(climate, gdirs)
     end
-    gdirs_climate = get_gdir_climate_tuple(gdirs, climate)
+    gdirs_climate = get_gdir_climate_tuple(gdirs, climate, tspan)
     return gdirs_climate
 end
 
@@ -29,10 +29,7 @@ Gets the climate data for multiple gdirs in parallel.
 function get_climate(gdirs, massbalance, overwrite)
     println("Getting climate data...")
     # Retrieve and compute climate data in parallel
-    # /!\ Keep batch size small in order to avoid memory problems
-    # climate = pmap(gdir -> get_climate_glacier(gdir, overwrite), gdirs; batch_size=6) 
     climate = pmap(gdir -> get_climate_glacier(gdir, overwrite; mb=massbalance), gdirs) 
-    # climate = map(gdir -> get_climate_glacier(gdir, overwrite), gdirs) 
     return climate
 end
 
@@ -394,7 +391,7 @@ end
 
 Generates a tuple with all the Glacier directories and climate series for the simulations.  
 """
-function get_gdir_climate_tuple(gdirs, climate)
+function get_gdir_climate_tuple(gdirs, climate, tspan)
     dates, longterm_temps, annual_climate = [],[],[]
     for climate_batch in climate
         push!(dates, climate_batch["longterm_temps"].year.data)

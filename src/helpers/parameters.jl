@@ -45,5 +45,5 @@ rng_seed() = MersenneTwister(1010)   # Random seed
 ice_thickness_source = "farinotti" # choose between "farinotti" or "millan"
 
 # Machine learning training
-const current_epoch = Ref{Int}(1)
+current_epoch = 1
 loss_history = []
