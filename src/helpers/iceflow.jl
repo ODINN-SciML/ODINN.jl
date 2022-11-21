@@ -80,7 +80,6 @@ function batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; r
             year = floor(Int, integrator.t[end]) 
             compute_MB_matrix!(context, B, H_y, year)
             MB = context.x[25]
-            # MB = compute_MB_matrix(context, S, H_y, year) ./12
             integrator.u .+= MB
             # integrator.u .*= 1.0f0
         end
@@ -133,10 +132,18 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs,
     end
     # Fill default UDE_settings if not available 
     if isnothing(UDE_settings)
-        UDE_settings = Dict("reltol"=>10f-6,
-                        "solver"=>ROCK4(),
-                        "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP()))
+        if use_MB[]
+            UDE_settings = Dict("reltol"=>10f-6,
+                                "solver"=>RDPK3Sp35(), #explore methods
+                                "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
+        else
+            UDE_settings = Dict("reltol"=>10f-6,
+                                "solver"=>RDPK3Sp35(),
+                                "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP())) 
+
+        end
     end
+
 
     if random_MB == nothing
         ODINN.set_use_MB(false) 
@@ -149,7 +156,7 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs,
     climate_years_list = gdirs_climate[1]
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = pmap((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
+    context_batches = map((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
     loss(θ) = loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_settings) # closure
 
     println("Training iceflow UDE...")
@@ -212,7 +219,6 @@ function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_s
     # Compute loss function for the full batch
     l_Vx, l_Vy, l_H = 0.0f0, 0.0f0, 0.0f0
     for i in 1:length(H_V_preds)
-
         # Get ice thickness from the reference dataset
         H_ref = gdir_refs[i]["H"]
         # Get ice velocities for the reference dataset
@@ -272,7 +278,8 @@ Solve the Shallow Ice Approximation iceflow UDE for a given temperature series b
 function batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, UDE_settings) 
     # Retrieve long-term temperature series
     # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan)
-    H = context[3]
+    H = context[2]
+    S = context[9]
     tspan = context[6]
     longterm_temps_batch = Float32.(longterm_temps_batch)
 
@@ -281,25 +288,23 @@ function batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, UDE_settings
         # Define stop times every one month
         tmin_int = Int(tspan[1])
         tmax_int = Int(tspan[2])+1
-        tstops = LinRange(tmin_int+1/12, tmax_int, 12*(tmax_int-tmin_int))
+        tstops = LinRange(tmin_int+1.0f0/12.0f0, tmax_int, 12.0f0*(tmax_int-tmin_int))
         tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
 
         function stop_condition(u,t,integrator) 
             t in tstops
         end
         function action!(integrator)
-            # println("Time in cb: ", integrator.t[end])
-            year = floor(Int, integrator.t[end]) + 1   # this is the index of the year, no the actual year.
-            MB = compute_MB_matrix(context, S, H₀, year) ./12
+            year = floor(Int, integrator.t[end])  
+            MB = compute_MB_matrix(context, S, integrator.u, year)
             integrator.u .+= MB
-            # integrator.u .*= 1.0f0
         end
         cb_MB = DiscreteCallback(stop_condition, action!)
     else
         tstops = []
         cb_MB = DiscreteCallback((u,t,integrator)->false, nothing)
     end
-
+    
     iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA_f, context, longterm_temps_batch) # closure
     iceflow_prob = ODEProblem(iceflow_UDE_batch, H, tspan, tstops=tstops, θ)
     iceflow_sol = solve(iceflow_prob, UDE_settings["solver"], 

@@ -59,11 +59,12 @@ function compute_MB_matrix!(context, B, H_y, year)
 end
 
 function compute_MB_matrix(context, S, H, year)
-    max_MB = context[7][1][2][year]
-    min_MB = context[7][1][3][year]
+    simulation_years = context[12]
+    max_MB = context[7][1][2][year .== simulation_years]
+    min_MB = context[7][1][3][year .== simulation_years]
     max_S = maximum(getindex(S, H .> 0.0f0))
     min_S = minimum(getindex(S, H .> 0.0f0))
-    MB = (min_MB .+ (S .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Matrix{Float32}(H.>0.0f0)
+    MB = (min_MB .+ (S .- min_S) .* ((max_MB .- min_MB) ./ (max_S .- min_S))) .* Matrix{Float32}(H.>0.0f0) ./ 12.0f0 # TODO: control MB timestepping
     return MB
 end
 

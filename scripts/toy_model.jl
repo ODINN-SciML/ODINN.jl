@@ -29,7 +29,7 @@ ODINN.make_plots(true)
 ODINN.set_run_spinup(false) # Run the spin-up simulation
 ODINN.set_use_spinup(false) # Use the updated spinup
 # Reference simulations
-ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
+ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
 # UDE training
 ODINN.set_train(true)    # Train UDE
 ODINN.set_retrain(false) # Re-use previous NN weights to continue training
@@ -100,7 +100,7 @@ function run()
             θ_trained = trained_weights["θ_trained"]
             # train_settings = (BFGS(initial_stepnorm=0.05), 20) # optimizer, epochs
             train_settings = (BFGS(initial_stepnorm=0.02f0), n_BFGS) # optimizer, epochs
-            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs, θ_trained) # retrain
+            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs, θ_trained; random_MB=random_MB) # retrain
             θ_trained = iceflow_trained.minimizer
 
             # Save trained NN weights
@@ -120,7 +120,7 @@ function run()
             # Continue training with BFGS
             #current_epoch = n_ADAM + 1
             train_settings = (BFGS(initial_stepnorm=0.02f0), n_BFGS) # optimizer, epochs
-            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs) 
+            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs; random_MB=random_MB) 
             # iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, PDE_refs, θ_trained) # retrain
             θ_trained = iceflow_trained.minimizer
             # Save loss loss_history
