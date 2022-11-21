@@ -98,8 +98,9 @@ end
 function build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=nothing)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
+    simulation_years = collect(tspan[1]:tspan[2])
 
-    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V, climate_years)
+    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V, climate_years, simulation_years)
 
     return context
 end

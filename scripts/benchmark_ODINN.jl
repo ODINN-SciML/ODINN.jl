@@ -10,6 +10,7 @@ using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
 
 using Revise
+using AbbreviatedStackTraces
 using ODINN
 using OrdinaryDiffEq, Optim, Optimization, OptimizationOptimJL, SciMLSensitivity
 import OptimizationOptimisers.Adam
@@ -67,6 +68,7 @@ function run_benchmark()
     if ODINN.create_ref_dataset
         println("Generating reference dataset for training...")
         solver = RDPK3Sp35()
+        # solver = Ralston()
         # Compute reference dataset in parallel
         gdir_refs = @time generate_ref_dataset(gdirs_climate, tspan; solver=solver, random_MB=random_MB)
 
@@ -92,7 +94,8 @@ function run_benchmark()
  
     ODINN.reset_epochs()
     reltol = 10f-6
-    sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP())
+    # sensealg = InterpolatingAdjoint(autojacvec=ZygoteVJP())
+    sensealg = InterpolatingAdjoint(autojacvec=ReverseDiffVJP()) # MB only compatible with ReverseDiffVJP() for now
     opt = Adam(0.005)
     # opt = BFGS(initial_stepnorm=0.02f0)
     train_settings = (opt, 1) # optimizer, epochs
