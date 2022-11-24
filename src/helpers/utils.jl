@@ -92,6 +92,7 @@ end
 
 function reset_epochs()
     @everywhere @eval ODINN global current_epoch = 1
+    @everywhere @eval ODINN global loss_history = []
 end
 
 function set_current_epoch(epoch)
@@ -178,7 +179,7 @@ function get_NN_inversion_A(θ_trained)
         Dense(1,3, x->softplus.(x)),
         Dense(3,10, x->softplus.(x)),
         Dense(10,3, x->softplus.(x)),
-        Dense(3,1, sigmoid_A_inv)
+        Dense(3,1, sigmoid_A)
     )
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)

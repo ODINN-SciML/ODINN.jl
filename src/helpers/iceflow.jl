@@ -162,7 +162,8 @@ function train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs,
     println("Training iceflow UDE...")
     temps = gdirs_climate[3]
     A_noise = randn(rng_seed(), length(gdirs)).* noise_A_magnitude
-    cb_plots(θ, l, UA_f) = callback_plots(θ, l, UA_f, temps, A_noise)
+    training_path = joinpath(root_plots,"training")
+    cb_plots(θ, l, UA_f) = callback_plots_A(θ, l, UA_f, temps, A_noise, training_path)
     # Setup optimization of the problem
     optf = OptimizationFunction((θ,_)->loss(θ), Optimization.AutoZygote())
     optprob = OptimizationProblem(optf, θ)
@@ -173,7 +174,7 @@ end
 
 
 
-callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to observe training
+callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path) # callback function to observe training
     println("Epoch #$(current_epoch) - Loss $(loss_type[]): ", l)
 
     avg_temps = [mean(temps[i]) for i in 1:length(temps)]
@@ -190,7 +191,6 @@ callback_plots = function (θ, l, UA_f, temps, A_noise) # callback function to o
                         xlabel="Long-term air temperature (°C)", yticks=yticks,
                         ylabel="A", ylims=(0.0f0,maxA[]), lw = 3, c=:dodgerblue4,
                         legend=:topleft)
-    training_path = joinpath(root_plots,"training")
     if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
         mkpath(joinpath(training_path,"png"))
         mkpath(joinpath(training_path,"pdf"))
@@ -413,10 +413,10 @@ function SIA!(dH, H, context)
     # Compute surface gradients on edges
     dSdx .= diff_x(S) ./ Δx
     dSdy .= diff_y(S) ./ Δy
-    ∇S .= (avg_y(dSdx).^2.0f0 .+ avg_x(dSdy).^2.0f0).^((n[] - 1.0f0)/2.0f0) 
+    ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
 
-    Γ .= 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2.0f0) # 1 / m^3 s 
-    D .= Γ .* avg(H).^(n[] + 2.0f0) .* ∇S
+    Γ .= 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2) # 1 / m^3 s 
+    D .= Γ .* avg(H).^(n[] + 2) .* ∇S
 
     # Compute flux components
     @views dSdx_edges .= diff_x(S[:,2:end - 1]) ./ Δx
@@ -447,10 +447,10 @@ function SIA(H, A::Float32, context)
     # Compute surface gradients on edges
     dSdx = diff_x(S) ./ Δx
     dSdy = diff_y(S) ./ Δy
-    ∇S = (avg_y(dSdx).^2.0f0 .+ avg_x(dSdy).^2.0f0).^((n[] - 1.0f0)/2.0f0) 
+    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
 
-    Γ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2.0f0) # 1 / m^3 s 
-    D = Γ .* avg(H).^(n[] + 2.0f0) .* ∇S
+    Γ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2) # 1 / m^3 s 
+    D = Γ .* avg(H).^(n[] + 2) .* ∇S
 
     # Compute flux components
     @views dSdx_edges = diff_x(S[:,2:end - 1]) ./ Δx
@@ -488,18 +488,22 @@ function SIA(H, T, context, years, θ, UD_f, target)
     # Compute surface gradients on edges
     dSdx = diff_x(S) ./ Δx
     dSdy = diff_y(S) ./ Δy
-    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2.0f0) 
+    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
     
     if target == "D"
         X = build_D_features(H, temp, ∇S)
         D = predict_diffusivity(UD_f, θ, X)
+        V = D .* abs.(∇S[inn1(H) .!= 0.0])
     elseif target == "A"
         A = predict_A̅(UD_f, θ, temp)
-        Γ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2.0f0) # 1 / m^3 s 
-        D = Γ .* inn1(H).^(n[] + 2.0f0) .* ∇S
+        Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
+        D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S
+        Vx = - D .* avg_y(dSdx)
+        Vy = - D .* avg_x(dSdy)
+        V = D .* abs.(∇S)
     end
-    V = D .* abs.(∇S[inn1(H) .!= 0.0])
-    return V
+    V_pred = (Vx, Vy, V)
+    return V_pred
 end
 
 """
@@ -532,7 +536,7 @@ function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     # Compute surface gradients on edges
     dSdx = diff_x(S) / Δx
     dSdy = diff_y(S) / Δy
-    ∇S = (avg_y(dSdx).^2.0f0 .+ avg_x(dSdy).^2.0f0).^((n[] - 1.0f0)/2.0f0) 
+    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
     
     @assert (sim == "UDE" || sim == "PDE") "Wrong type of simulation. Needs to be 'UDE' or 'PDE'."
     if sim == "UDE"
@@ -540,8 +544,8 @@ function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     elseif sim == "PDE"
         A = A_fake(temp, A_noise, noise)
     end
-    Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+1.0f0) # surface stress (not average)  # 1 / m^3 s 
-    D = Γꜛ .* avg(H).^(n[] + 1.0f0) .* ∇S
+    Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
+    D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S
     
     # Compute averaged surface velocities
     Vx = - D .* avg_y(dSdx)

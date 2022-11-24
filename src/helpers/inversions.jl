@@ -31,7 +31,7 @@ Performs an inversion on the SIA to train a NN on the ice flow law
 """
 function invert_iceflow(gdirs_climate, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
     if length(θ_trained) == 0
-        global current_epoch[] = 1 # reset epoch count
+        reset_epochs()
     end
     optimizer = train_settings[1]
     epochs = train_settings[2]
@@ -47,7 +47,7 @@ function invert_iceflow(gdirs_climate, gtd_grids, gdir_refs, tspan, train_settin
     end
     loss(θ) = loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, context_batches, target) # closure
     
-    cb_plots_inv(θ, l, UD) = callback_plots_inv(θ, l, UD)
+    cb_plots_inv(θ, l, UD_f) = callback_plots_inv(θ, l, UD_f, gdirs_climate, target)
 
     # Setup optimization of the problem
     optf = OptimizationFunction((θ,_)->loss(θ), Optimization.AutoZygote())
@@ -64,31 +64,42 @@ end
 Loss function based on glacier ice velocities and/or ice thickness
 """
 function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, context_batches, target)
-
+    # (Vx, Vy, V)
     V_preds = perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
 
     # Compute loss function for the full batch
-    l_V = 0.0f0
+    l_∇V, l_Vx, l_Vy = 0.0f0, 0.0f0, 0.0f0
     for i in 1:length(V_preds)
-        # TODO: choose between Millan22 or simulated reference V_preds
         if isnothing(gtd_grids)
+            # Get reference dataset
             Vx_ref = gdir_refs[i]["Vx"]
             Vy_ref = gdir_refs[i]["Vy"]
             V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
-            H = context_batches[i].x[21]
         else
             # Get ice velocities from Millan et al. (2022)
             V_ref = avg(context_batches[i][6])
         end
+        Vx_pred = V_preds[i][1]
+        Vy_pred = V_preds[i][2]
 
-        if scale_loss[]
-            # We only evaluate the loss where there are ice thickness obs
-            normV = V_ref[inn1(gtd_grids[i]) .!= 0.0] .+ ϵ
-            l_V += Flux.Losses.mse(V_preds[i] ./normV, V_ref[inn1(gtd_grids[i]) .!= 0.0] ./normV; agg=mean)
-        else
-            l_V += Flux.Losses.mse(V_preds[i], V_ref[inn1(gtd_grids[i]) .!= 0.0]; agg=mean)
-        end
+        # H = context_batches[i][7]
+
+        # Classic loss function with the full matrix
+        # normV = mean(V_ref[V_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
+        normVx = mean(Vx_ref[Vx_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
+        normVy = mean(Vy_ref[Vy_ref .!= 0.0f0].^2)^0.5f0  #.+ ϵ
+        l_Vx += normVx^(-2) * Flux.Losses.mse(Vx_pred[Vx_ref .!= 0.0f0], Vx_ref[Vx_ref.!= 0.0f0]; agg=mean)
+        l_Vy += normVy^(-2) * Flux.Losses.mse(Vy_pred[Vy_ref .!= 0.0f0], Vy_ref[Vy_ref.!= 0.0f0]; agg=mean)
     end 
+
+    # We use the average loss between x and y V
+    l_V = (l_Vx + l_Vy)/2
+
+    # Plot V diffs to understand training
+    @ignore begin
+        gdirs = gdirs_climate[2]
+        plot_V_diffs(gdirs, gdir_refs, V_preds)
+    end
 
     return l_V, UD
 end
@@ -104,11 +115,26 @@ function perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, 
     if isnothing(gtd_grids)
         gtd_grids = zeros(size(T_batches))
     end
-    V = map((H, context, T) -> SIA(H, T, context, years, θ, UD, target), gtd_grids, context_batches, T_batches)
-    return V
+    V_preds = pmap((H, context, T) -> SIA(H, T, context, years, θ, UD, target), gtd_grids, context_batches, T_batches)
+
+    return V_preds # (Vx, Vy, V)
 end
 
-callback_plots_inv = function (θ, l, UD_f) # callback function to observe training
+callback_plots_inv = function (θ, l, UD_f, gdirs_climate, target) # callback function to observe training
+    # Choose between the two callbacks to display the training progress
+    training_path = joinpath(root_plots,"inversions")
+    if target == "D"
+        callback_plots_inv_D(θ, l, UD_f, training_path)
+    elseif target == "A"
+        gdirs = gdirs_climate[2]
+        temps = gdirs_climate[3]
+        A_noise = randn(rng_seed(), length(gdirs)).* noise_A_magnitude
+        callback_plots_A(θ, l, UD_f, temps, A_noise, training_path)
+    end
+    false
+end
+
+callback_plots_inv_D = function (θ, l, UD_f, training_path) 
     println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", l)
     # Let's explore the NN's output
     H = collect(20.0:100.0:1000.0)
@@ -138,7 +164,7 @@ callback_plots_inv = function (θ, l, UD_f) # callback function to observe train
     save_plot(pHT, training_path, "HT") 
     save_plot(pH∇S, training_path, "H∇S") 
 
-    global current_epoch[] += 1
+    global current_epoch += 1
     push!(loss_history, l)
 
     plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
