@@ -144,6 +144,32 @@ function get_gdir_refs(refs, gdirs)
     return gdir_refs
 end
 
+"""
+    generate_batches(batch_size, θ, UD, target, gdirs_climate, gdir_refs, context_batches, gtd_grids)
+
+Generates batches based on input data and feed them to the loss function.
+"""
+function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids)
+    targets = repeat([target], length(gdirs_climate_batches))
+    UDs = repeat([UD], length(gdirs_climate_batches))
+    if isnothing(gtd_grids) 
+        gtd_grids = repeat([nothing], length(gdirs_climate_batches))
+        batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
+        # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
+    else
+        batches = [UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets]
+        # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
+    end
+    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size)
+
+    return train_loader
+end
+
+function create_gdirs_climate_batches(gdirs_climate)
+
+
+end
+
 
 """
     get_NN()
@@ -179,7 +205,7 @@ function get_NN_inversion_A(θ_trained)
         Dense(1,3, x->softplus.(x)),
         Dense(3,10, x->softplus.(x)),
         Dense(10,3, x->softplus.(x)),
-        Dense(3,1, sigmoid_A)
+        Dense(3,1, softplus)
     )
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
@@ -195,7 +221,7 @@ function get_NN_inversion_D(θ_trained)
         Dense(20,15, x->softplus.(x)),
         Dense(15,10, x->softplus.(x)),
         Dense(10,5, x->softplus.(x)),
-        Dense(5,1, relu) # force diffusivity to be positive
+        Dense(5,1, softplus) # force diffusivity to be positive
     )
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
@@ -212,7 +238,7 @@ function sigmoid_A(x)
 end
 
 function sigmoid_A_inv(x) 
-    minA_out = 8.0f-2 # /!\     # these depend on predict_A̅, so careful when changing them!
+    minA_out = 8.0f-4 # /!\     # these depend on predict_A̅, so careful when changing them!
     maxA_out = 8.0f2
     return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
 end
@@ -231,5 +257,19 @@ function generate_plot_folders(path)
     if !isdir(joinpath(path,"png")) || !isdir(joinpath(path,"pdf"))
         mkpath(joinpath(path,"png"))
         mkpath(joinpath(path,"pdf"))
+    end
+end
+
+"""
+    config_training_state(θ_trained)
+
+Configure training state with current epoch and its loss history. 
+"""
+function config_training_state(θ_trained)
+    if length(θ_trained) == 0
+        reset_epochs()
+    else
+        # Remove loss history from unfinished trainings
+        deleteat!(loss_history, current_epoch:length(loss_history))
     end
 end

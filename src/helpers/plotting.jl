@@ -11,7 +11,8 @@ function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false
         set_theme!(theme)
 
         names = ["Argentiere", "Peyto Glacier", "Edvardbreen", "Aletsch", "Lemon Creek Glacier", "Biskayerfonna",
-                "Storglaciaren", "Wolverine Glacier", "Gulkana Glacier", "Esetuk Glacier", ]
+                "Storglaciaren", "Wolverine Glacier", "Gulkana Glacier", "Esetuk Glacier", "Skaugumbreen", "Buckskin Glacier",
+                "West Ching Kang Glacier", "CN5O194E0004"]
 
         # Ice surface velocities
         figV = Makie.Figure(resolution=(1200, 1800))
@@ -264,58 +265,63 @@ function plot_S_diffs(gdirs, gdir_refs; n=5, display=false)
     Makie.save(joinpath(root_plots, "glaciers_S.pdf"), figS, pt_per_unit = 1)
 end
 
-function plot_V_diffs(gdirs, gdir_refs, V_preds; n=5, display=false)
-    m = floor(Int, length(gdirs)/n)
-    figV = Makie.Figure(resolution=(1200, 1800))
-    axsV = [Axis(figV[i, j]) for i in 1:n, j in 1:m]
-    hidedecorations!.(axsV)
-    tightlimits!.(axsV)
-    Vs, V_diffs, hm_Vs = [],[],[]
-    for (i, ax) in enumerate(axsV)
-        ax.aspect = DataAspect()
-        glacier_gd = xr.open_dataset(gdirs[i].get_filepath("gridded_data"))
-        
-        nx = glacier_gd.y.size # glacier extent
-        ny = glacier_gd.x.size # really weird, but this is inversed 
-        Δx = abs(gdirs[i].grid.dx)
-        Δy = abs(gdirs[i].grid.dy)
-        rgi_id = gdirs[i].rgi_id
-        name = gdirs[i].name
-        ax.title = "$name - $rgi_id"
-        # Get reference surface velocities from PDE
-        H_ref = gdir_refs[i]["H"]
-        Vx_ref = gdir_refs[i]["Vx"]
-        Vy_ref = gdir_refs[i]["Vy"]
-        V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
-        V_ref = ifelse.(inn1(H_ref).==0.0, 0.0, V_ref)
+function plot_V_diffs(gdirs_climate, gdir_refs, V_preds; display=false)
+    n = 2
+    m = floor(Int, length(gdirs_climate)/n)
+    if m != 0
+        figV = Makie.Figure(resolution=(1200, 1800))
+        axsV = [Axis(figV[i, j]) for i in 1:n, j in 1:m]
+        hidedecorations!.(axsV)
+        tightlimits!.(axsV)
+        Vs, V_diffs, hm_Vs = [],[],[]
+        for (i, ax) in enumerate(axsV)
+            ax.aspect = DataAspect()
+            gdir = gdirs_climate[i][2]
+            glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
+            
+            nx = glacier_gd.y.size # glacier extent
+            ny = glacier_gd.x.size # really weird, but this is inversed 
+            Δx = abs(gdir.grid.dx)
+            Δy = abs(gdir.grid.dy)
+            rgi_id = gdir.rgi_id
+            name = gdir.name
+            ax.title = "$name - $rgi_id"
+            # Get reference surface velocities from PDE
+            H_ref = gdir_refs[i]["H"]
+            Vx_ref = gdir_refs[i]["Vx"]
+            Vy_ref = gdir_refs[i]["Vy"]
+            V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
+            V_ref = ifelse.(inn1(H_ref).==0.0, 0.0, V_ref)
 
-        # Get ice velocities prediction from the UDE
-        Vx_pred = V_preds[i][1]
-        Vy_pred = V_preds[i][2]
-        V_pred = sqrt.(Vx_pred.^2 .+ Vy_pred.^2)
-        V_pred = ifelse.(inn1(H_ref).==0.0, 0.0, V_pred)
+            # Get ice velocities prediction from the UDE
+            Vx_pred = V_preds[i][1]
+            Vy_pred = V_preds[i][2]
+            V_pred = sqrt.(Vx_pred.^2 .+ Vy_pred.^2)
+            V_pred = ifelse.(inn1(H_ref).==0.0, 0.0, V_pred)
 
-        V_diff = V_ref .- V_pred
+            V_diff = V_ref .- V_pred
 
-        push!(Vs, fillNaN(V_diff))
-        push!(V_diffs, fillZeros(V_diff))
+            push!(Vs, fillNaN(V_diff))
+            push!(V_diffs, fillZeros(V_diff))
+        end
+
+        minV = minimum(minimum.(Vs))
+        maxV = maximum(maximum.(Vs)) 
+        # absmaxS = maximum([abs(minS), abs(maxS)])
+        absmaxV = 300.0f0 # m/yr
+
+        # Make heatmap and colorbars with common S limits
+        for (i, ax) in enumerate(axsV)
+            push!(hm_Vs, Makie.heatmap!(ax, V_diffs[i], colormap=:speed, colorrange=(-absmaxV,absmaxV), clim=(-absmaxV,absmaxV)))
+        end
+        Colorbar(figV[2:3,m+1], colorrange=(-absmaxV,absmaxV),colormap=:speed, label="Ice surface velocity difference (m/yr)")
+        Label(figV[0, :], text = "Glacier dataset", textsize = 30)
+        if display 
+            display(figV)
+        end
+        training_path = joinpath(root_plots,"inversions")
+        Makie.save(joinpath(training_path, "glaciers_V_diff_inv_$(current_epoch).pdf"), figV, pt_per_unit = 1)
     end
-    minV = minimum(minimum.(Vs))
-    maxV = maximum(maximum.(Vs)) 
-    # absmaxS = maximum([abs(minS), abs(maxS)])
-    absmaxV = 300.0f0 # m/yr
-
-    # Make heatmap and colorbars with common S limits
-    for (i, ax) in enumerate(axsV)
-        push!(hm_Vs, Makie.heatmap!(ax, V_diffs[i], colormap=:speed, colorrange=(-absmaxV,absmaxV), clim=(-absmaxV,absmaxV)))
-    end
-    Colorbar(figV[2:3,m+1], colorrange=(-absmaxV,absmaxV),colormap=:speed, label="Ice surface velocity difference (m/yr)")
-    Label(figV[0, :], text = "Glacier dataset", textsize = 30)
-    if display 
-        display(figV)
-    end
-    training_path = joinpath(root_plots,"inversions")
-    Makie.save(joinpath(training_path, "glaciers_V_diff_inv_$(current_epoch).pdf"), figV, pt_per_unit = 1)
 
     GC.gc() # Call garbage collector to clear memory
 end
