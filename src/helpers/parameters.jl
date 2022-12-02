@@ -10,8 +10,8 @@ const minA = Ref{Float32}(8.5f-20)
 const maxT = Ref{Float32}(1.0f0)
 const minT = Ref{Float32}(-25.0f0)
 
-# const base_url = "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/"
-const base_url = "https://cluster.klima.uni-bremen.de/~fmaussion/share/jordi/prepro_dir_v0/"
+const base_url = "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/"
+# const base_url = "https://cluster.klima.uni-bremen.de/~fmaussion/share/jordi/prepro_dir_v0/"
 
 # From Cuffey and Paterson
 const A_values_sec = ([0.0f0 -2.0f0 -5.0f0 -10.0f0 -15.0f0 -20.0f0 -25.0f0 -30.0f0 -35.0f0 -40.0f0 -45.0f0 -50.0f0;

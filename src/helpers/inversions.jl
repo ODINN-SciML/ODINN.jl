@@ -5,13 +5,14 @@ invert_iceflow(gdirs, train_settings, θ_trained=[], loss_history=[])
 
 Performs an inversion on the SIA to train a NN on the ice flow law
 """
-function train_iceflow_inversion(rgi_ids, tspan, train_settings; gdir_refs=nothing, gtd_file=nothing, θ_trained=[], target="D")
+function train_iceflow_inversion(rgi_ids, tspan, train_settings; gdirs_climate=nothing, gdirs_climate_batches=nothing, gdir_refs=nothing, gtd_file=nothing, θ_trained=[], target="D")
     println("Training ice rheology inversion...")
-    # filter_missing_glaciers!(rgi_ids) # already done in init_gdirs()
-    # Initialize gdirs with ice thickness data
-    gdirs = init_gdirs(rgi_ids)
-    # Process climate data for glaciers
-    gdirs_climate = get_gdirs_with_climate(gdirs, tspan, overwrite=false, massbalance=false, plot=false)
+    if isnothing(gdirs_climate_batches) || isnothing(gdirs_climate)
+        # Initialize gdirs with ice thickness data
+        gdirs = init_gdirs(rgi_ids)
+        # Process climate data for glaciers
+        gdirs_climate, gdirs_climate_batches = get_gdirs_with_climate(gdirs, tspan, overwrite=false, massbalance=false, plot=false)
+    end
     if !isnothing(gtd_file)
         # Produce Glathida dataset
         gtd_grids = get_glathida!(gtd_file, gdirs; force=false)
@@ -19,7 +20,7 @@ function train_iceflow_inversion(rgi_ids, tspan, train_settings; gdir_refs=nothi
         gtd_grids=nothing
     end
     # Perform inversion with the given gdirs and climate data
-    rheology_trained = invert_iceflow(gdirs_climate, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
+    rheology_trained = invert_iceflow(gdirs_climate, gdirs_climate_batches, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
 
     return rheology_trained
 end
@@ -29,49 +30,59 @@ invert_iceflow(gdirs, train_settings, θ_trained=[], loss_history=[])
 
 Performs an inversion on the SIA to train a NN on the ice flow law
 """
-function invert_iceflow(gdirs_climate, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
-    if length(θ_trained) == 0
-        reset_epochs()
-    end
+function invert_iceflow(gdirs_climate, gdirs_climate_batches, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
+    # Configure the current epoch and training history for the run
+    config_training_state(θ_trained)
+    
     optimizer = train_settings[1]
     epochs = train_settings[2]
+    batch_size = train_settings[3]
     UD, θ = get_NN_inversion(θ_trained, target)
     gdirs = gdirs_climate[2]
 
     # Build context for all the batches before training
     println("Building context...")
     context_batches = try 
-         map(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
+         pmap(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
     catch error
         @error "$error: Missing data for some glaciers. The list of missing_glaciers has been updated. Try again."
     end
-    loss(θ) = loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, context_batches, target) # closure
     
     cb_plots_inv(θ, l, UD_f) = callback_plots_inv(θ, l, UD_f, gdirs_climate, target)
 
+    # Create batches for inversion training 
+    train_loader = generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids)
+    
     # Setup optimization of the problem
-    optf = OptimizationFunction((θ,_)->loss(θ), Optimization.AutoZygote())
+    optf = OptimizationFunction((θ, _, UD_batch, gdirs_climate_batch, gdir_refs_batch, context_batch, gtd_grids_batch, target_batch)->loss_iceflow_inversion(θ, UD_batch, gdirs_climate_batch, gdir_refs_batch, context_batch, gtd_grids_batch, target_batch), Optimization.AutoZygote())
+    
+    # optf = OptimizationFunction((θ,_)->loss(θ), Optimization.AutoZygote())
+    
     optprob = OptimizationProblem(optf, θ)
     println("Training iceflow rheology inversion...")
-    rheology_trained = solve(optprob, optimizer, maxiters=epochs, allow_f_increases=true, callback=cb_plots_inv, progress=true)
+
+    # rheology_trained = solve(optprob, optimizer, maxiters=epochs, allow_f_increases=true, callback=cb_plots_inv, progress=true)
+
+    rheology_trained = solve(optprob, optimizer, ncycle(train_loader, epochs), allow_f_increases=true, callback=cb_plots_inv, progress=true)
 
     return rheology_trained
 end
 
 """
-    loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches)
+    loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batches, gtd_grids, target)
 
 Loss function based on glacier ice velocities and/or ice thickness
 """
-function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, context_batches, target)
+function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batches, gtd_grids, target)
     # (Vx, Vy, V)
     V_preds = perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
 
     # Compute loss function for the full batch
-    l_∇V, l_Vx, l_Vy = 0.0f0, 0.0f0, 0.0f0
+    l_Vx, l_Vy = 0.0f0, 0.0f0
     for i in 1:length(V_preds)
-        if isnothing(gtd_grids)
+        if isnothing(gtd_grids[1])
             # Get reference dataset
+            H_ref = gdir_refs[i]["H"]
             Vx_ref = gdir_refs[i]["Vx"]
             Vy_ref = gdir_refs[i]["Vy"]
             V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
@@ -84,12 +95,39 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, con
 
         # H = context_batches[i][7]
 
+        # l_Vx += mean((abs.(Vx_pred[Vx_ref .!= 0.0] .- Vx_ref[Vx_ref.!= 0.0]).^7))^(1/7)
+        # l_Vy += mean((abs.(Vy_pred[Vy_ref .!= 0.0] .- Vy_ref[Vy_ref.!= 0.0]).^7))^(1/7)
+
+        # Squared-Mean-Root-Error :D
+        # l_Vx += mean((abs.(Vx_pred[Vx_ref .!= 0.0] .- Vx_ref[Vx_ref.!= 0.0]).^(1/4)))^4
+        # l_Vy += mean((abs.(Vy_pred[Vy_ref .!= 0.0] .- Vy_ref[Vy_ref.!= 0.0]).^(1/4)))^4
+        # Squared-Mean-Root-Error
+        # normVx = mean(abs.(Vx_ref[Vx_ref .!= 0.0f0]).^1/2)^2 #.+ ϵ
+        # normVy = mean(abs.(Vy_ref[Vx_ref .!= 0.0f0]).^1/2)^2  #.+ ϵ
+        # normVx = Vx_ref[Vx_ref .!= 0.0f0] .+ ϵ
+        # normVy = Vy_ref[Vy_ref .!= 0.0f0] .+ ϵ
+        # @show normVx
+        # l_Vx += mean((abs.(Vx_pred[Vx_ref .!= 0.0f0]./normVx .- Vx_ref[Vx_ref .!= 0.0f0]./normVx).^(1/2)))^2
+        # l_Vy += mean((abs.(Vy_pred[Vy_ref .!= 0.0f0]./normVy .- Vy_ref[Vy_ref .!= 0.0f0]./normVy).^(1/2)))^2
+        # l_Vx += (1/normVx) * mean((abs.(Vx_pred[Vx_ref .!= 0.0f0] .- Vx_ref[Vx_ref .!= 0.0f0]).^(1/2)))^2
+        # l_Vy += (1/normVy) * mean((abs.(Vy_pred[Vy_ref .!= 0.0f0] .- Vy_ref[Vy_ref .!= 0.0f0]).^(1/2)))^2
+
+        # MAE
+        # l_Vx += Flux.Losses.mae(Vx_pred[Vx_ref .!= 0.0]./normVx, Vx_ref[Vx_ref.!= 0.0]./normVx; agg=mean)
+        # l_Vy += Flux.Losses.mae(Vy_pred[Vy_ref .!= 0.0]./normVy, Vy_ref[Vy_ref.!= 0.0]./normVy; agg=mean)
+
+        # RMSE
+        # l_Vx += Flux.Losses.mse(Vx_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)^0.5
+        # l_Vy += Flux.Losses.mse(Vy_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)^0.5
+
         # Classic loss function with the full matrix
         # normV = mean(V_ref[V_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
         normVx = mean(Vx_ref[Vx_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
         normVy = mean(Vy_ref[Vy_ref .!= 0.0f0].^2)^0.5f0  #.+ ϵ
-        l_Vx += normVx^(-2) * Flux.Losses.mse(Vx_pred[Vx_ref .!= 0.0f0], Vx_ref[Vx_ref.!= 0.0f0]; agg=mean)
-        l_Vy += normVy^(-2) * Flux.Losses.mse(Vy_pred[Vy_ref .!= 0.0f0], Vy_ref[Vy_ref.!= 0.0f0]; agg=mean)
+        # normVx = mean(Vx_ref[Vx_ref .!= 0.0f0]) #.+ ϵ
+        # normVy = mean(Vy_ref[Vy_ref .!= 0.0f0]) #.+ ϵ
+        l_Vx += normVx^(-0.5) * Flux.Losses.mse(Vx_pred[avg(H_ref) .!= 0.0f0], Vx_ref[avg(H_ref).!= 0.0f0]; agg=mean)
+        l_Vy += normVy^(-0.5) * Flux.Losses.mse(Vy_pred[avg(H_ref) .!= 0.0f0], Vy_ref[avg(H_ref).!= 0.0f0]; agg=mean)
     end 
 
     # We use the average loss between x and y V
@@ -97,8 +135,7 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gtd_grids, gdir_refs, con
 
     # Plot V diffs to understand training
     @ignore begin
-        gdirs = gdirs_climate[2]
-        plot_V_diffs(gdirs, gdir_refs, V_preds)
+        plot_V_diffs(gdirs_climate, gdir_refs, V_preds)
     end
 
     return l_V, UD
@@ -109,13 +146,12 @@ end
 
 Performs an inversion of the iceflow law with a UDE in different batches
 """
-function perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
-    T_batches = gdirs_climate[3]
-    years = gdirs_climate[1][1]
-    if isnothing(gtd_grids)
-        gtd_grids = zeros(size(T_batches))
+function perform_V_inversion(θ, UD, gdirs_climate_batch, gtd_grids_batch, context_batch, target)
+    if all(isnothing.(gtd_grids_batch))
+        years = gdirs_climate_batch[1][1]
+        gtd_grids_batch = zeros(size(years))
     end
-    V_preds = pmap((H, context, T) -> SIA(H, T, context, years, θ, UD, target), gtd_grids, context_batches, T_batches)
+    V_preds = map((H, context, gdirs_climate) -> SIA(H, gdirs_climate, context, θ, UD[1], target[1]), gtd_grids_batch, context_batch, gdirs_climate_batch)
 
     return V_preds # (Vx, Vy, V)
 end

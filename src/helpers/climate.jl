@@ -17,8 +17,8 @@ function get_gdirs_with_climate(gdirs, tspan; overwrite=false, massbalance=true,
     if plot
         plot_avg_longterm_temps(climate, gdirs)
     end
-    gdirs_climate = get_gdir_climate_tuple(gdirs, climate, tspan)
-    return gdirs_climate
+    gdirs_climate, gdirs_climate_batches = get_gdir_climate_tuple(gdirs, climate, tspan)
+    return gdirs_climate, gdirs_climate_batches
 end
 
 """
@@ -392,12 +392,18 @@ end
 Generates a tuple with all the Glacier directories and climate series for the simulations.  
 """
 function get_gdir_climate_tuple(gdirs, climate, tspan)
-    dates, longterm_temps, annual_climate = [],[],[]
-    for climate_batch in climate
-        push!(dates, climate_batch["longterm_temps"].year.data)
-        push!(longterm_temps, climate_batch["longterm_temps"].temp.data)
-        push!(annual_climate, climate_batch["annual_climate"].temp.data)
+    dates, longterm_temps, annual_climate, gdirs_climate_batches = [],[],[],[]
+    for i in 1:length(gdirs)
+        # Old format (to be deprecated after implementing batches)
+        date = climate[i]["longterm_temps"].year.data
+        push!(dates, date)
+        longterm_temp = climate[i]["longterm_temps"].temp.data
+        push!(longterm_temps, longterm_temp)
+        annual_clim = climate[i]["annual_climate"].temp.data
+        push!(annual_climate, annual_clim)
+        # New batched format
+        push!(gdirs_climate_batches, (date, gdirs[i], longterm_temp, annual_clim))
     end
     gdirs_climate = (dates, gdirs, longterm_temps, annual_climate)
-    return gdirs_climate
+    return gdirs_climate, gdirs_climate_batches
 end

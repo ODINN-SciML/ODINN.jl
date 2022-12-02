@@ -63,14 +63,15 @@ Initializes Glacier Directories from scratch using OGGM.
 function init_gdirs_scratch(rgi_ids)
     # Check if some of the gdirs is missing files
     gdirs = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url, 
-                                                from_prepro_level=2, prepro_border=10)
+                                                from_prepro_level=2, prepro_border=10,
+                                                reset=true)
     list_talks = [
-        tasks.glacier_masks,
         # tasks.compute_centerlines,
         # tasks.initialize_flowlines,
         # tasks.compute_downstream_line,
         # tasks.catchment_area,
         tasks.gridded_attributes,
+        tasks.glacier_masks,
         # tasks.gridded_mb_attributes,
         # tasks.prepare_for_inversion,  # This is a preprocessing task
         # tasks.mass_conservation_inversion,  # This gdirsdoes the actual job

@@ -9,6 +9,7 @@ using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
 using OrdinaryDiffEq, DiffEqCallbacks
 using SciMLSensitivity, Optimization
+using IterTools: ncycle
 using Zygote: @ignore, Buffer 
 using Flux
 using Tullio, RecursiveArrayTools

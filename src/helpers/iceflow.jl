@@ -180,7 +180,7 @@ callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path) # callb
     avg_temps = [mean(temps[i]) for i in 1:length(temps)]
     p = sortperm(avg_temps)
     avg_temps = avg_temps[p]
-    pred_A = predict_A̅(UA_f, θ, collect(-23.0f0:1.0f0:0.0f0)')
+    pred_A = predict_A̅(UA_f[1], θ, collect(-23.0f0:1.0f0:0.0f0)')
     pred_A = [pred_A...] # flatten
     true_A = A_fake(avg_temps, A_noise[p], noise)
 
@@ -469,13 +469,16 @@ end
 
 Compute a step of the Shallow Ice Approximation, constrained by surface velocity observations. Allocates memory.
 """
-function SIA(H, T, context, years, θ, UD_f, target)
+function SIA(H, gdirs_climate, context, θ, UD_f, target)
     @assert (target == "A" || target == "D") "Functional inversion target needs to be either A or D!"
     # Retrieve parameters
     # context = (nxy, Δxy, tspan, rgi_id, S, V)
     Δx = context[2][1]
     Δy = context[2][2]
     S = context[5] # TODO: update this to Millan et al.(2022) DEM
+
+    years = gdirs_climate[1]
+    T = gdirs_climate[3]
 
     if H==0.0 # Retrieve H from context if Glathida thickness is not present 
         H = context[7]
