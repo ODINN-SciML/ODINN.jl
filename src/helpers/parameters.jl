@@ -46,4 +46,6 @@ ice_thickness_source = "farinotti" # choose between "farinotti" or "millan"
 
 # Machine learning training
 current_epoch = 1
+current_minibatches = 0
+loss_epoch = 0.0
 loss_history = []

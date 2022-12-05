@@ -174,39 +174,40 @@ end
 
 
 
-callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path) # callback function to observe training
-    println("Epoch #$(current_epoch) - Loss $(loss_type[]): ", l)
+callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_size, n_gdirs) # callback function to observe training
+    # Update training status
+    update_training_state(l, batch_size, n_gdirs)
 
-    avg_temps = [mean(temps[i]) for i in 1:length(temps)]
-    p = sortperm(avg_temps)
-    avg_temps = avg_temps[p]
-    pred_A = predict_A̅(UA_f[1], θ, collect(-23.0f0:1.0f0:0.0f0)')
-    pred_A = [pred_A...] # flatten
-    true_A = A_fake(avg_temps, A_noise[p], noise)
+    if current_minibatches == 0.0
+        avg_temps = [mean(temps[i]) for i in 1:length(temps)]
+        p = sortperm(avg_temps)
+        avg_temps = avg_temps[p]
+        pred_A = predict_A̅(UA_f[1], θ, collect(-23.0f0:1.0f0:0.0f0)')
+        pred_A = [pred_A...] # flatten
+        true_A = A_fake(avg_temps, A_noise[p], noise)
 
-    yticks = collect(0.0:2f-17:8f-17)
+        yticks = collect(0.0:2f-17:8f-17)
 
-    Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
-    plot_epoch = Plots.plot!(-23f0:1f0:0f0, pred_A, label="Predicted A", 
-                        xlabel="Long-term air temperature (°C)", yticks=yticks,
-                        ylabel="A", ylims=(0.0f0,maxA[]), lw = 3, c=:dodgerblue4,
-                        legend=:topleft)
-    if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
-        mkpath(joinpath(training_path,"png"))
-        mkpath(joinpath(training_path,"pdf"))
+        Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
+        plot_epoch = Plots.plot!(-23f0:1f0:0f0, pred_A, label="Predicted A", 
+                            xlabel="Long-term air temperature (°C)", yticks=yticks,
+                            ylabel="A", ylims=(0.0f0,maxA[]), lw = 3, c=:dodgerblue4,
+                            legend=:topleft)
+        if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
+            mkpath(joinpath(training_path,"png"))
+            mkpath(joinpath(training_path,"pdf"))
+        end
+        # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
+
+        plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
+                    ylabel="Loss (V)", lw = 3, c=:darkslategray3)
+        Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
+        Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
     end
-    # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
-    global current_epoch += 1
-    push!(loss_history, l)
 
-    plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
-                ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-    Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
-    Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
-    
-    false
+    return false
 end
 
 """

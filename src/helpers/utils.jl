@@ -149,7 +149,7 @@ end
 
 Generates batches based on input data and feed them to the loss function.
 """
-function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids)
+function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids; shuffle=true)
     targets = repeat([target], length(gdirs_climate_batches))
     UDs = repeat([UD], length(gdirs_climate_batches))
     if isnothing(gtd_grids) 
@@ -160,7 +160,7 @@ function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdi
         batches = [UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets]
         # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
     end
-    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size)
+    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
     return train_loader
 end
@@ -265,11 +265,34 @@ end
 
 Configure training state with current epoch and its loss history. 
 """
-function config_training_state(θ_trained)
+function config_training_state(θ_trained, batch_size, n_gdirs)
     if length(θ_trained) == 0
         reset_epochs()
     else
         # Remove loss history from unfinished trainings
         deleteat!(loss_history, current_epoch:length(loss_history))
+    end
+
+    @assert batch_size <= n_gdirs "Batch size larger that dataset! Reduce it to max $n_gdirs."
+end
+
+"""
+    update_training_state(batch_size, n_gdirs)
+
+Update training state to know if the training has completed an epoch. 
+If so, reset minibatches, update history loss and bump epochs.
+"""
+function update_training_state(l, batch_size, n_gdirs)
+    # Update minibatch count and loss for the current epoch
+    global current_minibatches += batch_size
+    global loss_epoch += l
+    if current_minibatches >= n_gdirs
+        # Track evolution of loss per epoch
+        push!(loss_history, loss_epoch)
+        println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", loss_epoch)
+        # Bump epoch and reset loss and minibatch count
+        global current_epoch += 1
+        global current_minibatches = 0
+        global loss_epoch = 0.0
     end
 end
