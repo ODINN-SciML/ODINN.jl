@@ -25,7 +25,7 @@ processes = 20
 # We enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 # Flags
-ODINN.set_use_MB(true)
+ODINN.set_use_MB(false)
 ODINN.make_plots(true)    
 # Reference dataset
 ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
@@ -117,9 +117,9 @@ function run()
     else
         epochs = 250
         batch_size = 10
-        optimizer = BFGS(initial_stepnorm=0.001f0)
+        # optimizer = BFGS(initial_stepnorm=0.0001f0)
         # optimizer = LBFGS()
-        # optimizer = Adam(0.003)
+        optimizer = Adam(0.001)
         train_settings = (optimizer, epochs, batch_size) # optimizer, epochs
     
         @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; 

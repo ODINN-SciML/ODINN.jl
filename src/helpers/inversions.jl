@@ -104,17 +104,19 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vx += mean((abs.(Vx_pred[Vx_ref .!= 0.0] .- Vx_ref[Vx_ref.!= 0.0]).^(1/4)))^4
         # l_Vy += mean((abs.(Vy_pred[Vy_ref .!= 0.0] .- Vy_ref[Vy_ref.!= 0.0]).^(1/4)))^4
         # Squared-Mean-Root-Error
-        normVx = mean(abs.(Vx_ref[Vx_ref .!= 0.0f0]).^1/2)^2 #.+ ϵ
-        normVy = mean(abs.(Vy_ref[Vx_ref .!= 0.0f0]).^1/2)^2  #.+ ϵ
+        # normVx = mean(abs.(Vx_ref[Vx_ref .!= 0.0f0]).^1/2)^2 #.+ ϵ
+        # normVy = mean(abs.(Vy_ref[Vx_ref .!= 0.0f0]).^1/2)^2  #.+ ϵ
         # normVx = Vx_ref[Vx_ref .!= 0.0f0] .+ ϵ
         # normVy = Vy_ref[Vy_ref .!= 0.0f0] .+ ϵ
         # @show normVx
         # l_Vx += mean((abs.(Vx_pred[Vx_ref .!= 0.0f0]./normVx .- Vx_ref[Vx_ref .!= 0.0f0]./normVx).^(1/2)))^2
         # l_Vy += mean((abs.(Vy_pred[Vy_ref .!= 0.0f0]./normVy .- Vy_ref[Vy_ref .!= 0.0f0]./normVy).^(1/2)))^2
-        l_Vx += (1/normVx) * mean((abs.(Vx_pred[Vx_ref .!= 0.0f0] .- Vx_ref[Vx_ref .!= 0.0f0]).^(1/2)))^2
-        l_Vy += (1/normVy) * mean((abs.(Vy_pred[Vy_ref .!= 0.0f0] .- Vy_ref[Vy_ref .!= 0.0f0]).^(1/2)))^2
+        # l_Vx += (1/normVx) * mean((abs.(Vx_pred[Vx_ref .!= 0.0f0] .- Vx_ref[Vx_ref .!= 0.0f0]).^(1/2)))^2
+        # l_Vy += (1/normVy) * mean((abs.(Vy_pred[Vy_ref .!= 0.0f0] .- Vy_ref[Vy_ref .!= 0.0f0]).^(1/2)))^2
 
         # MAE
+        # normVx = Vx_ref[Vx_ref .!= 0.0f0] .+ ϵ
+        # normVy = Vy_ref[Vy_ref .!= 0.0f0] .+ ϵ
         # l_Vx += Flux.Losses.mae(Vx_pred[Vx_ref .!= 0.0]./normVx, Vx_ref[Vx_ref.!= 0.0]./normVx; agg=mean)
         # l_Vy += Flux.Losses.mae(Vy_pred[Vy_ref .!= 0.0]./normVy, Vy_ref[Vy_ref.!= 0.0]./normVy; agg=mean)
 
@@ -124,12 +126,13 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
 
         # Classic loss function with the full matrix
         # normV = mean(V_ref[V_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
-        # normVx = mean(Vx_ref[Vx_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
-        # normVy = mean(Vy_ref[Vy_ref .!= 0.0f0].^2)^0.5f0  #.+ ϵ
+        normVx = mean(Vx_ref.^2) #.+ ϵ
+        normVy = mean(Vy_ref.^2) #.+ ϵ
+        normV = (normVx + normVy)^0.5f0
         # normVx = mean(Vx_ref[Vx_ref .!= 0.0f0]) #.+ ϵ
         # normVy = mean(Vy_ref[Vy_ref .!= 0.0f0]) #.+ ϵ
-        # l_Vx += normVx^(-0.5) * Flux.Losses.mse(Vx_pred[avg(H_ref) .!= 0.0f0], Vx_ref[avg(H_ref).!= 0.0f0]; agg=mean)
-        # l_Vy += normVy^(-0.5) * Flux.Losses.mse(Vy_pred[avg(H_ref) .!= 0.0f0], Vy_ref[avg(H_ref).!= 0.0f0]; agg=mean)
+        l_Vx += normV^(2) * Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean)
+        l_Vy += normV^(2) * Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
     end 
 
     # We use the average loss between x and y V
