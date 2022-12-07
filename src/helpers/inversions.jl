@@ -80,7 +80,8 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
     V_preds = perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
 
     # Compute loss function for the full batch
-    l_Vx, l_Vy = 0.0f0, 0.0f0
+    l_V = 0.0f0
+
     for i in 1:length(V_preds)
         if isnothing(gtd_grids[1])
             # Get reference dataset
@@ -126,17 +127,22 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
 
         # Classic loss function with the full matrix
         # normV = mean(V_ref[V_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
-        normVx = mean(Vx_ref.^2) #.+ ϵ
-        normVy = mean(Vy_ref.^2) #.+ ϵ
-        normV = (normVx + normVy)^0.5f0
+        # normVx = mean(Vx_ref.^2) #.+ ϵ
+        # normVy = mean(Vy_ref.^2) #.+ ϵ
+        # normV = (normVx + normVy)^0.5f0
         # normVx = mean(Vx_ref[Vx_ref .!= 0.0f0]) #.+ ϵ
         # normVy = mean(Vy_ref[Vy_ref .!= 0.0f0]) #.+ ϵ
-        l_Vx += normV^(2) * Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean)
-        l_Vy += normV^(2) * Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
-    end 
+        # l_Vx += normV^(2) * Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean)
+        # l_Vy += normV^(2) * Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
 
-    # We use the average loss between x and y V
-    l_V = (l_Vx + l_Vy)/2
+        # normV = (mean(Vx_ref.^2) + mean(Vy_ref.^2))^0.5f0
+        normV = maximum(Vx_ref.^2 .+ Vy_ref.^2)^0.5f0
+        l_V_local = Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean) + Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
+        l_V += normV^1.0f0 * log(l_V_local)
+        # @show i
+        # @show normV
+        # @show l_V_local
+    end 
 
     # Plot V diffs to understand training
     @ignore begin
