@@ -45,7 +45,7 @@ function invert_iceflow(gdirs_climate, gdirs_climate_batches, gtd_grids, gdir_re
     # Build context for all the batches before training
     println("Building context...")
     context_batches = try 
-         pmap(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
+         pmap((gdir, gdir_number) -> build_UDE_context_inv(gdir, gdir_number, tspan, gdir_refs), gdirs, 1:length(gdirs))
     catch error
         @error "$error: Missing data for some glaciers. The list of missing_glaciers has been updated. Try again."
     end
@@ -85,17 +85,18 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
     for i in 1:length(V_preds)
         if isnothing(gtd_grids[1])
             # Get reference dataset
+            # temp = gdir_refs[i]["Temp"]
             H_ref = gdir_refs[i]["H"]
             Vx_ref = gdir_refs[i]["Vx"]
             Vy_ref = gdir_refs[i]["Vy"]
-            V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
+            # V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
         else
             # Get ice velocities from Millan et al. (2022)
             V_ref = avg(context_batches[i][6])
         end
         Vx_pred = V_preds[i][1]
         Vy_pred = V_preds[i][2]
-
+        # V_pred = (Vx_pred.^2 .+ Vy_pred.^2).^0.5
         # H = context_batches[i][7]
 
         # l_Vx += mean((abs.(Vx_pred[Vx_ref .!= 0.0] .- Vx_ref[Vx_ref.!= 0.0]).^7))^(1/7)
@@ -135,19 +136,19 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vx += normV^(2) * Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean)
         # l_Vy += normV^(2) * Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
 
-        # normV = (mean(Vx_ref.^2) + mean(Vy_ref.^2))^0.5f0
-        normV = maximum(Vx_ref.^2 .+ Vy_ref.^2)^0.5f0
-        l_V_local = Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean) + Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
-        l_V += normV^1.0f0 * log(l_V_local)
-        # @show i
-        # @show normV
-        # @show l_V_local
+        normV = (mean(Vx_ref.^2) + mean(Vy_ref.^2))^0.5f0
+        # normV = maximum(Vx_ref[inn1(H_ref) .> 100.0].^2 .+ Vy_ref[inn1(H_ref) .> 100.0].^2)^0.5f0
+        l_V_local = (normV)^(-2) * Flux.Losses.mse(Vx_pred[inn1(H_ref) .> 100.0], Vx_ref[inn1(H_ref) .> 100.0]; agg=mean) + Flux.Losses.mse(Vy_pred[inn1(H_ref) .> 100.0], Vy_ref[inn1(H_ref) .> 100.0]; agg=mean)
+        l_V += l_V_local
+        # l_V += normV^1.0f0 * log(l_V_local)        
     end 
 
     # Plot V diffs to understand training
-    @ignore begin
-        plot_V_diffs(gdirs_climate, gdir_refs, V_preds)
-    end
+    # @ignore begin
+    #     plot_V_diffs(gdirs_climate, gdir_refs, V_preds)
+    #     heatmap_diff = Plots.heatmap(Vx_pred .- Vx_ref)
+    #     Plots.savefig(heatmap_diff, "vel_diff")
+    # end
 
     return l_V, UD
 end
