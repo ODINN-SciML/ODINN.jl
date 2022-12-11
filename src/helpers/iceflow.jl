@@ -516,18 +516,18 @@ function SIA(H, gdirs_climate, context, θ, UD_f, target)
         D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S.^(n[] - 1)
         Vx = - D .* avg_y(dSdx)
         Vy = - D .* avg_x(dSdy)
-        @ignore begin
-            heatmap_Htarget = Plots.heatmap(H, color=:oslo, rev=true, clim=(0, maximum(H)))
-            Plots.savefig(heatmap_Htarget, "H_target")
-            dSdy_max = 0.2*maximum(abs.(dSdy))
-            heatmap_DiffTarget = Plots.heatmap(dSdy, color=:bluesreds, clim=(-dSdy_max, dSdy_max))
-            Plots.savefig(heatmap_DiffTarget, "Diff_target")
-            Vy_max = maximum(abs.(Vy))
-            heatmap_target = Plots.heatmap(Vy, color=:bluesreds, clim=(-Vy_max, Vy_max))
-            Plots.savefig(heatmap_target, "vel_target")
-            heatmap_D = Plots.heatmap(D, color=:thermal, clim=(0, maximum(D)))
-            Plots.savefig(heatmap_D, "D_target")           
-        end            
+        # @ignore begin
+        #     heatmap_Htarget = Plots.heatmap(H, color=:oslo, rev=true, clim=(0, maximum(H)))
+        #     Plots.savefig(heatmap_Htarget, "H_target")
+        #     dSdy_max = 0.2*maximum(abs.(dSdy))
+        #     heatmap_DiffTarget = Plots.heatmap(dSdy, color=:bluesreds, clim=(-dSdy_max, dSdy_max))
+        #     Plots.savefig(heatmap_DiffTarget, "Diff_target")
+        #     Vy_max = maximum(abs.(Vy))
+        #     heatmap_target = Plots.heatmap(Vy, color=:bluesreds, clim=(-Vy_max, Vy_max))
+        #     Plots.savefig(heatmap_target, "vel_target")
+        #     heatmap_D = Plots.heatmap(D, color=:thermal, clim=(0, maximum(D)))
+        #     Plots.savefig(heatmap_D, "D_target")           
+        # end            
         V = (Vx.^2 .+ Vy.^2).^0.5f0
     end
     V_pred = (Vx, Vy, V)
