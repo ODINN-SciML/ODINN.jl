@@ -139,7 +139,8 @@ function get_gdir_refs(refs, gdirs)
                                 "Vx"=>ref["Vx"],
                                 "Vy"=>ref["Vy"],
                                 "S"=>ref["S"],
-                                "B"=>ref["B"]))
+                                "B"=>ref["B"],
+                                "Temp"=>ref["Temp"]))
     end
     return gdir_refs
 end
@@ -200,11 +201,13 @@ function get_NN_inversion(θ_trained, target)
     return U, θ
 end
 
+sigmoid(x) = 1 / (1 + exp(-x))
+
 function get_NN_inversion_A(θ_trained)
     UA = Chain(
-        Dense(1,3, x->softplus.(x)),
-        Dense(3,10, x->softplus.(x)),
-        Dense(10,3, x->softplus.(x)),
+        Dense(1,3, x->sigmoid_temp.(x)),
+        Dense(3,10, x->sigmoid.(x)),
+        Dense(10,3, x->sigmoid.(x)),
         Dense(3,1, sigmoid_A)
     )
     # See if parameters need to be retrained or not
@@ -241,9 +244,16 @@ function predict_A̅(UA_f, θ, temp)
     return UA(temp) .* 1f-17
 end
 
+function sigmoid_temp(x)
+    minT = -20
+    maxT = 0
+    x_centered = (x - (minT + maxT)/2) / (maxT - minT)
+    return sigmoid(x_centered)
+end
+
 function sigmoid_A(x) 
-    minA_out = 8.0f-3 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0f0
+    minA_out = 0.0f0 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 1.0f-16    
     return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
 end
 

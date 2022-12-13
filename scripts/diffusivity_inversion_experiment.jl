@@ -29,7 +29,7 @@ ODINN.enable_multiprocessing(processes)
 ODINN.set_use_MB(true)
 ODINN.make_plots(true)    
 # Reference dataset
-ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
+ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
 # UDE training
 ODINN.set_retrain(false) # Re-use previous NN weights to continue training
 # Datasets for inversion
@@ -102,7 +102,7 @@ function run()
         epochs_BFGS = 200
         batch_size = 4
         # optimizer = BFGS(initial_stepnorm=0.001f0)
-        optimizer = Adam(0.01)
+        optimizer = Adam(0.001)
         train_settings = (optimizer, epochs_BFGS, batch_size) # optimizer, epochs, batch size
         @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; 
                                                         gdirs_climate=gdirs_climate,
@@ -117,10 +117,9 @@ function run()
         jldsave(joinpath(ODINN.root_dir, "data/trained_inv_weights.jld2"); θ_trained, ODINN.current_epoch)
     else
         epochs = 250
-        batch_size = 10
-        # optimizer = BFGS(initial_stepnorm=0.001f0)
-        # optimizer = Adam(0.01)
-        optimizer = Optimisers.RMSProp(0.001)
+        # batch_size = 1
+        batch_size = length(gdir_refs)
+        optimizer = BFGS(initial_stepnorm=0.001f0)
         # optimizer = LBFGS()
         # optimizer = Adam(0.01)
         train_settings = (optimizer, epochs, batch_size) # optimizer, epochs

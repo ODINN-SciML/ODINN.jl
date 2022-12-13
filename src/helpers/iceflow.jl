@@ -39,9 +39,11 @@ function generate_ref_dataset(gdirs_climate, tspan; solver = RDPK3Sp35(), random
     climate_years_list = gdirs_climate[1]
     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
     if isnothing(random_MB)
-        refs = @showprogress pmap((gdir, longterm_temp, climate_years, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver;run_spinup=false), gdirs, longterm_temps, climate_years_list, A_noises)
+        # refs = @showprogress pmap((gdir, longterm_temp, climate_years, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver;run_spinup=false), gdirs, longterm_temps, climate_years_list, A_noises)
+        refs = pmap((gdir, longterm_temp, climate_years, A_noise) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver;run_spinup=false), gdirs, longterm_temps, climate_years_list, A_noises)
     else
-        refs = @showprogress pmap((gdir, longterm_temp, climate_years, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver; run_spinup=false,random_MB=MB), gdirs, longterm_temps, climate_years_list, A_noises, random_MB)
+        # refs = @showprogress pmap((gdir, longterm_temp, climate_years, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver; run_spinup=false,random_MB=MB), gdirs, longterm_temps, climate_years_list, A_noises, random_MB)
+        refs = pmap((gdir, longterm_temp, climate_years, A_noise, MB) -> batch_iceflow_PDE(gdir, longterm_temp, climate_years, A_noise, tspan, solver; run_spinup=false,random_MB=MB), gdirs, longterm_temps, climate_years_list, A_noises, random_MB)
     end
 
     # Gather information per gdir
@@ -61,6 +63,8 @@ function batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; r
     println("Processing glacier: ", gdir.rgi_id)
 
     context, H = build_PDE_context(gdir, longterm_temp, years, A_noise, tspan; run_spinup=run_spinup, random_MB=random_MB)
+
+    println("Temperature (mean) used for simulation: ", mean(context.x[7]))
 
     # Callback  
     if use_MB[]
@@ -113,7 +117,7 @@ function simulate_iceflow_PDE(H, context, solver, tstops, cb_MB)
     B = context.x[2]
     V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(temps), "PDE") # Average velocity with average temperature
     S = B .+ H_ref # Surface topography
-    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B)
+    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B, "Temp"=>mean(temps))
     return refs
 end
 
@@ -478,6 +482,7 @@ function SIA(H, gdirs_climate, context, θ, UD_f, target)
     # context = (nxy, Δxy, tspan, rgi_id, S, V)
     Δx = context[2][1]
     Δy = context[2][2]
+    # rgi_id = context[4]
     S = context[5] # TODO: update this to Millan et al.(2022) DEM
 
     years = gdirs_climate[1]
@@ -494,19 +499,38 @@ function SIA(H, gdirs_climate, context, θ, UD_f, target)
     # Compute surface gradients on edges
     dSdx = diff_x(S) ./ Δx
     dSdy = diff_y(S) ./ Δy
-    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
-    
+    # dS is evaluated in the dual grid
+    # We remove surface slopes in regions with no ice
+    # dSdx[avg_x(H).<=0.0] .= dSdx[avg_x(H).<=0.0] .* 0.0f0 
+    # dSdy[avg_y(H).<=0.0] .= dSdy[avg_y(H).<=0.0] .* 0.0f0 
+
+    # ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2)
+    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^0.5
+
     if target == "D"
         X = build_D_features(H, temp, ∇S)
         D = predict_diffusivity(UD_f, θ, X)
-        V = D .* abs.(∇S[inn1(H) .!= 0.0])
+        V = D .* abs.(∇S[inn1(H) .!= 0.0].^(n[] - 1))
     elseif target == "A"
         A = predict_A̅(UD_f, θ, temp)
-        Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
-        D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S
+        # A = 4.0f-17 # HARDCODED!
+        Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[] + 1) # surface stress (not average)  # 1 / m^3 s 
+        D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S.^(n[] - 1)
         Vx = - D .* avg_y(dSdx)
         Vy = - D .* avg_x(dSdy)
-        V = D .* abs.(∇S)
+        # @ignore begin
+        #     heatmap_Htarget = Plots.heatmap(H, color=:oslo, rev=true, clim=(0, maximum(H)))
+        #     Plots.savefig(heatmap_Htarget, "H_target")
+        #     dSdy_max = 0.2*maximum(abs.(dSdy))
+        #     heatmap_DiffTarget = Plots.heatmap(dSdy, color=:bluesreds, clim=(-dSdy_max, dSdy_max))
+        #     Plots.savefig(heatmap_DiffTarget, "Diff_target")
+        #     Vy_max = maximum(abs.(Vy))
+        #     heatmap_target = Plots.heatmap(Vy, color=:bluesreds, clim=(-Vy_max, Vy_max))
+        #     Plots.savefig(heatmap_target, "vel_target")
+        #     heatmap_D = Plots.heatmap(D, color=:thermal, clim=(0, maximum(D)))
+        #     Plots.savefig(heatmap_D, "D_target")           
+        # end            
+        V = (Vx.^2 .+ Vy.^2).^0.5f0
     end
     V_pred = (Vx, Vy, V)
     return V_pred
@@ -536,28 +560,46 @@ Computes the ice surface velocity for a given input temperature
 """
 function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     # Update glacier surface altimetry
-    S = B .+ (H₀ .+ H)./2.0f0 # Use average ice thickness for the simulated period
+    # S = B .+ (H₀ .+ H)./2.0f0 # Use average ice thickness for the simulated period
+    S = B .+ H # Use average ice thickness for the simulated period
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx = diff_x(S) / Δx
-    dSdy = diff_y(S) / Δy
-    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
-    
+    dSdx = diff_x(S) / Δx 
+    dSdy = diff_y(S) / Δy 
+    # We remove surface slopes in regions with no ice
+    dSdx[avg_x(H).<=0.0] .= dSdx[avg_x(H).<=0.0] .* 0.0f0 
+    dSdy[avg_y(H).<=0.0] .= dSdy[avg_y(H).<=0.0] .* 0.0f0 
+
+    # We are going to evaluate the velocity profile in the dual grid
+    # ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
+    ∇S = (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^0.5 
+
+    # heatmap_Href = Plots.heatmap(H, color=:oslo, rev=true, clim=(0, maximum(H)))
+    # Plots.savefig(heatmap_Href, "H_ref")
+
     @assert (sim == "UDE" || sim == "PDE") "Wrong type of simulation. Needs to be 'UDE' or 'PDE'."
     if sim == "UDE"
         A = predict_A̅(UA_f, θ, [temp]) 
     elseif sim == "PDE"
+        # A = 4.0f-17 # HARDCODED!!!!
         A = A_fake(temp, A_noise, noise)
     end
-    Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
-    D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S
-    
+    Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[] + 1) # surface stress (not average)  # 1 / m^3 s 
+    D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S.^(n[] - 1)
     # Compute averaged surface velocities
     Vx = - D .* avg_y(dSdx)
     Vy = - D .* avg_x(dSdy)
 
+    # Vy_max = maximum(abs.(Vy))
+    # dSdy_max = 0.2*maximum(abs.(dSdy))
+    # heatmap_ref = Plots.heatmap(Vy, color=:bluesreds, clim=(-Vy_max, Vy_max))
+    # heatmap_DiffRef = Plots.heatmap(dSdy, color=:bluesreds, clim=(-dSdy_max, dSdy_max))
+    # Plots.savefig(heatmap_DiffRef, "Diff_ref")
+    # Plots.savefig(heatmap_ref, "vel_ref")
+    # heatmap_D = Plots.heatmap(D, color=:thermal, clim=(0, maximum(D)))
+    # Plots.savefig(heatmap_D, "D_ref")
+    
     return Vx, Vy
         
 end
-
