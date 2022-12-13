@@ -185,10 +185,12 @@ callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_s
         pred_A = predict_A̅(UA_f[1], θ, collect(-23.0f0:1.0f0:0.0f0)')
         pred_A = [pred_A...] # flatten
         true_A = A_fake(avg_temps, A_noise[p], noise)
+        true_A_noiseless = A_fake(collect(-23.0f0:1.0f0:0.0f0))
 
         yticks = collect(0.0:2f-17:8f-17)
 
-        Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
+        Plots.plot(-23f0:1f0:0f0, true_A_noiseless, label="True noiseless A",c=:lightsteelblue2)
+        Plots.scatter!(avg_temps, true_A, label="True A", c=:lightsteelblue2)
         plot_epoch = Plots.plot!(-23f0:1f0:0f0, pred_A, label="Predicted A", 
                             xlabel="Long-term air temperature (°C)", yticks=yticks,
                             ylabel="A", ylims=(0.0f0,maxA[]), lw = 3, c=:dodgerblue4,
@@ -198,13 +200,13 @@ callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_s
             mkpath(joinpath(training_path,"pdf"))
         end
         # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-        Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
-        Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch-1).png"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch-1).pdf"))
 
         plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
                     ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-        Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
-        Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
+        Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch-1).png"))
+        Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch-1).pdf"))
     end
 
     return false
@@ -558,50 +560,4 @@ function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     return Vx, Vy
         
 end
-
-# Polynomial fit for Cuffey and Paterson data 
-A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
-
-"""
-    A_fake(temp, noise=false)
-
-Fake law establishing a theoretical relationship between ice viscosity (A) and long-term air temperature.
-"""
-function A_fake(temp, A_noise=nothing, noise=false)
-    # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
-    A = A_f.(temp) # polynomial fit
-    if noise[]
-        A = abs.(A .+ A_noise)
-    end
-    return A
-end
-
-"""
-    predict_A̅(UA_f, θ, temp)
-
-Predicts the value of A with a neural network based on the long-term air temperature.
-"""
-function predict_A̅(UA_f, θ, temp)
-    UA = UA_f(θ)
-    return UA(temp) .* 1f-17
-end
-
-function build_D_features(H::Matrix, temp, ∇S)
-    ∇S_flat = ∇S[inn1(H) .!= 0.0] # flatten
-    H_flat = H[H .!= 0.0] # flatten
-    T_flat = repeat(temp,length(H_flat))
-    X = Flux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
-    return X
-end
-
-function build_D_features(H::Float64, temp::Float64, ∇S::Float64)
-    X = Flux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
-    return X
-end
-
-function predict_diffusivity(UD_f, θ, X)
-    UD = UD_f(θ)
-    return UD(X)[1,:]
-end
-
 

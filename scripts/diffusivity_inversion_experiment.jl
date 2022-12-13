@@ -12,7 +12,8 @@ using Revise # very important!
 using ODINN
 using Plots
 using Optim, OptimizationOptimJL
-import OptimizationOptimisers.Adam
+using OptimizationOptimisers
+import Optimisers
 using Infiltrator
 using Distributed
 using JLD2
@@ -21,11 +22,11 @@ using JLD2
 ENV["GKSwstype"]="nul"
 
 # ODINN settings
-processes = 20
+processes = 18
 # We enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 # Flags
-ODINN.set_use_MB(false)
+ODINN.set_use_MB(true)
 ODINN.make_plots(true)    
 # Reference dataset
 ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
@@ -117,9 +118,11 @@ function run()
     else
         epochs = 250
         batch_size = 10
-        # optimizer = BFGS(initial_stepnorm=0.0001f0)
+        # optimizer = BFGS(initial_stepnorm=0.001f0)
+        # optimizer = Adam(0.01)
+        optimizer = Optimisers.RMSProp(0.001)
         # optimizer = LBFGS()
-        optimizer = Adam(0.001)
+        # optimizer = Adam(0.01)
         train_settings = (optimizer, epochs, batch_size) # optimizer, epochs
     
         @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; 

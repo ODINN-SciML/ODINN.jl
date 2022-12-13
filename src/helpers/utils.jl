@@ -205,7 +205,7 @@ function get_NN_inversion_A(θ_trained)
         Dense(1,3, x->softplus.(x)),
         Dense(3,10, x->softplus.(x)),
         Dense(10,3, x->softplus.(x)),
-        Dense(3,1, softplus)
+        Dense(3,1, sigmoid_A)
     )
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
@@ -216,7 +216,7 @@ function get_NN_inversion_A(θ_trained)
 end
 
 function get_NN_inversion_D(θ_trained)
-    UA = Chain(
+    UD = Chain(
         Dense(3,20, x->softplus.(x)),
         Dense(20,15, x->softplus.(x)),
         Dense(15,10, x->softplus.(x)),
@@ -224,11 +224,21 @@ function get_NN_inversion_D(θ_trained)
         Dense(5,1, softplus) # force diffusivity to be positive
     )
     # See if parameters need to be retrained or not
-    θ, UA_f = Flux.destructure(UA)
+    θ, UD_f = Flux.destructure(UD)
     if !isempty(θ_trained)
         θ = θ_trained
     end
-    return UA_f, θ
+    return UD_f, θ
+end
+
+"""
+    predict_A̅(UA_f, θ, temp)
+
+Predicts the value of A with a neural network based on the long-term air temperature.
+"""
+function predict_A̅(UA_f, θ, temp)
+    UA = UA_f(θ)
+    return UA(temp) .* 1f-17
 end
 
 function sigmoid_A(x) 
@@ -238,7 +248,7 @@ function sigmoid_A(x)
 end
 
 function sigmoid_A_inv(x) 
-    minA_out = 8.0f-4 # /!\     # these depend on predict_A̅, so careful when changing them!
+    minA_out = 8.0f-2 # /!\     # these depend on predict_A̅, so careful when changing them!
     maxA_out = 8.0f2
     return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
 end
@@ -296,3 +306,40 @@ function update_training_state(l, batch_size, n_gdirs)
         global loss_epoch = 0.0
     end
 end
+
+# Polynomial fit for Cuffey and Paterson data 
+A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
+
+"""
+    A_fake(temp, noise=false)
+
+Fake law establishing a theoretical relationship between ice viscosity (A) and long-term air temperature.
+"""
+function A_fake(temp, A_noise=nothing, noise=false)
+    # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    A = A_f.(temp) # polynomial fit
+    if noise[]
+        A = abs.(A .+ A_noise)
+    end
+    return A
+end
+
+function build_D_features(H::Matrix, temp, ∇S)
+    ∇S_flat = ∇S[inn1(H) .!= 0.0] # flatten
+    H_flat = H[H .!= 0.0] # flatten
+    T_flat = repeat(temp,length(H_flat))
+    X = Flux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
+    return X
+end
+
+function build_D_features(H::Float64, temp::Float64, ∇S::Float64)
+    X = Flux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
+    return X
+end
+
+function predict_diffusivity(UD_f, θ, X)
+    UD = UD_f(θ)
+    return UD(X)[1,:]
+end
+
+

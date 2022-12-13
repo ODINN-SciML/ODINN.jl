@@ -115,6 +115,10 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vx += (1/normVx) * mean((abs.(Vx_pred[Vx_ref .!= 0.0f0] .- Vx_ref[Vx_ref .!= 0.0f0]).^(1/2)))^2
         # l_Vy += (1/normVy) * mean((abs.(Vy_pred[Vy_ref .!= 0.0f0] .- Vy_ref[Vy_ref .!= 0.0f0]).^(1/2)))^2
 
+        # normV = (mean(Vx_ref.^1/2 .+ Vy_ref.^1/2))^2
+        # l_V = Flux.Losses.mae(Vx_pred.^1/2, Vx_ref.^1/2; agg=mean) + Flux.Losses.mae(Vy_pred.^1/2, Vy_ref.^1/2; agg=mean)
+        # l_V += normV^1.0f0 * log(l_V_local)
+
         # MAE
         # normVx = Vx_ref[Vx_ref .!= 0.0f0] .+ ϵ
         # normVy = Vy_ref[Vy_ref .!= 0.0f0] .+ ϵ
@@ -122,8 +126,8 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vy += Flux.Losses.mae(Vy_pred[Vy_ref .!= 0.0]./normVy, Vy_ref[Vy_ref.!= 0.0]./normVy; agg=mean)
 
         # RMSE
-        # l_Vx += Flux.Losses.mse(Vx_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)^0.5
-        # l_Vy += Flux.Losses.mse(Vy_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)^0.5
+        l_Vx += Flux.Losses.mse(Vx_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)^0.5
+        l_Vy += Flux.Losses.mse(Vy_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)^0.5
 
         # Classic loss function with the full matrix
         # normV = mean(V_ref[V_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
@@ -136,9 +140,9 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vy += normV^(2) * Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
 
         # normV = (mean(Vx_ref.^2) + mean(Vy_ref.^2))^0.5f0
-        normV = maximum(Vx_ref.^2 .+ Vy_ref.^2)^0.5f0
-        l_V_local = Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean) + Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
-        l_V += normV^1.0f0 * log(l_V_local)
+        # normV = maximum(Vx_ref.^2 .+ Vy_ref.^2)^0.5f0
+        # l_V_local = Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean) + Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
+        # l_V += normV^1.0f0 * log(l_V_local)
         # @show i
         # @show normV
         # @show l_V_local
