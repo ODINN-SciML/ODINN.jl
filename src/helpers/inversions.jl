@@ -45,7 +45,7 @@ function invert_iceflow(gdirs_climate, gdirs_climate_batches, gtd_grids, gdir_re
     # Build context for all the batches before training
     println("Building context...")
     context_batches = try 
-         pmap((gdir, gdir_number) -> build_UDE_context_inv(gdir, gdir_number, tspan, gdir_refs), gdirs, 1:length(gdirs))
+         map((gdir, gdir_ref) -> build_UDE_context_inv(gdir, gdir_ref, tspan), gdirs, gdir_refs)
     catch error
         @error "$error: Missing data for some glaciers. The list of missing_glaciers has been updated. Try again."
     end
@@ -53,7 +53,7 @@ function invert_iceflow(gdirs_climate, gdirs_climate_batches, gtd_grids, gdir_re
     cb_plots_inv(θ, l, UD_f) = callback_plots_inv(θ, l, UD_f, gdirs_climate, target, batch_size)
 
     # Create batches for inversion training 
-    train_loader = generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids)
+    train_loader = generate_batches(batch_size, UD, target, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=gtd_grids)
     
     # Setup optimization of the problem
     optf = OptimizationFunction((θ, _, UD_batch, gdirs_climate_batch, gdir_refs_batch, context_batch, gtd_grids_batch, target_batch)->loss_iceflow_inversion(θ, UD_batch, gdirs_climate_batch, gdir_refs_batch, context_batch, gtd_grids_batch, target_batch), Optimization.AutoZygote())
@@ -127,8 +127,8 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vy += Flux.Losses.mae(Vy_pred[Vy_ref .!= 0.0]./normVy, Vy_ref[Vy_ref.!= 0.0]./normVy; agg=mean)
 
         # RMSE
-        l_Vx += Flux.Losses.mse(Vx_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)^0.5
-        l_Vy += Flux.Losses.mse(Vy_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)^0.5
+        # l_Vx += Flux.Losses.mse(Vx_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)^0.5
+        # l_Vy += Flux.Losses.mse(Vy_pred[Vy_ref .!= 0.0], Vy_ref[Vy_ref.!= 0.0]; agg=mean)^0.5
 
         # Classic loss function with the full matrix
         # normV = mean(V_ref[V_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
@@ -140,9 +140,10 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vx += normV^(2) * Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean)
         # l_Vy += normV^(2) * Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
 
+        ice_threshold = 10.0
         normV = (mean(Vx_ref.^2) + mean(Vy_ref.^2))^0.5f0
         # normV = maximum(Vx_ref[inn1(H_ref) .> 100.0].^2 .+ Vy_ref[inn1(H_ref) .> 100.0].^2)^0.5f0
-        l_V_local = (normV)^(-2) * Flux.Losses.mse(Vx_pred[inn1(H_ref) .> 100.0], Vx_ref[inn1(H_ref) .> 100.0]; agg=mean) + Flux.Losses.mse(Vy_pred[inn1(H_ref) .> 100.0], Vy_ref[inn1(H_ref) .> 100.0]; agg=mean)
+        l_V_local = (normV)^(-2) * Flux.Losses.mse(Vx_pred[inn1(H_ref) .> ice_threshold], Vx_ref[inn1(H_ref) .> ice_threshold]; agg=mean) + Flux.Losses.mse(Vy_pred[inn1(H_ref) .> ice_threshold], Vy_ref[inn1(H_ref) .> ice_threshold]; agg=mean)
         l_V += l_V_local
         # l_V += normV^1.0f0 * log(l_V_local)        
     end 
@@ -167,7 +168,7 @@ function perform_V_inversion(θ, UD, gdirs_climate_batch, gtd_grids_batch, conte
         years = gdirs_climate_batch[1][1]
         gtd_grids_batch = zeros(size(years))
     end
-    V_preds = map((H, context, gdirs_climate) -> SIA(H, gdirs_climate, context, θ, UD[1], target[1]), gtd_grids_batch, context_batch, gdirs_climate_batch)
+    V_preds = pmap((H, context, gdirs_climate) -> SIA(H, gdirs_climate, context, θ, UD[1], target[1]), gtd_grids_batch, context_batch, gdirs_climate_batch)
 
     return V_preds # (Vx, Vy, V)
 end

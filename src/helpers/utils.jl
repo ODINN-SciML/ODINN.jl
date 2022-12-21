@@ -4,21 +4,22 @@
 
 4-point average of a matrix
 """
-@views avg(A) = 0.25f0 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+@views avg(A) = 0.25 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+
 
 """
     avg_x(A)
 
 2-point average of a matrix's X axis
 """
-@views avg_x(A) = 0.5f0 .* ( A[1:end-1,:] .+ A[2:end,:] )
+@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
 
 """
     avg_y(A)
 
 2-point average of a matrix's Y axis
 """
-@views avg_y(A) = 0.5f0 .* ( A[:,1:end-1] .+ A[:,2:end] )
+@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
 
 """
     diff_x(A)
@@ -79,13 +80,12 @@ end
 Smooth data contained in a matrix with one time step (CFL) of diffusion.
 """
 @views function smooth!(A)
-    A[2:end-1,2:end-1] .= A[2:end-1,2:end-1] .+ 1.0f0./4.1f0.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    A[2:end-1,2:end-1] .= A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
     A[1,:]=A[2,:]; A[end,:]=A[end-1,:]; A[:,1]=A[:,2]; A[:,end]=A[:,end-1]
-    return
 end
 
 function smooth(A)
-    A_smooth = A[2:end-1,2:end-1] .+ 1.0f0./4.1f0.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    A_smooth = A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
     @tullio A_smooth_pad[i,j] := A_smooth[pad(i-1,1,1),pad(j-1,1,1)] # Fill borders 
     return A_smooth_pad
 end
@@ -146,29 +146,36 @@ function get_gdir_refs(refs, gdirs)
 end
 
 """
-    generate_batches(batch_size, θ, UD, target, gdirs_climate, gdir_refs, context_batches, gtd_grids)
+    generate_batches(batch_size, UD, target, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
 
-Generates batches based on input data and feed them to the loss function.
+Generates batches for the UE inversion problem based on input data and feed them to the loss function.
 """
-function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids; shuffle=true)
+function generate_batches(batch_size, UD, target::String, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
     targets = repeat([target], length(gdirs_climate_batches))
     UDs = repeat([UD], length(gdirs_climate_batches))
     if isnothing(gtd_grids) 
         gtd_grids = repeat([nothing], length(gdirs_climate_batches))
         batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
-        # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
     else
-        batches = [UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets]
-        # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
+        batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
     end
     train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
     return train_loader
 end
 
-function create_gdirs_climate_batches(gdirs_climate)
+"""
+    generate_batches(batch_size, UA, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings; shuffle=true))
 
+Generates batches for the UDE problem based on input data and feed them to the loss function.
+"""
+function generate_batches(batch_size, UA, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings; shuffle=true)
+    UAs = repeat([UA], length(gdirs_climate_batches))
+    UDE_settings_batches = repeat([UDE_settings], length(gdirs_climate_batches))
+    batches = (UAs, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings_batches)
+    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
+    return train_loader
 end
 
 
@@ -241,7 +248,7 @@ Predicts the value of A with a neural network based on the long-term air tempera
 """
 function predict_A̅(UA_f, θ, temp)
     UA = UA_f(θ)
-    return UA(temp) .* 1f-17
+    return UA(temp) #.* 1e-17
 end
 
 function sigmoid_temp(x)
@@ -252,15 +259,15 @@ function sigmoid_temp(x)
 end
 
 function sigmoid_A(x) 
-    minA_out = 0.0f0 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 1.0f-16    
-    return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
+    minA_out = 0.0 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 1.0e-16    
+    return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
 end
 
 function sigmoid_A_inv(x) 
-    minA_out = 8.0f-2 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0f2
-    return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
+    minA_out = 8.0e-4 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 8.0e2
+    return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
 end
 
 # Convert Pythonian date to Julian date
