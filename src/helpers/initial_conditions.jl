@@ -15,9 +15,9 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
         # Retrieve initial conditions from OGGM
         # initial ice thickness conditions for forward model
         if ice_thickness_source == "millan"
-            H₀ = ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0)
+            H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
         elseif ice_thickness_source == "farinotti"
-            H₀ = glacier_gd.consensus_ice_thickness.data
+            H₀ = Float64.(glacier_gd.consensus_ice_thickness.data)
         end
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
         if smoothing 
@@ -49,8 +49,8 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
     try
         H = deepcopy(H₀)
         B = glacier_gd.topo.data .- H₀ # bedrock
-        S = glacier_gd.topo.data # surface elevation
-        V = ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0)
+        S = Float64.(glacier_gd.topo.data) # surface elevation
+        V = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
         fillNaN!(V)
         nx = glacier_gd.y.size # glacier extent
         ny = glacier_gd.x.size # really weird, but this is inversed 
@@ -99,10 +99,9 @@ end
 
 function build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=nothing)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
-    rgi_id = gdir.rgi_id
     simulation_years = collect(tspan[1]:tspan[2])
 
-    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V, climate_years, simulation_years)
+    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, gdir.rgi_id, S, V, climate_years, simulation_years)
 
     return context
 end

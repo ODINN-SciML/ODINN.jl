@@ -23,13 +23,13 @@ processes = 14
 # Enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 # Flags
-ODINN.set_use_MB(true)
+ODINN.set_use_MB(false)
 ODINN.make_plots(true)    
 # Spin up 
 ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
 ODINN.set_use_spinup(false) # Use the updated spinup
 # Reference simulations
-ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
+ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
 # UDE training
 ODINN.set_train(true)    # Train UDE
 ODINN.set_retrain(false) # Re-use previous NN weights to continue training
@@ -47,7 +47,7 @@ function run()
                 "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-    gdirs = init_gdirs(rgi_ids)
+    gdirs = init_gdirs(rgi_ids[4:7])
 
     #########################################
     ###########  CLIMATE DATA  ##############
@@ -100,7 +100,7 @@ function run()
             θ_trained = trained_weights["θ_trained"]
             # train_settings = (BFGS(initial_stepnorm=0.05), 20) # optimizer, epochs
             batch_size = length(gdir_refs)
-            train_settings = (BFGS(initial_stepnorm=0.02f0), n_BFGS, batch_size) # optimizer, epochs, batch_size
+            train_settings = (BFGS(initial_stepnorm=0.02), n_BFGS, batch_size) # optimizer, epochs, batch_size
             iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, 
                                                                         tspan, train_settings, gdir_refs, θ_trained; 
                                                                         random_MB=random_MB) # retrain

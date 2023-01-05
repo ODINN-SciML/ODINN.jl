@@ -139,7 +139,7 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_se
         if use_MB[]
             UDE_settings = Dict("reltol"=>10e-6,
                                 "solver"=>RDPK3Sp35(), #explore methods
-                                "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
+                                "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP())) # Currently just ReverseDiffVJP supports callbacks.
         else
             UDE_settings = Dict("reltol"=>10e-6,
                                 "solver"=>RDPK3Sp35(),
@@ -189,6 +189,7 @@ callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_s
         avg_temps = [mean(temps[i]) for i in 1:length(temps)]
         p = sortperm(avg_temps)
         avg_temps = avg_temps[p]
+        @ignore @infiltrate
         pred_A = predict_A̅(UA_f[1], θ, collect(-23.0:1.0:0.0)')
         pred_A = [pred_A...] # flatten
         true_A = A_fake(avg_temps, A_noise[p], noise)
@@ -263,7 +264,6 @@ function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_s
         l_avg = (l_Vx/length(gdir_refs) + l_Vy/length(gdir_refs) + l_H/length(gdir_refs))/3.0
     end
 
-    @show l_avg
     return l_avg, UA_f[1]
 end
 
@@ -307,7 +307,12 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings)
         function action!(integrator)
             year = floor(Int, integrator.t[end])  
             MB = compute_MB_matrix(context, S, integrator.u, year)
-            integrator.u .+= MB
+            println("integrator.u before: ", mean(integrator.u))
+            H_buf = Buffer(integrator.u)
+            H_buf .+= MB
+            integrator.u = copy(H_buf)
+            println("integrator.u after: ", mean(integrator.u))
+            # integrator.u .+= MB
         end
         cb_MB = DiscreteCallback(stop_condition, action!)
     else
@@ -315,6 +320,8 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings)
         cb_MB = DiscreteCallback((u,t,integrator)->false, nothing)
     end
     
+    @show typeof(θ)
+    @show typeof(context)
     iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA_f, context, longterm_temps_batch) # closure
     iceflow_prob = ODEProblem(iceflow_UDE_batch, H, tspan, tstops=tstops, θ)
     iceflow_sol = solve(iceflow_prob, UDE_settings["solver"], 
@@ -377,12 +384,17 @@ function iceflow_NN(H, θ, t, UA_f, context, temps)
     B = context[1]
     S = B .+ H
     climate_years = context[11]
+
+    @show t
+
     year = floor(Int, t) 
     temp = temps[year .== climate_years]
     A = predict_A̅(UA_f, θ, temp)[1]
     
     # Compute the Shallow Ice Approximation in a staggered grid
     dH = SIA(H, A, context) 
+    @show any(isnan.(dH))
+    @show mean(dH)
     
     return dH
 end  
