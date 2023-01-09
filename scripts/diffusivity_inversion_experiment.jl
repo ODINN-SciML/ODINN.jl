@@ -8,11 +8,12 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 using Revise # very important!
-# using AbbreviatedStackTraces
+using AbbreviatedStackTraces
 using ODINN
 using Plots
 using Optim, OptimizationOptimJL
-import OptimizationOptimisers.Adam
+using OptimizationOptimisers
+import Optimisers
 using Infiltrator
 using Distributed
 using JLD2
@@ -21,12 +22,15 @@ using JLD2
 ENV["GKSwstype"]="nul"
 
 # ODINN settings
-processes = 20
+processes = 18
 # We enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 # Flags
-ODINN.set_use_MB(false)
-ODINN.make_plots(true)    
+ODINN.set_use_MB(true)
+ODINN.make_plots(true)   
+# Spin up 
+ODINN.set_run_spinup(false) # Run the spin-up simulation
+ODINN.set_use_spinup(false) # Use the updated spinup 
 # Reference dataset
 ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
 # UDE training
@@ -36,7 +40,7 @@ ODINN.set_ice_thickness_source("farinotti")
 
 function run()
 
-    tspan = (2017, 2018) # period in years for simulation
+    tspan = (2017, 2018) # period in years for simulation (also for spin-up)
 
     # Configure OGGM settings in all workers
     working_dir = joinpath(homedir(), "Python/OGGM_data_diffusivity")
@@ -67,6 +71,12 @@ function run()
     #########################################
     #########  REFERENCE DATASET  ###########
     #########################################
+
+    if ODINN.run_spinup[]
+        println("Spin up run to stabilize initial conditions...")
+        tspan_spinup = (2000, 2018)
+        @time spinup(gdirs_climate, tspan_spinup)
+    end
 
     # Run forward model for selected glaciers
     if ODINN.create_ref_dataset[]
@@ -99,9 +109,10 @@ function run()
 
         # Continue training with BFGS
         epochs_BFGS = 200
-        batch_size = 4
-        # optimizer = BFGS(initial_stepnorm=0.001f0)
-        optimizer = Adam(0.001)
+        # batch_size = 4
+        batch_size = length(gdir_refs)
+        optimizer = BFGS(initial_stepnorm=0.001f0)
+        # optimizer = Adam(0.001)
         train_settings = (optimizer, epochs_BFGS, batch_size) # optimizer, epochs, batch size
         @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; 
                                                         gdirs_climate=gdirs_climate,
@@ -116,13 +127,13 @@ function run()
         jldsave(joinpath(ODINN.root_dir, "data/trained_inv_weights.jld2"); θ_trained, ODINN.current_epoch)
     else
         epochs = 250
-        # batch_size = 1
+        # batch_size = 10
         batch_size = length(gdir_refs)
         optimizer = BFGS(initial_stepnorm=0.001f0)
         # optimizer = LBFGS()
-        # optimizer = Adam(0.01)
+        # optimizer = Adam(0.05)
         train_settings = (optimizer, epochs, batch_size) # optimizer, epochs
-    
+        
         @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; 
                                                         gdirs_climate=gdirs_climate,
                                                         gdirs_climate_batches=gdirs_climate_batches, 

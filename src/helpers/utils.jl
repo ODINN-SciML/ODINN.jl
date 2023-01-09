@@ -4,21 +4,22 @@
 
 4-point average of a matrix
 """
-@views avg(A) = 0.25f0 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+@views avg(A) = 0.25 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+
 
 """
     avg_x(A)
 
 2-point average of a matrix's X axis
 """
-@views avg_x(A) = 0.5f0 .* ( A[1:end-1,:] .+ A[2:end,:] )
+@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
 
 """
     avg_y(A)
 
 2-point average of a matrix's Y axis
 """
-@views avg_y(A) = 0.5f0 .* ( A[:,1:end-1] .+ A[:,2:end] )
+@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
 
 """
     diff_x(A)
@@ -79,13 +80,12 @@ end
 Smooth data contained in a matrix with one time step (CFL) of diffusion.
 """
 @views function smooth!(A)
-    A[2:end-1,2:end-1] .= A[2:end-1,2:end-1] .+ 1.0f0./4.1f0.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    A[2:end-1,2:end-1] .= A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
     A[1,:]=A[2,:]; A[end,:]=A[end-1,:]; A[:,1]=A[:,2]; A[:,end]=A[:,end-1]
-    return
 end
 
 function smooth(A)
-    A_smooth = A[2:end-1,2:end-1] .+ 1.0f0./4.1f0.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    A_smooth = A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
     @tullio A_smooth_pad[i,j] := A_smooth[pad(i-1,1,1),pad(j-1,1,1)] # Fill borders 
     return A_smooth_pad
 end
@@ -145,29 +145,36 @@ function get_gdir_refs(refs, gdirs)
 end
 
 """
-    generate_batches(batch_size, θ, UD, target, gdirs_climate, gdir_refs, context_batches, gtd_grids)
+    generate_batches(batch_size, UD, target, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
 
-Generates batches based on input data and feed them to the loss function.
+Generates batches for the UE inversion problem based on input data and feed them to the loss function.
 """
-function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids)
+function generate_batches(batch_size, UD, target::String, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
     targets = repeat([target], length(gdirs_climate_batches))
     UDs = repeat([UD], length(gdirs_climate_batches))
     if isnothing(gtd_grids) 
         gtd_grids = repeat([nothing], length(gdirs_climate_batches))
         batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
-        # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
     else
-        batches = [UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets]
-        # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
+        batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
     end
     train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size)
 
     return train_loader
 end
 
-function create_gdirs_climate_batches(gdirs_climate)
+"""
+    generate_batches(batch_size, UA, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings; shuffle=true))
 
+Generates batches for the UDE problem based on input data and feed them to the loss function.
+"""
+function generate_batches(batch_size, UA, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings; shuffle=true)
+    UAs = repeat([UA], length(gdirs_climate_batches))
+    UDE_settings_batches = repeat([UDE_settings], length(gdirs_climate_batches))
+    batches = (UAs, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings_batches)
+    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
+    return train_loader
 end
 
 
@@ -216,7 +223,7 @@ function get_NN_inversion_A(θ_trained)
 end
 
 function get_NN_inversion_D(θ_trained)
-    UA = Chain(
+    UD = Chain(
         Dense(3,20, x->softplus.(x)),
         Dense(20,15, x->softplus.(x)),
         Dense(15,10, x->softplus.(x)),
@@ -224,11 +231,21 @@ function get_NN_inversion_D(θ_trained)
         Dense(5,1, softplus) # force diffusivity to be positive
     )
     # See if parameters need to be retrained or not
-    θ, UA_f = Flux.destructure(UA)
+    θ, UD_f = Flux.destructure(UD)
     if !isempty(θ_trained)
         θ = θ_trained
     end
-    return UA_f, θ
+    return UD_f, θ
+end
+
+"""
+    predict_A̅(UA_f, θ, temp)
+
+Predicts the value of A with a neural network based on the long-term air temperature.
+"""
+function predict_A̅(UA_f, θ, temp)
+    UA = UA_f(θ)
+    return UA(temp) #.* 1e-17
 end
 
 function sigmoid_A(x) 
@@ -238,9 +255,9 @@ function sigmoid_A(x)
 end
 
 function sigmoid_A_inv(x) 
-    minA_out = 8.0f-4 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0f2
-    return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
+    minA_out = 8.0e-4 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 8.0e2
+    return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
 end
 
 # Convert Pythonian date to Julian date
@@ -273,3 +290,40 @@ function config_training_state(θ_trained)
         deleteat!(loss_history, current_epoch:length(loss_history))
     end
 end
+
+# Polynomial fit for Cuffey and Paterson data 
+A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
+
+"""
+    A_fake(temp, noise=false)
+
+Fake law establishing a theoretical relationship between ice viscosity (A) and long-term air temperature.
+"""
+function A_fake(temp, A_noise=nothing, noise=false)
+    # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
+    A = A_f.(temp) # polynomial fit
+    if noise[]
+        A = abs.(A .+ A_noise)
+    end
+    return A
+end
+
+function build_D_features(H::Matrix, temp, ∇S)
+    ∇S_flat = ∇S[inn1(H) .!= 0.0] # flatten
+    H_flat = H[H .!= 0.0] # flatten
+    T_flat = repeat(temp,length(H_flat))
+    X = Flux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
+    return X
+end
+
+function build_D_features(H::Float64, temp::Float64, ∇S::Float64)
+    X = Flux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
+    return X
+end
+
+function predict_diffusivity(UD_f, θ, X)
+    UD = UD_f(θ)
+    return UD(X)[1,:]
+end
+
+

@@ -11,13 +11,13 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
     # Load glacier gridded data
     glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
     if run_spinup || !use_spinup[]
+        # println("Using $ice_thickness_source for initial state")
         # Retrieve initial conditions from OGGM
         # initial ice thickness conditions for forward model
         if ice_thickness_source == "millan"
-            H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
+            H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
         elseif ice_thickness_source == "farinotti"
-            H₀ = Float32.(glacier_gd.consensus_ice_thickness.data)
-            # H₀ = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
+            H₀ = Float64.(glacier_gd.consensus_ice_thickness.data)
         end
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
         if smoothing 
@@ -30,30 +30,32 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
             mkdir(gdir_path)
         end
     else
+        # println("Using spin-up for initial state")
         # Retrieve initial state from previous spinup simulation
-        gdir_refs = load(joinpath(ODINN.root_dir, "data/gdir_refs.jld2"))["gdir_refs"]
-        H₀ = similar(gdir_refs[1]["H"])
+        gdir_spinup = load(joinpath(ODINN.root_dir, "data/spinup/gdir_refs.jld2"))["gdir_refs"]
+        H₀ = similar(gdir_spinup[1]["H"])
         found = false
-        for i in 1:length(gdir_refs)
-            if gdir_refs[i]["RGI_ID"] == gdir.rgi_id
-                H₀ = gdir_refs[i]["H"]
+        for i in 1:length(gdir_spinup)
+            if gdir_spinup[i]["RGI_ID"] == gdir.rgi_id
+                H₀ = gdir_spinup[i]["H"]
                 found = true
                 break
             end
         end
+
         @assert found == true "Spin up glacier simulation not found for $(gdir.rgi_id)."
 
     end
     try
         H = deepcopy(H₀)
         B = glacier_gd.topo.data .- H₀ # bedrock
-        S = glacier_gd.topo.data # surface elevation
-        V = Float32.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
+        S = Float64.(glacier_gd.topo.data) # surface elevation
+        V = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
         fillNaN!(V)
         nx = glacier_gd.y.size # glacier extent
         ny = glacier_gd.x.size # really weird, but this is inversed 
-        Δx = Float32(abs(gdir.grid.dx))
-        Δy = Float32(abs(gdir.grid.dy))
+        Δx = abs(gdir.grid.dx)
+        Δy = abs(gdir.grid.dy)
 
         return H₀, H, S, B, V, (nx,ny), (Δx,Δy)
     catch
@@ -73,22 +75,22 @@ function build_PDE_context(gdir, longterm_temp, climate_years, A_noise, tspan; r
     rgi_id = gdir.rgi_id
     # Initialize all matrices for the solver
     nx, ny = nxy
-    S, dSdx, dSdy = zeros(Float32,nx,ny),zeros(Float32,nx-1,ny),zeros(Float32,nx,ny-1)
-    dSdx_edges, dSdy_edges, ∇S = zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1),zeros(Float32,nx-1,ny-1)
-    D, Fx, Fy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-2),zeros(Float32,nx-2,ny-1)
-    V, Vx, Vy = zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1),zeros(Float32,nx-1,ny-1)
-    MB = zeros(Float32,nx,ny)
-    A = [2f-16]
-    α = [0.0f0]                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
-    C = [15f-14]    
-    Γ = [0.0f0]
-    maxS, minS = [0.0f0], [0.0f0]     
-    simulation_years = collect(tspan[1]:tspan[2])
+    S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
+    dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
+    D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
+    V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
+    MB = zeros(Float64,nx,ny)
+    A = [2e-16]
+    α = [0.0]                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
+    C = [15e-14]    
+    Γ = [0.0]
+    maxS, minS = [0.0], [0.0]     
+    simulation_years = collect(Int(tspan[1]):Int(tspan[2]))
     
     # Gather simulation parameters
     current_year = [0] 
     if isnothing(random_MB)
-        random_MB = zeros(Float32,Int(tspan[2]) - Int(tspan[1]))
+        random_MB = zeros(Float64,Int(tspan[2]) - Int(tspan[1]))
     end
     context = ArrayPartition(A, B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
                             current_year, nxy, Δxy, H₀, tspan, A_noise, random_MB, MB, rgi_id, Γ, maxS, minS, climate_years, simulation_years)
@@ -97,18 +99,33 @@ end
 
 function build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=nothing)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
-    rgi_id = gdir.rgi_id
     simulation_years = collect(tspan[1]:tspan[2])
 
-    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, rgi_id, S, V, climate_years, simulation_years)
+    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, gdir.rgi_id, S, V, climate_years, simulation_years)
 
     return context
 end
 
 # UDE  context using Glathida for H
-function build_UDE_context_inv(gdir, tspan)
-    H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
+function build_UDE_context_inv(gdir, gdir_ref, tspan;  run_spinup=false)
+    H₀, H₁, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
+    # Get evolved tickness and surface
+    H = gdir_ref["H"]
+
+    @ignore begin
+        glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
+        H₁ = glacier_gd.consensus_ice_thickness.data
+        fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+        # smooth!(H₁)
+        heatmap_diff = Plots.heatmap(H₀ .- H, title="Spin-up vs Reference difference")
+        heatmap_diff2 = Plots.heatmap(H₁ .- H₀, title="Farinotti vs spin-up difference")
+        heatmap_diff3 = Plots.heatmap(H₁ .- H, title="Farinotti vs Reference difference")
+        training_path = joinpath(root_plots,"inversions")
+        Plots.savefig(heatmap_diff, joinpath(training_path, "H_diff_su_ref.pdf"))
+        Plots.savefig(heatmap_diff2, joinpath(training_path, "H_diff_far_spu.pdf"))
+        Plots.savefig(heatmap_diff3, joinpath(training_path, "H_diff_far_ref.pdf"))
+    end
 
     context = (nxy, Δxy, tspan, rgi_id, S, V, H₀)
 
