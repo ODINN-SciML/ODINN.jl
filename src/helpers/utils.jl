@@ -139,8 +139,7 @@ function get_gdir_refs(refs, gdirs)
                                 "Vx"=>ref["Vx"],
                                 "Vy"=>ref["Vy"],
                                 "S"=>ref["S"],
-                                "B"=>ref["B"],
-                                "Temp"=>ref["Temp"]))
+                                "B"=>ref["B"]))
     end
     return gdir_refs
 end
@@ -150,7 +149,7 @@ end
 
 Generates batches based on input data and feed them to the loss function.
 """
-function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids; shuffle=true)
+function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids)
     targets = repeat([target], length(gdirs_climate_batches))
     UDs = repeat([UD], length(gdirs_climate_batches))
     if isnothing(gtd_grids) 
@@ -161,7 +160,7 @@ function generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdi
         batches = [UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets]
         # batches = [[UDs[i], gdirs_climate[i], gdir_refs[i], context_batches[i], gtd_grids[i], targets[i]] for i in 1:length(gdirs_climate)]
     end
-    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
+    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size)
 
     return train_loader
 end
@@ -201,14 +200,12 @@ function get_NN_inversion(θ_trained, target)
     return U, θ
 end
 
-sigmoid(x) = 1 / (1 + exp(-x))
-
 function get_NN_inversion_A(θ_trained)
     UA = Chain(
-        Dense(1,3, x->sigmoid_temp.(x)),
-        Dense(3,10, x->sigmoid.(x)),
-        Dense(10,3, x->sigmoid.(x)),
-        Dense(3,1, sigmoid_A)
+        Dense(1,3, x->softplus.(x)),
+        Dense(3,10, x->softplus.(x)),
+        Dense(10,3, x->softplus.(x)),
+        Dense(3,1, softplus)
     )
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
@@ -234,16 +231,9 @@ function get_NN_inversion_D(θ_trained)
     return UA_f, θ
 end
 
-function sigmoid_temp(x)
-    minT = -20
-    maxT = 0
-    x_centered = (x - (minT + maxT)/2) / (maxT - minT)
-    return sigmoid(x_centered)
-end
-
 function sigmoid_A(x) 
-    minA_out = 0.0f0 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 1.0f-16    
+    minA_out = 8.0f-3 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 8.0f0
     return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
 end
 
@@ -275,34 +265,11 @@ end
 
 Configure training state with current epoch and its loss history. 
 """
-function config_training_state(θ_trained, batch_size, n_gdirs)
+function config_training_state(θ_trained)
     if length(θ_trained) == 0
         reset_epochs()
     else
         # Remove loss history from unfinished trainings
         deleteat!(loss_history, current_epoch:length(loss_history))
-    end
-
-    @assert batch_size <= n_gdirs "Batch size larger that dataset! Reduce it to max $n_gdirs."
-end
-
-"""
-    update_training_state(batch_size, n_gdirs)
-
-Update training state to know if the training has completed an epoch. 
-If so, reset minibatches, update history loss and bump epochs.
-"""
-function update_training_state(l, batch_size, n_gdirs)
-    # Update minibatch count and loss for the current epoch
-    global current_minibatches += batch_size
-    global loss_epoch += l
-    if current_minibatches >= n_gdirs
-        # Track evolution of loss per epoch
-        push!(loss_history, loss_epoch)
-        println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", loss_epoch)
-        # Bump epoch and reset loss and minibatch count
-        global current_epoch += 1
-        global current_minibatches = 0
-        global loss_epoch = 0.0
     end
 end

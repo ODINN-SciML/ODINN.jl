@@ -31,26 +31,24 @@ invert_iceflow(gdirs, train_settings, θ_trained=[], loss_history=[])
 Performs an inversion on the SIA to train a NN on the ice flow law
 """
 function invert_iceflow(gdirs_climate, gdirs_climate_batches, gtd_grids, gdir_refs, tspan, train_settings, θ_trained, target)
-    
-    epochs = train_settings[2]
-    batch_size = train_settings[3]
-    gdirs = gdirs_climate[2]
-    n_gdirs = length(gdirs)
     # Configure the current epoch and training history for the run
-    config_training_state(θ_trained, batch_size, n_gdirs)
+    config_training_state(θ_trained)
     
     optimizer = train_settings[1]
+    epochs = train_settings[2]
+    batch_size = train_settings[3]
     UD, θ = get_NN_inversion(θ_trained, target)
+    gdirs = gdirs_climate[2]
 
     # Build context for all the batches before training
     println("Building context...")
     context_batches = try 
-         pmap((gdir, gdir_number) -> build_UDE_context_inv(gdir, gdir_number, tspan, gdir_refs), gdirs, 1:length(gdirs))
+         pmap(gdir -> build_UDE_context_inv(gdir, tspan), gdirs)
     catch error
         @error "$error: Missing data for some glaciers. The list of missing_glaciers has been updated. Try again."
     end
     
-    cb_plots_inv(θ, l, UD_f) = callback_plots_inv(θ, l, UD_f, gdirs_climate, target, batch_size)
+    cb_plots_inv(θ, l, UD_f) = callback_plots_inv(θ, l, UD_f, gdirs_climate, target)
 
     # Create batches for inversion training 
     train_loader = generate_batches(batch_size, θ, UD, target, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids)
@@ -80,23 +78,21 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
     V_preds = perform_V_inversion(θ, UD, gdirs_climate, gtd_grids, context_batches, target)
 
     # Compute loss function for the full batch
-    l_V = 0.0f0
-
+    l_Vx, l_Vy = 0.0f0, 0.0f0
     for i in 1:length(V_preds)
         if isnothing(gtd_grids[1])
             # Get reference dataset
-            # temp = gdir_refs[i]["Temp"]
             H_ref = gdir_refs[i]["H"]
             Vx_ref = gdir_refs[i]["Vx"]
             Vy_ref = gdir_refs[i]["Vy"]
-            # V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
+            V_ref = sqrt.(Vx_ref.^2 .+ Vy_ref.^2)
         else
             # Get ice velocities from Millan et al. (2022)
             V_ref = avg(context_batches[i][6])
         end
         Vx_pred = V_preds[i][1]
         Vy_pred = V_preds[i][2]
-        # V_pred = (Vx_pred.^2 .+ Vy_pred.^2).^0.5
+
         # H = context_batches[i][7]
 
         # l_Vx += mean((abs.(Vx_pred[Vx_ref .!= 0.0] .- Vx_ref[Vx_ref.!= 0.0]).^7))^(1/7)
@@ -117,8 +113,6 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
         # l_Vy += (1/normVy) * mean((abs.(Vy_pred[Vy_ref .!= 0.0f0] .- Vy_ref[Vy_ref .!= 0.0f0]).^(1/2)))^2
 
         # MAE
-        # normVx = Vx_ref[Vx_ref .!= 0.0f0] .+ ϵ
-        # normVy = Vy_ref[Vy_ref .!= 0.0f0] .+ ϵ
         # l_Vx += Flux.Losses.mae(Vx_pred[Vx_ref .!= 0.0]./normVx, Vx_ref[Vx_ref.!= 0.0]./normVx; agg=mean)
         # l_Vy += Flux.Losses.mae(Vy_pred[Vy_ref .!= 0.0]./normVy, Vy_ref[Vy_ref.!= 0.0]./normVy; agg=mean)
 
@@ -128,27 +122,21 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
 
         # Classic loss function with the full matrix
         # normV = mean(V_ref[V_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
-        # normVx = mean(Vx_ref.^2) #.+ ϵ
-        # normVy = mean(Vy_ref.^2) #.+ ϵ
-        # normV = (normVx + normVy)^0.5f0
+        normVx = mean(Vx_ref[Vx_ref .!= 0.0f0].^2)^0.5f0 #.+ ϵ
+        normVy = mean(Vy_ref[Vy_ref .!= 0.0f0].^2)^0.5f0  #.+ ϵ
         # normVx = mean(Vx_ref[Vx_ref .!= 0.0f0]) #.+ ϵ
         # normVy = mean(Vy_ref[Vy_ref .!= 0.0f0]) #.+ ϵ
-        # l_Vx += normV^(2) * Flux.Losses.mse(Vx_pred, Vx_ref; agg=mean)
-        # l_Vy += normV^(2) * Flux.Losses.mse(Vy_pred, Vy_ref; agg=mean)
-
-        normV = (mean(Vx_ref.^2) + mean(Vy_ref.^2))^0.5f0
-        # normV = maximum(Vx_ref[inn1(H_ref) .> 100.0].^2 .+ Vy_ref[inn1(H_ref) .> 100.0].^2)^0.5f0
-        l_V_local = (normV)^(-2) * Flux.Losses.mse(Vx_pred[inn1(H_ref) .> 100.0], Vx_ref[inn1(H_ref) .> 100.0]; agg=mean) + Flux.Losses.mse(Vy_pred[inn1(H_ref) .> 100.0], Vy_ref[inn1(H_ref) .> 100.0]; agg=mean)
-        l_V += l_V_local
-        # l_V += normV^1.0f0 * log(l_V_local)        
+        l_Vx += normVx^(-0.5) * Flux.Losses.mse(Vx_pred[avg(H_ref) .!= 0.0f0], Vx_ref[avg(H_ref).!= 0.0f0]; agg=mean)
+        l_Vy += normVy^(-0.5) * Flux.Losses.mse(Vy_pred[avg(H_ref) .!= 0.0f0], Vy_ref[avg(H_ref).!= 0.0f0]; agg=mean)
     end 
 
+    # We use the average loss between x and y V
+    l_V = (l_Vx + l_Vy)/2
+
     # Plot V diffs to understand training
-    # @ignore begin
-    #     plot_V_diffs(gdirs_climate, gdir_refs, V_preds)
-    #     heatmap_diff = Plots.heatmap(Vx_pred .- Vx_ref)
-    #     Plots.savefig(heatmap_diff, "vel_diff")
-    # end
+    @ignore begin
+        plot_V_diffs(gdirs_climate, gdir_refs, V_preds)
+    end
 
     return l_V, UD
 end
@@ -168,60 +156,57 @@ function perform_V_inversion(θ, UD, gdirs_climate_batch, gtd_grids_batch, conte
     return V_preds # (Vx, Vy, V)
 end
 
-callback_plots_inv = function (θ, l, UD_f, gdirs_climate, target, batch_size) # callback function to observe training
+callback_plots_inv = function (θ, l, UD_f, gdirs_climate, target) # callback function to observe training
     # Choose between the two callbacks to display the training progress
     training_path = joinpath(root_plots,"inversions")
-    gdirs = gdirs_climate[2]
-    n_gdirs = length(gdirs)
     if target == "D"
-        callback_plots_inv_D(θ, l, UD_f, training_path, batch_size, n_gdirs)
+        callback_plots_inv_D(θ, l, UD_f, training_path)
     elseif target == "A"
+        gdirs = gdirs_climate[2]
         temps = gdirs_climate[3]
         A_noise = randn(rng_seed(), length(gdirs)).* noise_A_magnitude
-        callback_plots_A(θ, l, UD_f, temps, A_noise, training_path, batch_size, n_gdirs)
+        callback_plots_A(θ, l, UD_f, temps, A_noise, training_path)
     end
     false
 end
 
-callback_plots_inv_D = function (θ, l, UD_f, training_path, batch_size, n_gdirs) 
-
-    # Update training status
-    update_training_state(l, batch_size, n_gdirs)
-    
-    if current_minibatches == 0.0
-        # Let's explore the NN's output
-        H = collect(20.0:100.0:1000.0)
-        T = collect(-40.0:5.0:5.0)
-        ∇S = collect(0.0:0.06:0.6) # 0 to 35 º (in rad)
-        D_preds = []
-        for (h,t,∇s) in zip(H,T,∇S)
-            X = build_D_features(h, t, ∇s)
-            push!(D_preds, predict_diffusivity(UD_f, θ, X)[1])
-        end
-
-        # TODO: make 3 plots with all combinations
-        # Let's plot this in 3D   
-        hs = collect(LinRange(minimum(H), maximum(H), length(H)))
-        ts = collect(LinRange(minimum(T), maximum(T), length(H)))
-        ss = collect(LinRange(minimum(∇S), maximum(∇S), length(H)))
-
-        pHT = Plots.plot(hs, ts, D_preds, zcolor = reverse(D_preds), cbar = true, w = 3, 
-                                xlabel="H", ylabel="T", zlabel="D")
-
-        pH∇S = Plots.plot(hs, ss, D_preds, zcolor = reverse(D_preds), cbar = true, w = 3, 
-                            xlabel="H", ylabel="∇S", zlabel="D")
-
-        training_path = joinpath(root_plots,"inversions")
-        generate_plot_folders(training_path)
-
-        save_plot(pHT, training_path, "HT") 
-        save_plot(pH∇S, training_path, "H∇S") 
-        
-        plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
-                    ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-
-        save_plot(plot_loss, training_path, "loss") 
+callback_plots_inv_D = function (θ, l, UD_f, training_path) 
+    println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", l)
+    # Let's explore the NN's output
+    H = collect(20.0:100.0:1000.0)
+    T = collect(-40.0:5.0:5.0)
+    ∇S = collect(0.0:0.06:0.6) # 0 to 35 º (in rad)
+    D_preds = []
+    for (h,t,∇s) in zip(H,T,∇S)
+        X = build_D_features(h, t, ∇s)
+        push!(D_preds, predict_diffusivity(UD_f, θ, X)[1])
     end
 
-    return false
+    # TODO: make 3 plots with all combinations
+    # Let's plot this in 3D   
+    hs = collect(LinRange(minimum(H), maximum(H), length(H)))
+    ts = collect(LinRange(minimum(T), maximum(T), length(H)))
+    ss = collect(LinRange(minimum(∇S), maximum(∇S), length(H)))
+
+    pHT = Plots.plot(hs, ts, D_preds, zcolor = reverse(D_preds), cbar = true, w = 3, 
+                            xlabel="H", ylabel="T", zlabel="D")
+
+    pH∇S = Plots.plot(hs, ss, D_preds, zcolor = reverse(D_preds), cbar = true, w = 3, 
+                        xlabel="H", ylabel="∇S", zlabel="D")
+
+    training_path = joinpath(root_plots,"inversions")
+    generate_plot_folders(training_path)
+
+    save_plot(pHT, training_path, "HT") 
+    save_plot(pH∇S, training_path, "H∇S") 
+
+    global current_epoch += 1
+    push!(loss_history, l)
+
+    plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
+                ylabel="Loss (V)", lw = 3, c=:darkslategray3)
+
+    save_plot(plot_loss, training_path, "loss") 
+
+    false
 end

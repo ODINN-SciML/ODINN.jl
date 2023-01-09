@@ -106,13 +106,11 @@ function build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_
 end
 
 # UDE  context using Glathida for H
-function build_UDE_context_inv(gdir, gdir_number, tspan, gdir_refs)
+function build_UDE_context_inv(gdir, tspan)
     H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
-    # Get evolved tickness and surface
-    H = gdir_refs[gdir_number]["H"]
-    S .= B .+ H
-    context = (nxy, Δxy, tspan, rgi_id, S, V, H)
+
+    context = (nxy, Δxy, tspan, rgi_id, S, V, H₀)
 
     return context
 end

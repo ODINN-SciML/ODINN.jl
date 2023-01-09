@@ -1,14 +1,15 @@
 __precompile__() # this module is safe to precompile
 module ODINN
 
-###############################################
-############       PACKAGES     ##############
-###############################################
+# ##############################################
+# ###########       PACKAGES     ##############
+# ##############################################
 
 using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
 using OrdinaryDiffEq, DiffEqCallbacks
-using SciMLSensitivity, Optimization
+using SciMLSensitivity
+using Optimization, Optim, OptimizationOptimJL
 using IterTools: ncycle
 using Zygote: @ignore, Buffer 
 using Flux
@@ -24,17 +25,17 @@ using PyCall
 using HDF5, Downloads
 using SnoopPrecompile 
 
-###############################################
-#############    PARAMETERS     ###############
-###############################################
+# ##############################################
+# ############    PARAMETERS     ###############
+# ##############################################
 
 @precompile_setup begin
 
 include("helpers/parameters.jl")
 
-###############################################
-#############  ODINN LIBRARIES  ###############
-###############################################
+# ##############################################
+# ############  ODINN LIBRARIES  ###############
+# ##############################################
 
 cd(@__DIR__)
 global root_dir = dirname(Base.current_project())
@@ -58,9 +59,9 @@ end # @precompile_all_calls
 
 
 
-###############################################
-#############  PYTHON LIBRARIES  ##############
-###############################################
+# ##############################################
+# ############  PYTHON LIBRARIES  ##############
+# ##############################################
 
 @precompile_setup begin
 
@@ -81,9 +82,9 @@ const np = PyNULL()
 const xr = PyNULL()
 const pd = PyNULL()
 
-###############################################
-######### PYTHON JULIA INTERACTIONS  ##########
-###############################################
+# ##############################################
+# ######## PYTHON JULIA INTERACTIONS  ##########
+# ##############################################
 
 @precompile_all_calls begin
 
