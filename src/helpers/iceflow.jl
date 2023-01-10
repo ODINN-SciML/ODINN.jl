@@ -116,7 +116,7 @@ function simulate_iceflow_PDE(H, context, solver, tstops, cb_MB)
                         save_everystep=false, 
                         progress=true, 
                         progress_steps=10)
-    @show iceflow_sol.destats
+    # @show iceflow_sol.destats
     # Compute average ice surface velocities for the simulated period
     H_ref = iceflow_sol.u[end]
     H_ref[H_ref.<0.0] .= H_ref[H_ref.<0.0] .* 0.0 # remove remaining negative values
@@ -144,7 +144,7 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_se
     # Fill default UDE_settings if not available 
     if isnothing(UDE_settings)
         if use_MB[]
-            UDE_settings = Dict("reltol"=>10f-6, 
+            UDE_settings = Dict("reltol"=>10e-6, 
                                 "solver"=>RDPK3Sp35(), 
                                 "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
         else
@@ -168,7 +168,7 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_se
     climate_years_list = gdirs_climate[1]
     # Build context for all the batches before training
     println("Building context...")
-    context_batches = map((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
+    context_batches = pmap((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
 
     println("Training iceflow UDE...")
     temps = gdirs_climate[3]
@@ -179,14 +179,14 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_se
     train_loader = generate_batches(batch_size, UA_f, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings)
     # Setup optimization of the problem
     if optimization_method == "AD+AD"
-        println("Optimization based on pure AD.")
+        println("Optimization based on pure AD")
         optf = OptimizationFunction((θ, _, UA_batch, gdirs_climate_batch, context_batch, gdir_refs_batch, UDE_settings_batch)->loss_iceflow(θ, UA_batch, gdirs_climate_batch, context_batch, gdir_refs_batch, UDE_settings_batch), Optimization.AutoZygote())
         optprob = OptimizationProblem(optf, θ)
         iceflow_trained = solve(optprob, 
                                 optimizer, ncycle(train_loader, epochs), allow_f_increases=true,
                                 callback=cb_plots, progress=true)
     elseif optimization_method == "AD+Diff"
-        println("Optimization based on AD for NN and finite differences for ODE solver.")
+        println("Optimization based on AD for NN and finite differences for ODE solver")
         η = 0.01
         p = [temps]
         function loc_loss(θ, p)
@@ -214,52 +214,40 @@ end
 
 
 
-callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path) # callback function to observe training
-    println("Epoch #$(current_epoch) - Loss $(loss_type[]): ", l)
+callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_size, n_gdirs) # callback function to observe training
+    # Update training status
+    update_training_state(l, batch_size, n_gdirs)
 
     if current_minibatches == 0.0
         avg_temps = [mean(temps[i]) for i in 1:length(temps)]
         p = sortperm(avg_temps)
         avg_temps = avg_temps[p]
-        @ignore @infiltrate
-        pred_A = predict_A̅(UA_f[1], θ, collect(-23.0:1.0:0.0)')
+        pred_A = predict_A̅(UA_f, θ, collect(-23.0f0:1.0f0:0.0f0)')
         pred_A = [pred_A...] # flatten
         true_A = A_fake(avg_temps, A_noise[p], noise)
-        true_A_noiseless = A_fake(collect(-23.0:1.0:0.0))
 
-        yticks = collect(0.0:2e-17:8e-17)
+        yticks = collect(0.0:2f-17:8f-17)
 
-        Plots.plot(-23:1:0, true_A_noiseless, label="True noiseless A",c=:lightsteelblue2)
-        Plots.scatter!(avg_temps, true_A, label="True A", c=:lightsteelblue2)
-        plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
+        Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
+        plot_epoch = Plots.plot!(-23f0:1f0:0f0, pred_A, label="Predicted A", 
                             xlabel="Long-term air temperature (°C)", yticks=yticks,
-                            ylabel="A", ylims=(0.0,maxA[]), lw = 3, c=:dodgerblue4,
+                            ylabel="A", ylims=(0.0f0,maxA[]), lw = 3, c=:dodgerblue4,
                             legend=:topleft)
         if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
             mkpath(joinpath(training_path,"png"))
             mkpath(joinpath(training_path,"pdf"))
         end
         # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-        Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch-1).png"))
-        Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch-1).pdf"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
 
         plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
                     ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-        Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch-1).png"))
-        Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch-1).pdf"))
+        Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
+        Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
     end
-    # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
-    global current_epoch += 1
-    push!(loss_history, l)
 
-    plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
-                ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-    Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
-    Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
-    
-    false
+    return false
 end
 
 """
@@ -270,7 +258,7 @@ Loss function based on glacier ice velocities and/or ice thickness
 function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_settings) 
     H_V_preds = predict_iceflow(θ, UA_f, gdirs_climate, context_batches, UDE_settings)
     # Compute loss function for the full batch
-    l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0
+    l_V, l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0, 0.0
     for i in 1:length(H_V_preds)
         # Get ice thickness from the reference dataset
         H_ref = gdir_refs[i]["H"]
@@ -284,12 +272,12 @@ function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_s
         V̄y_pred = H_V_preds[i][3]
 
         if scale_loss[]
-            normH = mean(H_ref.^2.0f0)^0.5f0
+            normH = mean(H_ref.^2.0)^0.5
             # normV = mean(Vx_ref.^2.0f0 .+ Vy_ref.^2.0f0)^0.5f0
-            normV = maximum(Vx_ref.^2.0f0 .+ Vy_ref.^2.0f0)^0.5f0
+            normV = maximum(Vx_ref.^2.0 .+ Vy_ref.^2.0)^0.5
             l_H_loc = Flux.Losses.mse(H, H_ref; agg=mean) 
             l_V_loc = Flux.Losses.mse(V̄x_pred, Vx_ref; agg=mean) + Flux.Losses.mse(V̄y_pred, Vy_ref; agg=mean)
-            l_H += normH^(-2.0f0) * l_H_loc
+            l_H += normH^(-2.0) * l_H_loc
             # l_V += normV^(-1.0f0) * l_V_loc
             l_V += normV * log(l_V_loc)
         else
@@ -319,7 +307,7 @@ Makes a prediction of glacier evolution with the UDE for a given temperature ser
 function predict_iceflow(θ, UA_f, gdirs_climate_batches, context_batches, UDE_settings)
     # Train UDE in parallel
     # UA_f and UDE_settings need to be passed as scalars since they were transformed to Vectors for the batches
-    H_V_pred = map((context, gdirs_climate_batch) -> batch_iceflow_UDE(θ, UA_f[1], context, gdirs_climate_batch, UDE_settings[1]), context_batches, gdirs_climate_batches)
+    H_V_pred = pmap((context, gdirs_climate_batch) -> batch_iceflow_UDE(θ, UA_f[1], context, gdirs_climate_batch, UDE_settings[1]), context_batches, gdirs_climate_batches)
     return H_V_pred
 end
 
@@ -352,7 +340,7 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings)
             year = floor(Int, integrator.t[end])  
             MB = compute_MB_matrix(context, S, integrator.u, year)
             # since the mass balance is anual, we need to divide per month
-            integrator.u .+= MB / 12.0f0
+            integrator.u .+= MB ./ 12.0
         end
         cb_MB = DiscreteCallback(stop_condition, action!)
     else
@@ -360,8 +348,6 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings)
         cb_MB = DiscreteCallback((u,t,integrator)->false, nothing)
     end
     
-    @show typeof(θ)
-    @show typeof(context)
     iceflow_UDE_batch(H, θ, t) = iceflow_NN(H, θ, t, UA_f, context, longterm_temps_batch) # closure
     iceflow_prob = ODEProblem(iceflow_UDE_batch, H, tspan, tstops=tstops, θ)
     iceflow_sol = solve(iceflow_prob, 
@@ -429,8 +415,6 @@ function iceflow_NN(H, θ, t, UA_f, context, temps)
     B = context[1]
     S = B .+ H
     climate_years = context[11]
-
-    @show t
 
     year = floor(Int, t) 
     temp = temps[year .== climate_years]

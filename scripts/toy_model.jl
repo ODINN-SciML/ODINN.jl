@@ -19,11 +19,14 @@ using JLD2
 using Statistics  
 # using AbbreviatedStackTraces
 
-processes = 11
+# Activate to avoid GKS backend Plot issues in the JupyterHub
+ENV["GKSwstype"]="nul"
+
+processes = 20
 # Enable multiprocessing
 ODINN.enable_multiprocessing(processes)
 # Flags
-ODINN.set_use_MB(false)
+ODINN.set_use_MB(true)
 ODINN.make_plots(true)    
 # Spin up 
 ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
@@ -43,11 +46,12 @@ function run()
 
     # Defining glaciers to be modelled with RGI IDs
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
-                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051"]#,                	
-                # "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]
+                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
+                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316", 
+                "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-    gdirs = init_gdirs(rgi_ids[4:7])
+    gdirs = init_gdirs(rgi_ids)
 
     #########################################
     ###########  CLIMATE DATA  ##############
@@ -114,15 +118,17 @@ function run()
             # Reset epoch counter
             ODINN.reset_epochs()
 
-            println("Training from scratch...")
-            train_settings = (Adam(0.002), n_ADAM) # optimizer, epochs
-            iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs, random_MB=random_MB)
-            θ_trained = iceflow_trained.minimizer
-            println("Saving NN weights...")
-            # jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
+            # println("Training from scratch...")
+            # train_settings = (Adam(0.002), n_ADAM) # optimizer, epochs
+            # iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, 
+            #                                                 tspan, train_settings, gdir_refs; 
+            #                                                 random_MB=random_MB)
+            # θ_trained = iceflow_trained.minimizer
+            # println("Saving NN weights...")
+            # # jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
 
-            # Continue training with BFGS
-            #current_epoch = n_ADAM + 1
+            # # Continue training with BFGS
+            # #current_epoch = n_ADAM + 1
             batch_size = length(gdir_refs)
             optimizer = BFGS(initial_stepnorm=0.001)
             # optimizer = Adam(0.001)

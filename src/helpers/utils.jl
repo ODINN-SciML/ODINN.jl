@@ -158,7 +158,7 @@ function generate_batches(batch_size, UD, target::String, gdirs_climate_batches,
     else
         batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
     end
-    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size)
+    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
     return train_loader
 end
@@ -245,7 +245,7 @@ Predicts the value of A with a neural network based on the long-term air tempera
 """
 function predict_A̅(UA_f, θ, temp)
     UA = UA_f(θ)
-    return UA(temp) #.* 1e-17
+    return UA(temp) .* 1e-17
 end
 
 function sigmoid_A(x) 
@@ -274,20 +274,6 @@ function generate_plot_folders(path)
     if !isdir(joinpath(path,"png")) || !isdir(joinpath(path,"pdf"))
         mkpath(joinpath(path,"png"))
         mkpath(joinpath(path,"pdf"))
-    end
-end
-
-"""
-    config_training_state(θ_trained)
-
-Configure training state with current epoch and its loss history. 
-"""
-function config_training_state(θ_trained)
-    if length(θ_trained) == 0
-        reset_epochs()
-    else
-        # Remove loss history from unfinished trainings
-        deleteat!(loss_history, current_epoch:length(loss_history))
     end
 end
 
@@ -326,4 +312,37 @@ function predict_diffusivity(UD_f, θ, X)
     return UD(X)[1,:]
 end
 
+"""
+    config_training_state(θ_trained)
 
+Configure training state with current epoch and its loss history. 
+"""
+function config_training_state(θ_trained)
+    if length(θ_trained) == 0
+        reset_epochs()
+    else
+        # Remove loss history from unfinished trainings
+        deleteat!(loss_history, current_epoch:length(loss_history))
+    end
+end
+
+"""
+    update_training_state(batch_size, n_gdirs)
+    
+Update training state to know if the training has completed an epoch. 
+If so, reset minibatches, update history loss and bump epochs.
+"""
+function update_training_state(l, batch_size, n_gdirs)
+    # Update minibatch count and loss for the current epoch
+    global current_minibatches += batch_size
+    global loss_epoch += l
+    if current_minibatches >= n_gdirs
+        # Track evolution of loss per epoch
+        push!(loss_history, loss_epoch)
+        println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", loss_epoch)
+        # Bump epoch and reset loss and minibatch count
+        global current_epoch += 1
+        global current_minibatches = 0
+        global loss_epoch = 0.0
+    end
+end
