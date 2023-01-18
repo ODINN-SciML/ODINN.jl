@@ -346,3 +346,15 @@ function update_training_state(l, batch_size, n_gdirs)
         global loss_epoch = 0.0
     end
 end
+
+function get_default_UDE_settings()
+    if use_MB[]    
+        UDE_settings = Dict("reltol"=>10e-6, 
+                            "solver"=>RDPK3Sp35(), 
+                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
+    else
+        UDE_settings = Dict("reltol"=>10e-6,
+                            "solver"=>RDPK3Sp35(),
+                            "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP())) 
+    end
+end

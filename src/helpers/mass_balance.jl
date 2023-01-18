@@ -39,8 +39,9 @@ function generate_random_MB(gdirs_climate, tspan; plot=true)
     return random_MB
 end
 
-function compute_MB_matrix!(context, B, H_y, year)
+function compute_MB_matrix!(context, H, year)
     # MB array has tuples with (RGI_ID, MB_max, MB_min)
+    B = context.x[2]
     MB_series = context.x[24]
     simulation_years = context.x[31]
     max_MB = MB_series[2][year .== simulation_years]
@@ -49,16 +50,17 @@ function compute_MB_matrix!(context, B, H_y, year)
     # Add mass balance based on gradient
     max_S = context.x[28]
     min_S = context.x[29] 
-    max_S .= maximum(getindex(B, H_y .> 0.0) .+ getindex(H_y, H_y .> 0.0))
-    min_S .= minimum(getindex(B, H_y .> 0.0) .+ getindex(H_y, H_y .> 0.0))
+    max_S .= maximum(getindex(B, H .> 0.0) .+ getindex(H, H .> 0.0))
+    min_S .= minimum(getindex(B, H .> 0.0) .+ getindex(H, H .> 0.0))
 
     # Define the mass balance as line between minimum and maximum surface
     MB = context.x[25]
-    MB .= (min_MB .+ (B .+ H_y .- min_S) .* 
-                ((max_MB .- min_MB) ./ (max_S .- min_S)) .* Matrix(H_y.>0.0)) ./ 12.0 # TODO: control MB timestepping
+    MB .= (min_MB .+ (B .+ H .- min_S) .* 
+                ((max_MB .- min_MB) ./ (max_S .- min_S)) .* Matrix(H.>0.0)) ./ 12.0 # TODO: control MB timestepping
 end
 
-function compute_MB_matrix(context, S, H, year)
+function compute_MB_matrix(context, H, year)
+    S = context[1]
     simulation_years = context[12]
     max_MB = context[7][1][2][year .== simulation_years]
     min_MB = context[7][1][3][year .== simulation_years]

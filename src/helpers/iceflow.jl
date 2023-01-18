@@ -70,23 +70,14 @@ function batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; r
     # Callback  
     if use_MB[] && !isnothing(random_MB)
         # Define stop times every one month
-        tmin_int = Int(tspan[1])
-        tmax_int = Int(tspan[2])+1
-        tstops = range(tmin_int+1.0f0/12.0f0, tmax_int, step=1/12.0f0) |> collect
-        tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
-        B = context.x[2]
-        H_y = context.x[21]
-
-        function stop_condition(u,t,integrator) 
-            t in tstops
-        end
+        tstops, step = define_callback_steps(tspan)
+        stop_condition(u,t,integrator) = stop_condition_tstops(u,t,integrator, tstops) #closure
         function action!(integrator)
-            # println("Time in cb: ", integrator.t[end])
             year = floor(Int, integrator.t[end]) 
-            compute_MB_matrix!(context, B, H_y, year) 
+            compute_MB_matrix!(context, integrator.u, year) 
             MB = context.x[25]
-            # since this represents the anual mass balance, we need to distribute in 12 months
-            integrator.u .+= MB / 12.0f0
+            # Since this represents the anual mass balance, we need to distribute in 12 months
+            integrator.u .+= MB .* step
         end
         cb_MB = DiscreteCallback(stop_condition, action!)
     else
@@ -136,29 +127,20 @@ Train the Shallow Ice Approximation iceflow UDE. UDE_settings is optional, and r
 """
 function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_settings, gdir_refs, 
                            θ_trained=[], UDE_settings=nothing, loss_history=[]; random_MB=nothing)
-    # Setup default parameters
+    #### Setup default parameters ####
     if length(θ_trained) == 0
         reset_epochs()
         global loss_history = []
     end
     # Fill default UDE_settings if not available 
     if isnothing(UDE_settings)
-        if use_MB[]
-            UDE_settings = Dict("reltol"=>10e-6, 
-                                "solver"=>RDPK3Sp35(), 
-                                "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
-        else
-            UDE_settings = Dict("reltol"=>10e-6,
-                                "solver"=>RDPK3Sp35(),
-                                "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP())) 
-
-        end
+        UDE_settings = get_default_UDE_settings()
     end
-
+    # Don't use MB if not specified
     if isnothing(random_MB)
         ODINN.set_use_MB(false) 
     end
-
+    ####
     optimizer = train_settings[1]
     epochs = train_settings[2]
     batch_size = train_settings[3]
@@ -166,6 +148,7 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_se
     UA_f, θ = get_NN(θ_trained)
     gdirs = gdirs_climate[2]
     climate_years_list = gdirs_climate[1]
+
     # Build context for all the batches before training
     println("Building context...")
     context_batches = pmap((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
@@ -177,6 +160,7 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_se
     cb_plots(θ, l, UA_f) = callback_plots_A(θ, l, UA_f, temps, A_noise, training_path, batch_size, n_gdirs)
     # Create batches for inversion training 
     train_loader = generate_batches(batch_size, UA_f, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings)
+
     # Setup optimization of the problem
     if optimization_method == "AD+AD"
         println("Optimization based on pure AD")
@@ -222,16 +206,16 @@ callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_s
         avg_temps = [mean(temps[i]) for i in 1:length(temps)]
         p = sortperm(avg_temps)
         avg_temps = avg_temps[p]
-        pred_A = predict_A̅(UA_f, θ, collect(-23.0f0:1.0f0:0.0f0)')
+        pred_A = predict_A̅(UA_f, θ, collect(-23.0:1.0:0.0)')
         pred_A = [pred_A...] # flatten
         true_A = A_fake(avg_temps, A_noise[p], noise)
 
-        yticks = collect(0.0:2f-17:8f-17)
+        yticks = collect(0.0:2e-17:8e-17)
 
         Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
-        plot_epoch = Plots.plot!(-23f0:1f0:0f0, pred_A, label="Predicted A", 
+        plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
                             xlabel="Long-term air temperature (°C)", yticks=yticks,
-                            ylabel="A", ylims=(0.0f0,maxA[]), lw = 3, c=:dodgerblue4,
+                            ylabel="A", ylims=(0.0,maxA[]), lw = 3, c=:dodgerblue4,
                             legend=:topleft)
         if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
             mkpath(joinpath(training_path,"png"))
@@ -273,13 +257,15 @@ function loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_s
 
         if scale_loss[]
             normH = mean(H_ref.^2.0)^0.5
-            # normV = mean(Vx_ref.^2.0f0 .+ Vy_ref.^2.0f0)^0.5f0
-            normV = maximum(Vx_ref.^2.0 .+ Vy_ref.^2.0)^0.5
+            # normV = mean(Vx_ref.^2.0 .+ Vy_ref.^2.0)^0.5
+            normV = mean(abs.(Vx_ref .+ Vy_ref))
             l_H_loc = Flux.Losses.mse(H, H_ref; agg=mean) 
             l_V_loc = Flux.Losses.mse(V̄x_pred, Vx_ref; agg=mean) + Flux.Losses.mse(V̄y_pred, Vy_ref; agg=mean)
+            # l_V_loc = mean(abs.(V̄x_pred .- Vx_ref)) + mean(abs.(V̄y_pred .- Vy_ref))
             l_H += normH^(-2.0) * l_H_loc
-            # l_V += normV^(-1.0f0) * l_V_loc
-            l_V += normV * log(l_V_loc)
+            l_V += normV^(2.0) * log(l_V_loc)
+            # l_V += normV * log(l_V_loc)
+            # l_V += normV * l_V_loc^(1/3)
         else
             l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean) 
             l_Vx += Flux.Losses.mse(V̄x_pred[Vx_ref .!= 0.0], Vx_ref[Vx_ref.!= 0.0]; agg=mean)
@@ -318,7 +304,6 @@ end
 Solve the Shallow Ice Approximation iceflow UDE for a given temperature series batch
 """
 function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings) 
-    # Retrieve long-term temperature series
     # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan)
     H = context[2]
     S = context[9]
@@ -328,19 +313,13 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings)
     # Callback  
     if use_MB[] 
         # Define stop times every one month
-        tmin_int = Int(tspan[1])
-        tmax_int = Int(tspan[2])+1
-        tstops = range(tmin_int+1.0f0/12.0f0, tmax_int, step=1/12.0f0) |> collect
-        tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
-
-        function stop_condition(u,t,integrator) 
-            t in tstops
-        end
+        tstops, step = define_callback_steps(tspan)
+        stop_condition(u,t,integrator) = stop_condition_tstops(u,t,integrator, tstops) #closure
         function action!(integrator)
             year = floor(Int, integrator.t[end])  
-            MB = compute_MB_matrix(context, S, integrator.u, year)
-            # since the mass balance is anual, we need to divide per month
-            integrator.u .+= MB ./ 12.0
+            MB = compute_MB_matrix(context, integrator.u, year)
+            # Since the mass balance is anual, we need to divide per month
+            integrator.u .+= MB .* step
         end
         cb_MB = DiscreteCallback(stop_condition, action!)
     else
@@ -516,7 +495,7 @@ end
 """
     SIA(H, V::Matrix, context)
 
-Compute a step of the Shallow Ice Approximation, constrained by surface velocity observations. Allocates memory.
+Compute a step of the Shallow Ice Approximation, returning ice surface velocities. Allocates memory.
 """
 function SIA(H, T, context, years, θ, UD_f, target)
     @assert (target == "A" || target == "D") "Functional inversion target needs to be either A or D!"
@@ -559,7 +538,6 @@ Computes the average ice surface velocity for a given input temperature
 function avg_surface_V(context, H, temp, sim, θ=[], UA_f=[])
     # context = (B, H₀, H, nxy, Δxy)
     B, H₀, Δx, Δy, A_noise = retrieve_context(context)
-
     # We compute the initial and final surface velocity and average them
     # TODO: Add more H datapoints to better interpolate this
     Vx, Vy = surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ, UA_f)
@@ -596,6 +574,27 @@ function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     Vx = - D .* avg_y(dSdx)
     Vy = - D .* avg_x(dSdy)
 
-    return Vx, Vy
-        
+    return Vx, Vy    
+end
+
+"""
+    define_callback_steps(tspan; step=1.0/12.0)
+
+Defines the times to stop for the DiscreteCallback given a step
+"""
+function define_callback_steps(tspan; step=1.0/12.0)
+    tmin_int = Int(tspan[1])
+    tmax_int = Int(tspan[2])+1
+    tstops = range(tmin_int+step, tmax_int, step=step) |> collect
+    tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
+    return tstops, step
+end
+
+"""
+    stop_condition_tstops(u,t,integrator, tstops)  
+
+Function that iterates through the tstops, with a closure including `tstops`
+"""
+function stop_condition_tstops(u,t,integrator, tstops) 
+    t in tstops
 end
