@@ -1,4 +1,19 @@
 # Helper functions for the staggered grid
+
+####  Non-allocating functions  ####
+
+diff_x!(O, I, Δx) = @views @. O = (I[begin+1:end,:] - I[1:end-1,:]) / Δx
+
+diff_y!(O, I, Δy) = @views @. O = (I[:,begin+1:end] - I[:,1:end - 1]) / Δy
+
+avg!(O, I) = @views @. O = (I[1:end-1,1:end-1] + I[2:end,1:end-1] + I[1:end-1,2:end] + I[2:end,2:end]) * 0.25
+
+avg_x!(O, I) = @views @. O = (I[1:end-1,:] + I[2:end,:]) * 0.5
+
+avg_y!(O, I) = @views @. O = (I[:,1:end-1] + I[:,2:end]) * 0.5
+
+####  Allocating functions  ####
+
 """
     avg(A)
 

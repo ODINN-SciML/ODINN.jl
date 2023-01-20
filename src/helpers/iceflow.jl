@@ -337,7 +337,7 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings)
                         p=θ,
                         sensealg=UDE_settings["sensealg"],
                         reltol=UDE_settings["reltol"], 
-                        save_everystep=true, # has to be true in order to Zygote to work.  
+                        save_everystep=true, # has to be true in order for to Zygote to work.  
                         progress=true, 
                         progress_steps=100)
     # @show iceflow_sol.destats
@@ -356,9 +356,6 @@ Runs a single time step of the iceflow PDE model in-place
 function iceflow!(dH, H, context,t)
     # First, enforce values to be positive
     H[H.<0.0] .= H[H.<0.0] .* 0.0
-    # Then, clip values if they get too high due to solver instabilities
-    H₀ = context.x[21]
-    H[H.>(2.0 * maximum(H₀))] .= 2.0 * maximum(H₀)
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
     current_year = context.x[18]
@@ -385,14 +382,9 @@ end
 Runs a single time step of the iceflow UDE model 
 """
 function iceflow_NN(H, θ, t, UA_f, context, temps)
-    t₁ = context[6][end]
-    H₀ = context[2]
     H_buf = Buffer(H)
     @views H_buf .= ifelse.(H.<0.0, 0.0, H) # prevent values from going negative
-    @views H_buf .= ifelse.(H.>(1.5 * maximum(H₀)), 1.5 * maximum(H₀), H) # prevent values from becoming too large
     H = copy(H_buf)
-    B = context[1]
-    S = B .+ H
     climate_years = context[11]
 
     year = floor(Int, t) 
@@ -431,7 +423,6 @@ function SIA!(dH, H, context)
     Fy = context.x[12]
     Δx = context.x[20][1]
     Δy = context.x[20][2]
-    MB = context.x[25]
     Γ = context.x[27]
 
     # Update glacier surface altimetry
@@ -439,16 +430,16 @@ function SIA!(dH, H, context)
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
-    dSdx .= diff_x(S) ./ Δx
-    dSdy .= diff_y(S) ./ Δy
+    diff_x!(dSdx, S, Δx)  
+    diff_y!(dSdy, S, Δy)  
     ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n[] - 1)/2) 
 
     Γ .= 2.0 * A * (ρ[] * g[])^n[] / (n[]+2) # 1 / m^3 s 
     D .= Γ .* avg(H).^(n[] + 2) .* ∇S
 
     # Compute flux components
-    @views dSdx_edges .= diff_x(S[:,2:end - 1]) ./ Δx
-    @views dSdy_edges .= diff_y(S[2:end - 1,:]) ./ Δy
+    @views diff_x!(dSdx_edges, S[:,2:end - 1], Δx)
+    @views diff_y!(dSdy_edges, S[2:end - 1,:], Δy)
     Fx .= .-avg_y(D) .* dSdx_edges
     Fy .= .-avg_x(D) .* dSdy_edges 
 
@@ -523,8 +514,8 @@ function SIA(H, T, context, years, θ, UD_f, target)
         D = predict_diffusivity(UD_f, θ, X)
     elseif target == "A"
         A = predict_A̅(UD_f, θ, temp)
-        Γ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+2.0f0) # 1 / m^3 s 
-        D = Γ .* inn1(H).^(n[] + 2.0f0) .* ∇S
+        Γ = 2.0 * A * (ρ[] * g[])^n[] / (n[]+2.0) # 1 / m^3 s 
+        D = Γ .* inn1(H).^(n[] + 2.0) .* ∇S
     end
     V = D .* abs.(∇S[inn1(H) .!= 0.0])
     return V
@@ -553,7 +544,7 @@ Computes the ice surface velocity for a given input temperature
 """
 function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     # Update glacier surface altimetry
-    S = B .+ (H₀ .+ H)./2.0f0 # Use average ice thickness for the simulated period
+    S = B .+ (H₀ .+ H)./2.0 # Use average ice thickness for the simulated period
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -567,7 +558,7 @@ function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     elseif sim == "PDE"
         A = A_fake(temp, A_noise, noise)
     end
-    Γꜛ = 2.0f0 * A * (ρ[] * g[])^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
+    Γꜛ = 2.0 * A * (ρ[] * g[])^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
     D = Γꜛ .* avg(H).^(n[] + 1) .* ∇S
     
     # Compute averaged surface velocities
