@@ -32,7 +32,7 @@ end
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(gdirs_climate, tspan; solver = Ralston(), random_MB=nothing)
+function generate_ref_dataset(gdirs_climate, tspan; solver = RDPK3Sp35(), random_MB=nothing)
   
     # Perform reference simulation with forward model 
     println("Running forward PDE ice flow model...\n")
@@ -196,43 +196,6 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, tspan, train_se
     return iceflow_trained, UA_f, loss_history
 end
 
-
-
-callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_size, n_gdirs) # callback function to observe training
-    # Update training status
-    update_training_state(l, batch_size, n_gdirs)
-
-    if current_minibatches == 0.0
-        avg_temps = [mean(temps[i]) for i in 1:length(temps)]
-        p = sortperm(avg_temps)
-        avg_temps = avg_temps[p]
-        pred_A = predict_A̅(UA_f, θ, collect(-23.0:1.0:0.0)')
-        pred_A = [pred_A...] # flatten
-        true_A = A_fake(avg_temps, A_noise[p], noise)
-
-        yticks = collect(0.0:2e-17:8e-17)
-
-        Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
-        plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
-                            xlabel="Long-term air temperature (°C)", yticks=yticks,
-                            ylabel="A", ylims=(0.0,maxA[]), lw = 3, c=:dodgerblue4,
-                            legend=:topleft)
-        if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
-            mkpath(joinpath(training_path,"png"))
-            mkpath(joinpath(training_path,"pdf"))
-        end
-        # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-        Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
-        Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
-
-        plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
-                    ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-        Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
-        Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
-    end
-
-    return false
-end
 
 """
     loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs::Dict{String, Any}, UDE_settings)  
@@ -484,7 +447,7 @@ function SIA(H, A, context)
 end
 
 """
-    SIA(H, V::Matrix, context)
+    SIA(H, T, context, years, θ, UD_f, target)
 
 Compute a step of the Shallow Ice Approximation, returning ice surface velocities. Allocates memory.
 """
@@ -522,29 +485,33 @@ function SIA(H, T, context, years, θ, UD_f, target)
 end
 
 """
-    avg_surface_V(H, B, temp)
+    avg_surface_V(context, H, temp, sim, θ=[], UA_f=[])
 
-Computes the average ice surface velocity for a given input temperature
+Computes the average ice surface velocity for a given glacier evolution period
+based on the initial and final ice thickness states. 
 """
 function avg_surface_V(context, H, temp, sim, θ=[], UA_f=[])
     # context = (B, H₀, H, nxy, Δxy)
     B, H₀, Δx, Δy, A_noise = retrieve_context(context)
     # We compute the initial and final surface velocity and average them
-    # TODO: Add more H datapoints to better interpolate this
-    Vx, Vy = surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ, UA_f)
+    # TODO: Add more datapoints to better interpolate this
+    Vx₀, Vy₀ = surface_V(H₀, B, Δx, Δy, temp, sim, A_noise, θ, UA_f)
+    Vx, Vy = surface_V(H, B, Δx, Δy, temp, sim, A_noise, θ, UA_f)
+    V̄x = (Vx₀ .+ Vx)./2.0
+    V̄y = (Vy₀ .+ Vy)./2.0
 
-    return Vx, Vy
+    return V̄x, V̄y
         
 end
 
 """
-    avg_surface_V(H, B, temp)
+    surface_V(H, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
 
-Computes the ice surface velocity for a given input temperature
+Computes the ice surface velocity for a given glacier state
 """
-function surface_V(H, H₀, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
+function surface_V(H, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
     # Update glacier surface altimetry
-    S = B .+ (H₀ .+ H)./2.0 # Use average ice thickness for the simulated period
+    S = B .+ H
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
@@ -588,4 +555,40 @@ Function that iterates through the tstops, with a closure including `tstops`
 """
 function stop_condition_tstops(u,t,integrator, tstops) 
     t in tstops
+end
+
+callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_size, n_gdirs) # callback function to observe training
+    # Update training status
+    update_training_state(l, batch_size, n_gdirs)
+
+    if current_minibatches == 0.0
+        avg_temps = [mean(temps[i]) for i in 1:length(temps)]
+        p = sortperm(avg_temps)
+        avg_temps = avg_temps[p]
+        pred_A = predict_A̅(UA_f, θ, collect(-23.0:1.0:0.0)')
+        pred_A = [pred_A...] # flatten
+        true_A = A_fake(avg_temps, A_noise[p], noise)
+
+        yticks = collect(0.0:2e-17:8e-17)
+
+        Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
+        plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
+                            xlabel="Long-term air temperature (°C)", yticks=yticks,
+                            ylabel="A", ylims=(0.0,maxA[]), lw = 3, c=:dodgerblue4,
+                            legend=:topleft)
+        if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
+            mkpath(joinpath(training_path,"png"))
+            mkpath(joinpath(training_path,"pdf"))
+        end
+        # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(current_epoch).png"))
+        Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(current_epoch).pdf"))
+
+        plot_loss = Plots.plot(loss_history, label="", xlabel="Epoch", yaxis=:log10,
+                    ylabel="Loss (V)", lw = 3, c=:darkslategray3)
+        Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
+        Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
+    end
+
+    return false
 end

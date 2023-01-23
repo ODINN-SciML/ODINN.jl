@@ -146,6 +146,8 @@ function run()
             jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, ODINN.current_epoch)
         end
     end
+    # Clean-up memory
+    GC.gc()
 end
 
 # Run main

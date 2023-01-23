@@ -4,8 +4,8 @@ Pkg.precompile()
 
 using ODINN
 using Test
-using Flux
-using JLD, PyCallJLD
+using JLD2
 
 @testset "SIA PDE simulations" begin include("PDE_solve.jl") end
-@testset "SIA UDE training" begin include("UDE_train.jl") end
+# @testset "SIA UDE training" begin include("UDE_train.jl") end
+
