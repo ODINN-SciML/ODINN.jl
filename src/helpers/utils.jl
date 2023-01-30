@@ -264,9 +264,9 @@ function predict_A̅(UA_f, θ, temp)
 end
 
 function sigmoid_A(x) 
-    minA_out = 8.0f-3 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0f0
-    return minA_out + (maxA_out - minA_out) / ( 1.0f0 + exp(-x) )
+    minA_out = 8.0e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = 8.0
+    return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
 end
 
 function sigmoid_A_inv(x) 
@@ -364,12 +364,36 @@ end
 
 function get_default_UDE_settings()
     if use_MB[]    
-        UDE_settings = Dict("reltol"=>10e-6, 
+        UDE_settings = Dict("reltol"=>1e-10, 
                             "solver"=>RDPK3Sp35(), 
                             "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
     else
-        UDE_settings = Dict("reltol"=>10e-6,
+        UDE_settings = Dict("reltol"=>1e-10,
                             "solver"=>RDPK3Sp35(),
                             "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP())) 
     end
+end
+
+function get_default_training_settings!(gdirs_climate, UDE_settings=nothing, train_settings=nothing, 
+                                        θ_trained=[], random_MB=nothing)
+    if isnothing(UDE_settings)
+        UDE_settings = get_default_UDE_settings()
+    end
+
+    if isnothing(train_settings)
+        train_settings = (Adam(), 1, length(gdirs_climate[1])) # solver, epochs, batch size
+    end
+
+    #### Setup default parameters ####
+    if length(θ_trained) == 0
+        reset_epochs()
+        global loss_history = []
+    end
+
+    # Don't use MB if not specified
+    if isnothing(random_MB)
+        ODINN.set_use_MB(false) 
+    end
+
+    return UDE_settings, train_settings
 end

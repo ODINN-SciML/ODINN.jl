@@ -109,7 +109,7 @@ function run_benchmark()
 
     # @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $gdir_refs, $θ_bm, $UDE_settings; random_MB=$random_MB)
 
-    @time train_iceflow_UDE(gdirs_climate, tspan, train_settings, gdir_refs, θ_bm, UDE_settings; random_MB=random_MB)
+    @time train_iceflow_UDE(gdirs_climate, gdir_refs, tspan, train_settings, θ_bm, UDE_settings; random_MB=random_MB)
 
 end
 

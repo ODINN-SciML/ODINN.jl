@@ -29,7 +29,8 @@ Gets the climate data for multiple gdirs in parallel.
 function get_climate(gdirs, massbalance, overwrite)
     println("Getting climate data...")
     # Retrieve and compute climate data in parallel
-    climate = pmap(gdir -> get_climate_glacier(gdir, overwrite; mb=massbalance), gdirs) 
+    climate = map(gdir -> get_climate_glacier(gdir, overwrite; mb=massbalance), gdirs) 
+    GC.gc() # run garbage collector to avoid memory overflow
     return climate
 end
 
@@ -64,7 +65,6 @@ function get_climate_glacier(gdir::PyObject, overwrite; mb=true, period_y=(1979,
     longterm_temps = annual_climate.rolling(year=20).mean().dropna("year")
     climate = Dict("longterm_temps"=>longterm_temps, "annual_climate"=>annual_climate,
                     "MB_dataset"=>MB_ds)
-    GC.gc() # run garbage collector to avoid memory overflow
     return climate
 end
 

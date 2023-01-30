@@ -10,6 +10,7 @@ using JLD2
 using OrdinaryDiffEq, DiffEqCallbacks
 using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL
+import OptimizationOptimisers.Adam
 using IterTools: ncycle
 using Zygote: @ignore, Buffer 
 using Flux
@@ -38,8 +39,8 @@ include("helpers/parameters.jl")
 # ##############################################
 
 cd(@__DIR__)
-global root_dir = dirname(Base.current_project())
-global root_plots = joinpath(root_dir, "plots")
+const global root_dir = dirname(Base.current_project())
+const global root_plots = joinpath(root_dir, "plots")
 
 @precompile_all_calls begin
 

@@ -104,10 +104,9 @@ function run()
             trained_weights = load(joinpath(ODINN.root_dir, "data/trained_weights.jld2"))
             ODINN.set_current_epoch(trained_weights["current_epoch"])
             θ_trained = trained_weights["θ_trained"]
-            # train_settings = (BFGS(initial_stepnorm=0.05), 20) # optimizer, epochs
             train_settings = (BFGS(initial_stepnorm=0.002), n_BFGS, batch_size) # optimizer, epochs, batch_size
-            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, 
-                                                                        tspan, train_settings, gdir_refs, θ_trained; 
+            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
+                                                                        tspan, train_settings, θ_trained; 
                                                                         random_MB=random_MB) # retrain
             θ_trained = iceflow_trained.minimizer
 
@@ -131,8 +130,8 @@ function run()
             # #current_epoch = n_ADAM + 1
             optimizer = BFGS(initial_stepnorm=0.002)
             train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
-            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, 
-                                                                            tspan, train_settings, gdir_refs;
+            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
+                                                                            tspan, train_settings;
                                                                             random_MB=random_MB) 
             # iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, 
             #                                                             tspan, train_settings, gdir_refs,

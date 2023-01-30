@@ -80,10 +80,10 @@ function build_PDE_context(gdir, longterm_temp, climate_years, A_noise, tspan; r
     D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
     MB = zeros(Float64,nx,ny)
-    A = [2e-16]
+    A = Ref{Float64}(2e-16)
     α = [0.0]                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
     C = [15e-14]    
-    Γ = [0.0]
+    Γ = Ref{Float64}(0.0)
     maxS, minS = [0.0], [0.0]     
     simulation_years = collect(Int(tspan[1]):Int(tspan[2]))
     
@@ -92,9 +92,17 @@ function build_PDE_context(gdir, longterm_temp, climate_years, A_noise, tspan; r
     if isnothing(random_MB)
         random_MB = zeros(Float64,Int(tspan[2]) - Int(tspan[1]))
     end
-    context = ArrayPartition(A, B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
+    context = (A, B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
                             current_year, nxy, Δxy, H₀, tspan, A_noise, random_MB, MB, rgi_id, Γ, maxS, minS, climate_years, simulation_years)
     return context, H
+end
+
+function get_UDE_context(gdirs_climate, tspan, random_MB=nothing)
+    gdirs = gdirs_climate[2]
+    climate_years_list = gdirs_climate[1]
+    context_batches = map((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
+
+    return context_batches
 end
 
 function build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=nothing)
@@ -153,11 +161,11 @@ Retrieves context variables for computing the surface velocities of the PDE.
 """
 function retrieve_context(context::ArrayPartition)
     # context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan)
-    B = context.x[2]
-    H₀ = context.x[21]
-    Δx = context.x[20][1]
-    Δy = context.x[20][2]
-    A_noise = context.x[23]
+    B = context[2]
+    H₀ = context[21]
+    Δx = context[20][1]
+    Δy = context[20][2]
+    A_noise = context[23]
     return B, H₀, Δx, Δy, A_noise
 end
 
