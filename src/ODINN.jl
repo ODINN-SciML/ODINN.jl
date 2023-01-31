@@ -14,7 +14,7 @@ import OptimizationOptimisers.Adam
 using IterTools: ncycle
 using Zygote: @ignore, Buffer 
 using Flux
-using Tullio, RecursiveArrayTools
+using Tullio
 using Infiltrator
 using Plots, PlotThemes
 Plots.theme(:wong2) # sets overall theme for Plots
@@ -23,7 +23,7 @@ import Pkg
 using Distributed, ParallelDataTransfer
 using ProgressMeter
 using PyCall
-using HDF5, Downloads
+using Downloads
 using SnoopPrecompile 
 
 # ##############################################

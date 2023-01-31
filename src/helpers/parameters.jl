@@ -50,14 +50,3 @@ current_minibatches = 0
 loss_epoch = 0.0
 loss_history = []
 global optimization_method = "AD+AD"
-
-### Testing
-pde_A_values = []
-ude_A_values = []
-pde_temp_values = []
-ude_temp_values = []
-pde_A_glacier_recorded = false
-ude_A_glacier_recorded = false
-
-is_ude_noise = []
-is_pde_noise = []

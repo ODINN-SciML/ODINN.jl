@@ -29,7 +29,7 @@ Gets the climate data for multiple gdirs in parallel.
 function get_climate(gdirs, massbalance, overwrite)
     println("Getting climate data...")
     # Retrieve and compute climate data in parallel
-    climate = map(gdir -> get_climate_glacier(gdir, overwrite; mb=massbalance), gdirs) 
+    climate = pmap(gdir -> get_climate_glacier(gdir, overwrite; mb=massbalance), gdirs) 
     GC.gc() # run garbage collector to avoid memory overflow
     return climate
 end

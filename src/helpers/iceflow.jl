@@ -65,7 +65,6 @@ Solve the Shallow Ice Approximation iceflow PDE for a given temperature series b
 function batch_iceflow_PDE(gdir, longterm_temp, years, A_noise, tspan, solver; run_spinup=false, random_MB=nothing) 
     println("Processing glacier: ", gdir.rgi_id)
 
-    @eval ODINN pde_A_glacier_recorded = false
     context, H = build_PDE_context(gdir, longterm_temp, years, A_noise, tspan; run_spinup=run_spinup, random_MB=random_MB)
     # Callback  
     if use_MB[] && !isnothing(random_MB)
@@ -105,7 +104,7 @@ function simulate_iceflow_PDE(H, context, solver, tstops, cb_MB)
                         solver, 
                         callback=cb_MB, 
                         tstops=tstops, 
-                        reltol=1e-12, 
+                        reltol=1e-7, 
                         save_everystep=false, 
                         progress=true, 
                         progress_steps=10)
@@ -277,8 +276,6 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings;
     tspan = context[6]
     longterm_temps_batch = gdirs_climate_batch[3]
 
-    @eval ODINN ude_A_glacier_recorded = false
-
     # Callback  
     if use_MB[] 
         # Define stop times every one month
@@ -314,8 +311,9 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings;
     H_end = iceflow_sol.u[end]
     H_pred = ifelse.(H_end .< 0.0, 0.0, H_end)
     V̄x_pred, V̄y_pred = avg_surface_V(context, H_pred, mean(longterm_temps_batch), "UDE", θ, UA_f; testmode) # Average velocity with average temperature
-    rgi_id = gdirs_climate_batch[2].rgi_id
+    rgi_id = @ignore gdirs_climate_batch[2].rgi_id
     H_V_pred = (H_pred, V̄x_pred, V̄y_pred, rgi_id)
+    # H_V_pred = (H_pred, V̄x_pred, V̄y_pred)
     return H_V_pred
 end
 
@@ -339,16 +337,7 @@ function iceflow!(dH, H, context,t)
     year = floor(Int, t) 
     if year != current_year && year <= t₁ 
         temp = context[7][year .== climate_years]
-        # A .= A_fake(temp, A_noise, noise)
         A[] = A_fake(temp, A_noise, noise)[1]
-
-        if !ODINN.pde_A_glacier_recorded
-            push!(pde_A_values, A)
-            @eval ODINN pde_A_glacier_recorded = true
-            push!(is_pde_noise, noise[])
-            push!(pde_temp_values, temp[1])
-        end
-
         current_year .= year
     end
 
@@ -371,26 +360,19 @@ function iceflow_NN(H, θ, t, UA_f, context, temps, testmode)
     temp = temps[year .== climate_years]
     if testmode
         A = A_fake(temp)[1]
-
-        if !ude_A_glacier_recorded
-            push!(ude_A_values, A)
-            @eval ODINN ude_A_glacier_recorded = true
-            push!(is_ude_noise, noise[])
-            push!(ude_temp_values, temp[1])
-        end
     else
         A = predict_A̅(UA_f, θ, temp)[1]
     end
     # Compute the Shallow Ice Approximation in a staggered grid
-    if !use_MB[] && typeof(A) <: AbstractFloat
-        dH = SIA(H, A, context) 
-    elseif use_MB[]
-        # When including MB, Zygote returns 
-        dH = SIA(H, A.value, context) 
-    else
-        throw(DomainError(A, "Error with type of A"))
-    end
-    # dH = SIA(H, A, context) 
+    # if !use_MB[] && typeof(A) <: AbstractFloat
+    #     dH = SIA(H, A, context) 
+    # elseif use_MB[]
+    #     # When including MB, Zygote returns 
+    #     dH = SIA(H, A.value, context) 
+    # else
+    #     throw(DomainError(A, "Error with type of A"))
+    # end
+    dH = SIA(H, A, context) 
 
     return dH
 end  
@@ -522,7 +504,7 @@ based on the initial and final ice thickness states.
 """
 function avg_surface_V(context, H, temp, sim, θ=[], UA_f=[]; testmode=false)
     # context = (B, H₀, H, nxy, Δxy)
-    B, H₀, Δx, Δy, A_noise = retrieve_context(context)
+    B, H₀, Δx, Δy, A_noise = retrieve_context(context, sim)
     # We compute the initial and final surface velocity and average them
     # TODO: Add more datapoints to better interpolate this
     Vx₀, Vy₀ = surface_V(H₀, B, Δx, Δy, temp, sim, A_noise, θ, UA_f; testmode=testmode)

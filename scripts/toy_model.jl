@@ -32,14 +32,14 @@ ODINN.make_plots(true)
 ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
 ODINN.set_use_spinup(false) # Use the updated spinup
 # Reference simulations
-ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
+ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
 # UDE training
 ODINN.set_train(true)    # Train UDE
 ODINN.set_retrain(false) # Re-use previous NN weights to continue training
 
 tspan = (2010.0, 2015.0) # period in years for simulation
  
-function run()
+function run_toy_model()
     # Configure OGGM settings in all workers
     working_dir = joinpath(homedir(), "Python/OGGM_data")
     oggm_config(working_dir)
@@ -150,4 +150,4 @@ function run()
 end
 
 # Run main
-run()
+run_toy_model()

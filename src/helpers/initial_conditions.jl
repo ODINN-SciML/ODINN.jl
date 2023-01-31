@@ -100,7 +100,7 @@ end
 function get_UDE_context(gdirs_climate, tspan, random_MB=nothing)
     gdirs = gdirs_climate[2]
     climate_years_list = gdirs_climate[1]
-    context_batches = map((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
+    context_batches = pmap((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
 
     return context_batches
 end
@@ -141,11 +141,24 @@ function build_UDE_context_inv(gdir, gdir_ref, tspan;  run_spinup=false)
 end
 
 """
+    retrieve_context(context::Tuple, sim)
+
+Retrieves context variables for computing the surface velocities of a PDE or UDE.
+"""
+function retrieve_context(context::Tuple, sim)
+    if sim == "PDE"
+        return retrieve_PDE_context(context)
+    elseif sim == "UDE"
+        return retrieve_UDE_context(context)
+    end
+end
+
+"""
     retrieve_context(context::Tuple)
 
 Retrieves context variables for computing the surface velocities of the UDE.
 """
-function retrieve_context(context::Tuple)
+function retrieve_UDE_context(context::Tuple)
     # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan)
     B = context[1]
     H₀ = context[2]
@@ -159,8 +172,8 @@ end
 
 Retrieves context variables for computing the surface velocities of the PDE.
 """
-function retrieve_context(context::ArrayPartition)
-    # context = ArrayPartition([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan)
+function retrieve_PDE_context(context::Tuple)
+    # context = ([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan)
     B = context[2]
     H₀ = context[21]
     Δx = context[20][1]

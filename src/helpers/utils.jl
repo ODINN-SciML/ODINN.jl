@@ -364,11 +364,11 @@ end
 
 function get_default_UDE_settings()
     if use_MB[]    
-        UDE_settings = Dict("reltol"=>1e-10, 
+        UDE_settings = Dict("reltol"=>1e-7, 
                             "solver"=>RDPK3Sp35(), 
                             "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
     else
-        UDE_settings = Dict("reltol"=>1e-10,
+        UDE_settings = Dict("reltol"=>1e-7,
                             "solver"=>RDPK3Sp35(),
                             "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP())) 
     end
@@ -396,4 +396,37 @@ function get_default_training_settings!(gdirs_climate, UDE_settings=nothing, tra
     end
 
     return UDE_settings, train_settings
+end
+
+function plot_test_error(pred::Dict{String, Any}, ref::Dict{String, Any}, variable, rgi_id, atol; path=joinpath(ODINN.root_dir, "test/plots"))
+    @assert (variable == "H") || (variable == "Vx") || (variable == "Vy") "Wrong variable for plots. Needs to be either `H`, `Vx` or `Vy`."
+    if !isapprox(pred[variable], ref[variable], atol=atol)
+        # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
+        if variable == "H"
+            colour=:ice
+        elseif variable == "Vx" || variable == "Vy"
+            colour=:speed
+        end
+        PDE_plot = Plots.heatmap(pred[variable] .- ref[variable], title="$(variable): PDE simulation - Reference simulation", c=colour)
+        Plots.savefig(PDE_plot,joinpath(path,"$(variable)_PDE_$rgi_id.pdf"))
+    end
+end
+
+function plot_test_error(pred::Tuple, ref::Dict{String, Any}, variable, rgi_id, atol; path=joinpath(ODINN.root_dir, "test/plots"))
+    @assert (variable == "H") || (variable == "Vx") || (variable == "Vy") "Wrong variable for plots. Needs to be either `H`, `Vx` or `Vy`."
+    if variable == "H"
+        idx=1
+        colour=:ice
+    elseif variable == "Vx" 
+        idx=2
+        colour=:speed
+    elseif variable == "Vy"
+        idx=3
+        colour=:speed
+    end
+    if !isapprox(pred[idx], ref[variable], atol=atol)
+        # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
+        UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
+        Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id.pdf"))
+    end
 end
