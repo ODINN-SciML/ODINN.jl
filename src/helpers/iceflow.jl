@@ -303,10 +303,10 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings;
                         p=θ,
                         sensealg=UDE_settings["sensealg"],
                         reltol=UDE_settings["reltol"], 
-                        save_everystep=true, # has to be true in order for to Zygote to work.  
+                        save_everystep=false,  
                         progress=true, 
-                        progress_steps=100)
-    # @show iceflow_sol.destats
+                        progress_steps=50)
+    @show iceflow_sol.destats
     # Get ice velocities from the UDE predictions
     H_end = iceflow_sol.u[end]
     H_pred = ifelse.(H_end .< 0.0, 0.0, H_end)
@@ -601,6 +601,8 @@ callback_plots_A = function (θ, l, UA_f, temps, A_noise, training_path, batch_s
         Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
         Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
     end
+
+    GC.gc()
 
     return false
 end
