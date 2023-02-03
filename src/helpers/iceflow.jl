@@ -260,7 +260,7 @@ Makes a prediction of glacier evolution with the UDE for a given temperature ser
 """
 function predict_iceflow(θ, UA_f, gdirs_climate_batches, context_batches, UDE_settings; testmode=false)
     # Train UDE in parallel
-    H_V_pred = map((context, gdirs_climate_batch) -> batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings; testmode=testmode), context_batches, gdirs_climate_batches)
+    H_V_pred = pmap((context, gdirs_climate_batch) -> batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings; testmode=testmode), context_batches, gdirs_climate_batches)
     return H_V_pred
 end
 
@@ -304,9 +304,9 @@ function batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings;
                         sensealg=UDE_settings["sensealg"],
                         reltol=UDE_settings["reltol"], 
                         save_everystep=false,  
-                        progress=true, 
+                        progress=false, 
                         progress_steps=50)
-    @show iceflow_sol.destats
+    # @show iceflow_sol.destats
     # Get ice velocities from the UDE predictions
     H_end = iceflow_sol.u[end]
     H_pred = ifelse.(H_end .< 0.0, 0.0, H_end)

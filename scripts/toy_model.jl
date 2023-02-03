@@ -22,24 +22,27 @@ using Statistics
 # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"]="nul"
 
-processes = 18
-# Enable multiprocessing
-ODINN.enable_multiprocessing(processes)
-# Flags
-ODINN.set_use_MB(true)
-ODINN.make_plots(true)    
-# Spin up 
-ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
-ODINN.set_use_spinup(false) # Use the updated spinup
-# Reference simulations
-ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
-# UDE training
-ODINN.set_train(true)    # Train UDE
-ODINN.set_retrain(false) # Re-use previous NN weights to continue training
-
-tspan = (2010.0, 2015.0) # period in years for simulation
- 
 function run_toy_model()
+
+    processes = 18
+    # Enable multiprocessing
+    ODINN.enable_multiprocessing(processes)
+    # Flags
+    ODINN.set_use_MB(true)
+    ODINN.make_plots(true)    
+    # Spin up 
+    ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
+    ODINN.set_use_spinup(false) # Use the updated spinup
+    # Reference simulations
+    ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
+    # UDE training
+    ODINN.set_train(true)    # Train UDE
+    ODINN.set_retrain(false) # Re-use previous NN weights to continue training
+
+    ODINN.scale_loss[] = false
+
+    tspan = (2010.0, 2011.0) # period in years for simulation
+
     # Configure OGGM settings in all workers
     working_dir = joinpath(homedir(), "Python/OGGM_data")
     oggm_config(working_dir)
@@ -95,7 +98,7 @@ function run_toy_model()
 
     if ODINN.train[]
         # Train iceflow UDE in parallel
-        n_ADAM = 5
+        n_ADAM = 10
         n_BFGS = 70
         batch_size = length(gdir_refs)
         # batch_size = 9
@@ -116,26 +119,25 @@ function run_toy_model()
         else
             # Reset epoch counter
             ODINN.reset_epochs()
-            # First train with ADAM to move the parameters into a favourable space
-            # println("Training from scratch...")
+            ## First train with ADAM to move the parameters into a favourable space
+            println("Training from scratch...")
             # train_settings = (Adam(0.005), n_ADAM, batch_size) # optimizer, epochs
-            # iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, 
-            #                                                 tspan, train_settings, gdir_refs; 
-            #                                                 random_MB=random_MB)
+            # iceflow_trained, UA_f = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
+            #                                                 tspan, train_settings;
+            #                                                 random_MB=random_MB) 
             # θ_trained = iceflow_trained.minimizer
             # println("Saving NN weights...")
             # jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
 
-            # # Continue training with BFGS
-            # #current_epoch = n_ADAM + 1
-            optimizer = BFGS(initial_stepnorm=0.002)
+            ## Continue training with BFGS
+            # current_epoch = n_ADAM + 1
+            optimizer = BFGS(initial_stepnorm=0.001)
             train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
             iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
                                                                             tspan, train_settings;
                                                                             random_MB=random_MB) 
-            # iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, 
-            #                                                             tspan, train_settings, gdir_refs,
-            #                                                             θ_trained; 
+            # iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
+            #                                                             tspan, train_settings, θ_trained; 
             #                                                             random_MB=random_MB) 
             θ_trained = iceflow_trained.minimizer
             # Save loss loss_history
