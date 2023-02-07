@@ -129,7 +129,8 @@ Train the Shallow Ice Approximation iceflow UDE. UDE_settings is optional, and r
 `sensealg` and `solver` for the UDE.  
 """
 function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs, tspan, 
-                            train_settings=nothing, θ_trained=[], UDE_settings=nothing, loss_history=[]; 
+                            train_settings=nothing, θ_trained=[], loss_history=[]; 
+                            UDE_settings=nothing,
                             random_MB=nothing)
 
     # Fill default training settings if not available 
@@ -170,23 +171,30 @@ function train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs, tspa
         η = 0.01
         p = [temps]
         function loc_loss(θ, p)
-            loss_iceflow(θ, UA_f, gdirs_climate, context_batches, gdir_refs, UDE_settings)[1] 
+            loss_iceflow(θ, [UA_f], [gdirs_climate_batches[1]], [context_batches[1]], [gdir_refs[1]], [UDE_settings])[1] 
         end
         function customized_grad!(g::Vector, θ, p)
             # compute output of NN using temps 
             temp = mean(p[1][1])  # Is this the best way of getting the temperature? 
             ∇θ_A = gradient(θ -> UA_f(θ)([temp])[1], θ)[1]
             loss₀ = loc_loss(θ, p)
-            θ₁ = Array{Float32}(θ .+ η .* ∇θ_A)
+            θ₁ = Array{Float64}(θ .+ η .* ∇θ_A)
             loss₁ = loc_loss(θ₁, p)
             scalar_factor = (loss₁ - loss₀) ./ (η * norm(∇θ_A)^2)
             g .= scalar_factor .* ∇θ_A
         end   
-        optf = OptimizationFunction((θ,_)->loss(θ), 
+        optf = OptimizationFunction((θ, _, UA_batch, gdirs_climate_batch, context_batch, gdir_refs_batch, UDE_settings_batch)->loss_iceflow(θ, UA_batch, gdirs_climate_batch, context_batch, gdir_refs_batch, UDE_settings_batch), 
                                     grad=customized_grad!)
+
+        # optf = OptimizationFunction((θ,_)->loss(θ), 
+        #                             grad=customized_grad!)
         optprob = OptimizationProblem(optf, θ, p)
         # cb_plots(θ, l) = callback_plots(θ, l, UA_f, temps, A_noise)
-        iceflow_trained = solve(optprob, optimizer, callback=cb_plots, maxiters=epochs)
+        # iceflow_trained = solve(optprob, optimizer, callback=cb_plots, maxiters=epochs)
+        @ignore @infiltrate
+        iceflow_trained = solve(optprob, 
+                                optimizer, ncycle(train_loader, epochs), allow_f_increases=true,
+                                progress=true)
     end
 
     return iceflow_trained, UA_f, loss_history
@@ -260,10 +268,9 @@ Makes a prediction of glacier evolution with the UDE for a given temperature ser
 """
 function predict_iceflow(θ, UA_f, gdirs_climate_batches, context_batches, UDE_settings; testmode=false)
     # Train UDE in parallel
-    H_V_pred = pmap((context, gdirs_climate_batch) -> batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings; testmode=testmode), context_batches, gdirs_climate_batches)
+    H_V_pred = map((context, gdirs_climate_batch) -> batch_iceflow_UDE(θ, UA_f, context, gdirs_climate_batch, UDE_settings; testmode=testmode), context_batches, gdirs_climate_batches)
     return H_V_pred
 end
-
 
 """
     batch_iceflow_UDE(θ, UA_f, context, longterm_temps_batch, UDE_settings, testmode) 

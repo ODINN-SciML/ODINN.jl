@@ -49,4 +49,5 @@ current_epoch = 1
 current_minibatches = 0
 loss_epoch = 0.0
 loss_history = []
-global optimization_method = "AD+AD"
+# global optimization_method = "AD+AD"
+global optimization_method = "AD+Diff"

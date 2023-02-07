@@ -11,7 +11,7 @@ using Revise
 using ODINN
 using Optim, OptimizationOptimJL
 import OptimizationOptimisers.Adam
-using OrdinaryDiffEq
+using OrdinaryDiffEq, SciMLSensitivity
 using Plots
 using Infiltrator
 using Distributed
@@ -38,8 +38,6 @@ function run_toy_model()
     # UDE training
     ODINN.set_train(true)    # Train UDE
     ODINN.set_retrain(false) # Re-use previous NN weights to continue training
-
-    ODINN.scale_loss[] = false
 
     tspan = (2010.0, 2011.0) # period in years for simulation
 
@@ -107,9 +105,15 @@ function run_toy_model()
             trained_weights = load(joinpath(ODINN.root_dir, "data/trained_weights.jld2"))
             ODINN.set_current_epoch(trained_weights["current_epoch"])
             θ_trained = trained_weights["θ_trained"]
+
+            UDE_settings = Dict("reltol"=>1e-7,
+                                "solver"=>RDPK3Sp35(),
+                                "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(), checkpointing=true))
+
             train_settings = (BFGS(initial_stepnorm=0.002), n_BFGS, batch_size) # optimizer, epochs, batch_size
             iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
                                                                         tspan, train_settings, θ_trained; 
+                                                                        UDE_settings=UDE_settings,
                                                                         random_MB=random_MB) # retrain
             θ_trained = iceflow_trained.minimizer
 
@@ -129,12 +133,17 @@ function run_toy_model()
             # println("Saving NN weights...")
             # jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, current_epoch)
 
+            UDE_settings = Dict("reltol"=>1e-7,
+                                "solver"=>RDPK3Sp35(),
+                                "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(), checkpointing=true))
+
             ## Continue training with BFGS
             # current_epoch = n_ADAM + 1
             optimizer = BFGS(initial_stepnorm=0.001)
             train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
             iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
                                                                             tspan, train_settings;
+                                                                            UDE_settings=UDE_settings,
                                                                             random_MB=random_MB) 
             # iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
             #                                                             tspan, train_settings, θ_trained; 
