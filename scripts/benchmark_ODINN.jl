@@ -10,7 +10,7 @@ using Distributed
 @everywhere begin
 
 using Revise
-using AbbreviatedStackTraces
+# using AbbreviatedStackTraces
 using ODINN
 using OrdinaryDiffEq, ODEInterfaceDiffEq, Sundials
 using Optim, Optimization, OptimizationOptimJL, SciMLSensitivity
@@ -92,6 +92,8 @@ function run_benchmark()
     # UDE training
     ODINN.set_train(true)    # Train UDE 
 
+    ODINN.set_optimization_method("AD+Diff")
+
     tspan = (2010.0,2015.0) # period in years for simulation
 
     # Configure OGGM settings in all workers
@@ -107,8 +109,8 @@ function run_benchmark()
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
     gdirs = init_gdirs(rgi_ids)
 
-    glacier_filter = 1
-    gdir = [gdirs[glacier_filter]]
+    # glacier_filter = 1
+    # gdir = [gdirs[glacier_filter]]
 
     #########################################
     ###########  CLIMATE DATA  ##############

@@ -146,8 +146,22 @@ function set_ice_thickness_source(it_source_i)
     @everywhere @eval ODINN global ice_thickness_source = $it_source_i
 end
 
-function get_gdir_refs(refs, gdirs)
+function set_optimization_method(opt_method_i)
+    @assert (opt_method_i == "AD+AD" || opt_method_i == "AD+Diff") "Wrong optimization method. Needs to be either 'AD+AD' or 'AD+Diff'!"
+    @everywhere @eval ODINN global optimization_method = $opt_method_i
+end
+
+function get_gdir_refs(refs, gdirs_i; batches=false)
     gdir_refs = []
+    if batches
+        gdirs = []
+        for gdir_batch in gdirs_i
+            push!(gdirs, gdir_batch[2])
+        end
+    else
+        gdirs = gdirs_i
+    end
+
     for (ref, gdir) in zip(refs, gdirs)
         push!(gdir_refs, Dict("RGI_ID"=>gdir.rgi_id,
                                 "H"=>ref["H"],
@@ -187,6 +201,20 @@ function generate_batches(batch_size, UA, gdirs_climate_batches, context_batches
     UAs = repeat([UA], length(gdirs_climate_batches))
     UDE_settings_batches = repeat([UDE_settings], length(gdirs_climate_batches))
     batches = (UAs, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings_batches)
+    train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
+
+    return train_loader
+end
+
+"""
+    generate_batches(batch_size, UA, gdirs_climate_batches, gdir_refs, UDE_settings; shuffle=true)
+
+Generates batches for the UDE in place problem based on input data and feed them to the loss function.
+"""
+function generate_batches(batch_size, UA, gdirs_climate_batches, gdir_refs, random_MB, tspan::Tuple; shuffle=true)
+    UAs = repeat([UA], length(gdirs_climate_batches))
+    tspans = repeat([tspan], length(gdirs_climate_batches))
+    batches = (UAs, gdirs_climate_batches, gdir_refs, random_MB, tspans)
     train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
     return train_loader

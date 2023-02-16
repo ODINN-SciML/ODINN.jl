@@ -146,7 +146,7 @@ end
 Retrieves context variables for computing the surface velocities of a PDE or UDE.
 """
 function retrieve_context(context::Tuple, sim)
-    if sim == "PDE"
+    if sim == "PDE" || sim == "UDE_inplace"
         return retrieve_PDE_context(context)
     elseif sim == "UDE"
         return retrieve_UDE_context(context)

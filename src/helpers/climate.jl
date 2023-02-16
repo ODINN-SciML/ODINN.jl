@@ -230,8 +230,8 @@ function apply_t_grad!(climate, g_dem)
     climate.temp.data = climate.temp.data .+ climate.avg_gradient.data .* (g_dem.data .- climate.ref_hgt)
     climate.PDD.data = climate.PDD.data .+ climate.gradient.data .* (g_dem.data .- climate.ref_hgt)
     # We adjust the rain/snow fractions with the updated temperature
-    climate.snow.data = climate.snow.where(climate.temp < 0, 0).data
-    climate.rain.data = climate.rain.where(climate.temp > 0, 0).data
+    climate.snow.data = climate.snow.where(climate.temp < 0.0, 0.0).data
+    climate.rain.data = climate.rain.where(climate.temp > 0.0, 0.0).data
 end
 
 """
