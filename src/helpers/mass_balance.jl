@@ -78,3 +78,38 @@ function compute_MB_matrix(random_MB::Tuple{String, Vector{Float64}, Vector{Floa
     MB = (min_MB .+ (S .- min_S) .* ((max_MB - min_MB) / (max_S - min_S))) .* Matrix{Float64}(H.>0.0)
     return MB
 end
+
+### Data structures
+# Abstract type as a parent type for Mass Balance models
+abstract type MB_model end
+# Subtype structure for Temperature-Index Mass Balance model
+abstract type TI_model <: MB_model end
+# Temperature-index model with 1 melt factor
+# Make these mutable if necessary
+@kwdef struct TI_model_1 <: TI_model
+    DDF::Float64
+    acc_factor::Float64
+end
+
+@kwdef struct TI_model_2 <: TI_model
+    DDF_snow::Float64
+    DDF_ice::Float64
+    acc_factor::Float64
+end
+
+function compute_MB(mb_model::TI_model_1, climate_2D_period::PyObject)
+    accumulation = mb_model.acc_factor .* climate_2D_period.snow.data
+    ablation = mb_model.DDF .* climate_2D_period.PDD.data
+    return accumulation .- ablation
+end
+
+function get_MB_timestep(mb_model::MB_model, climate::PyObject, S, t, step::AbstractFloat)
+    # First we get the dates of the current time and the previous step
+    period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
+    climate_step = climate.sel(time=period) # Crop desired time period
+    climate_step = get_cumulative_climate(climate_step)
+    # Convert climate dataset to 2D based on the glacier's DEM
+    climate_2D_step = downscale_2D_climate(climate_step, S)
+    MB = compute_MB(mb_model, climate_2D_step)
+    return MB
+end

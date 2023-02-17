@@ -4,7 +4,23 @@
 
 using Dates # to provide correct Julian time slices 
 
-export get_gdirs_with_climate
+export get_gdirs_with_climate, generate_raw_climate_files
+
+function generate_raw_climate_files(gdir::PyObject, tspan)
+    println("Getting raw  climate for: ", gdir.rgi_id)
+    # Get raw climate data for gdir
+    tspan_date = partial_year(Day, tspan[1]):Day(1):partial_year(Day, tspan[2])
+    climate =  get_raw_climate_data(gdir)
+    # Make sure the desired period is covered by the climate data
+    period = trim_period(tspan_date, climate) 
+    if any((climate.time[1].dt.date.data[1] <= period[1]) & any(climate.time[end].dt.date.data[1] >= period[end]))
+        climate = climate.sel(time=period) # Crop desired time period
+    else
+        @warn "No overlapping period available between climate and target data!" 
+    end
+    # Save raw gdir climate on disk 
+    climate.to_netcdf(joinpath(gdir.dir, "raw_climate.nc"))
+end
 
 """
     get_gdirs_with_climate(gdirs; overwrite=false, plot=true)
@@ -180,11 +196,7 @@ function get_climate_forcing(gdir, climate, period, mb, season)
 
     # Convert climate dataset to 2D based on the glacier's DEM
     g_dem = xr.open_rasterio(gdir.get_filepath("dem"))
-    climate = create_2D_climate_data(climate, g_dem)
-        
-    # Apply temperature gradients and compute snow/rain fraction for the selected period
-    apply_t_grad!(climate, g_dem)
-    climate = climate.drop("gradient") 
+    climate = downscale_2D_climate(climate, g_dem)
 
     return climate
      
@@ -213,7 +225,7 @@ end
 
 Downloads the raw W5E5 climate data with a given resolution (daily by default). Returns an xarray Dataset. 
 """
-function get_raw_climate_data(gdir, temp_resolution="daily", climate="W5E5")
+function get_raw_climate_data(gdir; temp_resolution="daily", climate="W5E5")
     MBsandbox.process_w5e5_data(gdir, climate_type=climate, temporal_resol=temp_resolution) 
     fpath = gdir.get_filepath("climate_historical", filesuffix="_daily_W5E5")
     climate = xr.open_dataset(fpath)
@@ -235,12 +247,12 @@ function apply_t_grad!(climate, g_dem)
 end
 
 """
-    create_2D_climate_data(climate, g_dem)
+    downscale_2D_climate(climate, g_dem)
 
 Projects climate data to the glacier matrix by simply copying the closest gridpoint to all matrix gridpoints.
 Generates a new xarray Dataset which is returned.   
 """
-function create_2D_climate_data(climate, g_dem)
+function downscale_2D_climate(climate, g_dem)
     # Create dummy 2D arrays to have a base to apply gradients afterwards
     dummy_grid = ones(size(permutedims(g_dem.data, (1,2,3))))
     temp_2D = climate.avg_temp.data .* dummy_grid
@@ -265,6 +277,10 @@ function create_2D_climate_data(climate, g_dem)
         ]),
         attrs=climate.attrs
     )
+
+    # Apply temperature gradients and compute snow/rain fraction for the selected period
+    apply_t_grad!(climate_2D, g_dem)
+    climate_2D = climate_2D.drop("gradient") 
 
     return climate_2D
 
@@ -305,7 +321,6 @@ Trims a time period based on the time range of a climate series.
 """
 function trim_period(period, climate)
     if any(climate.time[1].dt.date.data[1] > period[1])
-
         head = jldate(climate.time[1])
         period = Date(year(head), 10, 1):Day(1):period[end] # make it a hydrological year
     end
@@ -316,6 +331,7 @@ function trim_period(period, climate)
 
     return period
 end
+
 
 """
     is_abl(month)
@@ -407,3 +423,12 @@ function get_gdir_climate_tuple(gdirs, climate, tspan)
     gdirs_climate = (dates, gdirs, longterm_temps, annual_climate)
     return gdirs_climate, gdirs_climate_batches
 end
+
+function partial_year(period::Type{<:Period}, float::AbstractFloat)
+    _year, Δ = divrem(float, 1)
+    year_start = Date(_year)
+    year = period((year_start + Year(1)) - year_start)
+    partial = period(round(Dates.value(year) * Δ))
+    year_start + partial
+end
+partial_year(float::AbstractFloat) = partial_year(Day, float)

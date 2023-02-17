@@ -13,6 +13,7 @@ using Optimization, Optim, OptimizationOptimJL
 import OptimizationOptimisers.Adam
 using IterTools: ncycle
 using Zygote: @ignore, Buffer 
+using Base: @kwdef
 using Flux
 using Tullio
 using Infiltrator

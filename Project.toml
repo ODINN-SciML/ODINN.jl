@@ -51,6 +51,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 TerminalLoggers = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
+TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 

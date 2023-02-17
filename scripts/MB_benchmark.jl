@@ -19,6 +19,8 @@ using JLD2
 using BenchmarkTools, TimerOutputs
 using Infiltrator
 
+using Dates
+
 using Logging: global_logger
 using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
@@ -74,8 +76,47 @@ function run_benchmark()
     ###########  CLIMATE DATA  ##############
     #########################################
 
-    # Process climate data for glaciers
-    gdirs_climate, gdirs_climate_batches = @timeit to "climate" get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=false)
+    ## Redesigning the climate and MB series workflow
+    ##  Raw skeleton for function to retrieve raw climate for all gdirs
+    @timeit to "process raw climate" begin
+    for gdir in gdirs # make this a pmap in the function
+        println("Getting raw  climate for: ", gdir.rgi_id)
+        # Get raw climate data for gdir
+        tspan_date = ODINN.partial_year(Day, tspan[1]):Day(1):ODINN.partial_year(Day, tspan[2])
+        climate =  @timeit to "get raw climate" ODINN.get_raw_climate_data(gdir)
+        # Make sure the desired period is covered by the climate data
+        period = ODINN.trim_period(tspan_date, climate) 
+        if any((climate.time[1].dt.date.data[1] <= period[1]) & any(climate.time[end].dt.date.data[1] >= period[end]))
+            climate = climate.sel(time=period) # Crop desired time period
+        else
+            @warn "No overlapping period available between climate and target data!" 
+        end
+        # Save gdir climate on disk 
+        @eval ODINN $climate.to_netcdf(joinpath($gdir.dir, "raw_climate.nc"))
+    end
+    end
+    @timeit to "compute MB one step" begin
+    # Raw skeleton for function to get MB for a given timestepping
+    step = 1.0/12.0
+    # We define a temperature-index model with a single DDF
+    ti_mb_model = ODINN.TI_model_1(DDF=5.0, acc_factor=1.2)
+    for gdir in gdirs
+        climate = ODINN.xr.open_dataset(joinpath(gdir.dir, "raw_climate.nc")) # load only once at the beginning
+        dem = ODINN.xr.open_rasterio(gdir.get_filepath("dem"))
+        # for time loop
+        t = 2012.3567 # time for testing
+        # First we get the dates of the current time and the previous step
+        period = ODINN.partial_year(Day, t - step):Day(1):ODINN.partial_year(Day, t)
+        climate_step = climate.sel(time=period) # Crop desired time period
+        climate_step = ODINN.get_cumulative_climate(climate_step)
+        # Convert climate dataset to 2D based on the glacier's DEM
+        climate_2D_step = ODINN.downscale_2D_climate(climate_step, dem)
+        MB = ODINN.compute_MB(ti_mb_model, climate_2D_step)
+        @show maximum(MB)
+        @show minimum(MB)
+        @show mean(MB)
+    end
+    end
 
     @show to
 
