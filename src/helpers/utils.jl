@@ -178,14 +178,14 @@ end
 
 Generates batches for the UE inversion problem based on input data and feed them to the loss function.
 """
-function generate_batches(batch_size, UD, target::String, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
-    targets = repeat([target], length(gdirs_climate_batches))
-    UDs = repeat([UD], length(gdirs_climate_batches))
+function generate_batches(batch_size, UD, target::String, gdirs, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
+    targets = repeat([target], length(gdirs))
+    UDs = repeat([UD], length(gdirs))
     if isnothing(gtd_grids) 
-        gtd_grids = repeat([nothing], length(gdirs_climate_batches))
-        batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
+        gtd_grids = repeat([nothing], length(gdirs))
+        batches = (UDs, gdirs, gdir_refs, context_batches, gtd_grids, targets)
     else
-        batches = (UDs, gdirs_climate_batches, gdir_refs, context_batches, gtd_grids, targets)
+        batches = (UDs, gdirs, gdir_refs, context_batches, gtd_grids, targets)
     end
     train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
@@ -197,10 +197,10 @@ end
 
 Generates batches for the UDE problem based on input data and feed them to the loss function.
 """
-function generate_batches(batch_size, UA, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings; shuffle=true)
-    UAs = repeat([UA], length(gdirs_climate_batches))
-    UDE_settings_batches = repeat([UDE_settings], length(gdirs_climate_batches))
-    batches = (UAs, gdirs_climate_batches, context_batches, gdir_refs, UDE_settings_batches)
+function generate_batches(batch_size, UA, gdirs, context_batches, gdir_refs, UDE_settings; shuffle=true)
+    UAs = repeat([UA], length(gdirs))
+    UDE_settings_batches = repeat([UDE_settings], length(gdirs))
+    batches = (UAs, gdirs, context_batches, gdir_refs, UDE_settings_batches)
     train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
     return train_loader
@@ -211,10 +211,10 @@ end
 
 Generates batches for the UDE in place problem based on input data and feed them to the loss function.
 """
-function generate_batches(batch_size, UA, gdirs_climate_batches, gdir_refs, random_MB, tspan::Tuple; shuffle=true)
-    UAs = repeat([UA], length(gdirs_climate_batches))
-    tspans = repeat([tspan], length(gdirs_climate_batches))
-    batches = (UAs, gdirs_climate_batches, gdir_refs, random_MB, tspans)
+function generate_batches(batch_size, UA, gdirs, gdir_refs, tspan::Tuple; shuffle=true)
+    UAs = repeat([UA], length(gdirs))
+    tspans = repeat([tspan], length(gdirs))
+    batches = (UAs, gdirs, gdir_refs, tspans)
     train_loader = Flux.Data.DataLoader(batches, batchsize=batch_size, shuffle=shuffle)
 
     return train_loader
@@ -402,14 +402,14 @@ function get_default_UDE_settings()
     end
 end
 
-function get_default_training_settings!(gdirs_climate, UDE_settings=nothing, train_settings=nothing, 
+function get_default_training_settings!(gdirs, UDE_settings=nothing, train_settings=nothing, 
                                         θ_trained=[], random_MB=nothing)
     if isnothing(UDE_settings)
         UDE_settings = get_default_UDE_settings()
     end
 
     if isnothing(train_settings)
-        train_settings = (Adam(), 1, length(gdirs_climate[1])) # solver, epochs, batch size
+        train_settings = (Adam(), 1, length(gdirs)) # solver, epochs, batch size
     end
 
     #### Setup default parameters ####

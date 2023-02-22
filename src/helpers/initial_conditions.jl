@@ -47,17 +47,18 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
 
     end
     try
-        H = deepcopy(H₀)
-        B = glacier_gd.topo.data .- H₀ # bedrock
-        S = Float64.(glacier_gd.topo.data) # surface elevation
-        V = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
+        H::Matrix{Float64} = deepcopy(H₀)
+        B::Matrix{Float64}= Float64.(glacier_gd.topo.data) .- H₀ # bedrock
+        S_coords::PyObject = xr.open_rasterio(gdir.get_filepath("dem"))
+        S::Matrix{Float64} = Float64.(glacier_gd.topo.data) # surface elevation
+        V::Matrix{Float64} = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
         fillNaN!(V)
         nx = glacier_gd.y.size # glacier extent
         ny = glacier_gd.x.size # really weird, but this is inversed 
         Δx = abs(gdir.grid.dx)
         Δy = abs(gdir.grid.dy)
 
-        return H₀, H, S, B, V, (nx,ny), (Δx,Δy)
+        return H₀, H, S, B, V, (nx,ny), (Δx,Δy), S_coords
     catch
         missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         push!(missing_glaciers, gdir.rgi_id)
@@ -69,13 +70,14 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
 
 end
 
-function build_PDE_context(gdir, longterm_temp, climate_years, A_noise, tspan; run_spinup=false, random_MB=nothing)
+function build_PDE_context(gdir, longterm_temps, A_noise, tspan; run_spinup=false)
     # Determine initial geometry conditions
-    H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
+    H₀::Matrix{Float64}, H::Matrix{Float64}, S::Matrix{Float64}, B::Matrix{Float64}, V::Matrix{Float64}, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
+
     rgi_id = gdir.rgi_id
     # Initialize all matrices for the solver
     nx, ny = nxy
-    S, dSdx, dSdy = zeros(Float64,nx,ny),zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
+    dSdx, dSdy = zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
     dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
     D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
@@ -89,34 +91,30 @@ function build_PDE_context(gdir, longterm_temp, climate_years, A_noise, tspan; r
     
     # Gather simulation parameters
     current_year = [0] 
-    if isnothing(random_MB)
-        random_MB = zeros(Float64,Int(tspan[2]) - Int(tspan[1]))
-    end
-    context = (A, B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
-                            current_year, nxy, Δxy, H₀, tspan, A_noise, random_MB, MB, rgi_id, Γ, maxS, minS, climate_years, simulation_years)
+
+    context = (A, B, S, dSdx, dSdy, D, longterm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
+                            current_year, nxy, Δxy, H₀, tspan, A_noise, nothing, MB, rgi_id, Γ, maxS, minS, simulation_years, simulation_years, S_coords)
     return context, H
 end
 
-function get_UDE_context(gdirs_climate, tspan, random_MB=nothing)
-    gdirs = gdirs_climate[2]
-    climate_years_list = gdirs_climate[1]
-    context_batches = pmap((gdir, climate_years) -> build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=random_MB), gdirs, climate_years_list)
+function get_UDE_context(gdirs, tspan)
+    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan; run_spinup=false), gdirs)
 
     return context_batches
 end
 
-function build_UDE_context(gdir, climate_years, tspan; run_spinup=false, random_MB=nothing)
-    H₀, H, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
+function build_UDE_context(gdir, tspan; run_spinup=false)
+    H₀::Matrix{Float64}, H::Matrix{Float64}, S::Matrix{Float64}, B::Matrix{Float64}, V::Matrix{Float64}, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
     simulation_years = collect(tspan[1]:tspan[2])
-
-    context = (B, H₀, H, nxy, Δxy, tspan, random_MB, gdir.rgi_id, S, V, climate_years, simulation_years)
+    A = Ref{Float64}(2e-17)
+    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A)
 
     return context
 end
 
 # UDE  context using Glathida for H
-function build_UDE_context_inv(gdir, gdir_ref, tspan;  run_spinup=false)
-    H₀, H₁, S, B, V, nxy, Δxy = get_initial_geometry(gdir, run_spinup)
+function build_UDE_context_inv(gdir, gdir_ref, tspan; run_spinup=false)
+    H₀, H₁, S, B, V, nxy, Δxy, S_coords = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
     # Get evolved tickness and surface
     H = gdir_ref["H"]
@@ -135,7 +133,7 @@ function build_UDE_context_inv(gdir, gdir_ref, tspan;  run_spinup=false)
         Plots.savefig(heatmap_diff3, joinpath(training_path, "H_diff_far_ref.pdf"))
     end
 
-    context = (nxy, Δxy, tspan, rgi_id, S, V, H₀)
+    context = (nxy, Δxy, tspan, rgi_id, S, V, H₀, S_coords)
 
     return context
 end
@@ -160,8 +158,8 @@ Retrieves context variables for computing the surface velocities of the UDE.
 """
 function retrieve_UDE_context(context::Tuple)
     # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan)
-    B = context[1]
-    H₀ = context[2]
+    B::Matrix{Float64} = context[1]
+    H₀::Matrix{Float64} = context[2]
     Δx = context[5][1]
     Δy = context[5][2]
     return B, H₀, Δx, Δy, nothing
@@ -174,8 +172,8 @@ Retrieves context variables for computing the surface velocities of the PDE.
 """
 function retrieve_PDE_context(context::Tuple)
     # context = ([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan)
-    B = context[2]
-    H₀ = context[21]
+    B::Matrix{Float64} = context[2]
+    H₀::Matrix{Float64} = context[21]
     Δx = context[20][1]
     Δy = context[20][2]
     A_noise = context[23]
@@ -263,21 +261,21 @@ function get_glathida_glacier(gdir, glathida, force)
     return gtd_grid
 end
 
-function filter_missing_glaciers!(gdirs::Vector{PyObject})
-    task_log = global_tasks.compile_task_log(gdirs, 
+function filter_missing_glaciers!(gdirs)
+    task_log::PyObject = global_tasks.compile_task_log(gdirs, 
                                             task_names=["gridded_attributes", "velocity_to_gdir", "thickness_to_gdir"])
                                                         
     task_log.to_csv(joinpath(ODINN.root_dir, "task_log.csv"))
     glacier_filter = ((task_log.velocity_to_gdir != "SUCCESS").values .&& (task_log.gridded_attributes != "SUCCESS").values
                         .&& (task_log.thickness_to_gdir != "SUCCESS").values)
-    glacier_ids = []
+    glacier_ids = String[]
     for id in task_log.index
         push!(glacier_ids, id)
     end
-    missing_glaciers = glacier_ids[glacier_filter]
+    missing_glaciers::Vector{String} = glacier_ids[glacier_filter]
 
     try
-        missing_glaciers_old = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
+        missing_glaciers_old::Vector{String} = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         for missing_glacier in missing_glaciers_old
             if all(missing_glacier .!= missing_glaciers) # if the glacier is already not present, let's add it
                 push!(missing_glaciers, missing_glacier)
@@ -299,9 +297,8 @@ end
 
 function filter_missing_glaciers!(rgi_ids::Vector{String})
 
-
     # Check which glaciers we can actually process
-    rgi_stats = pd.read_csv(utils.file_downloader("https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62_stats.csv"), index_col=0)
+    rgi_stats::PyObject = pd.read_csv(utils.file_downloader("https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62_stats.csv"), index_col=0)
     # rgi_stats = rgi_stats.loc[rgi_ids]
 
     # if any(rgi_stats.Connect .== 2)
@@ -319,7 +316,7 @@ function filter_missing_glaciers!(rgi_ids::Vector{String})
     end
 
     try
-        missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
+        missing_glaciers::Vector{String} = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         for missing_glacier in missing_glaciers
             deleteat!(rgi_ids, findall(x->x == missing_glacier,rgi_ids))
         end
