@@ -6,20 +6,23 @@ using Dates # to provide correct Julian time slices
 
 export get_gdirs_with_climate, generate_raw_climate_files
 
-function generate_raw_climate_files(gdir::PyObject, tspan)
-    println("Getting raw  climate for: ", gdir.rgi_id)
-    # Get raw climate data for gdir
-    tspan_date = partial_year(Day, tspan[1]):Day(1):partial_year(Day, tspan[2])
-    climate =  get_raw_climate_data(gdir)
-    # Make sure the desired period is covered by the climate data
-    period = trim_period(tspan_date, climate) 
-    if any((climate.time[1].dt.date.data[1] <= period[1]) & any(climate.time[end].dt.date.data[1] >= period[end]))
-        climate = climate.sel(time=period) # Crop desired time period
-    else
-        @warn "No overlapping period available between climate and target data!" 
+function generate_raw_climate_files(gdir, tspan)
+    if !ispath(joinpath(gdir.dir, "raw_climate.nc"))
+        println("Getting raw climate data for: ", gdir.rgi_id)
+        # Get raw climate data for gdir
+        tspan_date = partial_year(Day, tspan[1]):Day(1):partial_year(Day, tspan[2])
+        climate =  get_raw_climate_data(gdir)
+        # Make sure the desired period is covered by the climate data
+        period = trim_period(tspan_date, climate) 
+        if any((climate.time[1].dt.date.data[1] <= period[1]) & any(climate.time[end].dt.date.data[1] >= period[end]))
+            climate = climate.sel(time=period) # Crop desired time period
+        else
+            @warn "No overlapping period available between climate tspan!" 
+        end
+        # Save raw gdir climate on disk 
+        climate.to_netcdf(joinpath(gdir.dir, "raw_climate.nc"))
+        GC.gc()
     end
-    # Save raw gdir climate on disk 
-    climate.to_netcdf(joinpath(gdir.dir, "raw_climate.nc"))
 end
 
 """
@@ -58,7 +61,7 @@ Gets the W5E5 climate data for a single gdir. Returns a dictionary with the foll
     Dict("longterm_temps"=>longterm_temps, "annual_climate"=>annual_climate,
     "MB_dataset"=>MB_ds, "climate_dataset"=>climate_ds)
 """
-function get_climate_glacier(gdir::PyObject, overwrite; mb=true, period_y=(1979,2019))
+function get_climate_glacier(gdir, overwrite; mb=true, period_y=(1979,2019))
     # Generate downscaled climate data
     if !isfile(joinpath(gdir.dir, "annual_climate.nc")) || overwrite # Retrieve unless overwrite
         mb_type = "mb_real_daily"
@@ -237,13 +240,19 @@ end
 
 Applies temperature gradients to the glacier 2D climate data based on a DEM.  
 """
-function apply_t_grad!(climate, g_dem)
+function apply_t_cumul_grad!(climate, S)
     # We apply the gradients to the temperature
-    climate.temp.data = climate.temp.data .+ climate.avg_gradient.data .* (g_dem.data .- climate.ref_hgt)
-    climate.PDD.data = climate.PDD.data .+ climate.gradient.data .* (g_dem.data .- climate.ref_hgt)
+    climate.temp.data = climate.temp.data .+ climate.avg_gradient.data .* (S .- climate.ref_hgt)
+    climate.PDD.data = climate.PDD.data .+ climate.gradient.data .* (S .- climate.ref_hgt)
+    climate.PDD.data = ifelse.(climate.PDD.data .< 0.0, 0.0, climate.PDD.data) # Crop negative PDD values
     # We adjust the rain/snow fractions with the updated temperature
     climate.snow.data = climate.snow.where(climate.temp < 0.0, 0.0).data
     climate.rain.data = climate.rain.where(climate.temp > 0.0, 0.0).data
+end
+
+function apply_t_grad!(climate, dem)
+    # We apply the gradients to the temperature
+    climate.temp.data = climate.temp.data .+ climate.gradient.data .* (mean(dem.data) .- climate.ref_hgt)
 end
 
 """
@@ -252,9 +261,9 @@ end
 Projects climate data to the glacier matrix by simply copying the closest gridpoint to all matrix gridpoints.
 Generates a new xarray Dataset which is returned.   
 """
-function downscale_2D_climate(climate, g_dem)
+function downscale_2D_climate(climate, S, S_coords)
     # Create dummy 2D arrays to have a base to apply gradients afterwards
-    dummy_grid = ones(size(permutedims(g_dem.data, (1,2,3))))
+    dummy_grid = ones(size(permutedims(S_coords.data, (1,2,3))))
     temp_2D = climate.avg_temp.data .* dummy_grid
     PDD_2D = climate.temp.data .* dummy_grid
     snow_2D = climate.prcp.data .* dummy_grid
@@ -272,14 +281,16 @@ function downscale_2D_climate(climate, g_dem)
             ]),
         coords=Dict([
             ("time", climate.time),
-            ("x", g_dem.x),
-            ("y", g_dem.y)
+            ("x", S_coords.x),
+            ("y", S_coords.y)
         ]),
         attrs=climate.attrs
     )
 
+    # Reproject current S with xarray structure
+    S_time = reshape(S, size(S_coords.data))
     # Apply temperature gradients and compute snow/rain fraction for the selected period
-    apply_t_grad!(climate_2D, g_dem)
+    apply_t_cumul_grad!(climate_2D, S_time)
     climate_2D = climate_2D.drop("gradient") 
 
     return climate_2D
@@ -432,3 +443,19 @@ function partial_year(period::Type{<:Period}, float::AbstractFloat)
     year_start + partial
 end
 partial_year(float::AbstractFloat) = partial_year(Day, float)
+
+
+function get_longterm_temps(gdir::PyObject)
+    climate = xr.open_dataset(joinpath(gdir.dir, "raw_climate.nc")) # load only once at the beginning
+    dem = xr.open_rasterio(gdir.get_filepath("dem"))
+    apply_t_grad!(climate, dem)
+    longterm_temps = climate.groupby("time.year").mean().temp.data
+    return longterm_temps
+end
+
+function get_longterm_temps(gdir::PyObject, climate::PyObject)
+    dem = xr.open_rasterio(gdir.get_filepath("dem"))
+    apply_t_grad!(climate, dem)
+    longterm_temps = climate.groupby("time.year").mean().temp.data
+    return longterm_temps
+end

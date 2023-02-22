@@ -36,21 +36,23 @@ end
 
 Initializes Glacier Directories using OGGM. Wrapper function calling `init_gdirs_scratch(rgi_ids)`.
 """
-function init_gdirs(rgi_ids)
+function init_gdirs(rgi_ids::Vector{String})
     # Try to retrieve glacier gdirs if they are available
     filter_missing_glaciers!(rgi_ids)
     try
-        gdirs = workflow.init_glacier_directories(rgi_ids)
+        gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids)
         filter_missing_glaciers!(gdirs)
+        GC.gc()
         return gdirs
-    catch error
-        @warn "Cannot retrieve gdirs from disk"
+    catch 
+        @warn "Cannot retrieve gdirs from disk!"
         println("Generating gdirs from scratch...")
         global create_ref_dataset = true # we force the creation of the reference dataset
         # Generate all gdirs if needed
-        gdirs = init_gdirs_scratch(rgi_ids)
+        gdirs::Vector{PyObject} = init_gdirs_scratch(rgi_ids)
         # Check which gdirs errored in the tasks (useful to filter those gdirs)
         filter_missing_glaciers!(gdirs)
+        GC.gc()
         return gdirs
     end
 end
@@ -60,9 +62,9 @@ end
 
 Initializes Glacier Directories from scratch using OGGM.
 """
-function init_gdirs_scratch(rgi_ids)
+function init_gdirs_scratch(rgi_ids)::Vector{PyObject}
     # Check if some of the gdirs is missing files
-    gdirs = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url, 
+    gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url, 
                                                 from_prepro_level=2, prepro_border=10,
                                                 reset=true)
     list_talks = [
@@ -86,6 +88,7 @@ function init_gdirs_scratch(rgi_ids)
         # The order matters!
         workflow.execute_entity_task(task, gdirs)
     end
+    GC.gc()
 
     return gdirs
 end
