@@ -38,8 +38,8 @@ const to = TimerOutput()
 analysis = "timeit"
 
 # We enable multiprocessing
-processes = 3
-ODINN.enable_multiprocessing(processes)
+# processes = 3
+# ODINN.enable_multiprocessing(processes)
 
 ###############################################################
 ###########################  MAIN #############################
@@ -105,6 +105,7 @@ function run_benchmark(analysis)
         jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, ODINN.current_epoch)
 
         @show to
+        @show ODINN.to
 
     elseif analysis == "profile"
 
@@ -116,23 +117,23 @@ function run_benchmark(analysis)
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
     
         ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
-        gdirs = @profview_allocs init_gdirs(rgi_ids)
+        gdirs = init_gdirs(rgi_ids)
 
-        gdir_refs = @profview_allocs generate_ref_dataset(gdirs, tspan; solver=RDPK3Sp35())
+        @profview_allocs generate_ref_dataset(gdirs, tspan; solver=RDPK3Sp35())
 
-        ODINN.reset_epochs()
-        n_ADAM = 1
-        batch_size = length(gdirs)
-        UDE_settings = Dict("reltol"=>1e-7,
-                                "solver"=>RDPK3Sp35(),
-                                "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(), checkpointing=true))
-        ## First train with ADAM to move the parameters into a favourable space
-        println("Training from scratch...")
-        train_settings = (Adam(0.01), n_ADAM, batch_size) # optimizer, epochs
-        # train_settings = (BFGS(initial_stepnorm=0.001), n_BFGS, batch_size) # optimizer, epochs
-        iceflow_trained, UA_f, loss_history = @profview_allocs train_iceflow_UDE(gdirs, gdir_refs,
-                                                                        tspan, train_settings;
-                                                                        UDE_settings=UDE_settings)
+        # ODINN.reset_epochs()
+        # n_ADAM = 1
+        # batch_size = length(gdirs)
+        # UDE_settings = Dict("reltol"=>1e-7,
+        #                         "solver"=>RDPK3Sp35(),
+        #                         "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(), checkpointing=true))
+        # ## First train with ADAM to move the parameters into a favourable space
+        # println("Training from scratch...")
+        # train_settings = (Adam(0.01), n_ADAM, batch_size) # optimizer, epochs
+        # # train_settings = (BFGS(initial_stepnorm=0.001), n_BFGS, batch_size) # optimizer, epochs
+        # iceflow_trained, UA_f, loss_history = @profview_allocs train_iceflow_UDE(gdirs, gdir_refs,
+        #                                                                 tspan, train_settings;
+        #                                                                 UDE_settings=UDE_settings)
 
     elseif analysis == "types"
 

@@ -38,9 +38,13 @@ Initializes Glacier Directories using OGGM. Wrapper function calling `init_gdirs
 """
 function init_gdirs(rgi_ids::Vector{String})
     # Try to retrieve glacier gdirs if they are available
+    @timeit to "Filtering glaciers" begin
     filter_missing_glaciers!(rgi_ids)
+    end
     try
+        @timeit to "Init gdirs inside" begin
         gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids)
+        end
         filter_missing_glaciers!(gdirs)
         GC.gc()
         return gdirs

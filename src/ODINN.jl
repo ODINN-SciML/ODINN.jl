@@ -25,7 +25,7 @@ using Distributed, ParallelDataTransfer
 using ProgressMeter
 using PyCall
 using Downloads
-using SnoopPrecompile 
+using SnoopPrecompile, TimerOutputs
 
 # ##############################################
 # ############    PARAMETERS     ###############

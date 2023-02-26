@@ -98,12 +98,10 @@ end
 end
 
 function compute_MB(mb_model::TI_model_1, climate_2D_period::PyObject)
-    accumulation = mb_model.acc_factor .* climate_2D_period.snow[1].data
-    ablation = mb_model.DDF .* climate_2D_period.PDD[1].data
-    return accumulation .- ablation
+    return (mb_model.acc_factor .* climate_2D_period.snow.data) .- (mb_model.DDF .* climate_2D_period.PDD.data)
 end
 
-function MB_timestep(mb_model::MB_model, climate::PyObject, S::Matrix{Float64}, S_coords::PyObject, t, step::Float64)
+function MB_timestep(mb_model::MB_model, climate, S, S_coords, t, step)
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
     climate_step = get_cumulative_climate(climate.sel(time=period))
@@ -113,11 +111,17 @@ function MB_timestep(mb_model::MB_model, climate::PyObject, S::Matrix{Float64}, 
     return MB
 end
 
-function MB_timestep!(MB, mb_model::MB_model, climate::PyObject, S::Matrix{Float64}, S_coords::PyObject, t, step::AbstractFloat)
+function MB_timestep!(MB, mb_model::MB_model, climate, S, S_coords, t, step)
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
-    climate_step = get_cumulative_climate(climate.sel(time=period))
+    @timeit to "Climate step" begin
+    get_cumulative_climate!(climate, period)
+    end
     # Convert climate dataset to 2D based on the glacier's DEM
-    climate_2D_step = downscale_2D_climate(climate_step, S, S_coords)
-    MB .= compute_MB(mb_model, climate_2D_step)
+    @timeit to "Climate 2D step" begin
+    downscale_2D_climate!(climate, S, S_coords)
+    end
+    @timeit to "Compute MB" begin
+    MB .= compute_MB(mb_model, climate.climate_2D_step[])
+    end
 end
