@@ -85,13 +85,14 @@ function run_toy_model()
 
     if ODINN.train[]
         # Train iceflow UDE in parallel
-        n_ADAM = 100
+        n_ADAM = 20
         n_BFGS = 50
         batch_size = length(gdir_refs)
         # batch_size = 9
         UDE_settings = Dict("reltol"=>1e-7,
+                            "interpolating_step"=>1.5, # if checkpointing = true
                             "solver"=>RDPK3Sp35(),
-                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(), checkpointing=true))
+                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP()))
         if ODINN.retrain[]
             println("Retraining from previous NN weights...")
             trained_weights = load(joinpath(ODINN.root_dir, "data/trained_weights.jld2"))
@@ -124,18 +125,18 @@ function run_toy_model()
             jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, ODINN.current_epoch)
 
             ## Continue training with BFGS
-            # optimizer = BFGS(initial_stepnorm=0.001)
-            # train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
-            # iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
-            #                                                                 tspan, train_settings, θ_trained;
-            #                                                                 UDE_settings=UDE_settings) 
+            optimizer = BFGS(initial_stepnorm=0.001)
+            train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
+            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs, gdir_refs,
+                                                                            tspan, train_settings, #θ_trained;
+                                                                            UDE_settings=UDE_settings) 
   
-            # θ_trained = iceflow_trained.minimizer
+            θ_trained = iceflow_trained.minimizer
             # Save loss loss_history
             jldsave(joinpath(ODINN.root_dir, "data/loss_history.jld2"); loss_history)
             # Save trained NN weights
-            # println("Saving NN weights...")
-            # jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, ODINN.current_epoch)
+            println("Saving NN weights...")
+            jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, ODINN.current_epoch)
         end
     end
     # Clean-up memory

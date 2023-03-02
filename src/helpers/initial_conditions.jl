@@ -72,7 +72,7 @@ end
 
 function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
     # Determine initial geometry conditions
-    H₀::Matrix{Float64}, H::Matrix{Float64}, S::Matrix{Float64}, B::Matrix{Float64}, V::Matrix{Float64}, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
+    H₀, H, S, B, V, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
 
     rgi_id = gdir.rgi_id
     # Initialize all matrices for the solver
@@ -82,7 +82,7 @@ function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
     D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
     MB = zeros(Float64,nx,ny)
-    A = Ref{Float64}(2e-16)
+    A = Ref{Float64}(2e-17)
     α = [0.0]                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
     C = [15e-14]    
     Γ = Ref{Float64}(0.0)
@@ -97,19 +97,19 @@ function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
     return context, H
 end
 
-function get_UDE_context(gdirs, tspan)
-    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan; run_spinup=false), gdirs)
+function get_UDE_context(gdirs, tspan; testmode=false)
+    context_batches = map((gdir) -> build_UDE_context(gdir, tspan, testmode; run_spinup=false), gdirs)
 
     return context_batches
 end
 
-function build_UDE_context(gdir, tspan; run_spinup=false)
+function build_UDE_context(gdir, tspan, testmode; run_spinup=false)
     H₀, H, S, B, V, nxy, Δxy, S_coords = get_initial_geometry(gdir, run_spinup)
     simulation_years = collect(tspan[1]:tspan[2])
     A = Ref{Float64}(2e-17)
     nx, ny = nxy
     MB = zeros(Float64,nx,ny)
-    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A, MB)
+    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A, MB, testmode)
 
     return context
 end

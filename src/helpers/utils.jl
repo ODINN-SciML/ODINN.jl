@@ -391,15 +391,10 @@ function update_training_state(l, batch_size, n_gdirs)
 end
 
 function get_default_UDE_settings()
-    if use_MB[]    
-        UDE_settings = Dict("reltol"=>1e-7, 
+    UDE_settings = Dict("reltol"=>1e-7, 
                             "solver"=>RDPK3Sp35(), 
-                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP())) # Currently just ReverseDiffVJP supports callbacks.
-    else
-        UDE_settings = Dict("reltol"=>1e-7,
-                            "solver"=>RDPK3Sp35(),
-                            "sensealg"=>InterpolatingAdjoint(autojacvec=ZygoteVJP())) 
-    end
+                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true))) 
+    return UDE_settings
 end
 
 function get_default_training_settings!(gdirs, UDE_settings=nothing, train_settings=nothing, 
@@ -457,4 +452,15 @@ function plot_test_error(pred::Tuple, ref::Dict{String, Any}, variable, rgi_id, 
         UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
         Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id.pdf"))
     end
+end
+
+function get_interpolating_step(interpolating_step, tspan)
+    modulo =  mod(((tspan[end] - tspan[begin]) / interpolating_step), 1) 
+    if modulo != 0.0
+        int_steps = floor((tspan[end] - tspan[begin]) / interpolating_step)
+        updated_step = interpolating_step + (modulo*interpolating_step)/int_steps
+    else
+        updated_step = interpolating_step
+    end
+    return updated_step
 end

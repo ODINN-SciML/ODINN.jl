@@ -37,16 +37,16 @@ const to = TimerOutput()
 # analysis = "profile"
 analysis = "timeit"
 
-# We enable multiprocessing
-# processes = 3
-# ODINN.enable_multiprocessing(processes)
-
 ###############################################################
 ###########################  MAIN #############################
 ###############################################################
 
 
 function run_benchmark(analysis)
+
+    # We enable multiprocessing
+    processes = 3
+    ODINN.enable_multiprocessing(processes)
     
     # Flags
     @timeit to "setters" begin
@@ -71,7 +71,7 @@ function run_benchmark(analysis)
 
     if analysis == "timeit"
 
-        @timeit to "oggm config" oggm_config(working_dir)
+        @timeit to "oggm config" oggm_config(working_dir; processes=1)
 
         # Defining glaciers to be modelled with RGI IDs
         # RGI60-11.03638 # Argentière glacier
@@ -91,8 +91,9 @@ function run_benchmark(analysis)
         n_ADAM = 1
         batch_size = length(gdirs)
         UDE_settings = Dict("reltol"=>1e-7,
-                                "solver"=>RDPK3Sp35(),
-                                "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(), checkpointing=true))
+                            "interpolating_step"=>1.5,
+                            "solver"=>RDPK3Sp35(),
+                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)))
         ## First train with ADAM to move the parameters into a favourable space
         println("Training from scratch...")
         train_settings = (Adam(0.01), n_ADAM, batch_size) # optimizer, epochs

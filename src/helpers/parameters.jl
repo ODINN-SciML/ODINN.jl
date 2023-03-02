@@ -53,3 +53,6 @@ global optimization_method = "AD+AD"
 # optimization_method = "AD+Diff"
 
 const to = TimerOutput()
+
+global pde_A_values = []
+global ude_A_values = []
