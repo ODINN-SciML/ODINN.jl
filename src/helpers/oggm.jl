@@ -11,7 +11,7 @@ export oggm_config, init_gdirs, PARAMS, PATHS
 
 Configures the basic paths and parameters for OGGM.
 """
-function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"))
+function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"); processes=1)
     @eval begin
     @everywhere begin
     @eval ODINN begin
@@ -25,7 +25,9 @@ function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"))
     PARAMS["continue_on_error"] = true # avoid stopping when a task fails for a glacier (e.g. lack of data)
 
     # Multiprocessing 
-    PARAMS["use_multiprocessing"] = true # Let's use multiprocessing for OGGM
+    multiprocessing = $processes > 1 ? true : false
+    PARAMS["mp_processes"] = $processes
+    PARAMS["use_multiprocessing"] = multiprocessing # Let's use multiprocessing for OGGM
     end # @eval ODINN
     end # @everywhere
     end # @eval
@@ -38,11 +40,14 @@ Initializes Glacier Directories using OGGM. Wrapper function calling `init_gdirs
 """
 function init_gdirs(rgi_ids::Vector{String})
     # Try to retrieve glacier gdirs if they are available
+    @timeit to "Filtering glaciers" begin
     filter_missing_glaciers!(rgi_ids)
+    end
     try
+        @timeit to "Init gdirs inside" begin
         gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids)
+        end
         filter_missing_glaciers!(gdirs)
-        GC.gc()
         return gdirs
     catch 
         @warn "Cannot retrieve gdirs from disk!"
@@ -52,7 +57,6 @@ function init_gdirs(rgi_ids::Vector{String})
         gdirs::Vector{PyObject} = init_gdirs_scratch(rgi_ids)
         # Check which gdirs errored in the tasks (useful to filter those gdirs)
         filter_missing_glaciers!(gdirs)
-        GC.gc()
         return gdirs
     end
 end

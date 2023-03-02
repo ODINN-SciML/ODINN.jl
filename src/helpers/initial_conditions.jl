@@ -48,9 +48,9 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
     end
     try
         H::Matrix{Float64} = deepcopy(H₀)
-        B::Matrix{Float64}= Float64.(glacier_gd.topo.data) .- H₀ # bedrock
+        B::Matrix{Float64} = Float64.(glacier_gd.topo.data) .- H₀ # bedrock
         S_coords::PyObject = xr.open_rasterio(gdir.get_filepath("dem"))
-        S::Matrix{Float64} = Float64.(glacier_gd.topo.data) # surface elevation
+        S = Float64.(glacier_gd.topo.data) # surface elevation
         V::Matrix{Float64} = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
         fillNaN!(V)
         nx = glacier_gd.y.size # glacier extent
@@ -58,21 +58,21 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
         Δx = abs(gdir.grid.dx)
         Δy = abs(gdir.grid.dy)
 
+        glacier_gd.close() # Release any resources linked to this object
+
         return H₀, H, S, B, V, (nx,ny), (Δx,Δy), S_coords
     catch
         missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         push!(missing_glaciers, gdir.rgi_id)
         jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
+        glacier_gd.close() # Release any resources linked to this object
         @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
     end
-
-    glacier_gd.close() # Release any resources linked to this object
-
 end
 
-function build_PDE_context(gdir, longterm_temps, A_noise, tspan; run_spinup=false)
+function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
     # Determine initial geometry conditions
-    H₀::Matrix{Float64}, H::Matrix{Float64}, S::Matrix{Float64}, B::Matrix{Float64}, V::Matrix{Float64}, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
+    H₀, H, S, B, V, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
 
     rgi_id = gdir.rgi_id
     # Initialize all matrices for the solver
@@ -82,7 +82,7 @@ function build_PDE_context(gdir, longterm_temps, A_noise, tspan; run_spinup=fals
     D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
     MB = zeros(Float64,nx,ny)
-    A = Ref{Float64}(2e-16)
+    A = Ref{Float64}(2e-17)
     α = [0.0]                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
     C = [15e-14]    
     Γ = Ref{Float64}(0.0)
@@ -92,22 +92,24 @@ function build_PDE_context(gdir, longterm_temps, A_noise, tspan; run_spinup=fals
     # Gather simulation parameters
     current_year = [0] 
 
-    context = (A, B, S, dSdx, dSdy, D, longterm_temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
+    context = (A, B, S, dSdx, dSdy, D, nothing, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
                             current_year, nxy, Δxy, H₀, tspan, A_noise, nothing, MB, rgi_id, Γ, maxS, minS, simulation_years, simulation_years, S_coords)
     return context, H
 end
 
-function get_UDE_context(gdirs, tspan)
-    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan; run_spinup=false), gdirs)
+function get_UDE_context(gdirs, tspan; testmode=false)
+    context_batches = map((gdir) -> build_UDE_context(gdir, tspan, testmode; run_spinup=false), gdirs)
 
     return context_batches
 end
 
-function build_UDE_context(gdir, tspan; run_spinup=false)
-    H₀::Matrix{Float64}, H::Matrix{Float64}, S::Matrix{Float64}, B::Matrix{Float64}, V::Matrix{Float64}, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
+function build_UDE_context(gdir, tspan, testmode; run_spinup=false)
+    H₀, H, S, B, V, nxy, Δxy, S_coords = get_initial_geometry(gdir, run_spinup)
     simulation_years = collect(tspan[1]:tspan[2])
     A = Ref{Float64}(2e-17)
-    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A)
+    nx, ny = nxy
+    MB = zeros(Float64,nx,ny)
+    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A, MB, testmode)
 
     return context
 end
