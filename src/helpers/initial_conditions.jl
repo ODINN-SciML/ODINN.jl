@@ -98,7 +98,7 @@ function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
 end
 
 function get_UDE_context(gdirs, tspan; testmode=false)
-    context_batches = map((gdir) -> build_UDE_context(gdir, tspan, testmode; run_spinup=false), gdirs)
+    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan, testmode; run_spinup=false), gdirs)
 
     return context_batches
 end

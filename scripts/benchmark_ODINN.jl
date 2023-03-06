@@ -59,7 +59,7 @@ function run_benchmark()
     
         # @benchmark train_iceflow_UDE($gdirs_climate, $tspan, $train_settings, $gdir_refs, $θ_bm, $UDE_settings; random_MB=$random_MB)
     
-        t_stats = @timed train_iceflow_UDE(gdirs_climate, gdirs_climate_batches, gdir_refs,
+        t_stats = @timed train_iceflow_UDE(gdirs, gdir_refs,
                                             tspan, train_settings, θ_bm;
                                             UDE_settings=UDE_settings,
                                             random_MB=random_MB) 
@@ -112,26 +112,13 @@ function run_benchmark()
     # glacier_filter = 1
     # gdir = [gdirs[glacier_filter]]
 
-    #########################################
-    ###########  CLIMATE DATA  ##############
-    #########################################
-
-    # Process climate data for glaciers
-    gdirs_climate, gdirs_climate_batches = get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=false)
-
-    # Generate random mass balance series for toy model
-    if ODINN.use_MB[]
-        random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)
-    else
-        random_MB = nothing
-    end
     # Run forward model for selected glaciers
     if ODINN.create_ref_dataset
         println("Generating reference dataset for training...")
         solver = RDPK3Sp35()
         # solver = Ralston()
         # Compute reference dataset in parallel
-        gdir_refs = @time generate_ref_dataset(gdirs_climate, tspan; solver=solver, random_MB=random_MB)
+        gdir_refs = @time generate_ref_dataset(gdirs, tspan; solver=solver, random_MB=random_MB)
 
         println("Saving reference benchmark data")
         jldsave(joinpath(ODINN.root_dir, "data/PDE_refs_benchmark.jld2"); gdir_refs)
