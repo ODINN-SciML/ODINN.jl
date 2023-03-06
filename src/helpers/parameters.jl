@@ -40,7 +40,7 @@ const loss_type = Ref{String}("V")                   # Loss function based on ic
 const random_sampling_loss = Ref{Bool}(false)  # Use random subset of matrix samples for the loss
 const scale_loss = Ref{Bool}(true)
 const noise = Ref{Bool}(true)                  # Add random noise to fake A law
-rng_seed() = MersenneTwister(1010)   # Random seed
+rng_seed() = MersenneTwister(666)   # Random seed
 
 ice_thickness_source = "farinotti" # choose between "farinotti" or "millan"
 
@@ -53,6 +53,3 @@ global optimization_method = "AD+AD"
 # optimization_method = "AD+Diff"
 
 const to = TimerOutput()
-
-global pde_A_values = []
-global ude_A_values = []

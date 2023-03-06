@@ -79,7 +79,6 @@ function batch_iceflow_PDE(gdir, A_noise, tspan, solver; run_spinup=false)
         A = context[1]
         A_noise = context[23]
         A[] = A_fake(mean(climate.longterm_temps), A_noise, noise)[1]
-        push!(pde_A_values, A[])
         end
     end
     cb_MB = DiscreteCallback(stop_condition, action!)
@@ -291,8 +290,10 @@ function loss_iceflow_finite_differences(θ, UA_f, gdirs, gdir_refs, tspan)
         # normV = mean(abs.(Vx_ref .+ Vy_ref))
         l_H_loc = Flux.Losses.mse(H, H_ref; agg=mean) 
         l_V_loc = Flux.Losses.mse(V̄x_pred, Vx_ref; agg=mean) + Flux.Losses.mse(V̄y_pred, Vy_ref; agg=mean)
-        l_H = normHref^(-2.0) * l_H_loc
-        l_V = normVref^(-2.0) * l_V_loc
+        # l_H = normHref^(-2.0) * l_H_loc
+        # l_V = normVref^(-2.0) * l_V_loc
+        l_H = normHref^(-1) * l_H_loc
+        l_V = normVref^(-1) * l_V_loc
 
         @assert (loss_type[] == "H" || loss_type[] == "V" || loss_type[] == "HV") "Invalid loss_type. Needs to be 'H', 'V' or 'HV'"
         if loss_type[] == "H"
@@ -363,8 +364,6 @@ function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings)
         A = context[14]
         testmode = context[16]
         testmode ? A[] = A_fake(mean(climate.longterm_temps))[1] : A[] = predict_A̅(UA_f, θ, [mean(climate.longterm_temps)])[1]
-        push!(ude_A_values, A[])
-        # A[] = predict_A̅(UA_f, θ, [mean(longterm_temps)])[1]
     end
     cb_MB = DiscreteCallback(stop_condition, action!)
 
@@ -390,7 +389,9 @@ function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings)
                                                                         testmode=testmode) # Average velocity with average temperature
     rgi_id::String = @ignore gdir.rgi_id
     H_V_pred = (H_pred, V̄x_pred, V̄y_pred, rgi_id)
-    # H_V_pred = (H_pred, V̄x_pred, V̄y_pred)
+
+    @ignore GC.gc() # Run the garbage collector to tame the RAM
+
     return H_V_pred
 end
 
@@ -709,8 +710,6 @@ callback_plots_A = function (θ, l, UA_f, longterm_temps, A_noise, training_path
         Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(current_epoch).png"))
         Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(current_epoch).pdf"))
     end
-
-    GC.gc()
 
     return false
 end
