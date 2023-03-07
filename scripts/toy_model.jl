@@ -26,7 +26,7 @@ function run_toy_model()
 
     processes = 18
     # Enable multiprocessing
-    @time "multiprocessing" ODINN.enable_multiprocessing(processes)
+    ODINN.enable_multiprocessing(processes)
     # Flags
     ODINN.set_use_MB(true)
     ODINN.make_plots(true)    
@@ -40,12 +40,13 @@ function run_toy_model()
     ODINN.set_retrain(false) # Re-use previous NN weights to continue training
     # Optimization method for differentiating the model
     ODINN.set_optimization_method("AD+AD")
+    # ODINN.set_optimization_method("AD+Diff")
 
     tspan = (2010.0, 2015.0) # period in years for simulation
 
     # Configure OGGM settings in all workers
     working_dir = joinpath(homedir(), "Python/OGGM_data")
-    @time "OGGM config" oggm_config(working_dir)
+    oggm_config(working_dir)
 
     # Defining glaciers to be modelled with RGI IDs
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
@@ -90,9 +91,8 @@ function run_toy_model()
         batch_size = length(gdir_refs)
         # batch_size = 9
         UDE_settings = Dict("reltol"=>1e-7,
-                            "interpolating_step"=>1.5, # if checkpointing = true
                             "solver"=>RDPK3Sp35(),
-                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP()))
+                            "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)))
         if ODINN.retrain[]
             println("Retraining from previous NN weights...")
             trained_weights = load(joinpath(ODINN.root_dir, "data/trained_weights.jld2"))
@@ -115,7 +115,7 @@ function run_toy_model()
             ODINN.reset_epochs()
             ## First train with ADAM to move the parameters into a favourable space
             println("Training from scratch...")
-            train_settings = (Adam(0.005), n_ADAM, batch_size) # optimizer, epochs
+            train_settings = (Adam(0.01), n_ADAM, batch_size) # optimizer, epochs
             # train_settings = (BFGS(initial_stepnorm=0.001), n_BFGS, batch_size) # optimizer, epochs
             iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs, gdir_refs,
                                                                             tspan, train_settings;
@@ -128,7 +128,7 @@ function run_toy_model()
             optimizer = BFGS(initial_stepnorm=0.001)
             train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
             iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs, gdir_refs,
-                                                                            tspan, train_settings, #θ_trained;
+                                                                            tspan, train_settings, θ_trained;
                                                                             UDE_settings=UDE_settings) 
   
             θ_trained = iceflow_trained.minimizer

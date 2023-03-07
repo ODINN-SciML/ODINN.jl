@@ -151,16 +151,8 @@ function set_optimization_method(opt_method_i)
     @everywhere @eval ODINN global optimization_method = $opt_method_i
 end
 
-function get_gdir_refs(refs, gdirs_i; batches=false)
+function get_gdir_refs(refs, gdirs)
     gdir_refs = []
-    if batches
-        gdirs = []
-        for gdir_batch in gdirs_i
-            push!(gdirs, gdir_batch[2])
-        end
-    else
-        gdirs = gdirs_i
-    end
 
     for (ref, gdir) in zip(refs, gdirs)
         push!(gdir_refs, Dict("RGI_ID"=>gdir.rgi_id,

@@ -45,7 +45,7 @@ analysis = "timeit"
 function run_benchmark(analysis)
 
     # We enable multiprocessing
-    processes = 3
+    processes = 1
     ODINN.enable_multiprocessing(processes)
     
     # Flags
@@ -91,7 +91,6 @@ function run_benchmark(analysis)
         n_ADAM = 1
         batch_size = length(gdirs)
         UDE_settings = Dict("reltol"=>1e-7,
-                            "interpolating_step"=>1.5,
                             "solver"=>RDPK3Sp35(),
                             "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)))
         ## First train with ADAM to move the parameters into a favourable space
