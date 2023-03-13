@@ -39,8 +39,8 @@ function run_toy_model()
     ODINN.set_train(true)    # Train UDE
     ODINN.set_retrain(false) # Re-use previous NN weights to continue training
     # Optimization method for differentiating the model
-    ODINN.set_optimization_method("AD+AD")
-    # ODINN.set_optimization_method("AD+Diff")
+    # ODINN.set_optimization_method("AD+AD")
+    ODINN.set_optimization_method("AD+Diff")
 
     tspan = (2010.0, 2015.0) # period in years for simulation
 
@@ -125,13 +125,13 @@ function run_toy_model()
             jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, ODINN.current_epoch)
 
             ## Continue training with BFGS
-            optimizer = BFGS(initial_stepnorm=0.001)
-            train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
-            iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs, gdir_refs,
-                                                                            tspan, train_settings, θ_trained;
-                                                                            UDE_settings=UDE_settings) 
+            # optimizer = BFGS(initial_stepnorm=0.001)
+            # train_settings = (optimizer, n_BFGS, batch_size) # optimizer, epochs, batch_size
+            # iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs, gdir_refs,
+            #                                                                 tspan, train_settings, #θ_trained;
+            #                                                                 UDE_settings=UDE_settings) 
   
-            θ_trained = iceflow_trained.minimizer
+            # θ_trained = iceflow_trained.minimizer
             # Save loss loss_history
             jldsave(joinpath(ODINN.root_dir, "data/loss_history.jld2"); loss_history)
             # Save trained NN weights
