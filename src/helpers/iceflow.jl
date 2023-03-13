@@ -16,7 +16,7 @@ function spinup(gdirs, tspan; solver = RDPK3Sp35())
     end
     jldsave(joinpath(ODINN.root_dir, "data/spinup/gdir_refs.jld2"); gdir_refs)
 
-    GC.gc() # run garbage collector
+    @everywhere GC.gc() # run garbage collector
 end
 
 """
@@ -38,7 +38,7 @@ function generate_ref_dataset(gdirs, tspan; solver = RDPK3Sp35())
     # Gather information per gdir
     gdir_refs = get_gdir_refs(refs, gdirs)
 
-    GC.gc() # run garbage collector 
+    @everywhere GC.gc() # run garbage collector 
 
     return gdir_refs
 end
@@ -174,14 +174,22 @@ function train_iceflow_UDE(gdirs, gdir_refs, tspan,
     elseif optimization_method == "AD+Diff"
         println("Optimization based on AD for NN and finite differences for ODE solver")
 
-        ### IN PLACE VERSION
         function update_gradient_glacier!(g::Vector, θ, UA_f, gdir, gdir_ref_batch, temps, tspan; η = 0.01)
+            # AD for the NN gradient
             ∇θ_A = gradient(θ -> UA_f(θ)([mean(temps)])[1], θ)[1]
-            loss₀, _ = loss_iceflow_finite_differences(θ, [UA_f], [gdir], [gdir_ref_batch], [tspan]) 
-            θ₁ = Array{Float64}(θ .+ η .* ∇θ_A)
-            loss₁, _ = loss_iceflow_finite_differences(θ₁, [UA_f], [gdir], [gdir_ref_batch], [tspan])
-            scalar_factor = (loss₁ - loss₀) ./ (η * norm(∇θ_A)^2)
-            g .+= scalar_factor .* ∇θ_A
+            # Compute scaling factor for gradient
+            grad_norm = Float64(norm(∇θ_A))
+            A₀ = UA_f(θ)([mean(temps)])[1]
+            δ = 2.0^7 * eps(Float64)^0.5
+            η =  δ * A₀ / grad_norm^2
+
+            # Do for loop to see if there are wiggles. 
+            θ₋ = Array{Float64}(θ .- η .* ∇θ_A)
+            θ₊ = Array{Float64}(θ .+ η .* ∇θ_A)
+            loss₋, _ = loss_iceflow_finite_differences(θ₋, [UA_f], [gdir], [gdir_ref_batch], [tspan]) 
+            loss₊, _ = loss_iceflow_finite_differences(θ₊, [UA_f], [gdir], [gdir_ref_batch], [tspan])
+            scalar_factor = (loss₊ - loss₋) ./ (2 * δ * A₀)
+            g .+= scalar_factor .* ∇θ_A # update gradient
         end
 
         # We compute the combined gradient for all batches in parallel
@@ -205,7 +213,7 @@ function train_iceflow_UDE(gdirs, gdir_refs, tspan,
                                 progress=true)
     end
 
-    GC.gc() # run garbage collector 
+    @everywhere GC.gc() # run garbage collector 
 
     return iceflow_trained, UA_f, loss_history
 end
@@ -235,14 +243,12 @@ function loss_iceflow(θ, UA_f, gdirs, context_batches, gdir_refs, UDE_settings)
         V̄y_pred = H_V_preds[i][3]
 
         if scale_loss[]
-            normHref = mean(H_ref.^2.0)^0.5
-            normVref = mean(Vx_ref.^2.0 .+ Vy_ref.^2.0)^0.5
-            # normV = mean(abs.(Vx_ref .+ Vy_ref))
+            normHref = mean(H_ref.^2)^0.5
+            normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
             l_H_loc = Flux.Losses.mse(H, H_ref; agg=mean) 
             l_V_loc = Flux.Losses.mse(V̄x_pred, Vx_ref; agg=mean) + Flux.Losses.mse(V̄y_pred, Vy_ref; agg=mean)
-            # l_V_loc = mean(abs.(V̄x_pred .- Vx_ref)) + mean(abs.(V̄y_pred .- Vy_ref))
-            l_H += normHref^(-2.0) * l_H_loc
-            l_V += normVref^(-2.0) * l_V_loc
+            l_H += normHref^(-1) * l_H_loc
+            l_V += normVref^(-1) * l_V_loc
 
         else
             l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean) 
@@ -285,8 +291,8 @@ function loss_iceflow_finite_differences(θ, UA_f, gdirs, gdir_refs, tspan)
 
         # TODO: make loss function part standalone (to be re-used)
 
-        normHref = mean(H_ref.^2.0)^0.5
-        normVref = mean(Vx_ref.^2.0 .+ Vy_ref.^2.0)^0.5
+        normHref = mean(H_ref.^2)^0.5
+        normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
         # normV = mean(abs.(Vx_ref .+ Vy_ref))
         l_H_loc = Flux.Losses.mse(H, H_ref; agg=mean) 
         l_V_loc = Flux.Losses.mse(V̄x_pred, Vx_ref; agg=mean) + Flux.Losses.mse(V̄y_pred, Vy_ref; agg=mean)

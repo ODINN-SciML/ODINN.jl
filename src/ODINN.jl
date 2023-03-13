@@ -7,7 +7,7 @@ module ODINN
 
 using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
-using OrdinaryDiffEq, DiffEqCallbacks
+using OrdinaryDiffEq
 using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL
 import OptimizationOptimisers.Adam
@@ -21,7 +21,7 @@ using Plots, PlotThemes
 Plots.theme(:wong2) # sets overall theme for Plots
 using Makie, CairoMakie, GeoMakie
 import Pkg
-using Distributed, ParallelDataTransfer
+using Distributed
 using ProgressMeter
 using PyCall
 using Downloads

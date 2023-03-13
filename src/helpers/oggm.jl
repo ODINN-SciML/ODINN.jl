@@ -2,8 +2,6 @@
 ####  OGGM configuration  #####
 ###############################
 
-@everywhere using ParallelDataTransfer
-
 export oggm_config, init_gdirs, PARAMS, PATHS
 
 """
