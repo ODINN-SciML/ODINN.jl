@@ -174,13 +174,13 @@ function train_iceflow_UDE(gdirs, gdir_refs, tspan,
     elseif optimization_method == "AD+Diff"
         println("Optimization based on AD for NN and finite differences for ODE solver")
 
-        function update_gradient_glacier!(g::Vector, θ, UA_f, gdir, gdir_ref_batch, temps, tspan; η = 0.01)
+        function update_gradient_glacier!(g::Vector, θ, UA_f, gdir, gdir_ref_batch, temps, tspan)
             # AD for the NN gradient
             ∇θ_A = gradient(θ -> UA_f(θ)([mean(temps)])[1], θ)[1]
             # Compute scaling factor for gradient
             grad_norm = Float64(norm(∇θ_A))
             A₀ = UA_f(θ)([mean(temps)])[1]
-            δ = 2.0^7 * eps(Float64)^0.5
+            δ = 2.0^10 * eps(Float64)^0.5
             η =  δ * A₀ / grad_norm^2
 
             # Do for loop to see if there are wiggles. 
@@ -194,8 +194,7 @@ function train_iceflow_UDE(gdirs, gdir_refs, tspan,
 
         # We compute the combined gradient for all batches in parallel
         function customized_grad!(g::Vector, θ, _, UA_fs, gdirs, gdir_refs_batches, tspan)
-            η = 0.01
-            map((gdir, gdir_ref_batch, temps) -> update_gradient_glacier!(g::Vector, θ, UA_fs[1], gdir, gdir_ref_batch, temps, tspan[1]; η = η), 
+            map((gdir, gdir_ref_batch, temps) -> update_gradient_glacier!(g::Vector, θ, UA_fs[1], gdir, gdir_ref_batch, temps, tspan[1]), 
                 gdirs, gdir_refs_batches, longterm_temps)
         end   
 
