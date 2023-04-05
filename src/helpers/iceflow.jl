@@ -470,10 +470,7 @@ end
 Runs a single time step of the iceflow UDE model 
 """
 function iceflow_NN(H, θ, t, UA_f, context)
-    H_buf = Buffer(H)
-    @views H_buf .= ifelse.(H.<0.0, 0.0, H) # prevent values from going negative
-    H = copy(H_buf)
-
+    @views H .= ifelse.(H.<0.0, 0.0, H) # prevent values from going negative
     dH = SIA(H, context) 
     return dH
 end  
