@@ -10,18 +10,22 @@
 
 <img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo_final.png" width="250">
 
-## OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
+### OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
 
-Global glacier model using Neural Differential Equations to model and discover processes of climate-glacier interactions.  
+Global glacier model using Universal Differential Equations to model and discover processes of climate-glacier interactions.  
 
-It uses neural networks and differential equations in order to combine mechanistic models describing glaciological processes (e.g. enhanced temperature-index model or the Shallow Ice Approximation) with machine learning. Neural networks are used to learn parts of the equations, which then can be interpreted in a mathematical form (e.g. using SINDy) in order to update the original equation from the process. ODINN uses the Open Global Glacier Model (OGGM, Maussion et al., 2019) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. This is done calling Python from Julia using PyCall. Then, all the simulations and processing are performed in Julia, benefitting from the high performance and the SciML ecosystem. 
+`ODINN.jl` uses neural networks and differential equations in order to combine mechanistic models describing glacier physical processes (e.g. ice creep, basal sliding, surface mass balance) with machine learning. Neural networks are used to learn parts of the equations, which then can be interpreted in a mathematical form (e.g. using SINDy) in order to update the original equation from the process. ODINN uses the Open Global Glacier Model (OGGM, Maussion et al., 2019) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. This is done calling Python from Julia using PyCall. Then, all the simulations and processing are performed in Julia, benefitting from its high performance and the SciML ecosystem. 
+
+<center><img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/overview_figure.png" width="700"></center>
+
+> **Overview of `ODINN.jl`’s workflow to perform functional inversions of glacier physical processes using Universal Differential Equations**. The parameters ($θ$) of a function determining a given physical process ($D_θ$), expressed by a neural network $NN_θ$, are optimized in order to minimize a loss function. In this example, the physical to be inferred law was constrained only by climate data, but any other proxies of interest can be used to design it. The climate data, and therefore the glacier mass balance, are downscaled (i.e. it depends on $S$), with $S$ being updated by the solver, thus dynamically updating the state of the simulation for a given timestep.
 
 ## Installing ODINN
 
 In order to install `ODINN` in a given environment, just do in the REPL:
 ```julia
 julia> ] # enter Pkg mode
-(@v1.7) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
+(@v1.8) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
 (MyEnvironment) pkg> add ODINN
 ```
 
@@ -63,11 +67,11 @@ ODINN works as a back-end of OGGM, utilizing all its tools to retrieve RGI data,
 
 ## Running the toy model
 
-A demostration with a toy model is showcased in `src/scripts/toy_model.jl`. The `Manifest.toml` and `Project.toml` include all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
+A demostration with a toy model is showcased in [`src/scripts/toy_model.jl`](https://github.com/ODINN-SciML/ODINN.jl/blob/main/scripts/toy_model.jl). The `Project.toml` includes all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
 
 ```julia
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
-Pkg.precompile()
 Pkg.instantiate()
+Pkg.precompile()
 ```
