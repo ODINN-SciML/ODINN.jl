@@ -75,3 +75,6 @@ Pkg.activate(dirname(Base.current_project()))
 Pkg.instantiate()
 Pkg.precompile()
 ```
+## Upcoming changes
+
+A stable API is still being designed, which will be available in the next release. If you plan to start using the model, please contact us, although we recommend to wait until next release for a smoother experience. 
