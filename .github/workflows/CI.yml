@@ -30,6 +30,13 @@ jobs:
         with:
           environment-file: ./oggm_env.yaml
           activate-environment: oggm_env
+      - name: Initialize conda
+        run: |
+          conda init bash
+          source ~/.bashrc
+          conda env create -f ./oggm_env.yaml
+          conda activate oggm_env
+          which python
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
