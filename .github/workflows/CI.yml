@@ -34,6 +34,7 @@ jobs:
         run: |
           conda init bash
           source ~/.bashrc
+          conda env create -f ./oggm_env.yaml
           conda activate oggm_env
           which python
       - uses: julia-actions/setup-julia@v1
