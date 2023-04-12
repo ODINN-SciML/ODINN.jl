@@ -31,6 +31,7 @@ jobs:
         with:
           environment-file: ./oggm_env.yaml
           activate-environment: true
+      - run: which python
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
