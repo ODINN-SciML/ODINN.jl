@@ -26,15 +26,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python environment
-        uses: actions/setup-python@v4
-      - uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v2
         with:
           environment-file: ./oggm_env.yaml
           activate-environment: true
-      - run: conda init bash
-      - run: source /home/runner/.bashrc
-      - run: conda activate oggm_env
-      - run: which python
+    - name: Initialize conda
+      run: |
+        conda init bash
+        exec bash
+        conda activate oggm_env
+        which python
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
