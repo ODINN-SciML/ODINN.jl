@@ -33,7 +33,7 @@ jobs:
       - name: Initialize conda
         run: |
           conda init bash
-          exec bash
+          source ~/.bashrc
           conda activate oggm_env
           which python
       - uses: julia-actions/setup-julia@v1
