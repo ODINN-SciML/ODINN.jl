@@ -1,4 +1,4 @@
-name: oggm_env2
+name: oggm_env
 channels:
   - oggm
   - conda-forge

@@ -28,13 +28,12 @@ jobs:
       - name: Set up Python environment
         uses: conda-incubator/setup-miniconda@v2
         with:
-          environment-file: ./oggm_env.yaml
+          environment-file: ./environment.yml
           activate-environment: oggm_env
       - name: Initialize conda
         run: |
           conda init bash
           source ~/.bashrc
-          conda env create -f ./oggm_env.yaml
           conda activate oggm_env
           which python
       - uses: julia-actions/setup-julia@v1
