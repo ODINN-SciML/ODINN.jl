@@ -44,6 +44,9 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Check PyCall environment
         run: |
+          conda init bash
+          source ~/.bashrc
+          conda activate oggm_env
           which python
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
