@@ -42,6 +42,7 @@ jobs:
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@v1
+      - name: Check PyCall environment
         run: |
           which python
       - uses: julia-actions/julia-runtest@v1
