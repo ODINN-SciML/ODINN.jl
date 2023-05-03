@@ -36,8 +36,10 @@ jobs:
           source ~/.bashrc
           conda activate oggm_env
           which python
-      - name: Set ENV Variables for 🐍 📞
-        run: echo ENV["PYTHON"] = which python
+          julia
+          global ENV["PYTHON"] = read(`which python`, String)[1:end-1]
+          import Pkg; Pkg.build("PyCall")
+          exit()
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
