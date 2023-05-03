@@ -40,7 +40,7 @@ jobs:
         env: 
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
       - name: Set ENV Variables for 🐍 📞
-        run: export PYTHON = /usr/share/miniconda/envs/oggm_env/bin/python
+        run: export PYTHON=/usr/share/miniconda/envs/oggm_env/bin/python
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
