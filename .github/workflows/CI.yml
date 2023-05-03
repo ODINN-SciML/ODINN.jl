@@ -37,9 +37,9 @@ jobs:
           conda activate oggm_env
           which python
         env: 
-          PYTHON: "$(which python)"
+          PYTHON: "/usr/share/miniconda/envs/oggm_env/bin/python"
       - name: Set ENV Variables for 🐍 📞
-        run: echo ENV["PYTHON"] = "$(which python)" >> $GITHUB_ENV
+        run: echo ENV["PYTHON"] = "/usr/share/miniconda/envs/oggm_env/bin/python"
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
@@ -56,7 +56,7 @@ jobs:
             ${{ runner.os }}-
       - uses: julia-actions/julia-buildpkg@v1
         env:
-          PYTHON : python
+          PYTHON : "/usr/share/miniconda/envs/oggm_env/bin/python"
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v2
