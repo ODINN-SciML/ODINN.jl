@@ -40,6 +40,7 @@ jobs:
           conda init bash
           source ~/.bashrc
           conda activate oggm_env
+          pip install --upgrade certifi
           which python
         env: 
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
