@@ -19,33 +19,37 @@ jobs:
       matrix:
         version:
           - '1.8'
+        python: [3.9]
         os:
           - ubuntu-latest
         arch:
           - x64
     steps:
       - uses: actions/checkout@v2
-      - name: Set up 🐍 ${{ matrix.python }}
+        - name: Set up Python 🐍 ${{ matrix.python }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Set up miniconda 🐍 
         uses: conda-incubator/setup-miniconda@v2
         with:
           environment-file: ./environment.yml
           activate-environment: oggm_env
-      - name: Set conda environment for PyCall.jl
+      - name: Activate conda environment for PyCall.jl  🐍 📞
         run: |
           conda init bash
           source ~/.bashrc
           conda activate oggm_env
-          conda install certifi
           which python
         env: 
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
-      - name: Set ENV Variables for 🐍 📞
+      - name: Set ENV Variables for PyCall.jl 🐍 📞
         run: export PYTHON=/usr/share/miniconda/envs/oggm_env/bin/python
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
         env:
           PYTHON : /usr/share/miniconda/envs/oggm_env/bin/python
