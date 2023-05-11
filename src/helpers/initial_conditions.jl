@@ -7,7 +7,7 @@
 
 Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier with other necessary data (e.g. grid size and ice surface velocities).
 """
-function get_initial_geometry(gdir, run_spinup, smoothing=true)
+function get_initial_geometry(gdir, run_spinup, smoothing=false)
     # Load glacier gridded data
     glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
     if run_spinup || !use_spinup[]
@@ -17,7 +17,7 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
         if ice_thickness_source == "millan"
             H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
         elseif ice_thickness_source == "farinotti"
-            H₀ = Float64.(glacier_gd.consensus_ice_thickness.data)
+            H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
         end
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
         if smoothing 
@@ -57,6 +57,9 @@ function get_initial_geometry(gdir, run_spinup, smoothing=true)
         ny = glacier_gd.x.size # really weird, but this is inversed 
         Δx = abs(gdir.grid.dx)
         Δy = abs(gdir.grid.dy)
+        @infiltrate
+        dist_border = glacier_gd.dis_from_border.data
+        H₀[dist_border .< 50.0] .= 0.0
 
         glacier_gd.close() # Release any resources linked to this object
 

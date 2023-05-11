@@ -28,7 +28,7 @@ function run_toy_model()
     # Enable multiprocessing
     ODINN.enable_multiprocessing(processes)
     # Flags
-    ODINN.set_use_MB(true)
+    ODINN.set_use_MB(false)
     ODINN.make_plots(true)    
     # Spin up 
     ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
@@ -36,13 +36,13 @@ function run_toy_model()
     # Reference simulations
     ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
     # UDE training
-    ODINN.set_train(true)    # Train UDE
+    ODINN.set_train(false)    # Train UDE
     ODINN.set_retrain(false) # Re-use previous NN weights to continue training
     # Optimization method for differentiating the model
-    # ODINN.set_optimization_method("AD+AD")
-    ODINN.set_optimization_method("AD+Diff")
+    ODINN.set_optimization_method("AD+AD")
+    # ODINN.set_optimization_method("AD+Diff")
 
-    tspan = (2010.0, 2015.0) # period in years for simulation
+    tspan = (2014.0, 2015.0) # period in years for simulation
 
     # Configure OGGM settings in all workers
     working_dir = joinpath(homedir(), "Python/OGGM_data")
@@ -71,11 +71,11 @@ function run_toy_model()
         gdir_refs = @time "PDEs" generate_ref_dataset(gdirs, tspan, solver=RDPK3Sp35())
 
         println("Saving reference data")
-        jldsave(joinpath(ODINN.root_dir, "data/gdir_refs.jld2"); gdir_refs)
+        jldsave(joinpath(ODINN.root_dir, "data/gdir_refs_$tspan.jld2"); gdir_refs)
     end
 
     # Load stored PDE reference datasets
-    gdir_refs = load(joinpath(ODINN.root_dir, "data/gdir_refs.jld2"))["gdir_refs"]
+    gdir_refs = load(joinpath(ODINN.root_dir, "data/gdir_refs_$tspan.jld2"))["gdir_refs"]
 
     # Plot training dataset of glaciers
     # plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB)

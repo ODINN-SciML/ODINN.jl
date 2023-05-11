@@ -71,7 +71,7 @@ function batch_iceflow_PDE(gdir, A_noise, tspan, solver; run_spinup=false)
             S = context[3]
             S_coords = context[32]
             MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t[end], step)
-            integrator.u .+= MB
+            #integrator.u .+= MB
             end
         end
         # Recompute A value
@@ -152,7 +152,7 @@ function train_iceflow_UDE(gdirs, gdir_refs, tspan,
     A_noise = randn(rng_seed(), length(gdirs)).* noise_A_magnitude
     training_path = joinpath(root_plots,"training")
     @timeit to "get longterm temps" begin
-    longterm_temps = pmap((gdir) -> get_longterm_temps(gdir), gdirs)
+    longterm_temps = pmap((gdir) -> get_longterm_temps(gdir, tspan), gdirs)
     end
     cb_plots(θ, l, UA_f) = callback_plots_A(θ, l, UA_f, longterm_temps, A_noise, training_path, batch_size, n_gdirs)
 

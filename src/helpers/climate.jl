@@ -5,7 +5,7 @@
 using Dates # to provide correct Julian time slices 
 
 function generate_raw_climate_files(gdir, tspan)
-    if !ispath(joinpath(gdir.dir, "raw_climate.nc"))
+    if !ispath(joinpath(gdir.dir, "raw_climate_$tspan.nc"))
         println("Getting raw climate data for: ", gdir.rgi_id)
         # Get raw climate data for gdir
         tspan_date = partial_year(Day, tspan[1]):Day(1):partial_year(Day, tspan[2])
@@ -18,7 +18,7 @@ function generate_raw_climate_files(gdir, tspan)
             @warn "No overlapping period available between climate tspan!" 
         end
         # Save raw gdir climate on disk 
-        climate.to_netcdf(joinpath(gdir.dir, "raw_climate.nc"))
+        climate.to_netcdf(joinpath(gdir.dir, "raw_climate_$tspan.nc"))
         GC.gc()
     end
 end
@@ -166,8 +166,8 @@ end
 partial_year(float::AbstractFloat) = partial_year(Day, float)
 
 
-function get_longterm_temps(gdir::PyObject)
-    climate = xr.open_dataset(joinpath(gdir.dir, "raw_climate.nc")) # load only once at the beginning
+function get_longterm_temps(gdir::PyObject, tspan)
+    climate = xr.open_dataset(joinpath(gdir.dir, "raw_climate_$tspan.nc")) # load only once at the beginning
     dem = xr.open_rasterio(gdir.get_filepath("dem"))
     apply_t_grad!(climate, dem)
     longterm_temps = climate.groupby("time.year").mean().temp.data
@@ -196,7 +196,7 @@ end
 
 function init_climate(gdir::PyObject, tspan, step, S, S_coords::PyObject)
     dummy_period = partial_year(Day, tspan[1]):Day(1):partial_year(Day, tspan[1] + step)
-    raw_climate::PyObject = xr.open_dataset(joinpath(gdir.dir, "raw_climate.nc"))
+    raw_climate::PyObject = xr.open_dataset(joinpath(gdir.dir, "raw_climate_$tspan.nc"))
     climate_step = Ref{PyObject}(get_cumulative_climate(raw_climate.sel(time=dummy_period)))
     climate_2D_step = Ref{PyObject}(downscale_2D_climate(climate_step[], S, S_coords))
     longterm_temps = get_longterm_temps(gdir, raw_climate)
