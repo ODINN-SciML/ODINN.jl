@@ -41,7 +41,12 @@ jobs:
           source ~/.bashrc
           conda activate oggm_env
           pip install --upgrade certifi
+          # print Python version 
+          echo Python Version
           which python
+          # print installed dependencies 
+          echo conda dependencies
+          conda env export 
         env: 
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
       - name: Set ENV Variables for PyCall.jl 🐍 📞
