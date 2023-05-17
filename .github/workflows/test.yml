@@ -31,8 +31,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Set up miniconda 🐍 
-      - uses: actions/checkout@v2
-      # - uses: conda-incubator/setup-miniconda@v2
+      # - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
         with:
           environment-file: ./environment.yml
           activate-environment: oggm_env
