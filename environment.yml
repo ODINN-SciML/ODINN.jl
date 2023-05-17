@@ -1,12 +1,12 @@
 name: oggm_env
 channels:
-  - oggm
+#   - oggm
   - conda-forge
 dependencies:
   - python=3.9
-  - mamba
-  - oggm-deps
-  - ca-certificates
-  - certifi
-  - openssl
-  - hdf5=1.12.1
+#   - mamba
+#   - oggm-deps
+#   - ca-certificates
+#   - certifi
+#   - openssl
+#   - hdf5=1.12.1
