@@ -51,6 +51,12 @@ jobs:
           conda env export 
         env: 
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
+      - name: Test OGGM installation 🔧🌎 
+        run: |
+          conda activate oggm_env
+          pytest.oggm
+        env: 
+          PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
       - name: Set ENV Variables for PyCall.jl 🐍 📞
         run: export PYTHON=/usr/share/miniconda/envs/oggm_env/bin/python
       - uses: julia-actions/setup-julia@v1
