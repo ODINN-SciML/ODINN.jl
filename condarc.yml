@@ -3,7 +3,7 @@
 show_channel_urls: True
 
 # Always yes when doing an installation 
-# always_yes: True
+always_yes: True
 
 # SSL verification. It is recommendable to have this in True. 
 ssl_verify: False
