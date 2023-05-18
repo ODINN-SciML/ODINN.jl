@@ -56,6 +56,12 @@ jobs:
           conda init bash
           source ~/.bashrc
           conda activate oggm_env
+          # print Python version 
+          echo Python Version
+          which python
+          # print installed dependencies 
+          echo conda dependencies
+          conda env export 
           pytest.oggm
         env: 
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
