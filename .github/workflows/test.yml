@@ -53,6 +53,8 @@ jobs:
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
       - name: Test OGGM installation 🔧🌎 
         run: |
+          conda init bash
+          source ~/.bashrc
           conda activate oggm_env
           pytest.oggm
         env: 
