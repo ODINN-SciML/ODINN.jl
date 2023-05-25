@@ -34,8 +34,8 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with: 
           environment-file: ./environment.yml
-          init-shell: bash
-          condarc-file: ./condarc.yml
+#           init-shell: bash
+#           condarc-file: ./condarc.yml
 #       - name: Set up miniconda 🐍 
 #         uses: conda-incubator/setup-miniconda@v2
 #         with:
