@@ -6,7 +6,7 @@ show_channel_urls: True
 always_yes: True
 
 # SSL verification. It is recommendable to have this in True. 
-ssl_verify: True # This should be False, just testing that the workflow is not ignorign this file.
+ssl_verify: False # This should be False, just testing that the workflow is not ignorign this file.
 
 # For more information about this file see:
 # https://conda.io/docs/user-guide/configuration/use-condarc.html
