@@ -47,6 +47,8 @@ jobs:
         shell: bash
         run: |
           which python
+          pip list
+          conda env export
           conda init bash
           source ~/.bashrc
           conda activate oggm_env
