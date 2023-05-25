@@ -30,7 +30,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
-      - name: Set up micromamba 🐍++
+      - name: Set up micromamba 🐍🖤
         uses: mamba-org/setup-micromamba@v1
         with: 
           environment-file: ./environment.yml
@@ -44,8 +44,10 @@ jobs:
 #           condarc-file: ./condarc.yml
 #           clean-patched-environment-file: true
       - name: Activate conda environment for PyCall.jl  🐍 📞
-        shell: bash
-        run: |
+      - uses: mamba-org/setup-micromamba@v1
+        with: 
+          init-shell: bash
+      - run: |
           which python
           pip list
           conda env export
