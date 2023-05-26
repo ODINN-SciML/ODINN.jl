@@ -72,7 +72,7 @@ jobs:
 #         run: pytest.oggm
 #         shell: bash -el {0}
       - name: Set ENV Variables for PyCall.jl 🐍 📞
-        run: export PYTHON = /home/runner/micromamba/envs/oggm_env/bin/python
+        run: export PYTHON=/home/runner/micromamba/envs/oggm_env/bin/python
         shell: bash -el {0}
       - uses: julia-actions/setup-julia@v1
         with:
