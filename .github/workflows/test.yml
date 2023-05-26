@@ -46,49 +46,41 @@ jobs:
 #           activate-environment: oggm_env
 #           condarc-file: ./condarc.yml
 #           clean-patched-environment-file: true
-      - name: Test creation of environment with micromamba
-        run: which python
+      - name: Test creation of environment with micromamba 🔧🐍🖤
+        run: which python, conda env export
         shell: bash -el {0}
-      - name: Activate conda environment for PyCall.jl  🐍 📞
-#         uses: mamba-org/setup-micromamba@v1
-#         with: 
-#           init-shell: bash
-        run: |
-          which python
-          micromamba shell init -s bash
-          which python
-          pip list
-          conda env export
-          micromamba activate oggm_env
-          which python 
-          conda activate oggm_env
-          pip install --upgrade certifi
-          # print Python version 
-          echo Python Version
-          which python
-          # print installed dependencies 
-          echo conda dependencies
-          conda env export 
-        shell: bash
+#       - name: Activate conda environment for PyCall.jl  🐍 📞
+# #         uses: mamba-org/setup-micromamba@v1
+# #         with: 
+# #           init-shell: bash
+#         run: |
+#           which python
+#           micromamba shell init -s bash
+#           which python
+#           pip list
+#           conda env export
+#           micromamba activate oggm_env
+#           which python 
+#           conda activate oggm_env
+#           pip install --upgrade certifi
+#           # print Python version 
+#           echo Python Version
+#           which python
+#           # print installed dependencies 
+#           echo conda dependencies
+#           conda env export 
+#         shell: bash
+# #         env: 
+# #           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
+# #           PYTHON: /home/runner/micromamba/envs/oggm_env/bin/python
+      - name: Test OGGM installation 🔧🌎 
+        run: pytest.oggm
+        shell: bash -el {0}
 #         env: 
 #           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
-#           PYTHON: /home/runner/micromamba/envs/oggm_env/bin/python
-      - name: Test OGGM installation 🔧🌎 
-        run: |
-          conda init bash
-          source ~/.bashrc
-          conda activate oggm_env
-          # print Python version 
-          echo Python Version
-          which python
-          # print installed dependencies 
-          echo conda dependencies
-          conda env export 
-          pytest.oggm
-        env: 
-          PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
       - name: Set ENV Variables for PyCall.jl 🐍 📞
         run: export PYTHON=/usr/share/miniconda/envs/oggm_env/bin/python
+        shell: bash -el {0}
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
