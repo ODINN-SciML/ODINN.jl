@@ -33,9 +33,11 @@ jobs:
       - name: Set up micromamba 🐍🖤
         uses: mamba-org/setup-micromamba@v1
         with: 
+          micromamba-version: '1.3.1-0'
           environment-file: ./environment.yml
           environment-name: oggm_env                # it seems it's better to puth both name and yml file. 
           init-shell: bash
+          cache-environment: true
 #           condarc-file: ./condarc.yml
 #       - name: Set up miniconda 🐍 
 #         uses: conda-incubator/setup-miniconda@v2
@@ -44,6 +46,9 @@ jobs:
 #           activate-environment: oggm_env
 #           condarc-file: ./condarc.yml
 #           clean-patched-environment-file: true
+      - name: Test creation of environment with micromamba
+        run: which python
+        shell: bash -el {0}
       - name: Activate conda environment for PyCall.jl  🐍 📞
 #         uses: mamba-org/setup-micromamba@v1
 #         with: 
