@@ -51,8 +51,8 @@ jobs:
           which python
           pip list
           conda env export
-          conda init bash
-          source ~/.bashrc
+#         conda init bash
+#         source ~/.bashrc
           conda activate oggm_env
           pip install --upgrade certifi
           # print Python version 
