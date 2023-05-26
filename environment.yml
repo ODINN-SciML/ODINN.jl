@@ -40,4 +40,5 @@ dependencies:
     - progressbar2
     - sphinx-togglebutton
     - git+https://github.com/OGGM/pytest-mpl
-    - oggm==1.6
+    - git+https://github.com/OGGM/massbalance-sandbox
+    - oggm==1.5.2
