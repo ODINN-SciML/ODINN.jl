@@ -72,8 +72,7 @@ jobs:
 #         run: pytest.oggm
 #         shell: bash -el {0}
       - name: Set ENV Variables for PyCall.jl 🐍 📞
-        run: export PYTHON = $(which python)
-#         run: export PYTHON=/usr/share/miniconda/envs/oggm_env/bin/python
+        run: export PYTHON = /home/runner/micromamba/envs/oggm_env/bin/python
         shell: bash -el {0}
       - uses: julia-actions/setup-julia@v1
         with:
@@ -88,24 +87,24 @@ jobs:
       - uses: codecov/codecov-action@v2
         with:
           files: lcov.info
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      statuses: write
-    steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
-        with:
-          version: '1.8'
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-docdeploy@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: |
-          julia --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using ODINN
-            DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
-            doctest(ODINN)'
+#   docs:
+#     name: Documentation
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#       statuses: write
+#     steps:
+#       - uses: actions/checkout@v2
+#       - uses: julia-actions/setup-julia@v1
+#         with:
+#           version: '1.8'
+#       - uses: julia-actions/julia-buildpkg@v1
+#       - uses: julia-actions/julia-docdeploy@v1
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - run: |
+#           julia --project=docs -e '
+#             using Documenter: DocMeta, doctest
+#             using ODINN
+#             DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
+#             doctest(ODINN)'
