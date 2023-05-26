@@ -47,7 +47,9 @@ jobs:
 #           condarc-file: ./condarc.yml
 #           clean-patched-environment-file: true
       - name: Test creation of environment with micromamba 🔧🐍🖤
-        run: which python, conda env export
+        run: | 
+            which python
+            conda env export
         shell: bash -el {0}
 #       - name: Activate conda environment for PyCall.jl  🐍 📞
 # #         uses: mamba-org/setup-micromamba@v1
