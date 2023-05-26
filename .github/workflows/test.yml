@@ -48,6 +48,7 @@ jobs:
 #         with: 
 #           init-shell: bash
         run: |
+          micromamba shell init -s bash
           which python
           pip list
           conda env export
