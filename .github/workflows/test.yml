@@ -34,7 +34,7 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with: 
           environment-file: ./environment.yml
-          init-shell: bash -l {0}
+          init-shell: bash
           condarc-file: ./condarc.yml
 #       - name: Set up miniconda 🐍 
 #         uses: conda-incubator/setup-miniconda@v2
@@ -46,7 +46,7 @@ jobs:
       - name: Activate conda environment for PyCall.jl  🐍 📞
 #         uses: mamba-org/setup-micromamba@v1
 #         with: 
-#           init-shell: bash -l {0}
+#           init-shell: bash
         run: |
           which python
           pip list
