@@ -39,13 +39,6 @@ jobs:
           init-shell: bash
           cache-environment: true
 #           condarc-file: ./condarc.yml
-#       - name: Set up miniconda 🐍 
-#         uses: conda-incubator/setup-miniconda@v2
-#         with:
-#           environment-file: ./environment.yml
-#           activate-environment: oggm_env
-#           condarc-file: ./condarc.yml
-#           clean-patched-environment-file: true
       - name: Test creation of environment with micromamba 🔧🐍🖤
         run: | 
             which python
@@ -75,13 +68,12 @@ jobs:
 # #         env: 
 # #           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
 # #           PYTHON: /home/runner/micromamba/envs/oggm_env/bin/python
-      - name: Test OGGM installation 🔧🌎 
-        run: pytest.oggm
-        shell: bash -el {0}
-#         env: 
-#           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
+#       - name: Test OGGM installation 🔧🌎 
+#         run: pytest.oggm
+#         shell: bash -el {0}
       - name: Set ENV Variables for PyCall.jl 🐍 📞
-        run: export PYTHON=/usr/share/miniconda/envs/oggm_env/bin/python
+        run: export PYTHON = read(`which python`, String)[1:end-1]
+#         run: export PYTHON=/usr/share/miniconda/envs/oggm_env/bin/python
         shell: bash -el {0}
       - uses: julia-actions/setup-julia@v1
         with:
