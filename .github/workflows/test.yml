@@ -63,7 +63,8 @@ jobs:
           conda env export 
         shell: bash
         env: 
-          PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
+#           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
+          PYTHON: /home/runner/micromamba/envs/oggm_env/bin/python
       - name: Test OGGM installation 🔧🌎 
         run: |
           conda init bash
