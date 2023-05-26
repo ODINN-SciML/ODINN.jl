@@ -51,6 +51,8 @@ jobs:
           which python
           pip list
           conda env export
+          micromamba activate oggm_env
+          which python 
           conda activate oggm_env
           pip install --upgrade certifi
           # print Python version 
