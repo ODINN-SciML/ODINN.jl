@@ -44,10 +44,10 @@ jobs:
 #           condarc-file: ./condarc.yml
 #           clean-patched-environment-file: true
       - name: Activate conda environment for PyCall.jl  🐍 📞
-      - uses: mamba-org/setup-micromamba@v1
-        with: 
-          init-shell: bash
-      - run: |
+#         uses: mamba-org/setup-micromamba@v1
+#         with: 
+#           init-shell: bash
+        run: |
           which python
           pip list
           conda env export
@@ -61,6 +61,7 @@ jobs:
           # print installed dependencies 
           echo conda dependencies
           conda env export 
+        shell: bash
         env: 
           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
       - name: Test OGGM installation 🔧🌎 
