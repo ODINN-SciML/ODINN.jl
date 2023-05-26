@@ -34,6 +34,7 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with: 
           environment-file: ./environment.yml
+          environment-name: oggm_env                # it seems it's better to puth both name and yml file. 
           init-shell: bash
 #           condarc-file: ./condarc.yml
 #       - name: Set up miniconda 🐍 
@@ -48,6 +49,7 @@ jobs:
 #         with: 
 #           init-shell: bash
         run: |
+          which python
           micromamba shell init -s bash
           which python
           pip list
@@ -63,9 +65,9 @@ jobs:
           echo conda dependencies
           conda env export 
         shell: bash
-        env: 
+#         env: 
 #           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
-          PYTHON: /home/runner/micromamba/envs/oggm_env/bin/python
+#           PYTHON: /home/runner/micromamba/envs/oggm_env/bin/python
       - name: Test OGGM installation 🔧🌎 
         run: |
           conda init bash
