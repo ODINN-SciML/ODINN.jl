@@ -41,4 +41,4 @@ dependencies:
     - sphinx-togglebutton
     - git+https://github.com/OGGM/pytest-mpl
     - git+https://github.com/OGGM/massbalance-sandbox
-    - oggm==1.5.2
+    - oggm==1.5.4.dev53+gfd6ce6c
