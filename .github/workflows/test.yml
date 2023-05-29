@@ -29,48 +29,25 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v2
+      
       - name: Set up Python 🐍 ${{ matrix.python }}
         uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python }}
-      - name: Set up micromamba 🐍🖤
+          python-version: ${{ matrix.python }}  
+      - name: Create environment with micromamba 🐍🖤
         uses: mamba-org/setup-micromamba@v1
         with: 
           micromamba-version: '1.3.1-0'
           environment-file: ./environment.yml
-          environment-name: oggm_env                # it seems it's better to puth both name and yml file. 
+          environment-name: oggm_env                # it is recommendable to add both name and yml file. 
           init-shell: bash
           cache-environment: true
-#           condarc-file: ./condarc.yml
+#           condarc-file: ./condarc.yml                # If necessary, we can include .condarc to configure environment
       - name: Test creation of environment with micromamba 🔧🐍🖤
         run: | 
             which python
             conda env export
         shell: bash -el {0}
-#       - name: Activate conda environment for PyCall.jl  🐍 📞
-# #         uses: mamba-org/setup-micromamba@v1
-# #         with: 
-# #           init-shell: bash
-#         run: |
-#           which python
-#           micromamba shell init -s bash
-#           which python
-#           pip list
-#           conda env export
-#           micromamba activate oggm_env
-#           which python 
-#           conda activate oggm_env
-#           pip install --upgrade certifi
-#           # print Python version 
-#           echo Python Version
-#           which python
-#           # print installed dependencies 
-#           echo conda dependencies
-#           conda env export 
-#         shell: bash
-# #         env: 
-# #           PYTHON: /usr/share/miniconda/envs/oggm_env/bin/python
-# #           PYTHON: /home/runner/micromamba/envs/oggm_env/bin/python
 #       - name: Test OGGM installation 🔧🌎 
 #         run: pytest.oggm
 #         shell: bash -el {0}
@@ -90,24 +67,3 @@ jobs:
       - uses: codecov/codecov-action@v2
         with:
           files: lcov.info
-#   docs:
-#     name: Documentation
-#     runs-on: ubuntu-latest
-#     permissions:
-#       contents: write
-#       statuses: write
-#     steps:
-#       - uses: actions/checkout@v2
-#       - uses: julia-actions/setup-julia@v1
-#         with:
-#           version: '1.8'
-#       - uses: julia-actions/julia-buildpkg@v1
-#       - uses: julia-actions/julia-docdeploy@v1
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#       - run: |
-#           julia --project=docs -e '
-#             using Documenter: DocMeta, doctest
-#             using ODINN
-#             DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
-#             doctest(ODINN)'
