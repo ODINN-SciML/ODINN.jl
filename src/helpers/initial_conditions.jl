@@ -47,23 +47,26 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
 
     end
     try
+        # We filter glacier borders in high elevations to avoid overflow problems
+        dist_border = glacier_gd.dis_from_border.data
+        S::Matrix{Float64} = Float64.(glacier_gd.topo.data) # surface elevation
+        H_mask = (dist_border .< 20.0) .&& (S .> maximum(S)*0.7)
+        H₀[H_mask] .= 0.0
+
         H::Matrix{Float64} = deepcopy(H₀)
         B::Matrix{Float64} = Float64.(glacier_gd.topo.data) .- H₀ # bedrock
         S_coords::PyObject = xr.open_rasterio(gdir.get_filepath("dem"))
-        S = Float64.(glacier_gd.topo.data) # surface elevation
         V::Matrix{Float64} = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
         fillNaN!(V)
         nx = glacier_gd.y.size # glacier extent
         ny = glacier_gd.x.size # really weird, but this is inversed 
         Δx = abs(gdir.grid.dx)
         Δy = abs(gdir.grid.dy)
-        @infiltrate
-        dist_border = glacier_gd.dis_from_border.data
-        H₀[dist_border .< 50.0] .= 0.0
+        slope = glacier_gd.slope.data
 
         glacier_gd.close() # Release any resources linked to this object
 
-        return H₀, H, S, B, V, (nx,ny), (Δx,Δy), S_coords
+        return H₀, H, S, B, V, (nx,ny), (Δx,Δy), S_coords, dist_border, slope
     catch
         missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
         push!(missing_glaciers, gdir.rgi_id)
@@ -75,7 +78,7 @@ end
 
 function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
     # Determine initial geometry conditions
-    H₀, H, S, B, V, nxy, Δxy, S_coords::PyObject = get_initial_geometry(gdir, run_spinup)
+    H₀, H, S, B, V, nxy, Δxy, S_coords::PyObject, dist_border, slope = get_initial_geometry(gdir, run_spinup)
 
     rgi_id = gdir.rgi_id
     # Initialize all matrices for the solver
@@ -85,18 +88,19 @@ function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
     D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
     V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
     MB = zeros(Float64,nx,ny)
+    MB_mask = ones(Bool,nx,ny)
     A = Ref{Float64}(2e-17)
-    α = [0.0]                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
-    C = [15e-14]    
+    α = Ref{Float64}(0.0)                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
+    C = Ref{Float64}(15e-14)    
     Γ = Ref{Float64}(0.0)
     maxS, minS = [0.0], [0.0]     
     simulation_years = collect(Int(tspan[1]):Int(tspan[2]))
     
     # Gather simulation parameters
-    current_year = [0] 
+    current_year = Ref{Float64}(0)
 
     context = (A, B, S, dSdx, dSdy, D, nothing, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
-                            current_year, nxy, Δxy, H₀, tspan, A_noise, nothing, MB, rgi_id, Γ, maxS, minS, simulation_years, simulation_years, S_coords)
+                            current_year, nxy, Δxy, H₀, tspan, A_noise, nothing, MB, rgi_id, Γ, maxS, minS, simulation_years, simulation_years, S_coords, dist_border, slope, MB_mask)
     return context, H
 end
 
@@ -107,19 +111,19 @@ function get_UDE_context(gdirs, tspan; testmode=false)
 end
 
 function build_UDE_context(gdir, tspan, testmode; run_spinup=false)
-    H₀, H, S, B, V, nxy, Δxy, S_coords = get_initial_geometry(gdir, run_spinup)
+    H₀, H, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup)
     simulation_years = collect(tspan[1]:tspan[2])
     A = Ref{Float64}(2e-17)
     nx, ny = nxy
     MB = zeros(Float64,nx,ny)
-    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A, MB, testmode)
+    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A, MB, testmode, dist_border, slope)
 
     return context
 end
 
 # UDE  context using Glathida for H
 function build_UDE_context_inv(gdir, gdir_ref, tspan; run_spinup=false)
-    H₀, H₁, S, B, V, nxy, Δxy, S_coords = get_initial_geometry(gdir, run_spinup)
+    H₀, H₁, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup)
     rgi_id = gdir.rgi_id
     # Get evolved tickness and surface
     H = gdir_ref["H"]
@@ -138,7 +142,7 @@ function build_UDE_context_inv(gdir, gdir_ref, tspan; run_spinup=false)
         Plots.savefig(heatmap_diff3, joinpath(training_path, "H_diff_far_ref.pdf"))
     end
 
-    context = (nxy, Δxy, tspan, rgi_id, S, V, H₀, S_coords)
+    context = (nxy, Δxy, tspan, rgi_id, S, V, H₀, S_coords, dist_border, slope)
 
     return context
 end
@@ -193,7 +197,7 @@ function get_glathida_path_and_IDs()
 
     glathida = pd.HDFStore(gtd_file)
     rgi_ids = glathida.keys()
-    rgi_ids = [id[2:end] for id in rgi_ids]
+    rgi_ids = String[id[2:end] for id in rgi_ids]
 
     # glathida = h5open(gtd_path, "r")
     # # Retrieve RGI IDs with Glathida data

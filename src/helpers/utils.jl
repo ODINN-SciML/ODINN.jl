@@ -107,7 +107,7 @@ end
 
 function reset_epochs()
     @everywhere @eval ODINN global current_epoch = 1
-    @everywhere @eval ODINN global loss_history = []
+    @everywhere @eval ODINN global loss_history = Float64[]
 end
 
 function set_current_epoch(epoch)
@@ -161,6 +161,7 @@ function get_gdir_refs(refs, gdirs)
     for (ref, gdir) in zip(refs, gdirs)
         push!(gdir_refs, Dict("RGI_ID"=>gdir.rgi_id,
                                 "H"=>ref["H"],
+                                "H₀"=>ref["H₀"],
                                 "Vx"=>ref["Vx"],
                                 "Vy"=>ref["Vy"],
                                 "S"=>ref["S"],
@@ -229,6 +230,7 @@ function get_NN(θ_trained)
         Dense(10,3, x->softplus.(x)),
         Dense(3,1, sigmoid_A)
     )
+    Flux.f64(UA)
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
     if !isempty(θ_trained)
@@ -406,7 +408,7 @@ function get_default_training_settings!(gdirs, UDE_settings=nothing, train_setti
     #### Setup default parameters ####
     if length(θ_trained) == 0
         reset_epochs()
-        global loss_history = []
+        global loss_history = Float64[]
     end
 
     # Don't use MB if not specified
@@ -465,3 +467,4 @@ function get_interpolating_step(interpolating_step, tspan)
     end
     return updated_step
 end
+

@@ -54,3 +54,12 @@ function MB_timestep!(MB, mb_model::MB_model, climate, S, S_coords, t, step)
     MB .= compute_MB(mb_model, climate.climate_2D_step[])
     end
 end
+
+function apply_MB_mask!(H, MB, context)
+    dist_border = context[33]
+    #slope = context[34]
+    MB_mask = context[35]
+    # Appy MB only over ice, and avoid applying it to the borders in the accummulation area to avoid overflow
+    MB_mask .= ((H .> 0.0) .&& (MB .< 0.0)) .|| ((H .> 0.0) .&& (dist_border .> 20.0) .&& (MB .>= 0.0))
+    H[MB_mask] .+= MB[MB_mask]
+end

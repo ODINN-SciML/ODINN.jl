@@ -24,7 +24,7 @@ end
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(gdirs, tspan; solver = RDPK3Sp35())
+function generate_ref_dataset(gdirs, tspan, mb_model; solver = RDPK3Sp35())
     # Generate climate data if necessary
     @timeit to "generate raw climate files" begin
     pmap((gdir) -> generate_raw_climate_files(gdir, tspan), gdirs)
@@ -33,7 +33,7 @@ function generate_ref_dataset(gdirs, tspan; solver = RDPK3Sp35())
     println("Running forward PDE ice flow model...\n")
     # Run batches in parallel
     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
-    refs = @showprogress pmap((gdir, A_noise) -> batch_iceflow_PDE(gdir, A_noise, tspan, solver; run_spinup=false), gdirs, A_noises)
+    refs = @showprogress pmap((gdir, A_noise) -> batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model; run_spinup=false), gdirs, A_noises)
 
     # Gather information per gdir
     gdir_refs = get_gdir_refs(refs, gdirs)
@@ -48,14 +48,15 @@ end
 
 Solve the Shallow Ice Approximation iceflow PDE for a given temperature series batch
 """
-function batch_iceflow_PDE(gdir, A_noise, tspan, solver; run_spinup=false) 
+function batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model=nothing; run_spinup=false) 
     println("Processing glacier: ", gdir.rgi_id)
     _, step = define_callback_steps(tspan)
     context, H = build_PDE_context(gdir ,A_noise, tspan; run_spinup=run_spinup)
     S = context[3]
     S_coords = context[32]
-    # This needs to be passed in a cleaner way
-    mb_model = TI_model_1(DDF=5.0/1000.0, acc_factor=1.2/1000.0) # in m.w.e.
+    if isnothing(mb_model)
+        mb_model = TI_model_1(DDF=5.0/1000.0, acc_factor=1.2/1000.0) # in m.w.e.
+    end
     # Initialize climate dataset
     climate = init_climate(gdir, tspan, step, S, S_coords)
     
@@ -70,8 +71,8 @@ function batch_iceflow_PDE(gdir, A_noise, tspan, solver; run_spinup=false)
             MB = context[25]
             S = context[3]
             S_coords = context[32]
-            MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t[end], step)
-            #integrator.u .+= MB
+            MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t, step)
+            apply_MB_mask!(integrator.u, MB, context)
             end
         end
         # Recompute A value
@@ -117,7 +118,7 @@ function simulate_iceflow_PDE(H, context, climate, solver, tstops, cb_MB, θ=Vec
     S::Matrix{Float64} = context[3]
     V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(climate.longterm_temps), sim, θ, UA_f) # Average velocity with average temperature
     S .= B .+ H_ref # Surface topography
-    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B)
+    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H₀"=>iceflow_sol.u[begin], "H"=>H_ref, "S"=>S, "B"=>B)
     return refs
 end
 
@@ -130,8 +131,8 @@ Train the Shallow Ice Approximation iceflow UDE. UDE_settings is optional, and r
 `sensealg` and `solver` for the UDE.  
 """
 function train_iceflow_UDE(gdirs, gdir_refs, tspan, 
-                            train_settings=nothing, θ_trained=[], loss_history=[]; 
-                            UDE_settings=nothing)
+                            train_settings=nothing, θ_trained=[];
+                            UDE_settings=nothing, mb_model=nothing)
 
     # Fill default training settings if not available 
     UDE_settings, train_settings = get_default_training_settings!(gdirs, 
@@ -164,7 +165,7 @@ function train_iceflow_UDE(gdirs, gdir_refs, tspan,
         context_batches = get_UDE_context(gdirs, tspan)
         # Create batches for inversion training 
         train_loader = generate_batches(batch_size, UA_f, gdirs, context_batches, gdir_refs, UDE_settings)
-        optf = OptimizationFunction((θ, _, UA_batch, gdir, context_batch, gdir_refs_batch, UDE_settings_batch)->loss_iceflow(θ, UA_batch, gdir, context_batch, gdir_refs_batch, UDE_settings_batch), Optimization.AutoZygote())
+        optf = OptimizationFunction((θ, _, UA_batch, gdir, context_batch, gdir_refs_batch, UDE_settings_batch)->loss_iceflow(θ, UA_batch, gdir, context_batch, gdir_refs_batch, UDE_settings_batch, mb_model), Optimization.AutoZygote())
         optprob = OptimizationProblem(optf, θ)
         println("Training iceflow UDE...")
         iceflow_trained = solve(optprob, 
@@ -223,9 +224,9 @@ end
 
 Loss function based on glacier ice velocities and/or ice thickness
 """
-function loss_iceflow(θ, UA_f, gdirs, context_batches, gdir_refs, UDE_settings) 
+function loss_iceflow(θ, UA_f, gdirs, context_batches, gdir_refs, UDE_settings, mb_model) 
     # UA_f and UDE_settings need to be passed as scalars since they were transformed to Vectors for the batches
-    H_V_preds = predict_iceflow(θ, UA_f[1], gdirs, context_batches, UDE_settings[1])
+    H_V_preds = predict_iceflow(θ, UA_f[1], gdirs, context_batches, UDE_settings[1], mb_model)
 
     # Compute loss function for the full batch
     l_V, l_Vx, l_Vy, l_H = 0.0, 0.0, 0.0, 0.0
@@ -318,9 +319,9 @@ end
 
 Makes a prediction of glacier evolution with the UDE for a given temperature series in different batches
 """
-function predict_iceflow(θ, UA_f, gdirs_batches, context_batches, UDE_settings)
+function predict_iceflow(θ, UA_f, gdirs_batches, context_batches, UDE_settings, mb_model)
     # Train UDE in parallel
-    H_V_pred = pmap((context, gdir) -> batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings), context_batches, gdirs_batches)
+    H_V_pred = pmap((context, gdir) -> batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings, mb_model), context_batches, gdirs_batches)
     return H_V_pred
 end
 
@@ -342,16 +343,17 @@ end
 
 Solve the Shallow Ice Approximation iceflow UDE for a given temperature series batch
 """
-function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings) 
+function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings, mb_model) 
     # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan)
     H::Matrix{Float64} = context[2]
     tspan::Tuple{Float64, Float64} = context[6]
-    # This needs to be passed in a cleaner way
-    mb_model = TI_model_1(DDF=5.0/1000.0, acc_factor=1.2/1000.0)
-
+    if isnothing(mb_model)
+        mb_model = TI_model_1(DDF=5.0/1000.0, acc_factor=1.2/1000.0)
+    end
     # Initialize climate dataset
     _, step = @ignore define_callback_steps(tspan)
     S_coords = context[13]
+    dist_border = context[17]
     climate = @ignore init_climate(gdir, tspan, step, context[9], S_coords)
     # Callback  
     # Define stop times every one month
@@ -362,8 +364,8 @@ function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings)
             S::Matrix{Float64} = context[9]
             S_coords = context[13]
             MB = context[15]
-            @ignore MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t[end], step)
-            integrator.u .+= MB 
+            @ignore MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t, step)
+            apply_MB_mask!(integrator.u, MB, context)
         end
         # Recompute A value
         A = context[14]
@@ -409,6 +411,7 @@ function batch_iceflow_UDE_inplace(θ, UA_f, gdir, tspan; solver = RDPK3Sp35())
     _, step = @ignore define_callback_steps(tspan)
     S = context[3]
     S_coords = context[32]
+    dist_border = context[33]
     climate = @ignore init_climate(gdir, tspan, step, S, S_coords)
     # Define stop times every one month
     tstops, step = define_callback_steps(tspan)
@@ -419,8 +422,8 @@ function batch_iceflow_UDE_inplace(θ, UA_f, gdir, tspan; solver = RDPK3Sp35())
             MB = context[25]
             S = context[3]
             S_coords = context[32]
-            MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t[end], step)
-            integrator.u .+= MB
+            MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t, step)
+            apply_MB_mask!(integrator.u, MB, context)
         end
         # Recompute A value
         A = context[1]
@@ -442,7 +445,7 @@ Runs a single time step of the iceflow PDE model in-place
 function iceflow!(dH, H, context, t)
     @timeit to "iceflow! PDE" begin
     # First, enforce values to be positive
-    H[H.<0.0] .= H[H.<0.0] .* 0.0
+    H[H.<0.0] .= 0.0
 
     # Compute the Shallow Ice Approximation in a staggered grid
     SIA!(dH, H, context)
@@ -456,7 +459,7 @@ Runs a single time step of the iceflow UDE model in-place using a NN
 """
 function iceflow_NN!(dH, H, context, t, θ, UA_f)
     # First, enforce values to be positive
-    H[H.<0.0] .= H[H.<0.0] .* 0.0
+    H[H.<0.0] .= 0.0
     # Unpack parameters
     #A, B, S, dSdx, dSdy, D, temps, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, current_year 
 
@@ -470,7 +473,7 @@ end
 Runs a single time step of the iceflow UDE model 
 """
 function iceflow_NN(H, θ, t, UA_f, context)
-    @views H .= ifelse.(H.<0.0, 0.0, H) # prevent values from going negative
+    @views H = ifelse.(H.<0.0, 0.0, H) # prevent values from going negative
     dH = SIA(H, context) 
     return dH
 end  
@@ -484,20 +487,20 @@ function SIA!(dH, H, context)
     # Retrieve parameters
     #[A], B, S, dSdx, dSdy, D, copy(temp_series[1]), dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy
     @timeit to "Variable initialization PDE" begin
-    A::Base.RefValue{Float64} = context[1]
-    B::Matrix{Float64} = context[2]
-    S::Matrix{Float64} = context[3]
-    dSdx::Matrix{Float64} = context[4]
-    dSdy::Matrix{Float64} = context[5]
-    D::Matrix{Float64} = context[6]
-    dSdx_edges::Matrix{Float64} = context[8]
-    dSdy_edges::Matrix{Float64} = context[9]
-    ∇S::Matrix{Float64} = context[10]
-    Fx::Matrix{Float64} = context[11]
-    Fy::Matrix{Float64} = context[12]
-    Δx::Float64 = context[20][1]
-    Δy::Float64 = context[20][2]
-    Γ::Base.RefValue{Float64} = context[27]
+    A = context[1]::Base.RefValue{Float64}
+    B = context[2]::Matrix{Float64}
+    S = context[3]::Matrix{Float64}
+    dSdx = context[4]::Matrix{Float64}
+    dSdy = context[5]::Matrix{Float64}
+    D = context[6]::Matrix{Float64}
+    dSdx_edges = context[8]::Matrix{Float64}
+    dSdy_edges = context[9]::Matrix{Float64}
+    ∇S = context[10]::Matrix{Float64}
+    Fx = context[11]::Matrix{Float64}
+    Fy = context[12]::Matrix{Float64}
+    Δx = context[20][1]::Float64
+    Δy = context[20][2]::Float64
+    Γ = context[27]::Base.RefValue{Float64}
     end
 
     # Update glacier surface altimetry
@@ -578,12 +581,12 @@ function SIA(H, T, context, years, θ, UD_f, target)
     @assert (target == "A" || target == "D") "Functional inversion target needs to be either A or D!"
     # Retrieve parameters
     # context = (nxy, Δxy, tspan, rgi_id, S, V)
-    Δx = context[2][1]
-    Δy = context[2][2]
-    S = context[5] # TODO: update this to Millan et al.(2022) DEM
+    Δx = context[2][1]::Float64
+    Δy = context[2][2]::Float64
+    S = context[5]::Matrix{Float64} # TODO: update this to Millan et al.(2022) DEM
 
     if H==0.0 # Retrieve H from context if Glathida thickness is not present 
-        H = context[7]
+        H = context[7]::Matrix{Float64}
     end
 
     # Get long term temperature for the Millan et al.(2022) dataset
@@ -685,11 +688,11 @@ callback_plots_A = function (θ, l, UA_f, longterm_temps, A_noise, training_path
     update_training_state(l, batch_size, n_gdirs)
 
     if current_minibatches == 0.0
-        avg_temps = [mean(longterm_temps[i]) for i in 1:length(longterm_temps)]
+        avg_temps = Float64[mean(longterm_temps[i]) for i in 1:length(longterm_temps)]
         p = sortperm(avg_temps)
         avg_temps = avg_temps[p]
         pred_A = predict_A̅(UA_f, θ, collect(-23.0:1.0:0.0)')
-        pred_A = [pred_A...] # flatten
+        pred_A = Float64[pred_A...] # flatten
         true_A = A_fake(avg_temps, A_noise[p], noise)
 
         yticks = collect(0.0:2e-17:8e-17)
