@@ -4,8 +4,8 @@ function pde_solve_test(atol; MB=false)
     println("PDE solving with MB = $MB")
     working_dir = joinpath(homedir(), "Python/ODINN_tests")
     oggm_config(working_dir)
-    ODINN.noise[] = false
-    ODINN.set_use_MB(false)
+    ODINN.set_use_MB(MB)
+    ODINN.set_noise(false)
 
     # @eval ODINN pde_A_values = []
     # @eval ODINN ude_A_values = []
@@ -54,13 +54,13 @@ function pde_solve_test(atol; MB=false)
         end
         vtol = 12.0*atol # a little extra tolerance for UDE surface velocities
         ### PDE ###
-        ODINN.plot_test_error(PDE_pred, test_ref, "H", rgi_id, atol)
-        ODINN.plot_test_error(PDE_pred, test_ref, "Vx", rgi_id, vtol)
-        ODINN.plot_test_error(PDE_pred, test_ref, "Vy", rgi_id, vtol)
+        ODINN.plot_test_error(PDE_pred, test_ref, "H", rgi_id, atol, MB)
+        ODINN.plot_test_error(PDE_pred, test_ref, "Vx", rgi_id, vtol, MB)
+        ODINN.plot_test_error(PDE_pred, test_ref, "Vy", rgi_id, vtol, MB)
         ### UDE ###
-        ODINN.plot_test_error(UDE_pred, test_ref, "H", rgi_id, atol)
-        ODINN.plot_test_error(UDE_pred, test_ref, "Vx", rgi_id, vtol)
-        ODINN.plot_test_error(UDE_pred, test_ref, "Vy", rgi_id, vtol)
+        ODINN.plot_test_error(UDE_pred, test_ref, "H", rgi_id, atol, MB)
+        ODINN.plot_test_error(UDE_pred, test_ref, "Vx", rgi_id, vtol, MB)
+        ODINN.plot_test_error(UDE_pred, test_ref, "Vy", rgi_id, vtol, MB)
 
         # Test that the PDE simulations are correct
         @test isapprox(PDE_pred["H"], test_ref["H"], atol=atol)

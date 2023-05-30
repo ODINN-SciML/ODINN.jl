@@ -1,12 +1,9 @@
 # ODINN
 
-<!---
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/stable)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/dev)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/dev/)
 [![Build Status](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Build Status](https://travis-ci.com/JordiBolibar/ODINN.jl.svg?branch=main)](https://travis-ci.com/JordiBolibar/ODINN.jl)
 [![Coverage](https://codecov.io/gh/JordiBolibar/ODINN.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JordiBolibar/ODINN.jl)
--->
 
 <img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo_final.png" width="250">
 

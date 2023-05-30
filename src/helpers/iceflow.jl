@@ -71,7 +71,7 @@ function batch_iceflow_PDE(gdir, A_noise, tspan, solver; run_spinup=false)
             S = context[3]
             S_coords = context[32]
             MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t[end], step)
-            integrator.u .+= MB
+            #integrator.u .+= MB
             end
         end
         # Recompute A value
@@ -105,19 +105,20 @@ function simulate_iceflow_PDE(H, context, climate, solver, tstops, cb_MB, θ=Vec
                         solver, 
                         callback=cb_MB, 
                         tstops=tstops, 
-                        reltol=1e-7, 
+                        reltol=1e-12, 
                         save_everystep=false, 
                         progress=progress, 
                         progress_steps=10)
     # @show iceflow_sol.destats
     # Compute average ice surface velocities for the simulated period
+    H₀ = iceflow_sol.u[begin]
     H_ref::Matrix{Float64} = iceflow_sol.u[end]
     H_ref[H_ref.<0.0] .= H_ref[H_ref.<0.0] .* 0.0 # remove remaining negative values
     B::Matrix{Float64} = context[2]
     S::Matrix{Float64} = context[3]
     V̄x_ref, V̄y_ref = avg_surface_V(context, H_ref, mean(climate.longterm_temps), sim, θ, UA_f) # Average velocity with average temperature
     S .= B .+ H_ref # Surface topography
-    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B)
+    refs = Dict("Vx"=>V̄x_ref, "Vy"=>V̄y_ref, "H"=>H_ref, "S"=>S, "B"=>B, "H_initial"=> H₀)
     return refs
 end
 
@@ -152,7 +153,7 @@ function train_iceflow_UDE(gdirs, gdir_refs, tspan,
     A_noise = randn(rng_seed(), length(gdirs)).* noise_A_magnitude
     training_path = joinpath(root_plots,"training")
     @timeit to "get longterm temps" begin
-    longterm_temps = pmap((gdir) -> get_longterm_temps(gdir), gdirs)
+    longterm_temps = pmap((gdir) -> get_longterm_temps(gdir, tspan), gdirs)
     end
     cb_plots(θ, l, UA_f) = callback_plots_A(θ, l, UA_f, longterm_temps, A_noise, training_path, batch_size, n_gdirs)
 
@@ -522,6 +523,14 @@ function SIA!(dH, H, context)
     # Compute flux components
     @views diff_x!(dSdx_edges, S[:,2:end - 1], Δx)
     @views diff_y!(dSdy_edges, S[2:end - 1,:], Δy)
+    # Cap surface elevaton differences with the upstream ice thickness to 
+    # imporse boundary condition of the SIA equation
+    η₀ = 1.0
+    dSdx_edges .= min.(dSdx_edges,  η₀ * H[1:end-1, 2:end-1]./Δx,  η₀ * H[2:end, 2:end-1]./Δx)
+    dSdy_edges .= min.(dSdy_edges,  η₀ * H[2:end-1, 1:end-1]./Δy,  η₀ * H[2:end-1, 2:end]./Δy) 
+    dSdx_edges .= max.(dSdx_edges, -η₀ * H[1:end-1, 2:end-1]./Δx, -η₀ * H[2:end, 2:end-1]./Δx)
+    dSdy_edges .= max.(dSdy_edges, -η₀ * H[2:end-1, 1:end-1]./Δy, -η₀ * H[2:end-1, 2:end]./Δy)
+    
     Fx .= .-avg_y(D) .* dSdx_edges
     Fy .= .-avg_x(D) .* dSdy_edges 
     end
@@ -560,6 +569,16 @@ function SIA(H, context)
     # Compute flux components
     @views dSdx_edges = diff_x(S[:,2:end - 1]) ./ Δx
     @views dSdy_edges = diff_y(S[2:end - 1,:]) ./ Δy
+
+    # Cap surface elevaton differences with the upstream ice thickness to 
+    # imporse boundary condition of the SIA equation
+    # We need to do this with Tullio or something else that allow us to set indices.
+    η₀ = 1.0
+    dSdx_edges .= min.(dSdx_edges,  η₀ * H[1:end-1, 2:end-1]./Δx,  η₀ * H[2:end, 2:end-1]./Δx)
+    dSdy_edges .= min.(dSdy_edges,  η₀ * H[2:end-1, 1:end-1]./Δy,  η₀ * H[2:end-1, 2:end]./Δy) 
+    dSdx_edges .= max.(dSdx_edges, -η₀ * H[1:end-1, 2:end-1]./Δx, -η₀ * H[2:end, 2:end-1]./Δx)
+    dSdy_edges .= max.(dSdy_edges, -η₀ * H[2:end-1, 1:end-1]./Δy, -η₀ * H[2:end-1, 2:end]./Δy)
+
     Fx = .-avg_y(D) .* dSdx_edges
     Fy = .-avg_x(D) .* dSdy_edges 
 

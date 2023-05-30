@@ -122,6 +122,10 @@ function set_use_MB(use_MB_i)
     @everywhere @eval ODINN global use_MB = $use_MB_i
 end
 
+function set_noise(noise_i)
+    @everywhere @eval ODINN global noise = $noise_i
+end
+
 function set_run_spinup(run_spinup_i)
     @everywhere @eval ODINN global run_spinup = $run_spinup_i
 end
@@ -160,7 +164,8 @@ function get_gdir_refs(refs, gdirs)
                                 "Vx"=>ref["Vx"],
                                 "Vy"=>ref["Vy"],
                                 "S"=>ref["S"],
-                                "B"=>ref["B"]))
+                                "B"=>ref["B"], 
+                                "H_initial"=>ref["H_initial"]))
     end
     return gdir_refs
 end
@@ -413,7 +418,7 @@ function get_default_training_settings!(gdirs, UDE_settings=nothing, train_setti
     return UDE_settings, train_settings
 end
 
-function plot_test_error(pred::Dict{String, Any}, ref::Dict{String, Any}, variable, rgi_id, atol; path=joinpath(ODINN.root_dir, "test/plots"))
+function plot_test_error(pred::Dict{String, Any}, ref::Dict{String, Any}, variable, rgi_id, atol, MB; path=joinpath(ODINN.root_dir, "test/plots"))
     @assert (variable == "H") || (variable == "Vx") || (variable == "Vy") "Wrong variable for plots. Needs to be either `H`, `Vx` or `Vy`."
     if !isapprox(pred[variable], ref[variable], atol=atol)
         # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
@@ -427,7 +432,7 @@ function plot_test_error(pred::Dict{String, Any}, ref::Dict{String, Any}, variab
     end
 end
 
-function plot_test_error(pred::Tuple, ref::Dict{String, Any}, variable, rgi_id, atol; path=joinpath(ODINN.root_dir, "test/plots"))
+function plot_test_error(pred::Tuple, ref::Dict{String, Any}, variable, rgi_id, atol, MB; path=joinpath(ODINN.root_dir, "test/plots"))
     @assert (variable == "H") || (variable == "Vx") || (variable == "Vy") "Wrong variable for plots. Needs to be either `H`, `Vx` or `Vy`."
     if variable == "H"
         idx=1
@@ -441,8 +446,13 @@ function plot_test_error(pred::Tuple, ref::Dict{String, Any}, variable, rgi_id, 
     end
     if !isapprox(pred[idx], ref[variable], atol=atol)
         # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
-        UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
-        Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id.pdf"))
+            UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
+            if MB
+            MB = "_MB"
+        else
+            MB = ""
+        end
+        Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id$MB.pdf"))
     end
 end
 

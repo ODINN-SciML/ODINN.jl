@@ -39,7 +39,7 @@ const loss_type = Ref{String}("V")                   # Loss function based on ic
 # loss_type = "HV"                    # Combined loss function based on ice surface velocities and ice thickness
 const random_sampling_loss = Ref{Bool}(false)  # Use random subset of matrix samples for the loss
 const scale_loss = Ref{Bool}(true)
-const noise = Ref{Bool}(true)                  # Add random noise to fake A law
+noise = true                 # Add random noise to fake A law
 rng_seed() = MersenneTwister(666)   # Random seed
 
 ice_thickness_source = "farinotti" # choose between "farinotti" or "millan"
