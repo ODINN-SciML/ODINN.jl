@@ -164,7 +164,8 @@ function get_gdir_refs(refs, gdirs)
                                 "Vx"=>ref["Vx"],
                                 "Vy"=>ref["Vy"],
                                 "S"=>ref["S"],
-                                "B"=>ref["B"]))
+                                "B"=>ref["B"], 
+                                "H_initial"=>ref["H_initial"]))
     end
     return gdir_refs
 end

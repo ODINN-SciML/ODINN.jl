@@ -4,16 +4,16 @@ using CairoMakie
 using JLD2
 import ODINN: fillZeros
 
-plot_only_H = true
-tspan = (2014.0, 2015.0) # period in years for simulation
+plot_only_H = false
+tspan = (2014.0, 2018.0) # period in years for simulation
 
 root_dir = dirname(Base.current_project())
 
 # Load forward simulations with different surface MB
 grefs = load(joinpath(root_dir, "data/gdir_refs_$tspan.jld2"))["gdir_refs"]
-grefs_MBu1 = load(joinpath(root_dir, "data/gdir_refs_updatedMB1.jld2"))["gdir_refs"]
+# grefs_MBu1 = load(joinpath(root_dir, "data/gdir_refs_updatedMB1.jld2"))["gdir_refs"]
 
-n=5
+n=4
 m=3
 hms_MBdiff, MBdiffs = [], []
 figMB = Figure(resolution = (900, 1100))
@@ -26,25 +26,46 @@ for (i, ax) in enumerate(axsMB)
     name = grefs[i]["RGI_ID"]
     ax.title = name
     H = reverse(grefs[i]["H"]', dims=2)
-    H_MBu1 = reverse(grefs_MBu1[i]["H"]', dims=2)
+    H₀ = reverse(grefs[i]["H_initial"]', dims=2)
+
+    # We cap very small numbers for visualization.
+    # It may be useful to do this directly at the END of the integrator.
+    ϵ = 0.0001
+    H[H.<ϵ] .= 0.0
+
+    println("Mass gain: ", (sum(H) - sum(H₀)) / sum(H₀) * 100 )
+    # H_MBu1 = reverse(grefs_MBu1[i]["H"]', dims=2)
     # H = reverse(grefs[i]["H"])
     # H_MBu1 = reverse(grefs_MBu1[i]["H"])
     if plot_only_H
         H_plot = H
     else
-        H_plot = H .- H_MBu1
+        H_plot = H .- H₀
+        # H_plot = H .- H_MBu1
     end
     push!(MBdiffs, H_plot)
-    push!(hms_MBdiff, CairoMakie.heatmap!(ax, fillZeros(H_plot), colormap=:inferno))
+    if plot_only_H
+        push!(hms_MBdiff, CairoMakie.heatmap!(ax, fillZeros(H_plot), colormap=:inferno))
+    else
+        push!(hms_MBdiff, CairoMakie.heatmap!(ax, H_plot, colormap=Reverse(:balance)))
+    end
 end
 
-minMBdiff = minimum(minimum.(MBdiffs))
-maxMBdiff = maximum(maximum.(MBdiffs)) 
+
 foreach(hms_MBdiff) do hm
-    hm.colorrange = (minMBdiff, maxMBdiff)
+    if plot_only_H
+        minMBdiff = minimum(minimum.(MBdiffs))
+        maxMBdiff = maximum(maximum.(MBdiffs)) 
+        hm.colorrange = (minMBdiff, maxMBdiff)
+        # be careful with the limits used in the colorbar of plots and colorbar
+        Colorbar(figMB[2:3,m+1], limits=(minMBdiff/2,maxMBdiff/2), label="Surface mass balance difference (m)", colormap=:inferno)
+    else
+        hm.colorrange = (-40, 40)
+        Colorbar(figMB[2:3,m+1], label="Surface mass balance difference (m)", colormap=Reverse(:balance), colorrange=(-40,40))
+    end
 end
-Colorbar(figMB[2:3,m+1], limits=(minMBdiff/2,maxMBdiff/2), label="Surface mass balance difference (m)", colormap=:inferno)
-#Label(figH[0, :], text = "Glacier dataset", textsize = 30)
+
+
 if plot_only_H
     Makie.save(joinpath(root_dir, "plots/MB/diffs_noMB_$tspan.pdf"), figMB, pt_per_unit = 1)
 else

@@ -21,6 +21,7 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
         end
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
         if smoothing 
+            println("Smoothing is being applied to initial condition.")
             smooth!(H₀)  # Smooth initial ice thickness to help the solver
         end
 
