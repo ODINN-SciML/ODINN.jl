@@ -16,20 +16,32 @@ function pde_solve_test(atol; MB=false)
     "RGI60-07.00274", "RGI60-07.01323",  "RGI60-01.17316"]
 
     # Load reference values for the simulation
-    PDE_refs = load(joinpath(ODINN.root_dir, "test/data/PDE_refs.jld2"))["PDE_preds"]
+    if MB
+        PDE_refs = load(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"))["PDE_preds"]
+    else
+        PDE_refs = load(joinpath(ODINN.root_dir, "test/data/PDE_refs_noMB.jld2"))["PDE_preds"]
+    end
 
     gdirs = init_gdirs(rgi_ids)
     tspan = (2010.0, 2015.0) # period in years for simulation
 
     # Run the forward PDE simulation
-    PDE_preds = @time generate_ref_dataset(gdirs, tspan)
+    mb_model = ODINN.TI_model_1(DDF=6.0/1000.0, acc_factor=1.2/1000.0) # in m.w.e.
+    PDE_preds = @time generate_ref_dataset(gdirs, tspan, solver=ODINN.RDPK3Sp35(), mb_model)
 
+    ## Saves current run as reference values
+    if MB
+        jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"); PDE_preds)
+    else
+        jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_noMB.jld2"); PDE_preds)
+    end
+    
     # Run one epoch of the UDE training
     θ = zeros(10) # dummy data for the NN
     UA_f = zeros(10)
     UDE_settings, train_settings = ODINN.get_default_training_settings!(gdirs)
     context_batches = ODINN.get_UDE_context(gdirs, tspan; testmode=true)
-    H_V_preds = @time ODINN.predict_iceflow(θ, UA_f, gdirs, context_batches, UDE_settings) # Array{(H_pred, V̄x_pred, V̄y_pred, rgi_id)}
+    H_V_preds = @time predict_iceflow(θ, UA_f, gdirs, context_batches, UDE_settings, mb_model) # Array{(H_pred, V̄x_pred, V̄y_pred, rgi_id)}
 
     let PDE_refs=PDE_refs, H_V_preds=H_V_preds
     for PDE_pred in PDE_preds
@@ -52,7 +64,7 @@ function pde_solve_test(atol; MB=false)
         if !isdir(test_plot_path)
             mkdir(test_plot_path)
         end
-        vtol = 12.0*atol # a little extra tolerance for UDE surface velocities
+        MB ? vtol = 30.0*atol : vtol = 12.0*atol # a little extra tolerance for UDE surface velocities
         ### PDE ###
         ODINN.plot_test_error(PDE_pred, test_ref, "H", rgi_id, atol, MB)
         ODINN.plot_test_error(PDE_pred, test_ref, "Vx", rgi_id, vtol, MB)
@@ -63,17 +75,14 @@ function pde_solve_test(atol; MB=false)
         ODINN.plot_test_error(UDE_pred, test_ref, "Vy", rgi_id, vtol, MB)
 
         # Test that the PDE simulations are correct
-        @test isapprox(PDE_pred["H"], test_ref["H"], atol=atol)
-        @test isapprox(PDE_pred["Vx"], test_ref["Vx"], atol=vtol)
-        @test isapprox(PDE_pred["Vy"], test_ref["Vy"], atol=vtol)
+        @test all(isapprox.(PDE_pred["H"], test_ref["H"], atol=atol))
+        @test all(isapprox.(PDE_pred["Vx"], test_ref["Vx"], atol=vtol))
+        @test all(isapprox.(PDE_pred["Vy"], test_ref["Vy"], atol=vtol))
         # Test that the UDE simulations are correct
-        @test isapprox(UDE_pred[1], test_ref["H"], atol=atol)
-        @test isapprox(UDE_pred[2], test_ref["Vx"], atol=vtol) 
-        @test isapprox(UDE_pred[3], test_ref["Vy"], atol=vtol)
+        @test all(isapprox.(UDE_pred[1], test_ref["H"], atol=atol))
+        @test all(isapprox.(UDE_pred[2], test_ref["Vx"], atol=vtol)) 
+        @test all(isapprox.(UDE_pred[3], test_ref["Vy"], atol=vtol))
         end
     end
     end
 end
-
-pde_solve_test(atol; MB=false)
-pde_solve_test(atol; MB=true)

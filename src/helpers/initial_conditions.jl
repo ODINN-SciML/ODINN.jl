@@ -21,6 +21,7 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
         end
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
         if smoothing 
+            println("Smoothing is being applied to initial condition.")
             smooth!(H₀)  # Smooth initial ice thickness to help the solver
         end
 
@@ -48,10 +49,10 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
     end
     try
         # We filter glacier borders in high elevations to avoid overflow problems
-        dist_border = glacier_gd.dis_from_border.data
+        dist_border = Float64.(glacier_gd.dis_from_border.data)
         S::Matrix{Float64} = Float64.(glacier_gd.topo.data) # surface elevation
-        H_mask = (dist_border .< 20.0) .&& (S .> maximum(S)*0.7)
-        H₀[H_mask] .= 0.0
+            # H_mask = (dist_border .< 20.0) .&& (S .> maximum(S)*0.7)
+            # H₀[H_mask] .= 0.0
 
         H::Matrix{Float64} = deepcopy(H₀)
         B::Matrix{Float64} = Float64.(glacier_gd.topo.data) .- H₀ # bedrock

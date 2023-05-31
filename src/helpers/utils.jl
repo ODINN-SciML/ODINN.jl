@@ -389,7 +389,7 @@ function update_training_state(l, batch_size, n_gdirs)
 end
 
 function get_default_UDE_settings()
-    UDE_settings = Dict("reltol"=>1e-7, 
+    UDE_settings = Dict("reltol"=>1e-8, 
                             "solver"=>RDPK3Sp35(), 
                             "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true))) 
     return UDE_settings
@@ -411,25 +411,21 @@ function get_default_training_settings!(gdirs, UDE_settings=nothing, train_setti
         global loss_history = Float64[]
     end
 
-    # Don't use MB if not specified
-    if isnothing(random_MB)
-        ODINN.set_use_MB(false) 
-    end
-
     return UDE_settings, train_settings
 end
 
 function plot_test_error(pred::Dict{String, Any}, ref::Dict{String, Any}, variable, rgi_id, atol, MB; path=joinpath(ODINN.root_dir, "test/plots"))
     @assert (variable == "H") || (variable == "Vx") || (variable == "Vy") "Wrong variable for plots. Needs to be either `H`, `Vx` or `Vy`."
-    if !isapprox(pred[variable], ref[variable], atol=atol)
+    if !all(isapprox.(pred[variable], ref[variable], atol=atol))
         # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
         if variable == "H"
             colour=:ice
         elseif variable == "Vx" || variable == "Vy"
             colour=:speed
         end
+        MB ? tail = "MB" : tail = ""
         PDE_plot = Plots.heatmap(pred[variable] .- ref[variable], title="$(variable): PDE simulation - Reference simulation", c=colour)
-        Plots.savefig(PDE_plot,joinpath(path,"$(variable)_PDE_$rgi_id.pdf"))
+        Plots.savefig(PDE_plot,joinpath(path,"$(variable)_PDE_$rgi_id$tail.pdf"))
     end
 end
 
@@ -445,15 +441,11 @@ function plot_test_error(pred::Tuple, ref::Dict{String, Any}, variable, rgi_id, 
         idx=3
         colour=:speed
     end
-    if !isapprox(pred[idx], ref[variable], atol=atol)
+    if !all(isapprox.(pred[idx], ref[variable], atol=atol))
         # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
-            UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
-            if MB
-            MB = "_MB"
-        else
-            MB = ""
-        end
-        Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id$MB.pdf"))
+        UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
+        MB ? tail = "MB" : tail = ""
+        Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id$tail.pdf"))
     end
 end
 

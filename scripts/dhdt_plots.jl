@@ -4,7 +4,8 @@ using CairoMakie
 using JLD2
 import ODINN: fillZeros
 
-make_plots()
+
+function make_plots()
 
     # plot_type = "only_H" # plot final H
     # plot_type = "MB_diff" # differences between runs with different MB models
@@ -17,7 +18,7 @@ make_plots()
     grefs = load(joinpath(root_dir, "data/gdir_refs_$tspan.jld2"))["gdir_refs"]
     grefs_MBu1 = load(joinpath(root_dir, "data/gdir_refs_updatedMB1.jld2"))["gdir_refs"]
 
-    n=5
+    n=4
     m=3
     hms_MBdiff, MBdiffs = [], []
     figMB = Figure(resolution = (900, 1100))

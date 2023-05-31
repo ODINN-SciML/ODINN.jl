@@ -24,7 +24,8 @@ ENV["GKSwstype"]="nul"
 
 function run_toy_model()
 
-    processes = 16
+    processes = 1
+
     # Enable multiprocessing
     ODINN.enable_multiprocessing(processes)
     # Flags
@@ -36,13 +37,13 @@ function run_toy_model()
     # Reference simulations
     ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
     # UDE training
-    ODINN.set_train(true)    # Train UDE
+    ODINN.set_train(false)    # Train UDE
     ODINN.set_retrain(false) # Re-use previous NN weights to continue training
     # Optimization method for differentiating the model
     ODINN.set_optimization_method("AD+AD")
     # ODINN.set_optimization_method("AD+Diff")
 
-    tspan = (2010.0, 2012.0) # period in years for simulation
+    tspan = (2010.0, 2015.0) # period in years for simulation
 
     # Configure OGGM settings in all workers
     working_dir = joinpath(homedir(), "Python/OGGM_data")
@@ -51,8 +52,8 @@ function run_toy_model()
     # Defining glaciers to be modelled with RGI IDs
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
                 "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
-                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316", 
-                "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
+                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]#, 
+                # "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
 
     # rgi_ids = rgi_ids[1:2]
 
@@ -68,7 +69,7 @@ function run_toy_model()
     if ODINN.create_ref_dataset[]
         println("Generating reference dataset for training...")
         # Compute reference dataset in parallel
-        mb_model = ODINN.TI_model_1(DDF=6.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
+        mb_model = ODINN.TI_model_1(DDF=8.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
         gdir_refs = @time "PDEs" generate_ref_dataset(gdirs, tspan, solver=RDPK3Sp35(), mb_model)
 
         println("Saving reference data")
