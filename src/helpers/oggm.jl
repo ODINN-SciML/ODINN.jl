@@ -9,7 +9,7 @@ export oggm_config, init_gdirs, PARAMS, PATHS
 
 Configures the basic paths and parameters for OGGM.
 """
-function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"); processes=1)
+function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"); oggm_processes=1)
     @eval begin
     @everywhere begin
     @eval ODINN begin
@@ -23,12 +23,21 @@ function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"); proces
     PARAMS["continue_on_error"] = true # avoid stopping when a task fails for a glacier (e.g. lack of data)
 
     # Multiprocessing 
-    multiprocessing = $processes > 1 ? true : false
-    PARAMS["mp_processes"] = $processes
-    PARAMS["use_multiprocessing"] = multiprocessing # Let's use multiprocessing for OGGM
+    PARAMS["use_multiprocessing"] = false # Don't set multiprocessing for workers
+
     end # @eval ODINN
     end # @everywhere
     end # @eval
+
+    @eval ODINN begin
+
+    # # Multiprocessing for the main worker
+    # multiprocessing = $oggm_processes > 1 ? true : false
+    # PARAMS["mp_processes"] = $oggm_processes
+    # PARAMS["use_multiprocessing"] = multiprocessing # Let's use multiprocessing for OGGM
+
+    end # @eval ODINN
+
 end
 
 """

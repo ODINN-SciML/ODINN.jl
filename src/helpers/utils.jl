@@ -107,7 +107,7 @@ end
 
 function reset_epochs()
     @everywhere @eval ODINN global current_epoch = 1
-    @everywhere @eval ODINN global loss_history = []
+    @everywhere @eval ODINN global loss_history = Float64[]
 end
 
 function set_current_epoch(epoch)
@@ -161,6 +161,7 @@ function get_gdir_refs(refs, gdirs)
     for (ref, gdir) in zip(refs, gdirs)
         push!(gdir_refs, Dict("RGI_ID"=>gdir.rgi_id,
                                 "H"=>ref["H"],
+                                "H₀"=>ref["H₀"],
                                 "Vx"=>ref["Vx"],
                                 "Vy"=>ref["Vy"],
                                 "S"=>ref["S"],
@@ -229,6 +230,7 @@ function get_NN(θ_trained)
         Dense(10,3, x->softplus.(x)),
         Dense(3,1, sigmoid_A)
     )
+    Flux.f64(UA)
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
     if !isempty(θ_trained)
@@ -387,7 +389,7 @@ function update_training_state(l, batch_size, n_gdirs)
 end
 
 function get_default_UDE_settings()
-    UDE_settings = Dict("reltol"=>1e-7, 
+    UDE_settings = Dict("reltol"=>1e-8, 
                             "solver"=>RDPK3Sp35(), 
                             "sensealg"=>InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true))) 
     return UDE_settings
@@ -406,12 +408,7 @@ function get_default_training_settings!(gdirs, UDE_settings=nothing, train_setti
     #### Setup default parameters ####
     if length(θ_trained) == 0
         reset_epochs()
-        global loss_history = []
-    end
-
-    # Don't use MB if not specified
-    if isnothing(random_MB)
-        ODINN.set_use_MB(false) 
+        global loss_history = Float64[]
     end
 
     return UDE_settings, train_settings
@@ -419,15 +416,16 @@ end
 
 function plot_test_error(pred::Dict{String, Any}, ref::Dict{String, Any}, variable, rgi_id, atol, MB; path=joinpath(ODINN.root_dir, "test/plots"))
     @assert (variable == "H") || (variable == "Vx") || (variable == "Vy") "Wrong variable for plots. Needs to be either `H`, `Vx` or `Vy`."
-    if !isapprox(pred[variable], ref[variable], atol=atol)
+    if !all(isapprox.(pred[variable], ref[variable], atol=atol))
         # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
         if variable == "H"
             colour=:ice
         elseif variable == "Vx" || variable == "Vy"
             colour=:speed
         end
+        MB ? tail = "MB" : tail = ""
         PDE_plot = Plots.heatmap(pred[variable] .- ref[variable], title="$(variable): PDE simulation - Reference simulation", c=colour)
-        Plots.savefig(PDE_plot,joinpath(path,"$(variable)_PDE_$rgi_id.pdf"))
+        Plots.savefig(PDE_plot,joinpath(path,"$(variable)_PDE_$rgi_id$tail.pdf"))
     end
 end
 
@@ -443,15 +441,11 @@ function plot_test_error(pred::Tuple, ref::Dict{String, Any}, variable, rgi_id, 
         idx=3
         colour=:speed
     end
-    if !isapprox(pred[idx], ref[variable], atol=atol)
+    if !all(isapprox.(pred[idx], ref[variable], atol=atol))
         # @warn "Error found in PDE solve! Check plots in /test/plots⁄"
-            UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
-            if MB
-            MB = "_MB"
-        else
-            MB = ""
-        end
-        Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id$MB.pdf"))
+        UDE_plot = Plots.heatmap(pred[idx] .- ref[variable], title="$(variable): UDE simulation - Reference simulation", c=colour)
+        MB ? tail = "MB" : tail = ""
+        Plots.savefig(UDE_plot,joinpath(path,"$(variable)_UDE_$rgi_id$tail.pdf"))
     end
 end
 
@@ -465,3 +459,4 @@ function get_interpolating_step(interpolating_step, tspan)
     end
     return updated_step
 end
+

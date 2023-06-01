@@ -12,14 +12,14 @@ using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL
 import OptimizationOptimisers.Adam
 using IterTools: ncycle
-using Zygote: @ignore, Buffer 
+using Zygote: @ignore 
 using Base: @kwdef
 using Flux
 using Tullio
 using Infiltrator
 using Plots, PlotThemes
 Plots.theme(:wong2) # sets overall theme for Plots
-using Makie, CairoMakie, GeoMakie
+using CairoMakie, GeoMakie
 import Pkg
 using Distributed
 using ProgressMeter

@@ -1,4 +1,3 @@
-using Infiltrator
 export plot_avg_longterm_temps, plot_glacier_dataset
 
 function plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB; display=false)
