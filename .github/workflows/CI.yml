@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.8'
+          - '1.9'
         python: [3.9]
         os:
           - ubuntu-latest
@@ -59,6 +59,8 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v1
+        with:
+          cache-registries: "true"
       - uses: julia-actions/julia-buildpkg@v1
         env:
           PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
