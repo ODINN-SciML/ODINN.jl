@@ -79,8 +79,10 @@ jobs:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.8'
+          version: '1.9'
       - uses: julia-actions/julia-buildpkg@v1
+        env:
+            PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
       - uses: julia-actions/julia-docdeploy@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
