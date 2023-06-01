@@ -1,28 +1,69 @@
-name: Run tests
-
+name: Run Tests
 on:
   push:
     branches:
       - main
+    tags: ['*']
   pull_request:
-    types: [opened, synchronize, reopened]
-  schedule:
-    - cron: '0 0 * * 0'
-
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 jobs:
-  test-github-cpuonly:
-    env:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    defaults:
+       run:
+         shell: bash -el {0}
     strategy:
+      fail-fast: false
       matrix:
-          os: [ubuntu-20.04]
-          julia-version: ['1.8']
-          julia-arch: [x64]
-
+        version:
+          - '1.8'
+        python: [3.9]
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
     steps:
       - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@latest
+      
+      - name: Set up Python 🐍 ${{ matrix.python }}
+        uses: actions/setup-python@v2
         with:
-          version: ${{ matrix.julia-version }}
-      - uses: julia-actions/julia-buildpkg@latest
-      - uses: julia-actions/julia-runtest@latest
+          python-version: ${{ matrix.python }}  
+      - name: Create environment with micromamba 🐍🖤
+        uses: mamba-org/setup-micromamba@v1
+        with: 
+          micromamba-version: '1.3.1-0'
+          environment-file: ./environment.yml
+          environment-name: oggm_env                # it is recommendable to add both name and yml file. 
+          init-shell: bash
+          cache-environment: true
+#           condarc-file: ./condarc.yml                # If necessary, we can include .condarc to configure environment
+      - name: Test creation of environment with micromamba 🔧🐍🖤
+        run: | 
+            which python
+            conda env export
+        shell: bash -el {0}
+#       - name: Test OGGM installation 🔧🌎 
+#         run: pytest.oggm
+#         shell: bash -el {0}
+      - name: Set ENV Variables for PyCall.jl 🐍 📞
+        run: export PYTHON=/home/runner/micromamba/envs/oggm_env/bin/python
+        shell: bash -el {0}
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v1
+      - uses: julia-actions/julia-buildpkg@v1
+        env:
+          PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
+      - uses: julia-actions/julia-runtest@v1
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v2
+        with:
+          files: lcov.info
