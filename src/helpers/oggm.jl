@@ -77,7 +77,7 @@ function init_gdirs_scratch(rgi_ids)::Vector{PyObject}
     # Check if some of the gdirs is missing files
     gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url, 
                                                 from_prepro_level=2, prepro_border=10,
-                                                reset=true)
+                                                reset=true, force=true)
     list_talks = [
         # tasks.compute_centerlines,
         # tasks.initialize_flowlines,
