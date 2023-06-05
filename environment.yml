@@ -1,4 +1,4 @@
-name: oggm_env
+name: oggm_env_CI
 channels:
   - conda-forge
 dependencies:
@@ -23,25 +23,21 @@ dependencies:
   - cartopy
   - geopandas
   - rasterio
-  - fiona
-  - pyogrio
+  - gdal=3.3
   - rioxarray
   - seaborn
   - pytables
   - salem
   - motionless
-  - sphinx
-  - sphinx-book-theme>=0.3.3
   - ipython
+  - ipykernel
   - numpydoc
   - seaborn
-  - sphinx-intl
-  - sphinx-reredirects
+  - scikit-learn
   - pip
   - pip:
     - joblib
     - progressbar2
-    - sphinx-togglebutton
     - git+https://github.com/OGGM/pytest-mpl
     - git+https://github.com/OGGM/massbalance-sandbox
     - oggm==1.6.0

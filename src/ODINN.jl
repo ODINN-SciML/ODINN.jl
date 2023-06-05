@@ -82,6 +82,7 @@ const salem = PyNULL()
 # Essential Python libraries
 const np = PyNULL()
 const xr = PyNULL()
+const rioxarray = PyNULL()
 const pd = PyNULL()
 
 # ##############################################

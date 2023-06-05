@@ -179,7 +179,7 @@ function get_longterm_temps(gdir::PyObject, tspan)
 end
 
 function get_longterm_temps(gdir::PyObject, climate::PyObject)
-    dem = xr.open_rasterio(gdir.get_filepath("dem"))
+    dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
     apply_t_grad!(climate, dem)
     longterm_temps = climate.groupby("time.year").mean().temp.data
     return longterm_temps

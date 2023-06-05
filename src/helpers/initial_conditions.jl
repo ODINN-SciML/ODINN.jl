@@ -56,7 +56,7 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
 
         H::Matrix{Float64} = deepcopy(H₀)
         B::Matrix{Float64} = Float64.(glacier_gd.topo.data) .- H₀ # bedrock
-        S_coords::PyObject = xr.open_rasterio(gdir.get_filepath("dem"))
+        S_coords::PyObject = rioxarray.open_rasterio(gdir.get_filepath("dem"))
         V::Matrix{Float64} = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
         fillNaN!(V)
         nx = glacier_gd.y.size # glacier extent
