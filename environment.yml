@@ -22,7 +22,6 @@ dependencies:
   - cartopy
   - geopandas
   - rasterio
-  - gdal=3.3
   - rioxarray
   - seaborn
   - pytables
