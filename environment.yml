@@ -2,6 +2,7 @@ name: oggm_env
 channels:
   - conda-forge
 dependencies:
+  - python=3.9
   - jupyter
   - jupyterlab
   - numpy
@@ -22,6 +23,7 @@ dependencies:
   - cartopy
   - geopandas
   - rasterio
+  - gdal=3.3
   - rioxarray
   - seaborn
   - pytables
