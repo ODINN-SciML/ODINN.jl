@@ -29,7 +29,8 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v2
-      
+      - name: Update CA certificates
+        run: sudo apt-get install ca-certificates
       - name: Set up Python 🐍 ${{ matrix.python }}
         uses: actions/setup-python@v2
         with:
