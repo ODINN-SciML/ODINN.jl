@@ -32,7 +32,8 @@ jobs:
       - name: Setup CA certificates for SSL
         run: | 
             echo $SSL_CERT_FILE
-            export SSL_CERT_FILE=certifi.where()
+            CAcertifi=$(python -m certifi)
+            export SSL_CERT_FILE=CAcertifi
             echo $SSL_CERT_FILE
         shell: bash -el {0}
       - name: Set up Python 🐍 ${{ matrix.python }}
