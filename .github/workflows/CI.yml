@@ -44,6 +44,7 @@ jobs:
 #           condarc-file: ./condarc.yml                # If necessary, we can include .condarc to configure environment
       - name: Test creation of environment with micromamba 🔧🐍🖤
         run: | 
+            echo $SSL_CERT_FILE
             which python
             conda env export
         shell: bash -el {0}
