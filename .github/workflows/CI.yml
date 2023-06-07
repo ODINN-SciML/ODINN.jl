@@ -29,6 +29,12 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v2
+      - name: Setup CA certificates for SSL
+        run: | 
+            echo $SSL_CERT_FILE
+            export SSL_CERT_FILE=certifi.where()
+            echo $SSL_CERT_FILE
+        shell: bash -el {0}
       - name: Set up Python 🐍 ${{ matrix.python }}
         uses: actions/setup-python@v2
         with:
@@ -44,7 +50,6 @@ jobs:
 #           condarc-file: ./condarc.yml                # If necessary, we can include .condarc to configure environment
       - name: Test creation of environment with micromamba 🔧🐍🖤
         run: | 
-            echo $SSL_CERT_FILE
             which python
             conda env export
         shell: bash -el {0}
