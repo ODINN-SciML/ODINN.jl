@@ -33,7 +33,7 @@ jobs:
         run: | 
             echo $SSL_CERT_FILE
             CAcertifi=$(python -m certifi)
-            export SSL_CERT_FILE=CAcertifi
+            export SSL_CERT_FILE=$CAcertifi
             echo $SSL_CERT_FILE
         shell: bash -el {0}
       - name: Set up Python 🐍 ${{ matrix.python }}
