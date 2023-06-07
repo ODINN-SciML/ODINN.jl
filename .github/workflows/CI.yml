@@ -29,7 +29,6 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v2
-      
       - name: Set up Python 🐍 ${{ matrix.python }}
         uses: actions/setup-python@v2
         with:
@@ -51,6 +50,8 @@ jobs:
 #       - name: Test OGGM installation 🔧🌎 
 #         run: pytest.oggm
 #         shell: bash -el {0}
+      - name: Update CA certificates
+        run: sudo apt-get install ca-certificates
       - name: Set ENV Variables for PyCall.jl 🐍 📞
         run: export PYTHON=/home/runner/micromamba/envs/oggm_env/bin/python
         shell: bash -el {0}
