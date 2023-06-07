@@ -45,7 +45,7 @@ function pde_solve_test(atol; MB=false)
 
     let PDE_refs=PDE_refs, H_V_preds=H_V_preds
     for PDE_pred in PDE_preds
-        let PDE_refs=PDE_refs, test_ref, H_V_preds=H_V_preds, UDE_pred, rgi_id
+        let PDE_refs=PDE_refs, test_ref=nothing, H_V_preds=H_V_preds, UDE_pred=nothing, rgi_id
         for (PDE_ref, H_V_pred) in zip(PDE_refs, H_V_preds)
             rgi_id = PDE_pred["RGI_ID"]
             if rgi_id == PDE_ref["RGI_ID"]
