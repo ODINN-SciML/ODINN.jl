@@ -29,11 +29,17 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v2
-      - name: Setup CA certificates for SSL
+      - name: Show CA certificates for SSL
         run: | 
             echo $SSL_CERT_FILE
-            CAcertifi=$(python -m certifi)
-            export SSL_CERT_FILE=$CAcertifi
+        shell: bash -el {0}
+      - name: Show certifi
+        run: | 
+            echo $(python -m certifi)
+        shell: bash -el {0}
+      - name: Setup CA certificates for SSL
+        run: | 
+            export SSL_CERT_FILE=$(python -m certifi)
             echo $SSL_CERT_FILE
         shell: bash -el {0}
       - name: Set up Python 🐍 ${{ matrix.python }}
