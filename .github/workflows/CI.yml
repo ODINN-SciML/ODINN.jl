@@ -29,23 +29,6 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v2
-      - name: Update CA certificates for SSL
-        run: | 
-            sudo update-ca-certificates 
-        shell: bash -el {0}
-      - name: Show CA certificates for SSL
-        run: | 
-            echo $SSL_CERT_FILE
-        shell: bash -el {0}
-      - name: Show certifi
-        run: | 
-            echo $(python -m certifi)
-        shell: bash -el {0}
-      - name: Setup CA certificates for SSL
-        run: | 
-            export SSL_CERT_FILE=$(python -m certifi)
-            echo $SSL_CERT_FILE
-        shell: bash -el {0}
       - name: Set up Python 🐍 ${{ matrix.python }}
         uses: actions/setup-python@v2
         with:
@@ -63,6 +46,27 @@ jobs:
         run: | 
             which python
             conda env export
+        shell: bash -el {0}
+      - name: Update certifi
+        run: | 
+            pip install –upgrade certifi
+        shell: bash -el {0}
+      - name: Update CA certificates for SSL
+        run: | 
+            sudo update-ca-certificates 
+        shell: bash -el {0}
+      - name: Show CA certificates for SSL
+        run: | 
+            echo $SSL_CERT_FILE
+        shell: bash -el {0}
+      - name: Show certifi
+        run: | 
+            echo $(python -m certifi)
+        shell: bash -el {0}
+      - name: Setup CA certificates for SSL
+        run: | 
+            export SSL_CERT_FILE=$(python -m certifi)
+            echo $SSL_CERT_FILE
         shell: bash -el {0}
 #       - name: Test OGGM installation 🔧🌎 
 #         run: pytest.oggm
