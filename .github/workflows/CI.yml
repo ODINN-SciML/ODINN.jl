@@ -49,7 +49,7 @@ jobs:
         shell: bash -el {0}
       - name: Update certifi
         run: | 
-            pip install –upgrade certifi
+            pip install --upgrade certifi
         shell: bash -el {0}
       - name: Update CA certificates for SSL
         run: | 
