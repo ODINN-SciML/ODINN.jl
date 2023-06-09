@@ -27,7 +27,7 @@ function pde_solve_test(atol; MB=false, fast=true)
         PDE_refs = load(joinpath(ODINN.root_dir, "test/data/PDE_refs_noMB.jld2"))["PDE_preds"]
     end
 
-    gdirs = init_gdirs(rgi_ids)
+    gdirs = init_gdirs(rgi_ids; velocities=false) # Don't download Millan22 velocities to avoid overhead
     tspan = (2010.0, 2015.0) # period in years for simulation
 
     # Run the forward PDE simulation
