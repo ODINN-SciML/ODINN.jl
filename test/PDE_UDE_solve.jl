@@ -3,7 +3,7 @@
 function pde_solve_test(atol; MB=false, fast=true)
     println("PDE solving with MB = $MB")
     working_dir = joinpath(homedir(), "Python/ODINN_tests")
-    oggm_config(working_dir)
+    oggm_config(working_dir; oggm_processes=2) # Use all GitHub actions workers available
     ODINN.set_use_MB(MB)
     ODINN.set_noise(false)
 
