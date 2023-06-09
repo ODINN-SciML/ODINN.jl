@@ -27,6 +27,7 @@ function __init__()
     copy!(pd, pyimport("pandas"))
     copy!(np, pyimport("numpy"))
     copy!(xr, pyimport("xarray"))
+    copy!(rioxarray, pyimport("rioxarray"))
 end
 
 function clean()

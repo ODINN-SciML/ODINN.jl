@@ -24,7 +24,8 @@ ENV["GKSwstype"]="nul"
 
 function run_toy_model()
 
-    processes = 18
+    processes = 1
+
     # Enable multiprocessing
     ODINN.enable_multiprocessing(processes)
     # Flags
@@ -36,11 +37,11 @@ function run_toy_model()
     # Reference simulations
     ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
     # UDE training
-    ODINN.set_train(true)    # Train UDE
+    ODINN.set_train(false)    # Train UDE
     ODINN.set_retrain(false) # Re-use previous NN weights to continue training
     # Optimization method for differentiating the model
-    # ODINN.set_optimization_method("AD+AD")
-    ODINN.set_optimization_method("AD+Diff")
+    ODINN.set_optimization_method("AD+AD")
+    # ODINN.set_optimization_method("AD+Diff")
 
     tspan = (2010.0, 2015.0) # period in years for simulation
 
@@ -51,8 +52,8 @@ function run_toy_model()
     # Defining glaciers to be modelled with RGI IDs
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
                 "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
-                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316", 
-                "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
+                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]#, 
+                # "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
 
     # rgi_ids = rgi_ids[1:2]
 
@@ -68,14 +69,15 @@ function run_toy_model()
     if ODINN.create_ref_dataset[]
         println("Generating reference dataset for training...")
         # Compute reference dataset in parallel
-        gdir_refs = @time "PDEs" generate_ref_dataset(gdirs, tspan, solver=RDPK3Sp35())
+        mb_model = ODINN.TI_model_1(DDF=8.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
+        gdir_refs = @time "PDEs" generate_ref_dataset(gdirs, tspan, solver=RDPK3Sp35(), mb_model)
 
         println("Saving reference data")
-        jldsave(joinpath(ODINN.root_dir, "data/gdir_refs.jld2"); gdir_refs)
+        jldsave(joinpath(ODINN.root_dir, "data/gdir_refs_$tspan.jld2"); gdir_refs)
     end
 
     # Load stored PDE reference datasets
-    gdir_refs = load(joinpath(ODINN.root_dir, "data/gdir_refs.jld2"))["gdir_refs"]
+    gdir_refs = load(joinpath(ODINN.root_dir, "data/gdir_refs_$tspan.jld2"))["gdir_refs"]
 
     # Plot training dataset of glaciers
     # plot_glacier_dataset(gdirs_climate, gdir_refs, random_MB)
@@ -87,7 +89,7 @@ function run_toy_model()
     if ODINN.train[]
         # Train iceflow UDE in parallel
         n_ADAM = 20
-        n_BFGS = 50
+        n_BFGS = 100
         batch_size = length(gdir_refs)
         # batch_size = 9
         UDE_settings = Dict("reltol"=>1e-7,
@@ -101,10 +103,11 @@ function run_toy_model()
             # optimizer = BFGS(initial_stepnorm=0.0001)
             optimizer = Adam(0.001)
             train_settings = (optimizer, n_ADAM, batch_size) # optimizer, epochs, batch_size
+            mb_model = ODINN.TI_model_1(DDF=6.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
             iceflow_trained, UA_f, loss_history = @time "UDEs" train_iceflow_UDE(gdirs, gdir_refs,
                                                                         tspan, train_settings, θ_trained; 
                                                                         UDE_settings=UDE_settings,
-                                                                        random_MB=random_MB) # retrain
+                                                                        mb_model=mb_model) # retrain
             θ_trained = iceflow_trained.minimizer
 
             # Save trained NN weights
@@ -115,11 +118,13 @@ function run_toy_model()
             ODINN.reset_epochs()
             ## First train with ADAM to move the parameters into a favourable space
             println("Training from scratch...")
-            train_settings = (Adam(0.01), n_ADAM, batch_size) # optimizer, epochs
-            # train_settings = (BFGS(initial_stepnorm=0.001), n_BFGS, batch_size) # optimizer, epochs
+            # train_settings = (Adam(0.01), n_ADAM, batch_size) # optimizer, epochs
+            mb_model = ODINN.TI_model_1(DDF=6.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
+            train_settings = (BFGS(initial_stepnorm=0.001), n_BFGS, batch_size) # optimizer, epochs
             iceflow_trained, UA_f, loss_history = @time train_iceflow_UDE(gdirs, gdir_refs,
                                                                             tspan, train_settings;
-                                                                            UDE_settings=UDE_settings) 
+                                                                            UDE_settings=UDE_settings,
+                                                                            mb_model=mb_model) 
             θ_trained = iceflow_trained.minimizer
             println("Saving NN weights...")
             jldsave(joinpath(ODINN.root_dir, "data/trained_weights.jld2"); θ_trained, ODINN.current_epoch)

@@ -1,12 +1,7 @@
 # ODINN
 
-<!---
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/stable)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://JordiBolibar.github.io/ODINN.jl/dev)
 [![Build Status](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Build Status](https://travis-ci.com/JordiBolibar/ODINN.jl.svg?branch=main)](https://travis-ci.com/JordiBolibar/ODINN.jl)
 [![Coverage](https://codecov.io/gh/JordiBolibar/ODINN.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JordiBolibar/ODINN.jl)
--->
 
 <img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo_final.png" width="250">
 
@@ -25,21 +20,22 @@ Global glacier model using Universal Differential Equations to model and discove
 In order to install `ODINN` in a given environment, just do in the REPL:
 ```julia
 julia> ] # enter Pkg mode
-(@v1.8) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
+(@v1.9) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
 (MyEnvironment) pkg> add ODINN
 ```
 
 ## ODINN initialization: integration with OGGM and multiprocessing
 
-In order to call OGGM in Python from Julia, a Python installation is needed, which then can be used in Julia using [PyCall](https://github.com/JuliaPy/PyCall.jl). We recommend splitting the Julia (i.e. ODINN) and Python (i.e. OGGM) files in separate folders, which we chose to name `Julia` and `Python`, both placed at root level. As indicated in the [OGGM documentation](https://docs.oggm.org/en/stable/installing-oggm.html), when installing OGGM it is best to create a new dedicated conda environment for it (e.g. `oggm_env`). In the same environment, install also the [OGGM Mass-Balance sandbox](https://github.com/OGGM/massbalance-sandbox) following the instructions in the repository.
-
-The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement, it just requires activating the conda environment before the first time you run ODINN in your machine. In the terminal (not in a Julia session), run:
+ODINN depends on some Python packages, mainly OGGM and xarray. In order to install the necessary Python dependencies in an easy manner, we are providing a Python environment (`oggm_env`) in `environment.yml`. In order to install it and activate it, we recommend using micromamba:
 
 ```
-conda activate oggm_env # replace `oggm_env` with whatever conda environment where you have installed OGGM and the MBSandbox
+micromamba create -f environment.yml
+micromamba activate oggm_env
 ```
 
-Then, you need to configure PyCall to use the Python path for that conda environment:
+In order to call OGGM in Python from Julia, we use [PyCall.jl](https://github.com/JuliaPy/PyCall.jl). PyCall hooks on the Python installation and allows using Python in a totally seamless way from Julia. 
+
+The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement, it just requires providing the Python path to PyCall and building it:
 
 ```julia
 julia # start Julia session
@@ -65,16 +61,6 @@ From this point, it is possible to use ODINN with multiprocessing and to run Pyt
 
 ODINN works as a back-end of OGGM, utilizing all its tools to retrieve RGI data, topographical data, climate data and other datasets from the OGGM shop. We use these data to specify the initial state of the simulations, and to retrieve the climate data to force the model. Everything related to the mass balance and ice flow dynamics models is written 100% in Julia. This allows us to run tests with this toy model for any glacier on Earth. In order to choose a glacier, you just need to specify the RGI ID, which you can find [here](https://www.glims.org/maps/glims). 
 
-## Running the toy model
-
-A demostration with a toy model is showcased in [`src/scripts/toy_model.jl`](https://github.com/ODINN-SciML/ODINN.jl/blob/main/scripts/toy_model.jl). The `Project.toml` includes all the required dependencies. If you are running this code from zero, you may need to install the libraries using `Pkg.instantiate()`. In case you want to include this package to the project manifest, you can also use `Pkg.resolve()` before instantiating the project. You can replace the preamble in `src/scripts/toy_model.jl` to 
-
-```julia
-import Pkg
-Pkg.activate(dirname(Base.current_project()))
-Pkg.instantiate()
-Pkg.precompile()
-```
 ## Upcoming changes
 
 A stable API is still being designed, which will be available in the next release. If you plan to start using the model, please contact us, although we recommend to wait until next release for a smoother experience. 
