@@ -24,7 +24,7 @@ end
 
 Generate reference dataset based on the iceflow PDE
 """
-function generate_ref_dataset(gdirs, tspan, mb_model; solver = RDPK3Sp35())
+function generate_ref_dataset(gdirs, tspan, mb_model; solver = RDPK3Sp35(), velocities=true)
     # Generate climate data if necessary
     @timeit to "generate raw climate files" begin
     pmap((gdir) -> generate_raw_climate_files(gdir, tspan), gdirs)
@@ -33,7 +33,7 @@ function generate_ref_dataset(gdirs, tspan, mb_model; solver = RDPK3Sp35())
     println("Running forward PDE ice flow model...\n")
     # Run batches in parallel
     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
-    refs = @showprogress pmap((gdir, A_noise) -> batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model; run_spinup=false), gdirs, A_noises)
+    refs = @showprogress pmap((gdir, A_noise) -> batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model; run_spinup=false, velocities=velocities), gdirs, A_noises)
 
     # Gather information per gdir
     gdir_refs = get_gdir_refs(refs, gdirs)
@@ -48,12 +48,13 @@ end
 
 Solve the Shallow Ice Approximation iceflow PDE for a given temperature series batch
 """
-function batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model=nothing; run_spinup=false) 
+function batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model=nothing; run_spinup=false, velocities=true) 
     println("Processing glacier: ", gdir.rgi_id)
     # Callback  
     # Define stop times every one month
     tstops, step = define_callback_steps(tspan)
-    context, H = build_PDE_context(gdir ,A_noise, tspan; run_spinup=run_spinup)
+    context, H = build_PDE_context(gdir ,A_noise, tspan; 
+                                    run_spinup=run_spinup, velocities=velocities)
     S = context[3]
     S_coords = context[32]
     MB_total = zeros(Float64, size(H))

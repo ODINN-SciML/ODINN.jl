@@ -7,14 +7,14 @@
 
 Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier with other necessary data (e.g. grid size and ice surface velocities).
 """
-function get_initial_geometry(gdir, run_spinup, smoothing=false)
+function get_initial_geometry(gdir, run_spinup, smoothing=false; velocities=true)
     # Load glacier gridded data
     glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
     if run_spinup || !use_spinup[]
         # println("Using $ice_thickness_source for initial state")
         # Retrieve initial conditions from OGGM
         # initial ice thickness conditions for forward model
-        if ice_thickness_source == "millan"
+        if ice_thickness_source == "millan" && velocities
             H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
         elseif ice_thickness_source == "farinotti"
             H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
@@ -47,7 +47,7 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
         @assert found == true "Spin up glacier simulation not found for $(gdir.rgi_id)."
 
     end
-    try
+    # try
         # We filter glacier borders in high elevations to avoid overflow problems
         dist_border = Float64.(glacier_gd.dis_from_border.data)
         S::Matrix{Float64} = Float64.(glacier_gd.topo.data) # surface elevation
@@ -57,8 +57,12 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
         H::Matrix{Float64} = deepcopy(H₀)
         B::Matrix{Float64} = Float64.(glacier_gd.topo.data) .- H₀ # bedrock
         S_coords::PyObject = rioxarray.open_rasterio(gdir.get_filepath("dem"))
-        V::Matrix{Float64} = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
-        fillNaN!(V)
+        if velocities
+            V::Matrix{Float64} = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
+            fillNaN!(V)
+        else
+            V = zeros(Float64, size(H))
+        end
         nx = glacier_gd.y.size # glacier extent
         ny = glacier_gd.x.size # really weird, but this is inversed 
         Δx = abs(gdir.grid.dx)
@@ -68,18 +72,20 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false)
         glacier_gd.close() # Release any resources linked to this object
 
         return H₀, H, S, B, V, (nx,ny), (Δx,Δy), S_coords, dist_border, slope
-    catch
-        missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
-        push!(missing_glaciers, gdir.rgi_id)
-        jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
-        glacier_gd.close() # Release any resources linked to this object
-        @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
-    end
+    # catch error
+    #     @show error  
+    #     missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
+    #     push!(missing_glaciers, gdir.rgi_id)
+    #     jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
+    #     glacier_gd.close() # Release any resources linked to this object
+    #     @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
+    # end
 end
 
-function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
+function build_PDE_context(gdir, A_noise, tspan; run_spinup=false, velocities=true)
     # Determine initial geometry conditions
-    H₀, H, S, B, V, nxy, Δxy, S_coords::PyObject, dist_border, slope = get_initial_geometry(gdir, run_spinup)
+    H₀, H, S, B, V, nxy, Δxy, S_coords::PyObject, dist_border, slope = get_initial_geometry(gdir, run_spinup; 
+                                                                                            velocities=velocities)
 
     rgi_id = gdir.rgi_id
     # Initialize all matrices for the solver
@@ -105,14 +111,15 @@ function build_PDE_context(gdir, A_noise, tspan; run_spinup=false)
     return context, H
 end
 
-function get_UDE_context(gdirs, tspan; testmode=false)
-    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan, testmode; run_spinup=false), gdirs)
+function get_UDE_context(gdirs, tspan; testmode=false, velocities=true)
+    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan, testmode; run_spinup=false, velocities=velocities), gdirs)
 
     return context_batches
 end
 
-function build_UDE_context(gdir, tspan, testmode; run_spinup=false)
-    H₀, H, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup)
+function build_UDE_context(gdir, tspan, testmode; run_spinup=false, velocities=true)
+    H₀, H, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup;
+                                                                                    velocities=velocities)
     simulation_years = collect(tspan[1]:tspan[2])
     A = Ref{Float64}(2e-17)
     nx, ny = nxy
@@ -124,7 +131,8 @@ end
 
 # UDE  context using Glathida for H
 function build_UDE_context_inv(gdir, gdir_ref, tspan; run_spinup=false)
-    H₀, H₁, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup)
+    H₀, H₁, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup; 
+                                                                                velocities=velocities)
     rgi_id = gdir.rgi_id
     # Get evolved tickness and surface
     H = gdir_ref["H"]

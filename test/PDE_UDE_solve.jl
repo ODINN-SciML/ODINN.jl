@@ -32,7 +32,8 @@ function pde_solve_test(atol; MB=false, fast=true)
 
     # Run the forward PDE simulation
     mb_model = ODINN.TI_model_1(DDF=6.0/1000.0, acc_factor=1.2/1000.0) # in m.w.e.
-    PDE_preds = @time generate_ref_dataset(gdirs, tspan, solver=ODINN.RDPK3Sp35(), mb_model)
+    PDE_preds = @time generate_ref_dataset(gdirs, tspan, solver=ODINN.RDPK3Sp35(), mb_model;
+                                            velocities=false)
 
     ## /!\ Saves current run as reference values
     # if MB
@@ -45,7 +46,7 @@ function pde_solve_test(atol; MB=false, fast=true)
     θ = zeros(10) # dummy data for the NN
     UA_f = zeros(10)
     UDE_settings, train_settings = ODINN.get_default_training_settings!(gdirs)
-    context_batches = ODINN.get_UDE_context(gdirs, tspan; testmode=true)
+    context_batches = ODINN.get_UDE_context(gdirs, tspan; testmode=true, velocities=false)
     H_V_preds = @time predict_iceflow(θ, UA_f, gdirs, context_batches, UDE_settings, mb_model) # Array{(H_pred, V̄x_pred, V̄y_pred, rgi_id)}
 
     let PDE_refs=PDE_refs, H_V_preds=H_V_preds
