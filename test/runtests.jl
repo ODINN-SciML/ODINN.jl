@@ -14,7 +14,7 @@ using JLD2
 using Plots
 using Infiltrator
 
-ODINN.enable_multiprocessing(1) # Force one single worker
+ODINN.enable_multiprocessing(2) # Use the 2 workers available in GitHub Actions machine
 
 include("PDE_UDE_solve.jl")
 
