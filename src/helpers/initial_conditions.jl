@@ -47,7 +47,7 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false; velocities=true
         @assert found == true "Spin up glacier simulation not found for $(gdir.rgi_id)."
 
     end
-    # try
+    try
         # We filter glacier borders in high elevations to avoid overflow problems
         dist_border = Float64.(glacier_gd.dis_from_border.data)
         S::Matrix{Float64} = Float64.(glacier_gd.topo.data) # surface elevation
@@ -72,14 +72,14 @@ function get_initial_geometry(gdir, run_spinup, smoothing=false; velocities=true
         glacier_gd.close() # Release any resources linked to this object
 
         return H₀, H, S, B, V, (nx,ny), (Δx,Δy), S_coords, dist_border, slope
-    # catch error
-    #     @show error  
-    #     missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
-    #     push!(missing_glaciers, gdir.rgi_id)
-    #     jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
-    #     glacier_gd.close() # Release any resources linked to this object
-    #     @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
-    # end
+    catch error
+        @show error  
+        missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
+        push!(missing_glaciers, gdir.rgi_id)
+        jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
+        glacier_gd.close() # Release any resources linked to this object
+        @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
+    end
 end
 
 function build_PDE_context(gdir, A_noise, tspan; run_spinup=false, velocities=true)
