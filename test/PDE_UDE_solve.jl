@@ -1,6 +1,6 @@
 
 
-function pde_solve_test(atol; MB=false)
+function pde_solve_test(atol; MB=false, fast=true)
     println("PDE solving with MB = $MB")
     working_dir = joinpath(homedir(), "Python/ODINN_tests")
     oggm_config(working_dir)
@@ -10,10 +10,15 @@ function pde_solve_test(atol; MB=false)
     # @eval ODINN pde_A_values = []
     # @eval ODINN ude_A_values = []
 
-    ## Retrieving gdirs and climate for the following glaciers  
-    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
-    "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
-    "RGI60-07.00274", "RGI60-07.01323",  "RGI60-01.17316"]
+    ## Retrieving gdirs and climate for the following glaciers
+    ## Fast version includes less glacier to reduce the amount of downloaded files and computation time on GitHub CI  
+    if fast
+        rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170"]
+    else
+        rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
+        "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
+        "RGI60-07.00274", "RGI60-07.01323",  "RGI60-01.17316"]
+    end
 
     # Load reference values for the simulation
     if MB
@@ -29,12 +34,12 @@ function pde_solve_test(atol; MB=false)
     mb_model = ODINN.TI_model_1(DDF=6.0/1000.0, acc_factor=1.2/1000.0) # in m.w.e.
     PDE_preds = @time generate_ref_dataset(gdirs, tspan, solver=ODINN.RDPK3Sp35(), mb_model)
 
-    ## Saves current run as reference values
-    if MB
-        jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"); PDE_preds)
-    else
-        jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_noMB.jld2"); PDE_preds)
-    end
+    ## /!\ Saves current run as reference values
+    # if MB
+    #     jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"); PDE_preds)
+    # else
+    #     jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_noMB.jld2"); PDE_preds)
+    # end
     
     # Run one epoch of the UDE training
     θ = zeros(10) # dummy data for the NN
