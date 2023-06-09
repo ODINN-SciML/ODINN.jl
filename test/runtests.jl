@@ -1,6 +1,11 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
+using PyCall
+certifi = pyimport("certifi")
+ENV["SSL_CERT_FILE"] = certifi.where()
+println("Current SSL certificate: ", ENV["SSL_CERT_FILE"])
+
 using Revise
 using ODINN
 using Test

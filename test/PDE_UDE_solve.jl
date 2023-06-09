@@ -82,7 +82,7 @@ function pde_solve_test(atol; MB=false)
         @test all(isapprox.(UDE_pred[1], test_ref["H"], atol=atol))
         @test all(isapprox.(UDE_pred[2], test_ref["Vx"], atol=vtol)) 
         @test all(isapprox.(UDE_pred[3], test_ref["Vy"], atol=vtol))
-        end
+        end # let
     end
     end
 end
