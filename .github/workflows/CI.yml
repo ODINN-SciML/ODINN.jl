@@ -60,6 +60,7 @@ jobs:
       - uses: julia-actions/cache@v1
         with:
           cache-registries: "true"
+          cache-compiled: "true"
       - uses: julia-actions/julia-buildpkg@v1
         env:
           PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
