@@ -1,7 +1,8 @@
 # ODINN
 
-[![Build Status](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/JordiBolibar/ODINN.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JordiBolibar/ODINN.jl)
+[![Build Status](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/ODINN-SciML/ODINN.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/JordiBolibar/ODINN.jl/branch/main/graph/badge.svg)](https://app.codecov.io/gh/ODINN-SciML/ODINN.jl)
+[![CompatHelper](https://github.com/JordiBolibar/ODINN.jl/actions/workflows/CompatHelper.yml/badge.svg)](https://github.com/ODINN-SciML/ODINN.jl/actions/workflows/CompatHelper.yml)
 
 <img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo_final.png" width="250">
 
