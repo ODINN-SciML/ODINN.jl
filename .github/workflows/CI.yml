@@ -1,6 +1,12 @@
 name: Run Tests
 on:
-  pull_request:
+   pull_request:
+    branches:
+      - main
+   push:
+    branches:
+      - main
+    tags: '*'
 concurrency:
   # Skip intermediate builds: always.
   # Cancel intermediate builds: only if it is a pull request build.
