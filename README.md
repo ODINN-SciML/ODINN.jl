@@ -40,7 +40,7 @@ The path to this conda environment needs to be specified in the `ENV["PYTHON"]` 
 ```julia
 julia # start Julia session
 
-julia> global ENV["PYTHON"] = read(`which python`, String)[1:end-1] # trim backspace
+julia> ENV["PYTHON"] = read(`which python`, String)[1:end-1] # trim backspace
 julia> import Pkg; Pkg.build("PyCall")
 julia> exit()
 
