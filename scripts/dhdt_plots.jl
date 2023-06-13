@@ -8,15 +8,17 @@ import ODINN: fillZeros
 function make_plots()
 
     # plot_type = "only_H" # plot final H
-    # plot_type = "MB_diff" # differences between runs with different MB models
-    plot_type = "H_diff" # H - H₀
+    plot_type = "MB_diff" # differences between runs with different MB models
+    # plot_type = "H_diff" # H - H₀
     tspan = (2010.0, 2015.0) # period in years for simulation
 
     root_dir = dirname(Base.current_project())
 
     # Load forward simulations with different surface MB
     grefs = load(joinpath(root_dir, "data/gdir_refs_$tspan.jld2"))["gdir_refs"]
-    grefs_MBu1 = load(joinpath(root_dir, "data/gdir_refs_updatedMB1.jld2"))["gdir_refs"]
+    grefs_MBu1 = load(joinpath(root_dir, "data/gdir_refs_$(tspan)_MB1.jld2"))["gdir_refs"]
+    grefs_MBu2 = load(joinpath(root_dir, "data/gdir_refs_$(tspan)_MB2.jld2"))["gdir_refs"]
+    grefs_MBu3 = load(joinpath(root_dir, "data/gdir_refs_$(tspan)_MB3.jld2"))["gdir_refs"]
 
     n=4
     m=3
@@ -33,8 +35,7 @@ function make_plots()
         H = reverse(grefs[i]["H"]', dims=2)
         H₀ = reverse(grefs[i]["H₀"]', dims=2)
         H_MBu1 = reverse(grefs_MBu1[i]["H"]', dims=2)
-        # H = reverse(grefs[i]["H"])
-        # H_MBu1 = reverse(grefs_MBu1[i]["H"])
+        H_MBu2 = reverse(grefs_MBu3[i]["H"]', dims=2)
         if plot_type == "only_H"
             H_plot = H
             label = "Predicted H (m)"
@@ -42,7 +43,7 @@ function make_plots()
             H_plot = H .- H₀
             label = "H - H₀ (m)"
         elseif plot_type == "MB_diff"
-            H_plot = H .- H_MBu1
+            H_plot = H_MBu1 .- H_MBu2
             label="Surface mass balance difference (m)"
         end
         push!(MBdiffs, H_plot)
@@ -65,35 +66,6 @@ function make_plots()
     end
 
     end # let
-
-    # hms = []
-    # for (gref, gref_MBu1) in zip(grefs, grefs_MBu1)
-    #     H = reverse(gref["H"], dims=1)
-    #     H_MBu1 = reverse(gref_MBu1["H"], dims=1)
-    #     # H = gref["H"]
-    #     # H_MBu1 = gref_MBu1["H"]
-    #     push!(hms, heatmap(H .- H_MBu1, 
-    #                         clims=(0.0,5.0),
-    #                         ylimits=(0, size(H)[1]),
-    #                         xlimits=(0, size(H)[2]),
-    #                         colorbar = false)
-    #         )
-    # end
-
-    # h2 = scatter([0,0], [0,1], clims=(0.0,5.0),
-    #                  xlims=(1,1.1), xshowaxis=false, yshowaxis=false, label="", colorbar_title="cbar", grid=false)
-
-
-    # l = @layout [grid(6,5) a{0.01w}]
-
-    # # Create the combined plot with the subplots and shared colormap
-    # p_dhdt = plot(hms..., h2,
-    #               size=(1800, 1200),
-    #               layout=l,
-    #               link=:all,
-    #               aspect_ratio=:equal)
-
-    # savefig(p_dhdt, joinpath(root_dir, "plots/MB/dhdt_MB_1"))
 
 end
 

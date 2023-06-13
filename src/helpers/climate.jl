@@ -160,7 +160,7 @@ function trim_period(period, climate)
     return period
 end
 
-function partial_year(period::Type{<:Period}, float::AbstractFloat)
+function partial_year(period::Type{<:Period}, float)
     _year, Δ = divrem(float, 1)
     year_start = Date(_year)
     year = period((year_start + Year(1)) - year_start)
@@ -172,7 +172,7 @@ partial_year(float::AbstractFloat) = partial_year(Day, float)
 
 function get_longterm_temps(gdir::PyObject, tspan)
     climate = xr.open_dataset(joinpath(gdir.dir, "raw_climate_$tspan.nc")) # load only once at the beginning
-    dem = xr.open_rasterio(gdir.get_filepath("dem"))
+    dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
     apply_t_grad!(climate, dem)
     longterm_temps = climate.groupby("time.year").mean().temp.data
     return longterm_temps

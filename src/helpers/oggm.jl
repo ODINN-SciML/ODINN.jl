@@ -24,8 +24,10 @@ function oggm_config(working_dir=joinpath(homedir(), "Python/OGGM_data"); oggm_p
 
     # Multiprocessing 
     multiprocessing = $oggm_processes > 1 ? true : false
-    PARAMS["mp_processes"] = $oggm_processes
     PARAMS["use_multiprocessing"] = multiprocessing # Let's use multiprocessing for OGGM
+    if multiprocessing
+        PARAMS["mp_processes"] = $oggm_processes
+    end
 
     end # @eval ODINN
     end # @everywhere

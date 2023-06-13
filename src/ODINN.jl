@@ -12,7 +12,7 @@ using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL
 import OptimizationOptimisers.Adam
 using IterTools: ncycle
-using Zygote: @ignore 
+using ChainRules: @ignore_derivatives
 using Base: @kwdef
 using Flux
 using Tullio
