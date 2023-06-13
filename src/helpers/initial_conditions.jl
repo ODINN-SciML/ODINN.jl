@@ -137,7 +137,7 @@ function build_UDE_context_inv(gdir, gdir_ref, tspan; run_spinup=false)
     # Get evolved tickness and surface
     H = gdir_ref["H"]
 
-    @ignore begin
+    @ignore_derivatives begin
         glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
         H₁ = glacier_gd.consensus_ice_thickness.data
         fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions

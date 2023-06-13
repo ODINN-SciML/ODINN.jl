@@ -14,7 +14,7 @@ using Test
 # using HDF5  
 # using JLD2
 # using OrdinaryDiffEq, DiffEqFlux
-# using Zygote: @ignore
+# using Zygote: @ignore_derivatives
 # using Flux
 # using Tullio, RecursiveArrayTools
 # using Infiltrator

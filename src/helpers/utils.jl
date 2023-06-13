@@ -230,7 +230,7 @@ function get_NN(θ_trained)
         Dense(10,3, x->softplus.(x)),
         Dense(3,1, sigmoid_A)
     )
-    Flux.f64(UA)
+    UA = Flux.f64(UA)
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
     if !isempty(θ_trained)

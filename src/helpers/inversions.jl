@@ -145,7 +145,7 @@ function loss_iceflow_inversion(θ, UD, gdirs_climate, gdir_refs, context_batche
     # l_V = (l_Vx + l_Vy)/2
 
     # Plot V diffs to understand training
-    @ignore begin
+    @ignore_derivatives begin
         plot_V_diffs(gdirs_climate, gdir_refs, V_preds)
     end
 

@@ -24,7 +24,7 @@ ENV["GKSwstype"]="nul"
 
 function run_toy_model()
 
-    processes = 1
+    processes = 18
 
     # Enable multiprocessing
     ODINN.enable_multiprocessing(processes)
@@ -35,9 +35,9 @@ function run_toy_model()
     ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
     ODINN.set_use_spinup(false) # Use the updated spinup
     # Reference simulations
-    ODINN.set_create_ref_dataset(true) # Generate reference data for UDE training
+    ODINN.set_create_ref_dataset(false) # Generate reference data for UDE training
     # UDE training
-    ODINN.set_train(false)    # Train UDE
+    ODINN.set_train(true)    # Train UDE
     ODINN.set_retrain(false) # Re-use previous NN weights to continue training
     # Optimization method for differentiating the model
     ODINN.set_optimization_method("AD+AD")
@@ -69,7 +69,7 @@ function run_toy_model()
     if ODINN.create_ref_dataset[]
         println("Generating reference dataset for training...")
         # Compute reference dataset in parallel
-        mb_model = ODINN.TI_model_1(DDF=8.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
+        mb_model = ODINN.TI_model_1(DDF=4.0/1000.0, acc_factor=2.0/1000.0) # in m.w.e.
         gdir_refs = @time "PDEs" generate_ref_dataset(gdirs, tspan, solver=RDPK3Sp35(), mb_model)
 
         println("Saving reference data")
@@ -89,7 +89,7 @@ function run_toy_model()
     if ODINN.train[]
         # Train iceflow UDE in parallel
         n_ADAM = 20
-        n_BFGS = 100
+        n_BFGS = 50
         batch_size = length(gdir_refs)
         # batch_size = 9
         UDE_settings = Dict("reltol"=>1e-7,
@@ -103,7 +103,7 @@ function run_toy_model()
             # optimizer = BFGS(initial_stepnorm=0.0001)
             optimizer = Adam(0.001)
             train_settings = (optimizer, n_ADAM, batch_size) # optimizer, epochs, batch_size
-            mb_model = ODINN.TI_model_1(DDF=6.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
+            mb_model = ODINN.TI_model_1(DDF=8.0/1000.0, acc_factor=1.0/1000.0) # in m.w.e.
             iceflow_trained, UA_f, loss_history = @time "UDEs" train_iceflow_UDE(gdirs, gdir_refs,
                                                                         tspan, train_settings, θ_trained; 
                                                                         UDE_settings=UDE_settings,

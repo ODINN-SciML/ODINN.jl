@@ -33,7 +33,7 @@ function generate_ref_dataset(gdirs, tspan, mb_model; solver = RDPK3Sp35(), velo
     println("Running forward PDE ice flow model...\n")
     # Run batches in parallel
     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
-    refs = @showprogress pmap((gdir, A_noise) -> batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model; run_spinup=false, velocities=velocities), gdirs, A_noises)
+    refs = @showprogress map((gdir, A_noise) -> batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model; run_spinup=false, velocities=velocities), gdirs, A_noises)
 
     # Gather information per gdir
     gdir_refs = get_gdir_refs(refs, gdirs)
@@ -359,10 +359,10 @@ function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings, mb_model)
         mb_model = TI_model_1(DDF=5.0/1000.0, acc_factor=1.2/1000.0)
     end
     # Initialize climate dataset
-    tstops, step = @ignore define_callback_steps(tspan)
+    tstops, step = @ignore_derivatives define_callback_steps(tspan)
     S_coords = context[13]
     dist_border = context[17]
-    climate = @ignore init_climate(gdir, tspan, step, context[9], S_coords)
+    climate = @ignore_derivatives init_climate(gdir, tspan, step, context[9], S_coords)
     # Callback  
     # Define stop times every one month
     stop_condition(u,t,integrator) = stop_condition_tstops(u,t,integrator, tstops) #closure
@@ -371,7 +371,7 @@ function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings, mb_model)
             S::Matrix{Float64} = context[9]
             S_coords = context[13]
             MB = context[15]
-            @ignore MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t, step)
+            @ignore_derivatives MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t, step)
             apply_MB_mask!(integrator.u, MB, MB_total, dist_border)
         end
         # Recompute A value
@@ -401,12 +401,12 @@ function batch_iceflow_UDE(θ, UA_f, context, gdir, UDE_settings, mb_model)
     testmode = context[16]
     V̄x_pred::Matrix{Float64}, V̄y_pred::Matrix{Float64} = avg_surface_V(context, H_pred, mean(climate.longterm_temps), "UDE", θ, UA_f; 
                                                                         testmode=testmode) # Average velocity with average temperature
-    rgi_id::String = @ignore gdir.rgi_id
+    rgi_id::String = @ignore_derivatives gdir.rgi_id
     H_V_pred = (H_pred, V̄x_pred, V̄y_pred, rgi_id)
 
     # println("Total MB for $rgi_id: ", sum(MB_total))
 
-    @ignore GC.gc() # Run the garbage collector to tame the RAM
+    @ignore_derivatives GC.gc() # Run the garbage collector to tame the RAM
 
     return H_V_pred
 end
@@ -418,11 +418,11 @@ function batch_iceflow_UDE_inplace(θ, UA_f, gdir, tspan; solver = RDPK3Sp35())
     mb_model = TI_model_1(DDF=5.0/1000.0, acc_factor=1.2/1000.0)
 
     # Initialize climate dataset
-    _, step = @ignore define_callback_steps(tspan)
+    _, step = @ignore_derivatives define_callback_steps(tspan)
     S = context[3]
     S_coords = context[32]
     dist_border = context[33]
-    climate = @ignore init_climate(gdir, tspan, step, S, S_coords)
+    climate = @ignore_derivatives init_climate(gdir, tspan, step, S, S_coords)
     # Define stop times every one month
     tstops, step = define_callback_steps(tspan)
     stop_condition(u,t,integrator) = stop_condition_tstops(u,t,integrator, tstops) #closure
@@ -432,7 +432,7 @@ function batch_iceflow_UDE_inplace(θ, UA_f, gdir, tspan; solver = RDPK3Sp35())
             MB = context[25]
             S = context[3]
             S_coords = context[32]
-            MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t, step)
+            @ignore_derivatives MB_timestep!(MB, mb_model, climate, S, S_coords, integrator.t, step)
             apply_MB_mask!(integrator.u, MB, MB_total, context)
         end
         # Recompute A value
