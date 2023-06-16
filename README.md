@@ -61,7 +61,7 @@ processes = 16
 ODINN.enable_multiprocessing(processes)
 ```
 
-From this point, it is possible to use ODINN with multiprocessing and to run Python from Julia running the different commands available in the PyCall documentation. In order to get a better idea on how this works, we recommend checking the toy model example [toy_model.jl](https://github.com/ODINN-SciML/ODINN/blob/main/src/scripts/toy_model.jl). 
+From this point, it is possible to use ODINN with multiprocessing and to run Python from Julia running the different commands available in the PyCall documentation. In order to get a better idea on how this works, we recommend checking the toy model example [toy_model.jl](https://github.com/ODINN-SciML/ODINN.jl/blob/main/scripts/toy_model.jl). 
 
 ### Using OGGM for the initial conditions of the training/simulations 
 
