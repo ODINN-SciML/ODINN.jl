@@ -10,7 +10,6 @@ using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL
-import OptimizationOptimisers.Adam
 using IterTools: ncycle
 using ChainRules: @ignore_derivatives
 using Base: @kwdef
@@ -31,34 +30,9 @@ using SnoopPrecompile, TimerOutputs
 # ############    PARAMETERS     ###############
 # ##############################################
 
-@precompile_setup begin
-
-include("helpers/parameters.jl")
-
-# ##############################################
-# ############  ODINN LIBRARIES  ###############
-# ##############################################
-
 cd(@__DIR__)
 const global root_dir = dirname(Base.current_project())
 const global root_plots = joinpath(root_dir, "plots")
-
-@precompile_all_calls begin
-
-include("helpers/utils.jl")
-#### Plotting functions  ###
-include("helpers/plotting.jl")
-### Iceflow modelling functions  ###
-# (includes utils.jl as well)
-include("helpers/iceflow.jl")
-### Mass balance modelling functions ###
-include("helpers/mass_balance.jl")
-### Ice rheology inversion functions ###
-include("helpers/inversions.jl")
-
-end # @precompile_setup
-end # @precompile_all_calls
-
 
 
 # ##############################################
@@ -86,18 +60,19 @@ const rioxarray = PyNULL()
 const pd = PyNULL()
 
 # ##############################################
-# ######## PYTHON JULIA INTERACTIONS  ##########
+# ############  ODINN LIBRARIES  ###############
 # ##############################################
 
 @precompile_all_calls begin
 
-include(joinpath(ODINN.root_dir, "src/helpers/config.jl"))
-### Climate data processing  ###
-include(joinpath(ODINN.root_dir, "src/helpers/climate.jl"))
-### OGGM configuration settings  ###
-include(joinpath(ODINN.root_dir, "src/helpers/oggm.jl"))
-# Functions to retrieve data for the simulation's initial conditions
-include(joinpath(ODINN.root_dir, "src/helpers/initial_conditions.jl"))
+# All parameters needed for the models
+include("parameters/Parameters.jl")
+# Anything related to managing glacier topographical and climate data
+include("glaciers/Glacier.jl")
+# All structures and functions related to ODINN models
+include("models/Model.jl")
+# Everything related to running simulations in ODINN
+include("simulations/Simulation.jl")
 
 end # @precompile_setup
 end # @precompile_all_calls

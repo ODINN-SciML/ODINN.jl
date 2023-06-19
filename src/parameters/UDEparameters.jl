@@ -1,14 +1,13 @@
 
 @kwdef struct UDEparameters
-    sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm{CS,AD,FDT}
-    optimization_method::String
+    sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
     loss_type::String
     scale_loss::Bool
 end
 
 """
     UDEparameters(;
-        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm{CS,AD,FDT} = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
+        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
         scale_loss::Bool = true
@@ -22,7 +21,7 @@ Keyword arguments
     - `scale_loss`: Determines if the loss function should be scaled or not.
 """
 function UDEparameters(;
-            sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm{CS,AD,FDT} = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
+            sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
             scale_loss::Bool = true

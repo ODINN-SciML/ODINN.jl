@@ -1,9 +1,9 @@
 
-function compute_MB(mb_model::TI_model_1, climate_2D_period::PyObject)
+function compute_MB(mb_model::TImodel1, climate_2D_period::PyObject)
     return (mb_model.acc_factor .* climate_2D_period.snow.data) .- (mb_model.DDF .* climate_2D_period.PDD.data)
 end
 
-function MB_timestep(mb_model::MB_model, climate, S, S_coords, t, step)
+function MB_timestep(mb_model::MBmodel, climate::Climate, S, S_coords, t, step)
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
     climate_step = get_cumulative_climate(climate.sel(time=period))
@@ -13,7 +13,7 @@ function MB_timestep(mb_model::MB_model, climate, S, S_coords, t, step)
     return MB
 end
 
-function MB_timestep!(MB, mb_model::MB_model, climate, S, S_coords, t, step)
+function MB_timestep!(MB, mb_model::MBmodel, climate, S, S_coords, t, step)
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
     get_cumulative_climate!(climate, period)

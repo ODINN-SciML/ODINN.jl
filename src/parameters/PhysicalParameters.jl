@@ -1,15 +1,15 @@
 
-@kwdef struct PhysicalParameters
-    ρ::Float64
-    g::Float64
-    n::Int64
-    ϵ::Float64
-    C::Float64
-    maxA::Float64
-    minA::Float64
-    maxTlaw::Float64
-    minTlaw::Float64
-    noise_A_magnitude::Float64
+@kwdef struct PhysicalParameters{F <: AbstractFloat, I <: Int}
+    ρ::F
+    g::F
+    n::I
+    ϵ::F
+    C::F
+    maxA::F
+    minA::F
+    maxTlaw::F
+    minTlaw::F
+    noise_A_magnitude::F
 end
 
 """
