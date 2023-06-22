@@ -20,10 +20,10 @@ function make_plots()
     grefs_MBu2 = load(joinpath(root_dir, "data/gdir_refs_$(tspan)_MB2.jld2"))["gdir_refs"]
     grefs_MBu3 = load(joinpath(root_dir, "data/gdir_refs_$(tspan)_MB3.jld2"))["gdir_refs"]
 
-    n=4
-    m=3
+    n=2
+    m=6
     hms_MBdiff, MBdiffs = [], []
-    figMB = Figure(resolution = (900, 1100))
+    figMB = Figure(resolution = (1000, 500))
     axsMB = [Axis(figMB[i, j]) for i in 1:n, j in 1:m]
     hidedecorations!.(axsMB)
     tightlimits!.(axsMB)
@@ -55,7 +55,7 @@ function make_plots()
     foreach(hms_MBdiff) do hm
         hm.colorrange = (minMBdiff, maxMBdiff)
     end
-    Colorbar(figMB[2:3,m+1], limits=(minMBdiff/2,maxMBdiff/2), label=label, colormap=:inferno)
+    Colorbar(figMB[1:2,m+1], limits=(minMBdiff/2,maxMBdiff/2), label=label, colormap=:inferno)
     #Label(figH[0, :], text = "Glacier dataset", textsize = 30)
     if plot_type == "only_H"
         Makie.save(joinpath(root_dir, "plots/MB/H_MB_$tspan.pdf"), figMB, pt_per_unit = 1)

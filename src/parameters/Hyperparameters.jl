@@ -1,5 +1,5 @@
 
-@kwdef mutable struct Hyperparameters{F <: AbstractFloat, I <: Int}
+  mutable struct Hyperparameters{F <: AbstractFloat, I <: Int}
     current_epoch::I
     current_minibatch::I
     loss_history::Vector{F}
@@ -28,9 +28,9 @@ Keyword arguments
     - `batch_size`: Batch size for the training
 """
 function Hyperparameters(;
-            current_epoch::Int64 = nothing,
-            current_minibatch::Int64 = nothing,
-            loss_history::Vector{Float64} = Vector{Float64}[],
+            current_epoch::Int64 = 1,
+            current_minibatch::Int64 = 1,
+            loss_history::Vector{Float64} = zeros(Float64, 0),
             optimizer::Optim.FirstOrderOptimizer = BFGS(initial_stepnorm=0.001),
             epochs::Int64 = 50,
             batch_size::Int64 = 15

@@ -8,19 +8,6 @@ end
 
 
 """
-define_callback_steps(tspan; step=1.0/12.0)
-
-Defines the times to stop for the DiscreteCallback given a step
-"""
-function define_callback_steps(tspan; step=1.0/12.0)
-    tmin_int = Int(tspan[1])
-    tmax_int = Int(tspan[2])+1
-    tstops = range(tmin_int+step, tmax_int, step=step) |> collect
-    tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
-    return tstops, step
-end
-
-"""
     stop_condition_tstops(u,t,integrator, tstops)  
 
 Function that iterates through the tstops, with a closure including `tstops`

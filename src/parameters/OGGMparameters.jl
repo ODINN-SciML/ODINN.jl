@@ -1,8 +1,12 @@
 
-@kwdef struct OGGMparameters
+  struct OGGMparameters
+    working_dir::String
     paths::PyDict
     params::PyDict
     multiprocessing::Bool
+    workers::Int64
+    ice_thickness_source::String
+    base_url::String
 end
 
 """
@@ -11,7 +15,8 @@ end
         paths::PyDict = nothing,
         params::PyDict = nothing,
         multiprocessing::Bool = false,
-        workers::Int64 = 1
+        workers::Int64 = 1,
+        base_url::String = "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/"
         )
 Initializes OGGM and it configures its parameters.
 Keyword arguments
@@ -21,16 +26,22 @@ Keyword arguments
     - `params`: Dictionary for OGGM-related parameters.
     - `multiprocessing`: Determines if multiprocessing is used for OGGM.
     - `workers`: How many workers are to be used for OGGM multiprocessing.
+    - `ice_thickness_source`: Source for the ice thickness dataset. Either `Millan22` of `Farinotti19`.
+    - `base_url`: Base URL to download all OGGM data.
 """
 function OGGMparameters(;
             working_dir::String = joinpath(homedir(), "OGGM/OGGM_data"),
-            paths::PyDict = nothing,
-            params::PyDict = nothing,
+            paths::Union{PyDict, Nothing} = nothing,
+            params::Union{PyDict, Nothing} = nothing,
             multiprocessing::Bool = false,
-            workers::Int64 = 1
+            workers::Int64 = 1,
+            ice_thickness_source::String = "Millan22",
+            base_url::String = "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/"
             )
 
-    cfg.initialize() # initialize OGGM configuration
+    @assert ((ice_thickness_source == "Millan22") || (ice_thickness_source == "Farinotti19")) "Wrong ice thickness source! Should be either `Millan22` or `Farinotti19`."
+    # initialize OGGM configuration
+    cfg.initialize()
     
     if isnothing(paths)
         paths = PyDict(cfg."PATHS")  # OGGM PATHS
@@ -51,8 +62,10 @@ function OGGMparameters(;
     end
 
     # Build the OGGM parameters and configuration
-    OGGM_parameters = OGGMparameters(paths, params,
-                                    multiprocessing)
+    OGGM_parameters = OGGMparameters(working_dir, paths, params,
+                                    multiprocessing, workers, 
+                                    ice_thickness_source,
+                                    base_url)
 
     return OGGM_parameters
 end

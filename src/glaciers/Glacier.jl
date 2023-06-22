@@ -1,10 +1,10 @@
 
 include("Climate.jl")
 
-@kwdef struct Glacier{F <: AbstractFloat} 
+@kwdef mutable struct Glacier{F <: AbstractFloat, I <: Int} 
     rgi_id::String
     gdir::PyObject 
-    climate::Climate
+    climate::Union{Climate, Nothing}
     H₀::Matrix{F}
     S::Matrix{F}
     B::Matrix{F}
@@ -14,14 +14,14 @@ include("Climate.jl")
     S_coords::PyObject
     Δx::F
     Δy::F
-    nx::F
-    ny::F
+    nx::I
+    ny::I
 end
 
 ###############################################
 ################### UTILS #####################
 ###############################################
 
-include("glacier_utils.jl")
 include("climate_utils.jl")
+include("glacier_utils.jl")
 

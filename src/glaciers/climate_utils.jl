@@ -12,23 +12,23 @@ Initializes the `Climate` data structure for a given `Glacier``
 """
 function initialize_glacier_climate!(glacier::Glacier, params::Parameters)
 
-    dummy_period = partial_year(Day, params.tspan[1]):Day(1):partial_year(Day, params.tspan[1] + params.step)
-    raw_climate::PyObject = xr.open_dataset(joinpath(glacier.gdir.dir, "raw_climate_$tspan.nc"))
+    dummy_period = partial_year(Day, params.simulation.tspan[1]):Day(1):partial_year(Day, params.simulation.tspan[1] + params.solver.step)
+    raw_climate::PyObject = xr.open_dataset(joinpath(glacier.gdir.dir, "raw_climate_$(params.simulation.tspan).nc"))
     climate_step = Ref{PyObject}(get_cumulative_climate(raw_climate.sel(time=dummy_period)))
-    climate_2D_step = Ref{PyObject}(downscale_2D_climate(climate_step[], glacier.S, glacier.S_coords))
+    climate_2D_step = Ref{PyObject}(downscale_2D_climate(climate_step[], glacier))
     longterm_temps = get_longterm_temps(glacier.gdir, raw_climate)
     glacier.climate = Climate(raw_climate = raw_climate,
-                            climate_raw_step = raw_climate.sel(time=dummy_period),
+                            climate_raw_step = Ref{PyObject}(raw_climate.sel(time=dummy_period)),
                             #climate_cum_step = raw_climate.sel(time=dummy_period).sum(),
                             climate_step = climate_step,
                             climate_2D_step = climate_2D_step,
                             longterm_temps = longterm_temps,
-                            avg_temps = raw_climate.sel(time=dummy_period).temp.mean(),
-                            avg_gradients = raw_climate.sel(time=dummy_period).gradient.mean())
+                            avg_temps = Ref{PyObject}(raw_climate.sel(time=dummy_period).temp.mean()),
+                            avg_gradients = Ref{PyObject}(raw_climate.sel(time=dummy_period).gradient.mean()))
 end
 
 
-function generate_raw_climate_files(gdir, tspan)
+function generate_raw_climate_files(gdir::PyObject, tspan::Tuple{AbstractFloat, AbstractFloat})
     if !ispath(joinpath(gdir.dir, "raw_climate_$tspan.nc"))
         println("Getting raw climate data for: ", gdir.rgi_id)
         # Get raw climate data for gdir
@@ -43,6 +43,7 @@ function generate_raw_climate_files(gdir, tspan)
         end
         # Save raw gdir climate on disk 
         climate.to_netcdf(joinpath(gdir.dir, "raw_climate_$tspan.nc"))
+        climate.close()
         GC.gc()
     end
 end
@@ -58,7 +59,7 @@ function get_cumulative_climate!(climate, period, gradient_bounds=[-0.009, -0.00
     climate.avg_temps[] = climate.climate_raw_step[].temp.mean() 
 
     climate.avg_gradients[] = climate.climate_raw_step[].gradient.mean() 
-    climate.climate_raw_step[].temp.data = climate.climate_raw_step[].temp.where(climate.climate_raw_step[].temp > 0, 0).data # get PDDs
+    climate.climate_raw_step[].temp.data = climate.climate_raw_step[].temp.where(climate.climate_raw_step[].temp > 0.0, 0.0).data # get PDDs
     climate.climate_raw_step[].gradient.data = utils.clip_array(climate.climate_raw_step[].gradient.data, gradient_bounds[1], gradient_bounds[2]) # Clip gradients within plausible values
     climate.climate_step[] = climate.climate_raw_step[].sum() # get monthly cumulative values
     climate.climate_step[] = climate.climate_step[].assign(Dict("avg_temp"=>climate.avg_temps[])) 
@@ -91,24 +92,25 @@ function get_raw_climate_data(gdir; temp_resolution="daily", climate="W5E5")
     return climate
 end
 
+
+function apply_t_cumul_grad!(climate_2D_step::PyObject, S::Matrix{F}) where {F <: AbstractFloat}
+    # We apply the gradients to the temperature
+    # /!\ AVOID USING `.` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
+    climate_2D_step.temp.data = climate_2D_step.temp.data .+ climate_2D_step.avg_gradient.data .* (S .- climate_2D_step.ref_hgt)
+    climate_2D_step.PDD.data = climate_2D_step.PDD.data .+ climate_2D_step.gradient.data .* (S .- climate_2D_step.ref_hgt)
+    climate_2D_step.PDD.data = ifelse.(climate_2D_step.PDD.data .< 0.0, 0.0, climate_2D_step.PDD.data) # Crop negative PDD values
+
+    # We adjust the rain/snow fractions with the updated temperature
+    climate_2D_step.snow.data = climate_2D_step.snow.where(climate_2D_step.temp < 0.0, 0.0).data
+    climate_2D_step.rain.data = climate_2D_step.rain.where(climate_2D_step.temp > 0.0, 0.0).data
+end
+
 """
     apply_t_grad!(climate, g_dem)
 
 Applies temperature gradients to the glacier 2D climate data based on a DEM.  
 """
-function apply_t_cumul_grad!(climate, S)
-    # We apply the gradients to the temperature
-    # /!\ AVOID USING `.` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
-    climate.temp.data = climate.temp.data .+ climate.avg_gradient.data .* (S .- climate.ref_hgt)
-    climate.PDD.data = climate.PDD.data .+ climate.gradient.data .* (S .- climate.ref_hgt)
-    climate.PDD.data = ifelse.(climate.PDD.data .< 0.0, 0.0, climate.PDD.data) # Crop negative PDD values
-
-    # We adjust the rain/snow fractions with the updated temperature
-    climate.snow.data = climate.snow.where(climate.temp < 0.0, 0.0).data
-    climate.rain.data = climate.rain.where(climate.temp > 0.0, 0.0).data
-end
-
-function apply_t_grad!(climate, dem)
+function apply_t_grad!(climate::PyObject, dem)
     # We apply the gradients to the temperature
     # /!\ AVOID USING `.` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
     climate.temp.data = climate.temp.data .+ climate.gradient.data .* (mean(dem.data) .- climate.ref_hgt)
@@ -120,8 +122,9 @@ end
 Projects climate data to the glacier matrix by simply copying the closest gridpoint to all matrix gridpoints.
 Generates a new xarray Dataset which is returned.   
 """
-function downscale_2D_climate!(climate, S, S_coords)
+function downscale_2D_climate!(glacier::Glacier)
     # Update 2D climate structure
+    climate = glacier.climate
     # /!\ AVOID USING `.` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
     climate.climate_2D_step[].temp.data = climate.climate_step[].avg_temp.data .* ones(size(climate.climate_2D_step[].temp.data))
     climate.climate_2D_step[].PDD.data = climate.climate_step[].temp.data .* ones(size(climate.climate_2D_step[].PDD.data))
@@ -132,38 +135,45 @@ function downscale_2D_climate!(climate, S, S_coords)
     climate.climate_2D_step[].avg_gradient.data = climate.climate_step[].avg_gradient.data
 
     # Apply temperature gradients and compute snow/rain fraction for the selected period
-    apply_t_cumul_grad!(climate.climate_2D_step[], reshape(S, size(S))) # Reproject current S with xarray structure
+    apply_t_cumul_grad!(climate.climate_2D_step[], reshape(glacier.S, size(glacier.S))) # Reproject current S with xarray structure
 end
 
-function downscale_2D_climate(climate, S, S_coords)
+function downscale_2D_climate(climate_step::PyObject, glacier::Glacier)
     # Create dummy 2D arrays to have a base to apply gradients afterwards
-    dummy_grid = ones(size(S))
-    temp_2D = climate.avg_temp.data .* dummy_grid
-    PDD_2D = climate.temp.data .* dummy_grid
-    snow_2D = climate.prcp.data .* dummy_grid
-    rain_2D = climate.prcp.data .* dummy_grid
+    dummy_grid = ones(size(glacier.S))
+    temp_2D::Matrix{AbstractFloat} = climate_step.avg_temp.data .* dummy_grid
+    PDD_2D::Matrix{AbstractFloat} = climate_step.temp.data .* dummy_grid
+    snow_2D::Matrix{AbstractFloat} = climate_step.prcp.data .* dummy_grid
+    rain_2D::Matrix{AbstractFloat} = climate_step.prcp.data .* dummy_grid
 
     # We generate a new dataset with the scaled data
-    climate_2D = xr.Dataset(
+    climate_2D_step::PyObject = xr.Dataset(
         data_vars=Dict([
             ("temp", (["y","x"], temp_2D)),
             ("PDD", (["y","x"], PDD_2D)),
             ("snow", (["y","x"], snow_2D)),
             ("rain", (["y","x"], rain_2D)),
-            ("gradient", climate.gradient.data),
-            ("avg_gradient", climate.avg_gradient.data)
+            ("gradient", climate_step.gradient.data),
+            ("avg_gradient", climate_step.avg_gradient.data)
             ]),
         coords=Dict([
-            ("x", S_coords.x),
-            ("y", S_coords.y)
+            ("x", glacier.S_coords.x),
+            ("y", glacier.S_coords.y)
         ]),
-        attrs=climate.attrs
+        attrs=climate_step.attrs
     )
 
     # Apply temperature gradients and compute snow/rain fraction for the selected period
-    apply_t_cumul_grad!(climate_2D, reshape(S, size(S))) # Reproject current S with xarray structure
-    return climate_2D
+    apply_t_cumul_grad!(climate_2D_step, reshape(glacier.S, size(glacier.S))) # Reproject current S with xarray structure
+    
+    return climate_2D_step
 
+end
+
+function downscale_2D_climate(glacier::Glacier)
+    climate_step::PyObject = glacier.climate.climate_step[]
+    climate_2D_step = downscale_2D_climate(climate_step, glacier)
+    return climate_2D_step
 end
 
 """

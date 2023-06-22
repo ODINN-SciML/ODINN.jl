@@ -65,14 +65,15 @@ const pd = PyNULL()
 
 @precompile_all_calls begin
 
+include(joinpath(ODINN.root_dir, "src/setup/config.jl"))
 # All parameters needed for the models
-include("parameters/Parameters.jl")
+include(joinpath(ODINN.root_dir, "src/parameters/Parameters.jl"))
 # Anything related to managing glacier topographical and climate data
-include("glaciers/Glacier.jl")
+include(joinpath(ODINN.root_dir, "src/glaciers/Glacier.jl"))
 # All structures and functions related to ODINN models
-include("models/Model.jl")
+include(joinpath(ODINN.root_dir, "src/models/Model.jl"))
 # Everything related to running simulations in ODINN
-include("simulations/Simulation.jl")
+include(joinpath(ODINN.root_dir, "src/simulations/Simulation.jl"))
 
 end # @precompile_setup
 end # @precompile_all_calls

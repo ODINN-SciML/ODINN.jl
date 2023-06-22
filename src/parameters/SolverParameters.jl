@@ -1,9 +1,12 @@
 
-@kwdef struct SolverParameters{F <: AbstractFloat}
+  mutable struct SolverParameters{F <: AbstractFloat}
     solver::OrdinaryDiffEq.OrdinaryDiffEqAdaptiveAlgorithm
     reltol::F
-    tspan::Tuple{F, F}
     step::F
+    tstops::Union{Nothing,Vector{F}} 
+    save_everystep::Bool
+    progress::Bool
+    progress_steps::Int
 end
 
 """
@@ -19,13 +22,30 @@ Keyword arguments
 """
 function SolverParameters(;
             solver::OrdinaryDiffEq.OrdinaryDiffEqAdaptiveAlgorithm = RDPK3Sp35(),
-            reltol::Float64 = 1e-7,
-            tspan::Tuple{Float64, Float64} = (2010.0, 2015.0),
-            step::Float64 = 1.0/12.0
-            )
+            reltol::F = 1e-7,
+            step::F = 1.0/12.0,
+            save_everystep = false,
+            tstops::Union{Nothing,Vector{F}} = nothing,
+            progress = true,
+            progress_steps = 10
+            ) where {F <: AbstractFloat}
     # Build the solver parameters based on input values
     solver_parameters = SolverParameters(solver, reltol, 
-                                        tspan, step)
+                                        step, tstops,
+                                        save_everystep, progress, progress_steps)
 
     return solver_parameters
+end
+
+"""
+    define_callback_steps(tspan::Tuple{Float64, Float64}, step::Float64)
+
+Defines the times to stop for the DiscreteCallback given a step
+"""
+function define_callback_steps(tspan::Tuple{Float64, Float64}, step::Float64)
+    tmin_int = Int(tspan[1])
+    tmax_int = Int(tspan[2])+1
+    tstops = range(tmin_int+step, tmax_int, step=step) |> collect
+    tstops = filter(x->( (Int(tspan[1])<x) & (x<=Int(tspan[2])) ), tstops)
+    return tstops
 end

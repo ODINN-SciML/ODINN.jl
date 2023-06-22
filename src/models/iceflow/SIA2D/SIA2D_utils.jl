@@ -5,23 +5,31 @@ SIA!(dH, H, SIA2Dmodel)
 
 Compute an in-place step of the Shallow Ice Approximation PDE in a forward model
 """
-function SIA!(dH, H, SIA2Dmodel)
+function SIA2D!(dH::Matrix{F}, H::Matrix{F}, simulation::SIM, t::F) where {F <: AbstractFloat, SIM <: Simulation}
     # Retrieve parameters
-    A::Float64 = SIA2Dmodel.A
-    B::Matrix{Float64} = SIA2Dmodel.B
-    S::Matrix{Float64} = SIA2Dmodel.S
-    dSdx::Matrix{Float64} = SIA2Dmodel.dSdx
-    dSdy::Matrix{Float64} = SIA2Dmodel.dSdy
-    D::Matrix{Float64} = SIA2Dmodel.D
-    dSdx_edges::Matrix{Float64} = SIA2Dmodel.dSdx_edges
-    dSdy_edges::Matrix{Float64} = SIA2Dmodel.dSdy_edges
-    ∇S::Matrix{Float64} = SIA2Dmodel.∇S
-    Fx::Matrix{Float64} = SIA2Dmodel.Fx
-    Fy::Matrix{Float64} = SIA2Dmodel.Fy
-    Δx::Float64 = SIA2Dmodel.Δx
-    Δy::Float64 = SIA2Dmodel.Δy
-    Γ::Float64 = SIA2Dmodel.Γ
+    SIA2D_model::SIA2Dmodel = simulation.model.iceflow
+    glacier::Glacier = simulation.glaciers[simulation.model.iceflow.glacier_idx[]]
+    int_type = simulation.parameters.simulation.int_type
+    A::F = SIA2D_model.A[]
+    B::Matrix{F} = glacier.B
+    S::Matrix{F} = SIA2D_model.S
+    dSdx::Matrix{F} = SIA2D_model.dSdx
+    dSdy::Matrix{F} = SIA2D_model.dSdy
+    D::Matrix{F} = SIA2D_model.D
+    dSdx_edges::Matrix{F} = SIA2D_model.dSdx_edges
+    dSdy_edges::Matrix{F} = SIA2D_model.dSdy_edges
+    ∇S::Matrix{F} = SIA2D_model.∇S
+    Fx::Matrix{F} = SIA2D_model.Fx
+    Fy::Matrix{F} = SIA2D_model.Fy
+    Δx::F = glacier.Δx
+    Δy::F = glacier.Δy
+    Γ::F = SIA2D_model.Γ[]
+    n::int_type = simulation.parameters.physical.n
+    ρ::F = simulation.parameters.physical.ρ
+    g::F = simulation.parameters.physical.g
 
+    # First, enforce values to be positive
+    H[H.<0.0] .= 0.0
     # Update glacier surface altimetry
     S .= B .+ H
 
@@ -105,20 +113,80 @@ end
 Computes the average ice surface velocity for a given glacier evolution period
 based on the initial and final ice thickness states. 
 """
-function avg_surface_V(SIA2Dmodel, temp, sim, θ=nothing, UA_f=nothing; testmode=false)
+function avg_surface_V!(H₀::Matrix{F}, simulation::SIM) where {F <: AbstractFloat, SIM <: Simulation}
+    # We compute the initial and final surface velocity and average them
+    # TODO: Add more datapoints to better interpolate this
+    ft = simulation.parameters.simulation.float_type
+    iceflow_model = simulation.model.iceflow
+    Vx₀::Matrix{ft}, Vy₀::Matrix{ft} = surface_V!(H₀, simulation)
+    Vx::Matrix{ft}, Vy::Matrix{ft} = surface_V!(iceflow_model.H, simulation)
+    iceflow_model.Vx .= (Vx₀ .+ Vx)./2.0
+    iceflow_model.Vy .= (Vy₀ .+ Vy)./2.0        
+end
+
+"""
+    avg_surface_V(context, H, temp, sim, θ=[], UA_f=[])
+
+Computes the average ice surface velocity for a given glacier evolution period
+based on the initial and final ice thickness states. 
+"""
+function avg_surface_V(ifm::IF, temp::F, sim, θ=nothing, UA_f=nothing; testmode=false) where {F <: AbstractFloat, IF <: IceflowModel}
     # TODO: see how to get this
     # A_noise = parameters.A_noise
     # Δx, Δy, A_noise = retrieve_context(context, sim)
 
     # We compute the initial and final surface velocity and average them
     # TODO: Add more datapoints to better interpolate this
-    Vx₀, Vy₀ = surface_V(SIA2Dmodel, sim, A_noise, θ, UA_f; testmode=testmode)
-    Vx, Vy = surface_V(SIA2Dmodel, temp, sim, A_noise, θ, UA_f; testmode=testmode)
+    Vx₀, Vy₀ = surface_V(ifm, sim, A_noise, θ, UA_f; testmode=testmode)
+    Vx, Vy = surface_V(ifm, temp, sim, A_noise, θ, UA_f; testmode=testmode)
     V̄x = (Vx₀ .+ Vx)./2.0
     V̄y = (Vy₀ .+ Vy)./2.0
 
     return V̄x, V̄y
         
+end
+
+"""
+    surface_V(H, B, Δx, Δy, temp, sim, A_noise, θ=[], UA_f=[])
+
+Computes the ice surface velocity for a given glacier state
+"""
+function surface_V!(H::Matrix{F}, simulation::SIM) where {F <: AbstractFloat, SIM <: Simulation}
+    params::Parameters = simulation.parameters
+    ft = params.simulation.float_type
+    it = params.simulation.int_type
+    iceflow_model = simulation.model.iceflow
+    glacier::Glacier = simulation.glaciers[iceflow_model.glacier_idx[]]
+    B::Matrix{ft} = glacier.B
+    dSdx::Matrix{ft} = iceflow_model.dSdx
+    dSdy::Matrix{ft} = iceflow_model.dSdy
+    ∇S::Matrix{ft} = iceflow_model.∇S
+    Γꜛ::ft = iceflow_model.Γ[]
+    D::Matrix{ft} = iceflow_model.D
+    A::ft = iceflow_model.A[]
+    Δx::ft = glacier.Δx
+    Δy::ft = glacier.Δy
+    n::it = params.physical.n
+    ρ::ft = params.physical.ρ
+    g::ft = params.physical.g
+    
+    # Update glacier surface altimetry
+    S::Matrix{ft} = B .+ H
+
+    # All grid variables computed in a staggered grid
+    # Compute surface gradients on edges
+    diff_x!(dSdx, S, Δx)  
+    diff_y!(dSdy, S, Δy) 
+    ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
+
+    Γꜛ = 2.0 * A * (ρ * g)^n / (n+1) # surface stress (not average)  # 1 / m^3 s 
+    D .= Γꜛ .* avg(H).^(n + 1) .* ∇S
+    
+    # Compute averaged surface velocities
+    Vx = - D .* avg_y(dSdx)
+    Vy = - D .* avg_x(dSdy)
+
+    return Vx, Vy    
 end
 
 """

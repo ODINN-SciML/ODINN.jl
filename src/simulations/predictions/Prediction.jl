@@ -1,28 +1,31 @@
-include("../Simulation.jl")
-include("../../models/Model.jl")
-include("../../glaciers/Glacier.jl")
-include("../../parameters/Parameters.jl")
+
+export Prediction
 
 # Subtype composite type for a prediction simulation
-@kwdef struct Prediction  <: Simulation 
+mutable struct Prediction  <: Simulation 
     model::Model
     glaciers::Vector{Glacier}
     parameters::Parameters
-    results::Results
+    results::Vector{Results}
 end
 
-function Prediction(;
+function Prediction(
     model::Model,
     glaciers::Vector{Glacier},
-    parameters::Parameters,
-    results::Results = Results()
+    parameters::Parameters
         )
 
     # Build the results struct based on input values
-    prediction = Prediction(model = model,
-                            glaciers = glaciers,
-                            parameters = parameters,
-                            results = results)
+    prediction = Prediction(model,
+                            glaciers,
+                            parameters,
+                            Vector{Results}([]))
 
     return prediction
 end
+
+###############################################
+################### UTILS #####################
+###############################################
+
+include("prediction_utils.jl")

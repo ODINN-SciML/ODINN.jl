@@ -1,5 +1,5 @@
 
-include("climate_utils.jl")
+export initialize_glaciers
 
 ###############################################
 ############  FUNCTIONS   #####################
@@ -16,11 +16,13 @@ Keyword arguments
     - `tspan`: Tuple specifying the initial and final year of the simulation
     - `step`: Step in years for the surface mass balance processing
 """
-function initialize_glaciers(rgi_ids::Vector{String}, parameters::Parameters; velocitites=true)
+function initialize_glaciers(rgi_ids::Vector{String}, params::Parameters; velocitites=true)
     # Initialize glacier directories
-    gdirs::Vector{PyObject} = init_gdirs(rgi_ids; velocities=velocitites)
+    gdirs::Vector{PyObject} = init_gdirs(rgi_ids, params; velocities=velocitites)
+     # Generate raw climate data if necessary
+    pmap((gdir) -> generate_raw_climate_files(gdir, params.simulation.tspan), gdirs)
     # Initialize glaciers
-    glaciers::Vector{Glacier} = pmap((gdir) -> initialize_glacier(gdir, parameters; smoothing=false, velocities=true), gdirs)
+    glaciers::Vector{Glacier} = pmap((gdir) -> initialize_glacier(gdir, params; smoothing=false, velocities=true), gdirs)
 
     return glaciers
 end
@@ -40,7 +42,8 @@ Keyword arguments
 """
 function initialize_glacier(gdir::PyObject, parameters; smoothing=false, velocities=true)
     # Initialize glacier initial topography
-    glacier::Glacier = initialize_glacier_topography(gdir; run_spinup=run_sinup, smoothing=smoothing, velocities=velocities)
+    glacier::Glacier = initialize_glacier_topography(gdir, parameters; smoothing=smoothing)
+    
     # Initialize glacier climate
     initialize_glacier_climate!(glacier, parameters)
 
@@ -48,90 +51,75 @@ function initialize_glacier(gdir::PyObject, parameters; smoothing=false, velocit
 end
 
 """
-    initialize_glacier(gdir::PyObject; run_spinup=false, smoothing=false, velocities=true)
+    initialize_glacier(gdir::PyObject; smoothing=false, velocities=true)
 
 Retrieves the initial glacier geometry (bedrock + ice thickness) for a glacier with other necessary data (e.g. grid size and ice surface velocities).
 """
-function initialize_glacier_topography(gdir::PyObject; run_spinup=false, smoothing=false, velocities=true)
+function initialize_glacier_topography(gdir::PyObject, params::Parameters; smoothing=false)
     # Load glacier gridded data
-    glacier_gd = xr.open_dataset(glacier.gdir.get_filepath("gridded_data"))
-    if run_spinup || !use_spinup[]
-        # println("Using $ice_thickness_source for initial state")
-        # Retrieve initial conditions from OGGM
-        # initial ice thickness conditions for forward model
-        if ice_thickness_source == "millan" && velocities
-            H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
-        elseif ice_thickness_source == "farinotti"
-            H₀ = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
-        end
-        fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
-        if smoothing 
-            println("Smoothing is being applied to initial condition.")
-            smooth!(H₀)  # Smooth initial ice thickness to help the solver
-        end
-
-        # Create path for spinup simulation results
-        gdir_path =  dirname(gdir.get_filepath("dem"))
-        if !isdir(gdir_path)
-            mkdir(gdir_path)
-        end
-    else
-        # println("Using spin-up for initial state")
-        # Retrieve initial state from previous spinup simulation
-        gdir_spinup = load(joinpath(ODINN.root_dir, "data/spinup/gdir_refs.jld2"))["gdir_refs"]
-        H₀ = similar(gdir_spinup[1]["H"])
-        found = false
-        for i in 1:length(gdir_spinup)
-            if gdir_spinup[i]["RGI_ID"] == gdir.rgi_id
-                H₀ = gdir_spinup[i]["H"]
-                found = true
-                break
-            end
-        end
-
-        @assert found == true "Spin up glacier simulation not found for $(gdir.rgi_id)."
-
+    F = params.simulation.float_type
+    I = params.simulation.int_type
+    glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
+    # println("Using $ice_thickness_source for initial state")
+    # Retrieve initial conditions from OGGM
+    # initial ice thickness conditions for forward model
+    if params.OGGM.ice_thickness_source == "Millan22" && params.simulation.velocities
+        H₀ = F.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_ice_thickness.data, 0.0))
+    elseif params.OGGM.ice_thickness_source == "Farinotti22"
+        H₀ = F.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.consensus_ice_thickness.data, 0.0))
     end
-    try
+    fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+    if smoothing 
+        println("Smoothing is being applied to initial condition.")
+        smooth!(H₀)  # Smooth initial ice thickness to help the solver
+    end
+
+    # Create path for simulation results
+    gdir_path = dirname(gdir.get_filepath("dem"))
+    if !isdir(gdir_path)
+        mkdir(gdir_path)
+    end
+
+    # try
         # We filter glacier borders in high elevations to avoid overflow problems
-        dist_border::Matrix{Float64} = Float64.(glacier_gd.dis_from_border.data)
-        S::Matrix{Float64} = Float64.(glacier_gd.topo.data) # surface elevation
+        dist_border::Matrix{F} = F.(glacier_gd.dis_from_border.data)
+        S::Matrix{F} = F.(glacier_gd.topo.data) # surface elevation
             # H_mask = (dist_border .< 20.0) .&& (S .> maximum(S)*0.7)
             # H₀[H_mask] .= 0.0
 
-        B::Matrix{Float64} = Float64.(glacier_gd.topo.data) .- H₀ # bedrock
+        B::Matrix{F} = F.(glacier_gd.topo.data) .- H₀ # bedrock
         S_coords::PyObject = rioxarray.open_rasterio(gdir.get_filepath("dem"))
-        if velocities
-            V::Matrix{Float64} = Float64.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
+        if params.simulation.velocities
+            V::Matrix{F} = F.(ifelse.(glacier_gd.glacier_mask.data .== 1, glacier_gd.millan_v.data, 0.0))
             fillNaN!(V)
         else
-            V = zeros(Float64, size(H))
+            V = zeros(F, size(H))
         end
         nx = glacier_gd.y.size # glacier extent
         ny = glacier_gd.x.size # really weird, but this is inversed 
         Δx = abs(gdir.grid.dx)
         Δy = abs(gdir.grid.dy)
-        slope = glacier_gd.slope.data
+        slope = F.(glacier_gd.slope.data)
 
         glacier_gd.close() # Release any resources linked to this object
 
         # We initialize the Glacier with all the initial topographical conditions
-        glacier = Glacier(rgi_id = gdir.rgi_id, gdir = gdir,
-                            climate=nothing, 
-                            H₀ = H₀, S = S, B = B, 
-                            V = V, slope = slope, dist_border = dist_border,
-                            S_coords = S_coords, Δx=Δx, Δy=Δy, nx=nx, ny=ny)
+        glacier = Glacier{F,I}(rgi_id = gdir.rgi_id, gdir = gdir,
+                        climate=nothing, 
+                        H₀ = H₀, S = S, B = B, 
+                        V = V, slope = slope, dist_border = dist_border,
+                        S_coords = S_coords, Δx=Δx, Δy=Δy, nx=nx, ny=ny)
 
         return glacier
 
-    catch error
-        @show error  
-        missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
-        push!(missing_glaciers, gdir.rgi_id)
-        jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
-        glacier_gd.close() # Release any resources linked to this object
-        @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
-    end
+    # catch error
+    #     @show error  
+    #     missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
+    #     push!(missing_glaciers, gdir.rgi_id)
+    #     jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
+    #     glacier_gd.close() # Release any resources linked to this object
+    #     @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
+    # end
 end
 
 """
@@ -139,27 +127,23 @@ end
 
 Initializes Glacier Directories using OGGM. Wrapper function calling `init_gdirs_scratch(rgi_ids)`.
 """
-function init_gdirs(rgi_ids::Vector{String}; velocities=true)
+function init_gdirs(rgi_ids::Vector{String}, params::Parameters; velocities=true)
     # Try to retrieve glacier gdirs if they are available
-    @timeit to "Filtering glaciers" begin
     filter_missing_glaciers!(rgi_ids)
-    end
-    try
-        @timeit to "Init gdirs inside" begin
+    # try
         gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids)
-        end
         filter_missing_glaciers!(gdirs)
         return gdirs
-    catch 
-        @warn "Cannot retrieve gdirs from disk!"
-        println("Generating gdirs from scratch...")
-        global create_ref_dataset = true # we force the creation of the reference dataset
-        # Generate all gdirs if needed
-        gdirs::Vector{PyObject} = init_gdirs_scratch(rgi_ids; velocities = velocities)
-        # Check which gdirs errored in the tasks (useful to filter those gdirs)
-        filter_missing_glaciers!(gdirs)
-        return gdirs
-    end
+    # catch 
+    #     @warn "Cannot retrieve gdirs from disk!"
+    #     println("Generating gdirs from scratch...")
+    #     global create_ref_dataset = true # we force the creation of the reference dataset
+    #     # Generate all gdirs if needed
+    #     gdirs::Vector{PyObject} = init_gdirs_scratch(rgi_ids, params; velocities = velocities)
+    #     # Check which gdirs errored in the tasks (useful to filter those gdirs)
+    #     filter_missing_glaciers!(gdirs)
+    #     return gdirs
+    # end
 end
 
 """
@@ -167,9 +151,9 @@ end
 
 Initializes Glacier Directories from scratch using OGGM.
 """
-function init_gdirs_scratch(rgi_ids; velocities=true)::Vector{PyObject}
+function init_gdirs_scratch(rgi_ids::Vector{String}, params::Parameters; velocities=true)::Vector{PyObject}
     # Check if some of the gdirs is missing files
-    gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url, 
+    gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids, prepro_base_url=params.OGGM.base_url, 
                                                 from_prepro_level=2, prepro_border=10,
                                                 reset=true, force=true)
     if velocities
@@ -207,123 +191,6 @@ function init_gdirs_scratch(rgi_ids; velocities=true)::Vector{PyObject}
     return gdirs
 end
 
-
-
-function build_PDE_context(gdir, A_noise, tspan; run_spinup=false, velocities=true)
-    # Determine initial geometry conditions
-    H₀, H, S, B, V, nxy, Δxy, S_coords::PyObject, dist_border, slope = get_initial_geometry(gdir, run_spinup; 
-                                                                                            velocities=velocities)
-
-    rgi_id = gdir.rgi_id
-    # Initialize all matrices for the solver
-    nx, ny = nxy
-    dSdx, dSdy = zeros(Float64,nx-1,ny),zeros(Float64,nx,ny-1)
-    dSdx_edges, dSdy_edges, ∇S = zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1),zeros(Float64,nx-1,ny-1)
-    D, Fx, Fy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-2),zeros(Float64,nx-2,ny-1)
-    V, Vx, Vy = zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1),zeros(Float64,nx-1,ny-1)
-    MB = zeros(Float64,nx,ny)
-    MB_mask = ones(Bool,nx,ny)
-    A = Ref{Float64}(2e-17)
-    α = Ref{Float64}(0.0)                      # Weertman-type basal sliding (Weertman, 1964, 1972). 1 -> sliding / 0 -> no sliding
-    C = Ref{Float64}(15e-14)    
-    Γ = Ref{Float64}(0.0)
-    maxS, minS = [0.0], [0.0]     
-    simulation_years = collect(Int(tspan[1]):Int(tspan[2]))
-    
-    # Gather simulation parameters
-    current_year = Ref{Float64}(0)
-
-    context = (A, B, S, dSdx, dSdy, D, nothing, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, 
-                            current_year, nxy, Δxy, H₀, tspan, A_noise, nothing, MB, rgi_id, Γ, maxS, minS, simulation_years, simulation_years, S_coords, dist_border, slope, MB_mask)
-    return context, H
-end
-
-function get_UDE_context(gdirs, tspan; testmode=false, velocities=true)
-    context_batches = pmap((gdir) -> build_UDE_context(gdir, tspan, testmode; run_spinup=false, velocities=velocities), gdirs)
-
-    return context_batches
-end
-
-function build_UDE_context(gdir, tspan, testmode; run_spinup=false, velocities=true)
-    H₀, H, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup;
-                                                                                    velocities=velocities)
-    simulation_years = collect(tspan[1]:tspan[2])
-    A = Ref{Float64}(2e-17)
-    nx, ny = nxy
-    MB = zeros(Float64,nx,ny)
-    context = (B, H₀, H, nxy, Δxy, tspan, nothing, gdir.rgi_id, S, V, simulation_years, simulation_years, S_coords, A, MB, testmode, dist_border, slope)
-
-    return context
-end
-
-# UDE  context using Glathida for H
-function build_UDE_context_inv(gdir, gdir_ref, tspan; run_spinup=false)
-    H₀, H₁, S, B, V, nxy, Δxy, S_coords, dist_border, slope = get_initial_geometry(gdir, run_spinup; 
-                                                                                velocities=velocities)
-    rgi_id = gdir.rgi_id
-    # Get evolved tickness and surface
-    H = gdir_ref["H"]
-
-    @ignore_derivatives begin
-        glacier_gd = xr.open_dataset(gdir.get_filepath("gridded_data"))
-        H₁ = glacier_gd.consensus_ice_thickness.data
-        fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
-        # smooth!(H₁)
-        heatmap_diff = Plots.heatmap(H₀ .- H, title="Spin-up vs Reference difference")
-        heatmap_diff2 = Plots.heatmap(H₁ .- H₀, title="Farinotti vs spin-up difference")
-        heatmap_diff3 = Plots.heatmap(H₁ .- H, title="Farinotti vs Reference difference")
-        training_path = joinpath(root_plots,"inversions")
-        Plots.savefig(heatmap_diff, joinpath(training_path, "H_diff_su_ref.pdf"))
-        Plots.savefig(heatmap_diff2, joinpath(training_path, "H_diff_far_spu.pdf"))
-        Plots.savefig(heatmap_diff3, joinpath(training_path, "H_diff_far_ref.pdf"))
-    end
-
-    context = (nxy, Δxy, tspan, rgi_id, S, V, H₀, S_coords, dist_border, slope)
-
-    return context
-end
-
-"""
-    retrieve_context(context::Tuple, sim)
-
-Retrieves context variables for computing the surface velocities of a PDE or UDE.
-"""
-function retrieve_context(context::Tuple, sim)
-    if sim == "PDE" || sim == "UDE_inplace"
-        return retrieve_PDE_context(context)
-    elseif sim == "UDE"
-        return retrieve_UDE_context(context)
-    end
-end
-
-"""
-    retrieve_context(context::Tuple)
-
-Retrieves context variables for computing the surface velocities of the UDE.
-"""
-function retrieve_UDE_context(context::Tuple)
-    # context = (B, H₀, H, Vxy_obs, nxy, Δxy, tspan)
-    B::Matrix{Float64} = context[1]
-    H₀::Matrix{Float64} = context[2]
-    Δx = context[5][1]
-    Δy = context[5][2]
-    return B, H₀, Δx, Δy, nothing
-end
-
-"""
-    retrieve_context(context::ArrayPartition)
-
-Retrieves context variables for computing the surface velocities of the PDE.
-"""
-function retrieve_PDE_context(context::Tuple)
-    # context = ([A], B, S, dSdx, dSdy, D, longterm_temp, dSdx_edges, dSdy_edges, ∇S, Fx, Fy, Vx, Vy, V, C, α, [current_year], nxy, Δxy, H₀, tspan)
-    B::Matrix{Float64} = context[2]
-    H₀::Matrix{Float64} = context[21]
-    Δx = context[20][1]
-    Δy = context[20][2]
-    A_noise = context[23]
-    return B, H₀, Δx, Δy, A_noise
-end
 
 function get_glathida_path_and_IDs()
     # Download all data from Glathida
@@ -471,3 +338,45 @@ function filter_missing_glaciers!(rgi_ids::Vector{String})
     end
     
 end
+
+"""
+fillNaN!(x, fill)
+
+Convert empty matrix grid cells into fill value
+"""
+function fillNaN!(A, fill=zero(eltype(A)))
+    for i in eachindex(A)
+        @inbounds A[i] = ifelse(isnan(A[i]), fill, A[i])
+    end
+end
+
+function fillNaN(A, fill=zero(eltype(A)))
+    return @. ifelse(isnan(A), fill, A)
+end
+
+function fillZeros!(A, fill=NaN)
+    for i in eachindex(A)
+        @inbounds A[i] = ifelse(iszero(A[i]), fill, A[i])
+    end
+end
+
+function fillZeros(A, fill=NaN)
+    return @. ifelse(iszero(A), fill, A)
+end
+
+"""
+    smooth!(A)
+
+Smooth data contained in a matrix with one time step (CFL) of diffusion.
+"""
+@views function smooth!(A)
+    A[2:end-1,2:end-1] .= A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    A[1,:]=A[2,:]; A[end,:]=A[end-1,:]; A[:,1]=A[:,2]; A[:,end]=A[:,end-1]
+end
+
+function smooth(A)
+    A_smooth = A[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(A[:,2:end-1], dims=1), dims=1) .+ diff(diff(A[2:end-1,:], dims=2), dims=2))
+    @tullio A_smooth_pad[i,j] := A_smooth[pad(i-1,1,1),pad(j-1,1,1)] # Fill borders 
+    return A_smooth_pad
+end
+

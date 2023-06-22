@@ -1,3 +1,4 @@
+export Parameters, PhysicalParameters, Hyperparameters, SolverParameters, UDEparameters, OGGMparameters, SimulationParameters
 
 include("PhysicalParameters.jl")
 include("Hyperparameters.jl")
@@ -6,7 +7,7 @@ include("UDEparameters.jl")
 include("OGGMparameters.jl")
 include("SimulationParameters.jl")
 
-@kwdef struct Parameters
+  struct Parameters
     physical::PhysicalParameters
     hyper::Hyperparameters
     solver::SolverParameters
