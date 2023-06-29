@@ -158,7 +158,8 @@ function avg_surface_V!(H₀::Matrix{F}, simulation::SIM) where {F <: AbstractFl
     Vx₀::Matrix{ft}, Vy₀::Matrix{ft} = surface_V!(H₀, simulation)
     Vx::Matrix{ft}, Vy::Matrix{ft} = surface_V!(iceflow_model.H, simulation)
     iceflow_model.Vx .= (Vx₀ .+ Vx)./2.0
-    iceflow_model.Vy .= (Vy₀ .+ Vy)./2.0        
+    iceflow_model.Vy .= (Vy₀ .+ Vy)./2.0
+    iceflow_model.V .= (iceflow_model.Vx.^2 .+ iceflow_model.Vy.^2).^(1/2) 
 end
 
 """

@@ -7,20 +7,20 @@ using ODINN
 using Infiltrator
 using TimerOutputs
 
-tspan=(2014.0, 2018.0)
-nglaciers = 5
+tspan=(2010.0, 2015.0)
+nglaciers = 1
 
 function API_test(tspan)
 
     to = get_timer("ODINN")
     reset_timer!(to)
 
-    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170"]
-    # rgi_ids = ["RGI60-11.01450"]
+    # rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170"]
+    rgi_ids = ["RGI60-11.01450"]
 
     # Get ODINN parameters for the simulation
     parameters = Parameters(simulation=SimulationParameters(tspan=tspan,
-                                                            use_MB=false,
+                                                            use_MB=true,
                                                             use_iceflow=true,
                                                             multiprocessing=true,
                                                             workers=1),

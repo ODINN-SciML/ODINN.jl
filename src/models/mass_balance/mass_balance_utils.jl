@@ -1,6 +1,6 @@
 
-function compute_MB(mb_model::TImodel1, climate_2D_period::PyObject)
-    return ((mb_model.acc_factor .* climate_2D_period.snow.data) .- (mb_model.DDF .* climate_2D_period.PDD.data))
+function compute_MB(mb_model::TImodel1, climate_2D_period::Climate2Dstep)
+    return ((mb_model.acc_factor .* climate_2D_period.snow) .- (mb_model.DDF .* climate_2D_period.PDD))
 end
 
 function MB_timestep(model::Model, glacier::Glacier, params_solver::SolverParameters, t::F) where {F <: AbstractFloat}
@@ -25,7 +25,7 @@ function MB_timestep!(model::Model, glacier::Glacier, params_solver::SolverParam
     downscale_2D_climate!(glacier)
     end
     @timeit get_timer("ODINN") "Compute MB" begin
-    model.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step[])
+    model.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step)
     end
 end
 

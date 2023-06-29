@@ -24,8 +24,8 @@ function make_plots(tspan, nglaciers)
     # grefs_MBu2 = load(joinpath(root_dir, "data/gdir_refs_$(tspan)_MB2.jld2"))["gdir_refs"]
     # grefs_MBu3 = load(joinpath(root_dir, "data/gdir_refs_$(tspan)_MB3.jld2"))["gdir_refs"]
 
-    n=2
-    m=2
+    n=1
+    m=1
     hms_MBdiff, MBdiffs = [], []
     figMB = Figure(resolution = (1000, 500))
     axsMB = [Axis(figMB[i, j]) for i in 1:n, j in 1:m]
@@ -69,7 +69,6 @@ function make_plots(tspan, nglaciers)
             cm=:inferno
         elseif plot_type == "V"
             H_plot = V
-            @show maximum(V)
             label="Ice surface velocities (m/yr)"
             cm=:viridis
             sym=false
@@ -91,7 +90,6 @@ function make_plots(tspan, nglaciers)
         foreach(hms_MBdiff) do hm
             hm.colorrange = (minMBdiff, maxMBdiff)
         end
-        @show (minMBdiff,maxMBdiff)
         Colorbar(figMB[1:2,m+1], limits=(minMBdiff,maxMBdiff), label=label, colormap=cm)
     end
     supertitle = Label(figMB[0, :], "$(Int(tspan[1]))-$(Int(tspan[2]))", fontsize = 20)
