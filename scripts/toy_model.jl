@@ -4,13 +4,15 @@
 # import Pkg; Pkg.build("PyCall")
 # exit()
 
+ENV["JULIA_DEBUG"]="Revise"
+
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 using Revise
 using ODINN
 using Optim, OptimizationOptimJL
-import OptimizationOptimisers.Adam
+import Flux.Optimiser.Adam
 using OrdinaryDiffEq, SciMLSensitivity
 using Plots
 using Infiltrator
