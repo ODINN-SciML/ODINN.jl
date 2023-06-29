@@ -31,8 +31,8 @@ using SnoopPrecompile, TimerOutputs
 # ##############################################
 
 cd(@__DIR__)
-const global root_dir = dirname(Base.current_project())
-const global root_plots = joinpath(root_dir, "plots")
+const global root_dir::String = dirname(Base.current_project())
+const global root_plots::String = joinpath(root_dir, "plots")
 
 
 # ##############################################
@@ -41,23 +41,23 @@ const global root_plots = joinpath(root_dir, "plots")
 
 @precompile_setup begin
 
-const netCDF4 = PyNULL()
-const cfg = PyNULL()
-const utils = PyNULL()
-const workflow = PyNULL()
-const tasks = PyNULL()
-const global_tasks = PyNULL()
-const graphics = PyNULL()
-const bedtopo = PyNULL()
-const millan22 = PyNULL()
-const MBsandbox = PyNULL()
-const salem = PyNULL()
+const netCDF4::PyObject = PyNULL()
+const cfg::PyObject = PyNULL()
+const utils::PyObject = PyNULL()
+const workflow::PyObject = PyNULL()
+const tasks::PyObject = PyNULL()
+const global_tasks::PyObject = PyNULL()
+const graphics::PyObject = PyNULL()
+const bedtopo::PyObject = PyNULL()
+const millan22::PyObject = PyNULL()
+const MBsandbox::PyObject = PyNULL()
+const salem::PyObject = PyNULL()
 
 # Essential Python libraries
-const np = PyNULL()
-const xr = PyNULL()
-const rioxarray = PyNULL()
-const pd = PyNULL()
+const np::PyObject = PyNULL()
+const xr::PyObject = PyNULL()
+const rioxarray::PyObject = PyNULL()
+const pd::PyObject = PyNULL()
 
 # ##############################################
 # ############  ODINN LIBRARIES  ###############

@@ -5,18 +5,31 @@ Pkg.activate(dirname(Base.current_project()))
 using Revise
 using ODINN
 using Infiltrator
+using TimerOutputs
 
-function API_test()
+tspan=(2014.0, 2018.0)
+nglaciers = 5
 
-    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+function API_test(tspan)
+
+    to = get_timer("ODINN")
+    reset_timer!(to)
+
+    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170"]
+    # rgi_ids = ["RGI60-11.01450"]
 
     # Get ODINN parameters for the simulation
-    parameters = Parameters()
+    parameters = Parameters(simulation=SimulationParameters(tspan=tspan,
+                                                            use_MB=false,
+                                                            use_iceflow=true,
+                                                            multiprocessing=true,
+                                                            workers=1),
+                            physical=PhysicalParameters(A=4e-18),
+                            solver=SolverParameters(reltol=1e-7))
     # Create an ODINN model based on a 2D Shallow Ice Approximation, 
     # a TI model with 1 DDF, and a neural network
-    # @infiltrate
     model = Model(iceflow = SIA2Dmodel(parameters),
-                  mass_balance = TImodel1(parameters),
+                  mass_balance = TImodel1(parameters; DDF=8.0/1000.0, acc_factor=1.0/1000.0),
                   machine_learning = NN(parameters))
 
 
@@ -27,7 +40,13 @@ function API_test()
     prediction = Prediction(model, glaciers, parameters)
 
     # We run the simulation
-    @time run!(prediction)
+    @timeit get_timer("ODINN") "Run prediction" run!(prediction) 
+    @show to
+
+    display(ODINN.Makie.heatmap(prediction.results[1].S))
 end
 
-API_test()
+API_test(tspan)
+
+include("dhdt_plots.jl")
+make_plots(tspan, nglaciers)

@@ -9,8 +9,7 @@ function pde_solve_test(atol; MB=false, fast=true)
                                               workers=2),
                         simulation = SimulationParameters(use_MB=MB,
                                                         velocities=false,
-                                                        tspan=(2010.0, 2015.0)),
-                        mass_balance = TI_model_1(DDF=6.0/1000.0, acc_factor=1.2/1000.0)) # in m.w.e.
+                                                        tspan=(2010.0, 2015.0))) 
 
     ## Retrieving gdirs and climate for the following glaciers
     ## Fast version includes less glacier to reduce the amount of downloaded files and computation time on GitHub CI  
@@ -30,7 +29,7 @@ function pde_solve_test(atol; MB=false, fast=true)
     end
 
     model = Model(iceflow = SIA2Dmodel(parameters),
-                  mass_balance = TImodel1(parameters),
+                  mass_balance = mass_balance = TImodel1(DDF=6.0/1000.0, acc_factor=1.2/1000.0),
                   machine_learning = NN(parameters))
 
     # We retrieve some glaciers for the simulation

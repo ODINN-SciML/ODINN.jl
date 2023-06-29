@@ -4,9 +4,9 @@ export run!
 function run!(simulation::Prediction)
 
     println("Running forward PDE ice flow model...\n")
-    @showprogress pmap((glacier_idx) -> batch_iceflow_PDE(glacier_idx, simulation), 1:length(simulation.glaciers))
+    results_list = @showprogress pmap((glacier_idx) -> batch_iceflow_PDE(glacier_idx, simulation), 1:length(simulation.glaciers))
 
-    save_results_file(simulation)
+    save_results_file!(results_list, simulation)
 
     @everywhere GC.gc() # run garbage collector
 
@@ -31,8 +31,10 @@ function batch_iceflow_PDE(glacier_idx::Int, simulation::Prediction)
     function action!(integrator)
         if params.simulation.use_MB 
             # Compute mass balance
+            @timeit get_timer("ODINN") "Mass balance" begin
             MB_timestep!(model, glacier, params.solver, integrator.t)
             apply_MB_mask!(integrator.u, glacier, model.iceflow)
+            end
         end
         # # Recompute A value
         # A = context[1]
@@ -42,7 +44,10 @@ function batch_iceflow_PDE(glacier_idx::Int, simulation::Prediction)
     cb_MB = DiscreteCallback(stop_condition, action!)
 
     # Run iceflow PDE for this glacier
-    simulate_iceflow_PDE!(simulation, model, params, cb_MB; du = SIA2D!)
+    du = params.simulation.use_iceflow ? SIA2D! : noSIA2D!
+    results = @timeit get_timer("ODINN") "Simulate iceflow PDE" simulate_iceflow_PDE!(simulation, model, params, cb_MB; du = du)
+
+    return results
 end
 
 """
@@ -53,6 +58,7 @@ Make forward simulation of the iceflow PDE determined in `du`.
 function simulate_iceflow_PDE!(simulation::SIM, model::Model, params::Parameters, cb::DiscreteCallback; du = SIA2D!) where {SIM <: Simulation}
     # Define problem to be solved
     iceflow_prob = ODEProblem{true,SciMLBase.FullSpecialize}(du, model.iceflow.H, params.simulation.tspan, tstops=params.solver.tstops, simulation)
+    @timeit get_timer("ODINN") "Solve" begin
     iceflow_sol = solve(iceflow_prob, 
                         params.solver.solver, 
                         callback=cb, 
@@ -61,43 +67,24 @@ function simulate_iceflow_PDE!(simulation::SIM, model::Model, params::Parameters
                         save_everystep=params.solver.save_everystep, 
                         progress=params.solver.progress, 
                         progress_steps=params.solver.progress_steps)
+    end
     # @show iceflow_sol.destats
     # Compute average ice surface velocities for the simulated period
+    @timeit get_timer("ODINN") "Postprocessing" begin
     model.iceflow.H .= iceflow_sol.u[end]
-    model.iceflow.H[model.iceflow.H.<0.0] .= 0.0 # remove remaining negative values
-    avg_surface_V!(iceflow_sol[begin], simulation) # Average velocity with average temperature
-    glacier_idx = simulation.model.iceflow.glacier_idx[]
-    glacier::Glacier = simulation.glaciers[glacier_idx]
+    map!(x -> ifelse(x>0.0,x,0.0), model.iceflow.H, model.iceflow.H)
+    
+    @timeit get_timer("ODINN") "Surface v"  avg_surface_V!(iceflow_sol[begin], simulation) # Average velocity with average temperature
+    glacier_idx = simulation.model.iceflow.glacier_idx
+    glacier::Glacier = simulation.glaciers[glacier_idx[]]
     model.iceflow.S .= glacier.B .+ model.iceflow.H # Surface topography
+    end
 
     # Update simulation results
-    store_results!(simulation, glacier_idx, iceflow_sol)
+    @timeit get_timer("ODINN") "Results" begin
+    results = create_results(simulation, glacier_idx[], iceflow_sol; light=true)
+    end
+
+    return results
 end
-
-
-# """
-# generate_ref_dataset(gdirs_climate, tspan; solver = RDPK3Sp35(), random_MB=nothing)
-
-# Generate reference dataset based on the iceflow PDE
-# """
-# function generate_ref_dataset(gdirs, tspan, mb_model; solver = RDPK3Sp35(), velocities=true)
-#     # Generate climate data if necessary
-#     @timeit to "generate raw climate files" begin
-#     pmap((gdir) -> generate_raw_climate_files(gdir, tspan), gdirs)
-#     end
-#     # Perform reference simulation with forward model 
-#     println("Running forward PDE ice flow model...\n")
-#     # Run batches in parallel
-#     A_noises = randn(rng_seed(), length(gdirs)) .* noise_A_magnitude
-#     refs = @showprogress pmap((gdir, A_noise) -> batch_iceflow_PDE(gdir, A_noise, tspan, solver, mb_model; run_spinup=false, velocities=velocities), gdirs, A_noises)
-
-#     # Gather information per gdir
-#     gdir_refs = get_gdir_refs(refs, gdirs)
-
-#     @everywhere GC.gc() # run garbage collector 
-
-#     return gdir_refs
-# end
-
-
 

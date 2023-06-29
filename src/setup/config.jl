@@ -60,4 +60,5 @@ function enable_multiprocessing(procs::Int)
             end # @eval
         end
     end
+    return nworkers()
 end

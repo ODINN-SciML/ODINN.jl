@@ -1,6 +1,6 @@
 
 function compute_MB(mb_model::TImodel1, climate_2D_period::PyObject)
-    return (mb_model.acc_factor .* climate_2D_period.snow.data) .- (mb_model.DDF .* climate_2D_period.PDD.data)
+    return ((mb_model.acc_factor .* climate_2D_period.snow.data) .- (mb_model.DDF .* climate_2D_period.PDD.data))
 end
 
 function MB_timestep(model::Model, glacier::Glacier, params_solver::SolverParameters, t::F) where {F <: AbstractFloat}
@@ -9,7 +9,7 @@ function MB_timestep(model::Model, glacier::Glacier, params_solver::SolverParame
     climate_step::PyObject = get_cumulative_climate(glacier.climate.sel(time=period))
     # Convert climate dataset to 2D based on the glacier's DEM
     climate_2D_step::PyObject = downscale_2D_climate(climate_step, glacier)
-    MB::Matrix{AbstractFloat} = compute_MB(model.mb_model, climate_2D_step)
+    MB::Matrix{F} = compute_MB(model.mb_model, climate_2D_step)
     return MB
 end
 
@@ -17,10 +17,16 @@ end
 function MB_timestep!(model::Model, glacier::Glacier, params_solver::SolverParameters, t::F) where {F <: AbstractFloat}
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - params_solver.step):Day(1):partial_year(Day, t)
+    @timeit get_timer("ODINN") "Cumulative climate" begin
     get_cumulative_climate!(glacier.climate, period)
+    end
     # Convert climate dataset to 2D based on the glacier's DEM
+    @timeit get_timer("ODINN") "Downscale 2D climate" begin
     downscale_2D_climate!(glacier)
+    end
+    @timeit get_timer("ODINN") "Compute MB" begin
     model.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step[])
+    end
 end
 
 function apply_MB_mask!(H::Matrix{F}, glacier::Glacier, ifm::IceflowModel) where {F <: AbstractFloat}

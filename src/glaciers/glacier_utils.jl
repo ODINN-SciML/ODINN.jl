@@ -6,7 +6,7 @@ export initialize_glaciers
 ###############################################
 
 """
-    initialize_glaciers(rgi_ids::Vector{String}, tspan, step; velocitites=true)
+    initialize_glaciers(rgi_ids::Vector{String}, params::Parameters; velocities=true)
 
 Initialize multiple `Glacier`s based on a list of RGI IDs, a time span for a simulation and step.
     
@@ -14,15 +14,15 @@ Keyword arguments
 =================
     - `rgi_ids`: List of RGI IDs of glaciers
     - `tspan`: Tuple specifying the initial and final year of the simulation
-    - `step`: Step in years for the surface mass balance processing
+    - `params`: `Parameters` object to be passed
 """
-function initialize_glaciers(rgi_ids::Vector{String}, params::Parameters; velocitites=true)
+function initialize_glaciers(rgi_ids::Vector{String}, params::Parameters; velocities=true)
     # Initialize glacier directories
-    gdirs::Vector{PyObject} = init_gdirs(rgi_ids, params; velocities=velocitites)
+    gdirs::Vector{PyObject} = init_gdirs(rgi_ids, params; velocities=velocities)
      # Generate raw climate data if necessary
     pmap((gdir) -> generate_raw_climate_files(gdir, params.simulation.tspan), gdirs)
     # Initialize glaciers
-    glaciers::Vector{Glacier} = pmap((gdir) -> initialize_glacier(gdir, params; smoothing=false, velocities=true), gdirs)
+    glaciers::Vector{Glacier} = pmap((gdir) -> initialize_glacier(gdir, params; smoothing=false, velocities=velocities), gdirs)
 
     return glaciers
 end
@@ -80,7 +80,7 @@ function initialize_glacier_topography(gdir::PyObject, params::Parameters; smoot
         mkdir(gdir_path)
     end
 
-    # try
+    try
         # We filter glacier borders in high elevations to avoid overflow problems
         dist_border::Matrix{F} = F.(glacier_gd.dis_from_border.data)
         S::Matrix{F} = F.(glacier_gd.topo.data) # surface elevation
@@ -112,14 +112,14 @@ function initialize_glacier_topography(gdir::PyObject, params::Parameters; smoot
 
         return glacier
 
-    # catch error
-    #     @show error  
-    #     missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
-    #     push!(missing_glaciers, gdir.rgi_id)
-    #     jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
-    #     glacier_gd.close() # Release any resources linked to this object
-    #     @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
-    # end
+    catch error
+        @show error  
+        missing_glaciers = load(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"))["missing_glaciers"]
+        push!(missing_glaciers, gdir.rgi_id)
+        jldsave(joinpath(ODINN.root_dir, "data/missing_glaciers.jld2"); missing_glaciers)
+        glacier_gd.close() # Release any resources linked to this object
+        @warn "Glacier without data: $(gdir.rgi_id). Updating list of missing glaciers. Please try again."
+    end
 end
 
 """
@@ -130,20 +130,19 @@ Initializes Glacier Directories using OGGM. Wrapper function calling `init_gdirs
 function init_gdirs(rgi_ids::Vector{String}, params::Parameters; velocities=true)
     # Try to retrieve glacier gdirs if they are available
     filter_missing_glaciers!(rgi_ids)
-    # try
+    try
         gdirs::Vector{PyObject} = workflow.init_glacier_directories(rgi_ids)
         filter_missing_glaciers!(gdirs)
         return gdirs
-    # catch 
-    #     @warn "Cannot retrieve gdirs from disk!"
-    #     println("Generating gdirs from scratch...")
-    #     global create_ref_dataset = true # we force the creation of the reference dataset
-    #     # Generate all gdirs if needed
-    #     gdirs::Vector{PyObject} = init_gdirs_scratch(rgi_ids, params; velocities = velocities)
-    #     # Check which gdirs errored in the tasks (useful to filter those gdirs)
-    #     filter_missing_glaciers!(gdirs)
-    #     return gdirs
-    # end
+    catch 
+        @warn "Cannot retrieve gdirs from disk!"
+        println("Generating gdirs from scratch...")
+        # Generate all gdirs if needed
+        gdirs::Vector{PyObject} = init_gdirs_scratch(rgi_ids, params; velocities = velocities)
+        # Check which gdirs errored in the tasks (useful to filter those gdirs)
+        filter_missing_glaciers!(gdirs)
+        return gdirs
+    end
 end
 
 """
@@ -273,7 +272,7 @@ function get_glathida_glacier(gdir, glathida, force)
     return gtd_grid
 end
 
-function filter_missing_glaciers!(gdirs)
+function filter_missing_glaciers!(gdirs::Vector{PyObject})
     task_log::PyObject = global_tasks.compile_task_log(gdirs, 
                                             task_names=["gridded_attributes", "velocity_to_gdir", "thickness_to_gdir"])
                                                         

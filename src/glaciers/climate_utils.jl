@@ -27,8 +27,7 @@ function initialize_glacier_climate!(glacier::Glacier, params::Parameters)
                             avg_gradients = Ref{PyObject}(raw_climate.sel(time=dummy_period).gradient.mean()))
 end
 
-
-function generate_raw_climate_files(gdir::PyObject, tspan::Tuple{AbstractFloat, AbstractFloat})
+function generate_raw_climate_files(gdir::PyObject, tspan::Tuple{F, F}) where {F <: AbstractFloat}
     if !ispath(joinpath(gdir.dir, "raw_climate_$tspan.nc"))
         println("Getting raw climate data for: ", gdir.rgi_id)
         # Get raw climate data for gdir
@@ -112,7 +111,7 @@ Applies temperature gradients to the glacier 2D climate data based on a DEM.
 """
 function apply_t_grad!(climate::PyObject, dem)
     # We apply the gradients to the temperature
-    # /!\ AVOID USING `.` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
+    # /!\ AVOID USING `.=` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
     climate.temp.data = climate.temp.data .+ climate.gradient.data .* (mean(dem.data) .- climate.ref_hgt)
 end
 
@@ -123,9 +122,12 @@ Projects climate data to the glacier matrix by simply copying the closest gridpo
 Generates a new xarray Dataset which is returned.   
 """
 function downscale_2D_climate!(glacier::Glacier)
+    @timeit get_timer("ODINN") "2D step" begin
     # Update 2D climate structure
     climate = glacier.climate
-    # /!\ AVOID USING `.` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
+    # /!\ AVOID USING `.=` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
+    # @infiltrate
+    # map((i,j) -> climate.climate_2D_step[].temp.data[i,j] = 0.0, 1:size(climate.climate_2D_step[].temp.data)[1], 1:size(climate.climate_2D_step[].temp.data)[2])
     climate.climate_2D_step[].temp.data = climate.climate_step[].avg_temp.data .* ones(size(climate.climate_2D_step[].temp.data))
     climate.climate_2D_step[].PDD.data = climate.climate_step[].temp.data .* ones(size(climate.climate_2D_step[].PDD.data))
     climate.climate_2D_step[].snow.data = climate.climate_step[].prcp.data .* ones(size(climate.climate_2D_step[].snow.data))
@@ -133,18 +135,22 @@ function downscale_2D_climate!(glacier::Glacier)
     # Update gradients
     climate.climate_2D_step[].gradient.data = climate.climate_step[].gradient.data
     climate.climate_2D_step[].avg_gradient.data = climate.climate_step[].avg_gradient.data
+    end
 
     # Apply temperature gradients and compute snow/rain fraction for the selected period
+    @timeit get_timer("ODINN") "Apply gradient" begin
     apply_t_cumul_grad!(climate.climate_2D_step[], reshape(glacier.S, size(glacier.S))) # Reproject current S with xarray structure
+    end
 end
 
 function downscale_2D_climate(climate_step::PyObject, glacier::Glacier)
     # Create dummy 2D arrays to have a base to apply gradients afterwards
-    dummy_grid = ones(size(glacier.S))
-    temp_2D::Matrix{AbstractFloat} = climate_step.avg_temp.data .* dummy_grid
-    PDD_2D::Matrix{AbstractFloat} = climate_step.temp.data .* dummy_grid
-    snow_2D::Matrix{AbstractFloat} = climate_step.prcp.data .* dummy_grid
-    rain_2D::Matrix{AbstractFloat} = climate_step.prcp.data .* dummy_grid
+    MFT = typeof(glacier.S)
+    dummy_grid::MFT = ones(size(glacier.S))
+    temp_2D::MFT = climate_step.avg_temp.data .* dummy_grid
+    PDD_2D::MFT = climate_step.temp.data .* dummy_grid
+    snow_2D::MFT = climate_step.prcp.data .* dummy_grid
+    rain_2D::MFT = climate_step.prcp.data .* dummy_grid
 
     # We generate a new dataset with the scaled data
     climate_2D_step::PyObject = xr.Dataset(
@@ -194,14 +200,14 @@ function trim_period(period, climate)
     return period
 end
 
-function partial_year(period::Type{<:Period}, float)
+function partial_year(period::Type{<:Period}, float::F) where {F <: AbstractFloat}
     _year, Δ = divrem(float, 1)
     year_start = Date(_year)
     year = period((year_start + Year(1)) - year_start)
     partial = period(round(Dates.value(year) * Δ))
     year_start + partial
 end
-partial_year(float::AbstractFloat) = partial_year(Day, float)
+partial_year(float::F) where {F <: AbstractFloat} = partial_year(Day, float) 
 
 
 function get_longterm_temps(gdir::PyObject, tspan)

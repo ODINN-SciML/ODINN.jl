@@ -6,59 +6,96 @@ SIA!(dH, H, SIA2Dmodel)
 Compute an in-place step of the Shallow Ice Approximation PDE in a forward model
 """
 function SIA2D!(dH::Matrix{F}, H::Matrix{F}, simulation::SIM, t::F) where {F <: AbstractFloat, SIM <: Simulation}
+    
     # Retrieve parameters
+    @timeit get_timer("ODINN") "Variable assignment" begin
     SIA2D_model::SIA2Dmodel = simulation.model.iceflow
     glacier::Glacier = simulation.glaciers[simulation.model.iceflow.glacier_idx[]]
-    int_type = simulation.parameters.simulation.int_type
-    A::F = SIA2D_model.A[]
+    params::Parameters = simulation.parameters
+        int_type = simulation.parameters.simulation.int_type
+    H̄::Matrix{F} = SIA2D_model.H̄
+    A::Ref{F} = SIA2D_model.A
     B::Matrix{F} = glacier.B
     S::Matrix{F} = SIA2D_model.S
     dSdx::Matrix{F} = SIA2D_model.dSdx
     dSdy::Matrix{F} = SIA2D_model.dSdy
     D::Matrix{F} = SIA2D_model.D
+    Dx::Matrix{F} = SIA2D_model.Dx
+    Dy::Matrix{F} = SIA2D_model.Dy
     dSdx_edges::Matrix{F} = SIA2D_model.dSdx_edges
     dSdy_edges::Matrix{F} = SIA2D_model.dSdy_edges
     ∇S::Matrix{F} = SIA2D_model.∇S
+    ∇Sx::Matrix{F} = SIA2D_model.∇Sx
+    ∇Sy::Matrix{F} = SIA2D_model.∇Sy
     Fx::Matrix{F} = SIA2D_model.Fx
     Fy::Matrix{F} = SIA2D_model.Fy
+    Fxx::Matrix{F} = SIA2D_model.Fxx
+    Fyy::Matrix{F} = SIA2D_model.Fyy
     Δx::F = glacier.Δx
     Δy::F = glacier.Δy
-    Γ::F = SIA2D_model.Γ[]
+    Γ::Ref{F} = SIA2D_model.Γ
     n::int_type = simulation.parameters.physical.n
     ρ::F = simulation.parameters.physical.ρ
     g::F = simulation.parameters.physical.g
+    end
 
+    @timeit get_timer("ODINN") "H to zero" begin
     # First, enforce values to be positive
-    H[H.<0.0] .= 0.0
+    map!(x -> ifelse(x>0.0,x,0.0), H, H)
     # Update glacier surface altimetry
     S .= B .+ H
+    end
 
     # All grid variables computed in a staggered grid
     # Compute surface gradients on edges
+    @timeit get_timer("ODINN") "Surface gradients" begin
     diff_x!(dSdx, S, Δx)  
     diff_y!(dSdy, S, Δy) 
-    ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
+    avg_y!(∇Sx, dSdx)
+    avg_x!(∇Sy, dSdy)
+    ∇S .= (∇Sx.^2 .+ ∇Sy.^2).^((n - 1)/2) 
+    end
 
-    Γ = 2.0 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
-    D .= Γ .* avg(H).^(n + 2) .* ∇S
+    @timeit get_timer("ODINN") "Diffusivity" begin
+    # @infiltrate
+    avg!(H̄, H)
+    Γ[] = 2.0 * A[] * (ρ * g)^n / (n+2) # 1 / m^3 s 
+    D .= Γ[] .* H̄.^(n + 2) .* ∇S
+    end
 
     # Compute flux components
+    @timeit get_timer("ODINN") "Gradients edges" begin
     @views diff_x!(dSdx_edges, S[:,2:end - 1], Δx)
     @views diff_y!(dSdy_edges, S[2:end - 1,:], Δy)
+    end
     # Cap surface elevaton differences with the upstream ice thickness to 
     # imporse boundary condition of the SIA equation
-    η₀ = 1.0
-    dSdx_edges .= min.(dSdx_edges,  η₀ * H[1:end-1, 2:end-1]./Δx,  η₀ * H[2:end, 2:end-1]./Δx)
-    dSdy_edges .= min.(dSdy_edges,  η₀ * H[2:end-1, 1:end-1]./Δy,  η₀ * H[2:end-1, 2:end]./Δy) 
-    dSdx_edges .= max.(dSdx_edges, -η₀ * H[1:end-1, 2:end-1]./Δx, -η₀ * H[2:end, 2:end-1]./Δx)
-    dSdy_edges .= max.(dSdy_edges, -η₀ * H[2:end-1, 1:end-1]./Δy, -η₀ * H[2:end-1, 2:end]./Δy)
+    @timeit get_timer("ODINN") "Capping flux" begin
+    η₀ = params.physical.η₀
+    dSdx_edges .= @views @. min(dSdx_edges,  η₀ * H[1:end-1, 2:end-1]/Δx,  η₀ * H[2:end, 2:end-1]/Δx)
+    dSdy_edges .= @views @. min(dSdy_edges,  η₀ * H[2:end-1, 1:end-1]/Δy,  η₀ * H[2:end-1, 2:end]/Δy) 
+    dSdx_edges .= @views @. max(dSdx_edges, -η₀ * H[1:end-1, 2:end-1]/Δx, -η₀ * H[2:end, 2:end-1]/Δx)
+    dSdy_edges .= @views @. max(dSdy_edges, -η₀ * H[2:end-1, 1:end-1]/Δy, -η₀ * H[2:end-1, 2:end]/Δy)
+    end
 
-    Fx .= .-avg_y(D) .* dSdx_edges
-    Fy .= .-avg_x(D) .* dSdy_edges 
+    @timeit get_timer("ODINN") "Flux" begin
+    avg_y!(Dx, D)
+    avg_x!(Dy, D)
+    Fx .= .-Dx .* dSdx_edges
+    Fy .= .-Dy .* dSdy_edges 
+    end
 
     #  Flux divergence
-    inn(dH) .= .-(diff_x(Fx) ./ Δx .+ diff_y(Fy) ./ Δy) 
+    @timeit get_timer("ODINN") "dH" begin
+    diff_x!(Fxx, Fx, Δx)
+    diff_y!(Fyy, Fy, Δy)
+    inn(dH) .= .-(Fxx .+ Fyy) 
+    end
+end
 
+# Dummy function to bypass ice flow
+function noSIA2D!(dH::Matrix{F}, H::Matrix{F}, simulation::SIM, t::F) where {F <: AbstractFloat, SIM <: Simulation}
+   
 end
 
 """
@@ -66,7 +103,7 @@ end
 
 Compute a step of the Shallow Ice Approximation UDE in a forward model. Allocates memory.
 """
-function SIA(H, SIA2Dmodel)
+function SIA2D(H, SIA2Dmodel)
     # Retrieve parameters
     B = SIA2Dmodel.B
     Δx = SIA2Dmodel.Δx
@@ -158,12 +195,17 @@ function surface_V!(H::Matrix{F}, simulation::SIM) where {F <: AbstractFloat, SI
     iceflow_model = simulation.model.iceflow
     glacier::Glacier = simulation.glaciers[iceflow_model.glacier_idx[]]
     B::Matrix{ft} = glacier.B
+    H̄::Matrix{F} = iceflow_model.H̄
     dSdx::Matrix{ft} = iceflow_model.dSdx
     dSdy::Matrix{ft} = iceflow_model.dSdy
     ∇S::Matrix{ft} = iceflow_model.∇S
-    Γꜛ::ft = iceflow_model.Γ[]
+    ∇Sx::Matrix{ft} = iceflow_model.∇Sx
+    ∇Sy::Matrix{ft} = iceflow_model.∇Sy
+    Γꜛ::Ref{ft} = iceflow_model.Γ
     D::Matrix{ft} = iceflow_model.D
-    A::ft = iceflow_model.A[]
+    Dx::Matrix{ft} = iceflow_model.Dx
+    Dy::Matrix{ft} = iceflow_model.Dy
+    A::Ref{ft} = iceflow_model.A
     Δx::ft = glacier.Δx
     Δy::ft = glacier.Δy
     n::it = params.physical.n
@@ -177,14 +219,17 @@ function surface_V!(H::Matrix{F}, simulation::SIM) where {F <: AbstractFloat, SI
     # Compute surface gradients on edges
     diff_x!(dSdx, S, Δx)  
     diff_y!(dSdy, S, Δy) 
-    ∇S .= (avg_y(dSdx).^2 .+ avg_x(dSdy).^2).^((n - 1)/2) 
+    avg_y!(∇Sx, dSdx)
+    avg_x!(∇Sy, dSdy)
+    ∇S .= (∇Sx.^2 .+ ∇Sy.^2).^((n - 1)/2) 
 
-    Γꜛ = 2.0 * A * (ρ * g)^n / (n+1) # surface stress (not average)  # 1 / m^3 s 
-    D .= Γꜛ .* avg(H).^(n + 1) .* ∇S
+    avg!(H̄, H)
+    Γꜛ[] = 2.0 * A[] * (ρ * g)^n / (n+1) # surface stress (not average)  # 1 / m^3 s 
+    D .= Γꜛ[] .* H̄.^(n + 1) .* ∇S
     
     # Compute averaged surface velocities
-    Vx = - D .* avg_y(dSdx)
-    Vy = - D .* avg_x(dSdy)
+    Vx = .-D .* ∇Sx
+    Vy = .-D .* ∇Sy 
 
     return Vx, Vy    
 end

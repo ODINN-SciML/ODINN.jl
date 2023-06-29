@@ -22,7 +22,7 @@ Keyword arguments
 """
 function SolverParameters(;
             solver::OrdinaryDiffEq.OrdinaryDiffEqAdaptiveAlgorithm = RDPK3Sp35(),
-            reltol::F = 1e-7,
+            reltol::F = 1e-12,
             step::F = 1.0/12.0,
             save_everystep = false,
             tstops::Union{Nothing,Vector{F}} = nothing,
