@@ -24,7 +24,7 @@ function API_test(tspan)
                                                             use_iceflow=true,
                                                             multiprocessing=true,
                                                             workers=1),
-                            physical=PhysicalParameters(A=4e-18),
+                            physical=PhysicalParameters(A=2e-17),
                             solver=SolverParameters(reltol=1e-7))
     # Create an ODINN model based on a 2D Shallow Ice Approximation, 
     # a TI model with 1 DDF, and a neural network
