@@ -1,4 +1,4 @@
-export generate_random_MB
+export generate_random_MB, compute_MB, MB_timestep, apply_MB_mask!
 
 ###############################################
 ############  DATA STRUCTURES #################

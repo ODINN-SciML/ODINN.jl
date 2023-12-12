@@ -1,10 +1,14 @@
 
-  struct UDEparameters
+  mutable struct UDEparameters <: AbstractParameters
     sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
     optimization_method::String
     loss_type::String
     scale_loss::Bool
 end
+
+Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.optimization_method == b.optimization_method && a.loss_type == b.loss_type && 
+                                      a.scale_loss == b.scale_loss 
+
 
 """
     UDEparameters(;
@@ -36,4 +40,38 @@ function UDEparameters(;
                                     loss_type, scale_loss)
 
     return UDE_parameters
+end
+
+"""
+Parameters(;
+        physical::PhysicalParameters = PhysicalParameters(),
+        simulation::SimulationParameters = SimulationParameters(),
+        OGGM::OGGMparameters = OGGMparameters(),
+        solver::SolverParameters = SolverParameters(),
+        hyper::Hyperparameters = Hyperparameters(),
+        UDE::UDEparameters = UDEparameters()
+        )
+Initialize ODINN parameters
+
+Keyword arguments
+=================
+    
+"""
+function Parameters(;
+            physical::PhysicalParameters = PhysicalParameters(),
+            simulation::SimulationParameters = SimulationParameters(),
+            OGGM::OGGMparameters = OGGMparameters(),
+            solver::SolverParameters = SolverParameters(),
+            hyper::Hyperparameters = Hyperparameters(),
+            UDE::UDEparameters = UDEparameters()
+            ) 
+
+    # Build the parameters based on all the subtypes of parameters
+    parameters = Sleipnir.Parameters(physical, simulation, OGGM,
+                                     hyper, solver, UDE)
+
+    enable_multiprocessing(parameters.simulation.workers)
+
+
+    return parameters
 end

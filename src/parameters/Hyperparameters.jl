@@ -1,5 +1,5 @@
 
-  mutable struct Hyperparameters{F <: AbstractFloat, I <: Int}
+  mutable struct Hyperparameters{F <: AbstractFloat, I <: Int} <: AbstractParameters
     current_epoch::I
     current_minibatch::I
     loss_history::Vector{F}
@@ -42,3 +42,7 @@ function Hyperparameters(;
 
     return hyperparameters
 end
+
+Base.:(==)(a::Hyperparameters, b::Hyperparameters) = a.current_epoch == b.current_epoch && a.current_minibatch == b.current_minibatch && a.loss_history == b.loss_history && 
+                                      a.optimizer == b.optimizer && a.epochs == b.epochs && a.batch_size == b.batch_size 
+

@@ -1,8 +1,31 @@
 
 export NN
 
+include("ML_utils.jl")
+
 # Abstract type as a parent type for Machine Learning models
-abstract type MLmodel end
+abstract type MLmodel <: AbstractModel end
+
+"""
+function Model(;
+    iceflow::Union{IFM, Nothing},
+    mass_balance::Union{MBM, Nothing}
+    machine_learning::Union{MLM, Nothing},
+    ) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
+    
+Initialize Model at ODINN level (iceflow + mass balance + machine learning).
+
+"""
+function Model(;
+    iceflow::Union{IFM, Nothing},
+    mass_balance::Union{MBM, Nothing},
+    machine_learning::Union{MLM, Nothing},
+    ) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
+
+    model = Sleipnir.Model(iceflow, mass_balance, machine_learning)
+
+    return model
+end
 
 struct NN{F <: AbstractFloat} <: MLmodel 
     architecture::Flux.Chain
@@ -10,17 +33,18 @@ struct NN{F <: AbstractFloat} <: MLmodel
 end
 
 """
-    NN(;
+    NN(params::Parameters;
         architecture::Union{Flux.Chain, Nothing} = nothing,
         θ::Union{Vector{AbstractFloat}, Nothing} = nothing)
-        Temperature-index model with a single degree-day factor.
+        
+        Feed-forward neural network.
 
 Keyword arguments
 =================
     - `architecture`: `Flux.Chain` neural network architecture
     - `θ`: Neural network parameters
 """
-function NN(params::Parameters;
+function NN(params::Sleipnir.Parameters;
             architecture::Union{Flux.Chain, Nothing} = nothing,
             θ::Union{Vector{F}, Nothing} = nothing) where {F <: AbstractFloat}
 

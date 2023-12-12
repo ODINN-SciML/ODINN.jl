@@ -5,6 +5,12 @@ module ODINN
 # ###########       PACKAGES     ##############
 # ##############################################
 
+# ODINN subpackages
+using Reexport
+# @reexport using Sleipnir
+# @reexport using Muninn
+@reexport using Huginn
+
 using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
 using OrdinaryDiffEq
@@ -18,13 +24,13 @@ using Tullio
 using Infiltrator
 using Plots, PlotThemes
 Plots.theme(:wong2) # sets overall theme for Plots
-using CairoMakie, GeoMakie
+using CairoMakie
 import Pkg
 using Distributed
 using ProgressMeter
 using PyCall
 using Downloads
-using SnoopPrecompile, TimerOutputs
+using TimerOutputs
 
 # ##############################################
 # ############    PARAMETERS     ###############
@@ -39,43 +45,37 @@ const global root_plots::String = joinpath(root_dir, "plots")
 # ############  PYTHON LIBRARIES  ##############
 # ##############################################
 
-@precompile_setup begin
-
-const netCDF4::PyObject = PyNULL()
-const cfg::PyObject = PyNULL()
-const utils::PyObject = PyNULL()
-const workflow::PyObject = PyNULL()
-const tasks::PyObject = PyNULL()
-const global_tasks::PyObject = PyNULL()
-const graphics::PyObject = PyNULL()
-const bedtopo::PyObject = PyNULL()
-const millan22::PyObject = PyNULL()
-const MBsandbox::PyObject = PyNULL()
-const salem::PyObject = PyNULL()
+# We either retrieve the reexported Python libraries from Sleipnir or we start from scratch
+const netCDF4::PyObject = isdefined(Sleipnir, :netCDF4) ? Sleipnir.netCDF4 : PyNULL()
+const cfg::PyObject = isdefined(Sleipnir, :cfg) ? Sleipnir.cfg : PyNULL()
+const utils::PyObject = isdefined(Sleipnir, :utils) ? Sleipnir.utils : PyNULL()
+const workflow::PyObject = isdefined(Sleipnir, :workflow) ? Sleipnir.workflow : PyNULL()
+const tasks::PyObject = isdefined(Sleipnir, :tasks) ? Sleipnir.tasks : PyNULL()
+const global_tasks::PyObject = isdefined(Sleipnir, :global_tasks) ? Sleipnir.global_tasks : PyNULL()
+const graphics::PyObject = isdefined(Sleipnir, :graphics) ? Sleipnir.graphics : PyNULL()
+const bedtopo::PyObject = isdefined(Sleipnir, :bedtopo) ? Sleipnir.bedtopo : PyNULL()
+const millan22::PyObject = isdefined(Sleipnir, :millan22) ? Sleipnir.millan22 : PyNULL()
+const MBsandbox::PyObject = isdefined(Sleipnir, :MBsandbox) ? Sleipnir.MBsandbox : PyNULL()
+const salem::PyObject = isdefined(Sleipnir, :salem) ? Sleipnir.salem : PyNULL()
 
 # Essential Python libraries
-const np::PyObject = PyNULL()
-const xr::PyObject = PyNULL()
-const rioxarray::PyObject = PyNULL()
-const pd::PyObject = PyNULL()
+const xr::PyObject = isdefined(Sleipnir, :xr) ? Sleipnir.xr : PyNULL()
+const rioxarray::PyObject = isdefined(Sleipnir, :rioxarray) ? Sleipnir.rioxarray : PyNULL()
+const pd::PyObject = isdefined(Sleipnir, :pd) ? Sleipnir.pd : PyNULL()
 
 # ##############################################
 # ############  ODINN LIBRARIES  ###############
 # ##############################################
 
-@precompile_all_calls begin
-
 include(joinpath(ODINN.root_dir, "src/setup/config.jl"))
 # All parameters needed for the models
-include(joinpath(ODINN.root_dir, "src/parameters/Parameters.jl"))
-# Anything related to managing glacier topographical and climate data
-include(joinpath(ODINN.root_dir, "src/glaciers/Glacier.jl"))
-# All structures and functions related to ODINN models
-include(joinpath(ODINN.root_dir, "src/models/Model.jl"))
-# Everything related to running simulations in ODINN
-include(joinpath(ODINN.root_dir, "src/simulations/Simulation.jl"))
+include(joinpath(ODINN.root_dir, "src/parameters/Hyperparameters.jl"))
+include(joinpath(ODINN.root_dir, "src/parameters/UDEparameters.jl"))
+# ML models
+include(joinpath(ODINN.root_dir, "src/models/machine_learning/MLmodel.jl"))
+# Simulations
+include(joinpath(ODINN.root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
+include(joinpath(ODINN.root_dir, "src/simulations/inversions/Inversion.jl"))
 
-end # @precompile_setup
-end # @precompile_all_calls
 end # module
 
