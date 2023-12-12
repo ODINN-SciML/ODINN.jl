@@ -1,37 +1,44 @@
 name: oggm_env
+
 channels:
   - conda-forge
+
 dependencies:
+  # Base language runtimes
   - python=3.9
+
+  # Python packages
+  - bottleneck
+  - cartopy
+  - configobj
+  - dask
+  - gdal=3.3
+  - geopandas
+  - ipython
   - jupyter
   - jupyterlab
-  - numpy
-  - scipy
-  - pandas
-  - shapely
   - matplotlib
-  - Pillow
+  - motionless
   - netcdf4
+  - numpy
+  - numpydoc
+  - pandas
+  - Pillow
+  - pip
+  - pyproj
+  - pytables
+  - pytest
+  - rasterio  
+  - rioxarray
+  - salem
+  - seaborn
+  - shapely
   - scikit-image
   - scikit-learn
-  - configobj
+  - scipy
   - xarray
-  - pytest
-  - dask
-  - bottleneck
-  - gdal=3.3
-  - pyproj
-  - cartopy
-  - geopandas
-  - rasterio
-  - rioxarray
-  - pytables
-  - salem
-  - motionless
-  - ipython
-  - numpydoc
-  - seaborn
-  - pip
+  
+  # Packages installed through pip
   - pip:
     - joblib
     - progressbar2
