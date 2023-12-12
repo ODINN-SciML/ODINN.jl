@@ -1,11 +1,9 @@
 name: Run Tests
 on:
    pull_request:
-    branches:
-      - main
+    branches: []
    push:
-    branches:
-      - main
+    branches: []
     tags: '*'
 concurrency:
   # Skip intermediate builds: always.
@@ -49,7 +47,7 @@ jobs:
             which python
             conda env export
         shell: bash -el {0}
-      - name: Update certifi
+      - name: Update certifi 🔒🔑
         run: | 
             pip install --upgrade certifi
         shell: bash -el {0}
@@ -63,6 +61,9 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      - name: Check Julia SSL certifications 🔎🔐
+        run: julia -e 'using NetworkOptions; println(NetworkOptions.bundled_ca_roots()); println(NetworkOptions.ca_roots())'
+        shell: bash -el {0}
       - uses: julia-actions/cache@v1
         with:
           cache-registries: "true"
