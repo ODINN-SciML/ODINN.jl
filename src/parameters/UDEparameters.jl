@@ -70,7 +70,9 @@ function Parameters(;
     parameters = Sleipnir.Parameters(physical, simulation, OGGM,
                                      hyper, solver, UDE)
 
-    enable_multiprocessing(parameters.simulation.workers)
+    if parameters.simulation.multiprocessing
+        enable_multiprocessing(parameters)
+    end
 
 
     return parameters

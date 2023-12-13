@@ -8,7 +8,10 @@ function pde_solve_test(atol; MB=false, fast=true)
                                               multiprocessing=false),
                         simulation = SimulationParameters(use_MB=MB,
                                                         velocities=false,
-                                                        tspan=(2010.0, 2015.0))) 
+                                                        tspan=(2010.0, 2015.0),
+                                                        workers=3,
+                                                        multiprocessing=true)
+                        ) 
 
     ## Retrieving gdirs and climate for the following glaciers
     ## Fast version includes less glacier to reduce the amount of downloaded files and computation time on GitHub CI  

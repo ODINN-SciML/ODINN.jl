@@ -52,8 +52,9 @@ function clean()
 Initializes ODINN by configuring PyCall based on a given Python path. It also configures multiprocessing
 for a given number of processes. 
 """
-function enable_multiprocessing(procs::Int)
-    if procs > 0
+function enable_multiprocessing(params::Sleipnir.Parameters)
+    procs::Int = params.simulation.workers
+    if procs > 0 && params.simulation.multiprocessing
         if nprocs() < procs
             @eval begin
             addprocs($procs - nprocs(); exeflags="--project")
