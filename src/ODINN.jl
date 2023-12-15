@@ -7,9 +7,7 @@ module ODINN
 
 # ODINN subpackages
 using Reexport
-# @reexport using Sleipnir
-# @reexport using Muninn
-@reexport using Huginn
+@reexport using Huginn # imports Muninn and Sleipnir
 
 using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2

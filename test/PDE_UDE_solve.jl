@@ -2,10 +2,11 @@
 
 function pde_solve_test(atol; MB=false, fast=true)
     println("PDE solving with MB = $MB")
-    working_dir = joinpath(homedir(), "Python/ODINN_tests")
+    working_dir = joinpath(homedir(), "OGGM/ODINN_tests")
     
     params = Parameters(OGGM = OGGMparameters(working_dir=working_dir,
-                                              multiprocessing=false),
+                                              workers=3,
+                                              multiprocessing=true),
                         simulation = SimulationParameters(use_MB=MB,
                                                         velocities=false,
                                                         tspan=(2010.0, 2015.0),

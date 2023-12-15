@@ -4,7 +4,6 @@ authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>"]
 version = "0.2.0"
 
 [deps]
-AbbreviatedStackTraces = "ac637c84-cc71-43bf-9c33-c1b4316be3d4"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ChainRules = "082447d4-558c-5d27-93f4-14fc19e9eca2"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -38,7 +37,6 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 
 [compat]
-AbbreviatedStackTraces = "0.1.7"
 BenchmarkTools = "1.3.2"
 CPUSummary = "0.2"
 ChainRules = "1.50"

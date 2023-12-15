@@ -70,9 +70,12 @@ function Parameters(;
     parameters = Sleipnir.Parameters(physical, simulation, OGGM,
                                      hyper, solver, UDE)
 
-    if parameters.simulation.multiprocessing
+    if simulation.multiprocessing
         enable_multiprocessing(parameters)
     end
+    # Config OGGM *after* setting multirprocessing 
+    # to ensure it is initialized in all workers
+    oggm_config(OGGM.working_dir; oggm_processes=OGGM.workers)
 
 
     return parameters

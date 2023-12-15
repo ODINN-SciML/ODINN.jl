@@ -60,8 +60,7 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
             addprocs($procs - nprocs(); exeflags="--project")
             println("Number of cores: ", nprocs())
             println("Number of workers: ", nworkers())
-            @everywhere using Reexport
-            @everywhere @reexport using ODINN
+            @everywhere using ODINN
             end # @eval
         elseif nprocs() != procs && procs == 1
             @eval begin
