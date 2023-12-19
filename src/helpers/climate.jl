@@ -2,6 +2,11 @@
 ############  FUNCTIONS   #####################
 ###############################################
 
+export get_cumulative_climate!, get_cumulative_climate, get_raw_climate_data, 
+        apply_t_cumul_grad!, apply_t_grad!, downscale_2D_climate!, 
+        downscale_2D_climate, ClimateDataset, trim_period, partial_year, 
+        get_longterm_temps, init_climate
+
 using Dates # to provide correct Julian time slices 
 
 function generate_raw_climate_files(gdir, tspan)
@@ -190,7 +195,6 @@ end
     raw_climate::PyObject # Raw climate dataset for the whole simulation
     # Buffers to avoid memory allocations
     climate_raw_step::Ref{PyObject} # Raw climate trimmed for the current step
-    #climate_cum_step::Ref{PyObject} # Raw cumulative trimmed climate for the current step
     climate_step::Ref{PyObject} # Climate data for the current step
     climate_2D_step::Ref{PyObject} # 2D climate data for the current step to feed to the MB model
     longterm_temps::Vector{Float64} # Longterm temperatures for the ice rheology

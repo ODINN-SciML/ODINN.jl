@@ -1,2 +1,5 @@
-
+data/
 scripts/plots/
+Manifest.toml
+plots/MB/
+plots/training/

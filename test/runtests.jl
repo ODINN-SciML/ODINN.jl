@@ -14,8 +14,6 @@ using JLD2
 using Plots
 using Infiltrator
 
-ODINN.enable_multiprocessing(1) # Force one single worker
-
 include("PDE_UDE_solve.jl")
 
 # Activate to avoid GKS backend Plot issues in the JupyterHub

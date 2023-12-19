@@ -1,11 +1,9 @@
 name: Run Tests
 on:
    pull_request:
-    branches:
-      - main
+    branches: []
    push:
-    branches:
-      - main
+    branches: []
     tags: '*'
 concurrency:
   # Skip intermediate builds: always.
@@ -49,7 +47,7 @@ jobs:
             which python
             conda env export
         shell: bash -el {0}
-      - name: Update certifi
+      - name: Update certifi 🔒🔑
         run: | 
             pip install --upgrade certifi
         shell: bash -el {0}
@@ -63,6 +61,9 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      - name: Check Julia SSL certifications 🔎🔐
+        run: julia -e 'using NetworkOptions; println(NetworkOptions.bundled_ca_roots()); println(NetworkOptions.ca_roots())'
+        shell: bash -el {0}
       - uses: julia-actions/cache@v1
         with:
           cache-registries: "true"
@@ -70,7 +71,12 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
         env:
           PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
+          # The SSL certificate path can be readed from the action "Check Julia SSL certifications"
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
       - uses: julia-actions/julia-runtest@v1
+        env:
+          PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v3
         with:
