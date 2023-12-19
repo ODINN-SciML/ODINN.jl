@@ -11,7 +11,8 @@ function pde_solve_test(atol; MB=false, fast=true)
                                                         velocities=false,
                                                         tspan=(2010.0, 2015.0),
                                                         workers=3,
-                                                        multiprocessing=true)
+                                                        multiprocessing=true,
+                                                        test_mode=true)
                         ) 
 
     ## Retrieving gdirs and climate for the following glaciers
