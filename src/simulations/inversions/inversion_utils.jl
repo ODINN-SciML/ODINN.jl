@@ -9,7 +9,7 @@ function run₀(simulation::Inversion)
 
     enable_multiprocessing(simulation.parameters)
 
-    println("Running forward out-place PDE ice flow inversion model...\n")
+    println("Running out-place PDE ice flow inversion model...\n")
     inversion_params_list = @showprogress pmap((glacier_idx) -> invert_iceflow(glacier_idx, simulation), 1:length(simulation.glaciers))
 
     simulation.inversion = inversion_params_list
@@ -59,15 +59,28 @@ function invert_iceflow(glacier_idx::Int, simulation::Inversion)
                         progress=params.solver.progress, 
                         progress_steps=params.solver.progress_steps)
 
+        H_obs = realsol[1]
+        V_obs = realsol[2]
         
-        sol = iceflow_sol.u[end]        
-        map!(x -> ifelse(x>0.0,x,0.0), sol, sol)
+        H_pred = iceflow_sol.u[end]        
+        map!(x -> ifelse(x>0.0,x,0.0), H_pred, H_pred)
         
+        V_pred = Huginn.avg_surface_V(H_pred, simulation)[3] 
+
         ofv = 0.0
         if any((s.retcode != :Success for s in iceflow_sol))
             ofv = 1e12
         else
-            ofv = mean((sol[realsol .!= 0] .- realsol[realsol .!= 0]) .^ 2)
+            mask_H = H_obs .!= 0
+            mask_V = V_pred .!= 0
+            
+            ofv_H = mean((H_pred[mask_H] .- H_obs[mask_H]) .^ 2)
+            ofv_V = mean((V_obs[mask_V] .- V_pred[mask_V]) .^ 2)
+
+            count_H = sum(mask_H)
+            count_V = sum(mask_V)
+    
+            ofv = (count_H * ofv_H + count_V * ofv_V) / (count_H + count_V)
             
         end
         
@@ -80,7 +93,7 @@ function invert_iceflow(glacier_idx::Int, simulation::Inversion)
     # Optimization
     fn(x, p) = objfun(x, p[1], p[2])
 
-    realsol = glacier.H_glathida
+    realsol = (glacier.H_glathida, glacier.V[1:end-1, 1:end-1])
     
     lower_bound = [0.0085]    
     upper_bound = [8.0] 
@@ -91,7 +104,13 @@ function invert_iceflow(glacier_idx::Int, simulation::Inversion)
 
     optimized_n = 3.0
     optimized_C = 0.0
-
+    
+    count_H = sum(glacier.H_glathida .!= 0)
+    count_V = sum(glacier.V[1:end-1, 1:end-1].!= 0)
+    
+    println("weight H:", count_H/(count_H + count_V))
+    println("weight V:", count_V/(count_H + count_V))
+    
     inversion_params = InversionParams(sol[1], optimized_n, optimized_C)
     
     return inversion_params
