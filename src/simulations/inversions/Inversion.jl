@@ -1,6 +1,7 @@
 export Inversion
 
 mutable struct InversionMetrics{F <: Real}
+    rgi_id::Union{String, Nothing}
     A::F
     n::F
     C::F
@@ -17,8 +18,8 @@ mutable struct InversionMetrics{F <: Real}
     lat::F 
 end
 
-function InversionMetrics(A::F, n::F, C::F, H_pred::Matrix{F}, H_obs::Matrix{F}, H_diff::Matrix{F}, V_pred::Matrix{F}, V_obs::Matrix{F}, V_diff::Matrix{F}, MSE::F, Δx::F, Δy::F, lon::F, lat::F) where {F <: Real}
-    return InversionMetrics{F}(A, n, C, H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, MSE, Δx, Δy, lon, lat)
+function InversionMetrics(rgi_id::Union{String, Nothing}, A::F, n::F, C::F, H_pred::Matrix{F}, H_obs::Matrix{F}, H_diff::Matrix{F}, V_pred::Matrix{F}, V_obs::Matrix{F}, V_diff::Matrix{F}, MSE::F, Δx::F, Δy::F, lon::F, lat::F) where {F <: Real}
+    return InversionMetrics{F}(rgi_id,A, n, C, H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, MSE, Δx, Δy, lon, lat)
 end
 
 
