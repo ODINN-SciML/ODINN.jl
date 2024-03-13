@@ -180,7 +180,6 @@ return inversion_metrics
 end
 
 function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion) 
-    
     ####### Retrieve parameters #######
     model = simulation.model
     params = simulation.parameters
@@ -194,34 +193,18 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
 
     ####### Objective function #######
     function objfun(x, simulation, realsol)
-        simulation.model.iceflow.A[]=x[1]*1e-17  #scaling for optimization
-        simulation.model.iceflow.n[]=x[2]
-        simulation.model.iceflow.C[]=x[3]
-
-        H_obs = realsol[1]
+        simulation.model.iceflow.A[] = exp(x[1]) #scaling for optimization
+        simulation.model.iceflow.n[] = x[2]
+        simulation.model.iceflow.C[] = exp(x[3])
+    
+        H_obs = realsol[1][1:end-1, 1:end-1]
         V_obs = realsol[2]
         
         H_pred = Huginn.H_from_V(V_obs,simulation)
         
-        H_obs = H_obs[1:end-1, 1:end-1]
-        mask_H = H_obs .!= 0
-
+        mask_H = (H_obs .!= 0)
         ofv_H = weighted_mse(H_obs[mask_H], H_pred[mask_H], 2.0)
-        
-        #Vx ,Vy = Huginn.surface_V(H_obs, simulation)
-        #V_pred = (Vx.^2 .+ Vy.^2).^(1/2)
-        #V_obs = V_obs[1:end-1, 1:end-1]
-        #mask_V = V_obs .!= 0
-        #println("MSE H: ",ofv_H)
-
-        #ofv_V = mean((V_obs[mask_V] .- V_pred[mask_V]) .^ 2)
-
-        #println("MSE V: ",ofv_V)
-        #ofv =   0.5*ofv_H + 0.5*ofv_V         
-        
-        #println("A = $x")
-        #println("MSE = $ofv")
-        
+    
         return ofv_H
     end
 
@@ -231,20 +214,18 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     realsol = (glacier.H_glathida, glacier.V) 
     
     # Bounds for parameters
-    initial_conditions = [4.0,3.0,1.0] 
-    lower_bound = [0.0085,1.5,0] 
-    upper_bound = [800.0,4.2,100]
+    initial_conditions = [log(4.0*1e-17) , 3.0, log(4.0*1e-17)] 
+    lower_bound = [log(8.5*1e-20), 1.5, -Inf] 
+    upper_bound = [log(8.0*1e-17), 4.2, Inf]
     
     optfun = OptimizationFunction(fn, Optimization.AutoForwardDiff())
     optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound,ub = upper_bound) 
     sol = solve(optprob, BFGS(), x_tol=1.0e-1, f_tol = 1.0e-1)
-    ####### Setup returning solution #######
-    optimized_A = sol[1] * 1e-17  
-    optimized_n = sol[2]
-    optimized_C = sol[3]
-    simulation.model.iceflow.A[] = optimized_A 
-    simulation.model.iceflow.n[] = optimized_n
-    simulation.model.iceflow.C[] = optimized_C
+    
+    ####### Setup returning solution #######   
+    simulation.model.iceflow.A[] = exp(sol[1])
+    simulation.model.iceflow.n[] = sol[2]
+    simulation.model.iceflow.C[] = exp(sol[3])
     
     # Extract observed H and V from realsol
     H_obs = realsol[1]
@@ -255,21 +236,23 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     
     H_pred = Huginn.H_from_V(V_obs,simulation)
 
+    H_obs = H_obs[1:end-1, 1:end-1] #trim to match predicted values
+    V_obs = V_obs[1:end-1, 1:end-1]
+
+    #H_pred[H_obs .== 0] .= 0
+    
     # Absolute difference between observed and predicted
-    H_diff = abs.(H_pred .- H_obs[1:end-1, 1:end-1])  
-    V_diff = abs.(V_pred .- V_obs[1:end-1, 1:end-1])  
+    H_diff = abs.(H_pred .- H_obs)  
+    V_diff = abs.(V_pred .- V_obs)  
 
-
-    H_diff[H_obs[1:end-1, 1:end-1] .== 0] .= 0 # Set differences to zero where observations are zero
-    V_diff[V_obs[1:end-1, 1:end-1] .== 0] .= 0
-
-    # Compute differences and MSE  #TODO: change into extracted MSE from solution
-    H_obs = H_obs[1:end-1, 1:end-1]
-    mask_H = H_obs .!= 0
-    MSE = weighted_mse(H_obs[mask_H], H_pred[mask_H], 2.0) 
+    H_diff[H_obs .== 0] .= 0 # Set differences to zero where observations are zero
+    V_diff[V_obs .== 0] .= 0
+   
+    MSE = sol.minimum
     
     # Create InversionMetrics instance with all the necessary fields
-    inversion_metrics = InversionMetrics(glacier.rgi_id,optimized_A, optimized_n, optimized_C, 
+    inversion_metrics = InversionMetrics(glacier.rgi_id,
+                                        simulation.model.iceflow.A[], simulation.model.iceflow.n[], simulation.model.iceflow.C[], 
                                         H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, 
                                         MSE, 
                                         simulation.glaciers[glacier_idx].Δx,              
