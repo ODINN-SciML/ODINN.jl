@@ -218,7 +218,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     optfun = OptimizationFunction(fn, Optimization.AutoForwardDiff())
     
    # Split H_obs into regions based on quartiles
-    regions = split_regions(glacier.H_glathida)
+    regions = split_regions(glacier.H_glathida, glacier.dist_border,2,2)
     total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
 
     # Iterate over each region, perform optimization, and combine predictions
@@ -284,21 +284,37 @@ function weighted_mse(H_obs, H_pred, weight_underprediction=2.0)
     return mean(weighted_errors)
 end
 
-function split_regions(H_obs)
-    max_value = maximum(H_obs)
+function split_regions(H_obs, dist_border, n_splits_H_obs, n_splits_dist_border)
+    max_value_H_obs = maximum(H_obs)
     regions = []
-    for i in 1:4
-        region_mask = if i == 4
-            (H_obs .>= (i-1)/4 * max_value)
+
+    for i in 1:n_splits_H_obs
+        # Initial split based on H_obs
+        region_mask_H_obs = if i == n_splits_H_obs
+            (H_obs .>= (i-1)/n_splits_H_obs * max_value_H_obs)
         else
-            (H_obs .>= (i-1)/4 * max_value) .& (H_obs .< i/4 * max_value)
+            (H_obs .>= (i-1)/n_splits_H_obs * max_value_H_obs) .& (H_obs .< i/n_splits_H_obs * max_value_H_obs)
         end
 
-        # Instead of multiplying by region_mask, create a copy of H_obs where only the current region's values are kept
-        region_H_obs = copy(H_obs) # Make a copy to avoid altering the original H_obs
-        region_H_obs[.!region_mask] .= 0 # Set values outside the current region to 0
+        # Find the maximum of dist_border within the current H_obs region
+        max_value_dist_border = maximum(dist_border[region_mask_H_obs])
 
-        push!(regions, region_H_obs)
+        for j in 1:n_splits_dist_border
+            # Further split each H_obs region based on dist_border
+            region_mask_dist_border = if j == n_splits_dist_border
+                (dist_border .>= (j-1)/n_splits_dist_border * max_value_dist_border) .& region_mask_H_obs
+            else
+                (dist_border .>= (j-1)/n_splits_dist_border * max_value_dist_border) .& (dist_border .< j/n_splits_dist_border * max_value_dist_border) .& region_mask_H_obs
+            end
+
+            # Create a copy of H_obs where only the current sub-region's values are kept
+            region_H_obs = zeros(size(H_obs))  # Initialize with zeros
+            region_H_obs[region_mask_dist_border] = H_obs[region_mask_dist_border]
+
+            push!(regions, region_H_obs)
+        end
     end
     return regions
 end
+
+
