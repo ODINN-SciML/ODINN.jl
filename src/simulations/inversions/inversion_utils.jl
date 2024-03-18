@@ -203,7 +203,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         H_pred = Huginn.H_from_V(V_obs,simulation)
         
         mask_H = (H_obs .!= 0)
-        ofv_H = weighted_mse(H_obs[mask_H], H_pred[mask_H], 2.0)
+        ofv_H = weighted_mse(H_obs[mask_H], H_pred[mask_H], 1.0)
     
         return ofv_H
     end
@@ -211,49 +211,56 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     ####### Optimization #######
     fn(x, p) = objfun(x, p[1], p[2])
     
-    realsol = (glacier.H_glathida, glacier.V) 
-    
-    # Bounds for parameters
     initial_conditions = [log(4.0*1e-17) , 3.0, log(4.0*1e-17)] 
     lower_bound = [log(8.5*1e-20), 1.5, -Inf] 
     upper_bound = [log(8.0*1e-17), 4.2, Inf]
     
     optfun = OptimizationFunction(fn, Optimization.AutoForwardDiff())
-    optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound,ub = upper_bound) 
-    sol = solve(optprob, BFGS(), x_tol=1.0e-1, f_tol = 1.0e-1)
     
-    ####### Setup returning solution #######   
-    simulation.model.iceflow.A[] = exp(sol[1])
-    simulation.model.iceflow.n[] = sol[2]
-    simulation.model.iceflow.C[] = exp(sol[3])
-    
-    # Extract observed H and V from realsol
-    H_obs = realsol[1]
-    V_obs = realsol[2]
+   # Split H_obs into regions based on quartiles
+    regions = split_regions(glacier.H_glathida)
+    total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
+
+    # Iterate over each region, perform optimization, and combine predictions
+    for region_H_obs in regions
+        realsol = (region_H_obs, glacier.V)
+        
+        optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound,ub = upper_bound) 
+        sol = solve(optprob, BFGS(), x_tol=1.0e-1, f_tol = 1.0e-1)
+        
+        # Setup returning solution   
+        simulation.model.iceflow.A[] = exp(sol[1])
+        simulation.model.iceflow.n[] = sol[2]
+        simulation.model.iceflow.C[] = exp(sol[3])
+        
+        # Extract observed H and V from realsol
+        H_pred = Huginn.H_from_V(realsol[2],simulation)
+        H_pred[realsol[1][1:end-1, 1:end-1] .== 0] .= 0
+        
+        total_H_pred += H_pred  
+    end
+
+    H_obs, V_obs = glacier.H_glathida, glacier.V
     
     Vx,Vy = Huginn.surface_V(H_obs, simulation)
     V_pred = (Vx.^2 .+ Vy.^2).^(1/2)
-    
-    H_pred = Huginn.H_from_V(V_obs,simulation)
 
     H_obs = H_obs[1:end-1, 1:end-1] #trim to match predicted values
     V_obs = V_obs[1:end-1, 1:end-1]
 
-    #H_pred[H_obs .== 0] .= 0
-    
     # Absolute difference between observed and predicted
-    H_diff = abs.(H_pred .- H_obs)  
+    H_diff = abs.(total_H_pred .- H_obs)  
     V_diff = abs.(V_pred .- V_obs)  
 
     H_diff[H_obs .== 0] .= 0 # Set differences to zero where observations are zero
     V_diff[V_obs .== 0] .= 0
-   
-    MSE = sol.minimum
+
+    MSE = 0.0
     
     # Create InversionMetrics instance with all the necessary fields
     inversion_metrics = InversionMetrics(glacier.rgi_id,
                                         simulation.model.iceflow.A[], simulation.model.iceflow.n[], simulation.model.iceflow.C[], 
-                                        H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, 
+                                        total_H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, 
                                         MSE, 
                                         simulation.glaciers[glacier_idx].Δx,              
                                         simulation.glaciers[glacier_idx].Δy,
@@ -277,3 +284,21 @@ function weighted_mse(H_obs, H_pred, weight_underprediction=2.0)
     return mean(weighted_errors)
 end
 
+function split_regions(H_obs)
+    max_value = maximum(H_obs)
+    regions = []
+    for i in 1:4
+        region_mask = if i == 4
+            (H_obs .>= (i-1)/4 * max_value)
+        else
+            (H_obs .>= (i-1)/4 * max_value) .& (H_obs .< i/4 * max_value)
+        end
+
+        # Instead of multiplying by region_mask, create a copy of H_obs where only the current region's values are kept
+        region_H_obs = copy(H_obs) # Make a copy to avoid altering the original H_obs
+        region_H_obs[.!region_mask] .= 0 # Set values outside the current region to 0
+
+        push!(regions, region_H_obs)
+    end
+    return regions
+end
