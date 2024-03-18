@@ -33,6 +33,7 @@ function run_ss(simulation::Inversion)
 
 end
 
+# === [Begin] Transient Inversion ===  # Frame work is here, however function is not physically correct
 function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion) 
     
     ####### Retrieve parameters #######
@@ -178,96 +179,96 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
 
 return inversion_metrics
 end
+# === [End] Transient Inversion ===
 
-function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion) 
-    ####### Retrieve parameters #######
+# === [Begin] Steady State Inversion ===
+function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
+    # === Retrieve Parameters ===
     model = simulation.model
     params = simulation.parameters
     glacier = simulation.glaciers[glacier_idx]
-    
     glacier_id = isnothing(glacier.gdir) ? "unnamed" : glacier.rgi_id
     println("Processing glacier: ", glacier_id)
-    
-    ####### Glacier Initialization #######
-    Huginn.initialize_iceflow_model(model.iceflow, glacier_idx, glacier, params)
 
-    ####### Objective function #######
+    # === Glacier Initialization ===
+    Huginn.initialize_iceflow_model(model.iceflow, glacier_idx, glacier, params)
+    
+    # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
-        simulation.model.iceflow.A[] = exp(x[1]) #scaling for optimization
+        # Apply parameter transformations for optimization
+        simulation.model.iceflow.A[] = exp(x[1])
         simulation.model.iceflow.n[] = x[2]
         simulation.model.iceflow.C[] = exp(x[3])
-    
+
+        # Extract and predict H values based on V observations
         H_obs = realsol[1][1:end-1, 1:end-1]
         V_obs = realsol[2]
-        
-        H_pred = Huginn.H_from_V(V_obs,simulation)
-        
-        mask_H = (H_obs .!= 0)
+        H_pred = Huginn.H_from_V(V_obs, simulation)
+
+        # Calculate and return the weighted mean squared error
+        mask_H = H_obs .!= 0
         ofv_H = weighted_mse(H_obs[mask_H], H_pred[mask_H], 1.0)
-    
         return ofv_H
     end
 
-    ####### Optimization #######
-    fn(x, p) = objfun(x, p[1], p[2])
-    
-    initial_conditions = [log(4.0*1e-17) , 3.0, log(4.0*1e-17)] 
-    lower_bound = [log(8.5*1e-20), 1.5, -Inf] 
-    upper_bound = [log(8.0*1e-17), 4.2, Inf]
-    
-    optfun = OptimizationFunction(fn, Optimization.AutoForwardDiff())
-    
-   # Split H_obs into regions based on quartiles
-    regions = split_regions(glacier.H_glathida, glacier.dist_border,2,2)
-    total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
+    # === Optimization Setup ===
+    initial_conditions = [log(4.0 * 1e-17), 3.0, log(4.0 * 1e-17)]
+    lower_bound = [log(8.5 * 1e-20), 1.5, -Inf]
+    upper_bound = [log(8.0 * 1e-17), 4.2, Inf]
+    optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), Optimization.AutoForwardDiff())
 
-    # Iterate over each region, perform optimization, and combine predictions
+    # === Region-based Optimization and Prediction ===
+    regions = split_regions(glacier.H_glathida, glacier.dist_border, 2, 2)
+    total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
+    
     for region_H_obs in regions
         realsol = (region_H_obs, glacier.V)
+        optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound, ub = upper_bound)
+        sol = solve(optprob, BFGS(), x_tol = 1.0e-1, f_tol = 1.0e-1)
         
-        optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound,ub = upper_bound) 
-        sol = solve(optprob, BFGS(), x_tol=1.0e-1, f_tol = 1.0e-1)
-        
-        # Setup returning solution   
+        # Apply optimized parameters and predict H values
         simulation.model.iceflow.A[] = exp(sol[1])
         simulation.model.iceflow.n[] = sol[2]
         simulation.model.iceflow.C[] = exp(sol[3])
-        
-        # Extract observed H and V from realsol
-        H_pred = Huginn.H_from_V(realsol[2],simulation)
+        H_pred = Huginn.H_from_V(realsol[2], simulation)
         H_pred[realsol[1][1:end-1, 1:end-1] .== 0] .= 0
-        
-        total_H_pred += H_pred  
+        total_H_pred += H_pred
     end
 
+    # === Post-Optimization Analysis ===
+    # Prepare observed values for comparison
     H_obs, V_obs = glacier.H_glathida, glacier.V
-    
-    Vx,Vy = Huginn.surface_V(H_obs, simulation)
-    V_pred = (Vx.^2 .+ Vy.^2).^(1/2)
-
-    H_obs = H_obs[1:end-1, 1:end-1] #trim to match predicted values
+    Vx, Vy = Huginn.surface_V(H_obs, simulation)
+    V_pred = sqrt.(Vx.^2 + Vy.^2)
+    H_obs = H_obs[1:end-1, 1:end-1]
     V_obs = V_obs[1:end-1, 1:end-1]
 
-    # Absolute difference between observed and predicted
-    H_diff = abs.(total_H_pred .- H_obs)  
-    V_diff = abs.(V_pred .- V_obs)  
-
-    H_diff[H_obs .== 0] .= 0 # Set differences to zero where observations are zero
+    # Compute absolute differences
+    H_diff = abs.(total_H_pred - H_obs)
+    V_diff = abs.(V_pred - V_obs)
+    H_diff[H_obs .== 0] .= 0
     V_diff[V_obs .== 0] .= 0
 
+    # === Results Compilation ===
+    # Initialize mean squared error (MSE) for potential calculation or adjustment
     MSE = 0.0
-    
-    # Create InversionMetrics instance with all the necessary fields
-    inversion_metrics = InversionMetrics(glacier.rgi_id,
-                                        simulation.model.iceflow.A[], simulation.model.iceflow.n[], simulation.model.iceflow.C[], 
-                                        total_H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, 
-                                        MSE, 
-                                        simulation.glaciers[glacier_idx].Δx,              
-                                        simulation.glaciers[glacier_idx].Δy,
-                                        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlon),
-                                        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlat))
 
-return inversion_metrics
+    # Compile inversion metrics
+    inversion_metrics = InversionMetrics(
+        glacier.rgi_id,
+        simulation.model.iceflow.A[],
+        simulation.model.iceflow.n[],
+        simulation.model.iceflow.C[],
+        total_H_pred, H_obs, H_diff,
+        V_pred, V_obs, V_diff,
+        MSE,
+        simulation.glaciers[glacier_idx].Δx,
+        simulation.glaciers[glacier_idx].Δy,
+        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlon),
+        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlat)
+    )
+
+    return inversion_metrics
 end
 
 function weighted_mse(H_obs, H_pred, weight_underprediction=2.0)
@@ -316,5 +317,5 @@ function split_regions(H_obs, dist_border, n_splits_H_obs, n_splits_dist_border)
     end
     return regions
 end
-
+# === [End] Steady State Inversion ===
 
