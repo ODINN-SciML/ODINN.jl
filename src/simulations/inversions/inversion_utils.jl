@@ -192,13 +192,13 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
 
     # === Glacier Initialization ===
     Huginn.initialize_iceflow_model(model.iceflow, glacier_idx, glacier, params)
-    
+    simulation.model.iceflow.A[] = 5.0e-17
     # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
         # Apply parameter transformations for optimization
-        simulation.model.iceflow.A[] = exp(x[1])
-        simulation.model.iceflow.n[] = x[2]
-        simulation.model.iceflow.C[] = exp(x[3])
+        
+        simulation.model.iceflow.n[] = x[1]
+        simulation.model.iceflow.C[] = x[2]
 
         # Extract and predict H values based on V observations
         H_obs = realsol[1][1:end-1, 1:end-1]
@@ -212,14 +212,17 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     end
 
     # === Optimization Setup ===
-    initial_conditions = [log(4.0 * 1e-17), 3.0, log(4.0 * 1e-17)]
-    lower_bound = [log(8.5 * 1e-20), 1.5, -Inf]
-    upper_bound = [log(8.0 * 1e-17), 4.2, Inf]
+    initial_conditions = [3.0, 4.0e-17]
+    lower_bound = [1.5, 0]
+    upper_bound = [4.2, Inf]
     optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), Optimization.AutoForwardDiff())
 
     # === Region-based Optimization and Prediction ===
     regions = split_regions(glacier.H_glathida, glacier.dist_border, 2, 2)
     total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
+    n_values = fill(NaN, size(glacier.H_glathida))
+    C_values = fill(NaN, size(glacier.H_glathida))
+
     
     for region_H_obs in regions
         realsol = (region_H_obs, glacier.V)
@@ -227,12 +230,16 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         sol = solve(optprob, BFGS(), x_tol = 1.0e-1, f_tol = 1.0e-1)
         
         # Apply optimized parameters and predict H values
-        simulation.model.iceflow.A[] = exp(sol[1])
-        simulation.model.iceflow.n[] = sol[2]
-        simulation.model.iceflow.C[] = exp(sol[3])
+        #simulation.model.iceflow.A[] = exp(sol[1])
+        simulation.model.iceflow.n[] = sol[1]
+        simulation.model.iceflow.C[] = sol[2]
         H_pred = Huginn.H_from_V(realsol[2], simulation)
         H_pred[realsol[1][1:end-1, 1:end-1] .== 0] .= 0
         total_H_pred += H_pred
+
+        # Create parameter matrices
+        n_values[realsol[1] .!= 0].= sol[1] 
+        C_values[realsol[1] .!= 0].= sol[2] 
     end
 
     # === Post-Optimization Analysis ===
@@ -257,8 +264,8 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     inversion_metrics = InversionMetrics(
         glacier.rgi_id,
         simulation.model.iceflow.A[],
-        simulation.model.iceflow.n[],
-        simulation.model.iceflow.C[],
+        n_values,
+        C_values,
         total_H_pred, H_obs, H_diff,
         V_pred, V_obs, V_diff,
         MSE,
