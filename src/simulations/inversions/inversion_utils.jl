@@ -211,33 +211,42 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     end
 
     # === Optimization Setup ===
-    initial_conditions = [1.0]
-    lower_bound = [0.0]
-    upper_bound = [Inf]
+    initial_conditions = params.inversion.initial_conditions
+    lower_bound = params.inversion.lower_bound
+    upper_bound = params.inversion.upper_bound
     optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), Optimization.AutoForwardDiff())
 
+    n_regions = params.inversion.regions_split
+
     # === Region-based Optimization and Prediction ===
-    regions = split_regions(glacier.H_glathida, glacier.dist_border, 6, 6)
+    regions = split_regions(glacier.H_glathida, glacier.dist_border, n_regions[1], n_regions[2])
     total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
-    C_values = fill(NaN, size(glacier.H_glathida))
+    C_values = zeros(size(glacier.H_glathida))
+    C_values[glacier.V .!= 0] .= NaN
 
     
     for region_H_obs in regions
         realsol = (region_H_obs, glacier.V)
         optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound, ub = upper_bound)
-        sol = solve(optprob, BFGS(), x_tol = 1.0e-1, f_tol = 1.0e-1)
+        sol = solve(optprob, params.inversion.solver, x_tol = params.inversion.x_tol , f_tol = params.inversion.f_tol)
         
         # Apply optimized parameters and predict H values
         simulation.model.iceflow.C[] = sol[1]
-        
+
         H_pred = Huginn.H_from_V(realsol[2], simulation)
         H_pred[realsol[1][1:end-1, 1:end-1] .== 0] .= 0
         total_H_pred += H_pred
-
+        
         # Create parameter matrices
         C_values[realsol[1] .!= 0].= sol[1] 
     end
 
+    
+    C_values = fill_with_nearest_neighbor(C_values, glacier.V)
+    C_values[glacier.V .== 0] .= NaN
+
+    total_H_pred = H_from_V(glacier.V, C_values,simulation)
+    
     # === Post-Optimization Analysis ===
     # Prepare observed values for comparison
     H_obs, V_obs = glacier.H_glathida, glacier.V
@@ -319,6 +328,73 @@ function split_regions(H_obs, dist_border, n_splits_H_obs, n_splits_dist_border)
         end
     end
     return regions
+end
+
+
+function fill_with_nearest_neighbor(c_matrix, v_matrix)
+    # Flatten matrices and find indices of NaNs in C
+    c_flat = vec(c_matrix)
+    v_flat = vec(v_matrix)
+    nan_indices = findall(isnan.(c_flat))
+
+    # Find indices of non-NaN values for interpolation
+    valid_indices = findall(.!isnan.(c_flat))
+
+    # Determine the minimum and maximum values of C for constraining the interpolation
+    min_c_value = minimum(c_flat[valid_indices])
+    max_c_value = maximum(c_flat[valid_indices])
+
+    # Create an interpolator for the valid indices of C, mapping them to their indices in V
+    interp = interpolate((valid_indices,), v_flat[valid_indices], Gridded(Constant()))
+
+    # Fill in NaNs using nearest neighbor interpolation
+    for nan_idx in nan_indices
+        # Find the nearest valid index for interpolation
+        nearest_idx = argmin(abs.(valid_indices .- nan_idx))
+        # Use the corresponding value from V for the nearest valid C index, constrained by min and max C values
+        interpolated_value = interp[valid_indices[nearest_idx]]
+        c_flat[nan_idx] = clamp(interpolated_value, min_c_value, max_c_value)
+    end
+
+    # Reshape back to the original matrix size
+    return reshape(c_flat, size(c_matrix))
+end
+
+
+function H_from_V(V::Matrix{<:Real}, C::Matrix{<:Real}, simulation::SIM) where {SIM <: Simulation}
+    params::Sleipnir.Parameters = simulation.parameters
+    
+    iceflow_model = simulation.model.iceflow
+    glacier::Sleipnir.Glacier2D = simulation.glaciers[iceflow_model.glacier_idx[]]
+    B = glacier.B
+    Δx = glacier.Δx
+    Δy = glacier.Δy
+    A = iceflow_model.A
+    n = iceflow_model.n
+    ρ = params.physical.ρ
+    g = params.physical.g
+    H₀ = glacier.H₀
+
+    # Update glacier surface altimetry
+    S = glacier.S  
+    V = Huginn.avg(V)
+    
+    # All grid variables computed in a staggered grid
+    # Compute surface gradients on edges
+    dSdx = Huginn.diff_x(S) / Δx
+    dSdy = Huginn.diff_y(S) / Δy
+    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^(1/2)
+    ∇S[V .== 0] .= 0
+    C = C[1:end-1, 1:end-1]
+    C[V .== 0] .= 0
+    
+    Γꜛ = (2.0 * A[] * (ρ * g)^n[]) / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
+    
+    H = ( V .+ C ./ (Γꜛ .*(∇S .^ n[]))) .^ (1 / (n[] + 1)) 
+    
+    replace!(H, NaN=>0.0)
+    replace!(H, Inf=>0.0)
+    return H   
 end
 # === [End] Steady State Inversion ===
 
