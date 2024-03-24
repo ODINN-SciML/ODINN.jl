@@ -4,8 +4,7 @@ on:
     branches:
       - main
    push:
-    branches:
-      - main
+    branches: []
     tags: '*'
 concurrency:
   # Skip intermediate builds: always.
@@ -38,7 +37,7 @@ jobs:
       - name: Create environment with micromamba 🐍🖤
         uses: mamba-org/setup-micromamba@v1
         with: 
-          micromamba-version: '1.3.1-0'
+          micromamba-version: '1.5.6-0'
           environment-file: ./environment.yml
           environment-name: oggm_env                # it is recommendable to add both name and yml file. 
           init-shell: bash
@@ -63,6 +62,9 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      - name: Check Julia SSL certifications 🔎🔐
+        run: julia -e 'using NetworkOptions; println(NetworkOptions.bundled_ca_roots()); println(NetworkOptions.ca_roots())'
+        shell: bash -el {0}
       - uses: julia-actions/cache@v1
         with:
           cache-registries: "true"
@@ -70,32 +72,14 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
         env:
           PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
+          # The SSL certificate path can be readed from the action "Check Julia SSL certifications"
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
       - uses: julia-actions/julia-runtest@v1
+        env:
+          PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v3
         with:
           token: ${{secrets.CODECOV_TOKEN}}
           files: lcov.info
-  # docs:
-  #   name: Documentation
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: write
-  #     statuses: write
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #     - uses: julia-actions/setup-julia@v1
-  #       with:
-  #         version: '1.9'
-  #     - uses: julia-actions/julia-buildpkg@v1
-  #       env:
-  #           PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
-  #     - uses: julia-actions/julia-docdeploy@v1
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #     - run: |
-  #         julia --project=docs -e '
-  #           using Documenter: DocMeta, doctest
-  #           using ODINN
-  #           DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
-  #           doctest(ODINN)'

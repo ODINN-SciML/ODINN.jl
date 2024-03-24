@@ -5,43 +5,43 @@ channels:
 
 dependencies:
   # Base language runtimes
-  - python=3.9
+  - python=3.12
 
   # Python packages
-  - bottleneck
-  - cartopy
-  - configobj
-  - dask
-  - gdal=3.3
-  - geopandas
-  - ipython
-  - jupyter
-  - jupyterlab
-  - matplotlib
-  - motionless
-  - netcdf4
-  - numpy
-  - numpydoc
-  - pandas
-  - Pillow
-  - pip
-  - pyproj
-  - pytables
-  - pytest
-  - rasterio  
-  - rioxarray
-  - salem
-  - seaborn
-  - shapely
-  - scikit-image
-  - scikit-learn
-  - scipy
-  - xarray
+  - bottleneck=1.3
+  - cartopy=0.22
+  - configobj=5.0
+  - dask=2024.3
+  - gdal=3.8
+  - geopandas=0.14
+  - ipython=8.22
+  - jupyter=1.0
+  - jupyterlab=4.1
+  - matplotlib=3.8
+  - motionless=1.3
+  - netcdf4=1.6
+  - numpy=1.26
+  - numpydoc=1.6
+  - pandas=2.2
+  - Pillow=10.2
+  - pip=24.0
+  - pyproj=3.6
+  - pytables=3.9
+  - pytest=8.1
+  - rasterio=1.3
+  - rioxarray=0.15
+  - salem=0.3
+  - seaborn=0.13
+  - shapely=2.0
+  - scikit-image=0.22
+  - scikit-learn=1.4
+  - scipy=1.12
+  - xarray=2024.2
   
   # Packages installed through pip
   - pip:
-    - joblib
-    - progressbar2
+    - joblib==1.3
+    - progressbar2==4.4
     - git+https://github.com/OGGM/pytest-mpl
     - git+https://github.com/OGGM/massbalance-sandbox
     - oggm==1.6.0
