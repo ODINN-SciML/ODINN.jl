@@ -220,6 +220,8 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
 
     # === Region-based Optimization and Prediction ===
     regions = split_regions(glacier.H_glathida, glacier.dist_border, n_regions[1], n_regions[2])
+
+
     total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
     C_values = zeros(size(glacier.H_glathida))
     C_values[glacier.V .!= 0] .= NaN
@@ -242,9 +244,9 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     end
 
     
-    C_values = fill_with_nearest_neighbor(C_values, glacier.V)
+    C_values = fill_with_nearest_neighbor(C_values, glacier.V, glacier.S, glacier.slope)
     C_values[glacier.V .== 0] .= NaN
-
+    C_values = safe_gaussian_filter(C_values, 3)
     total_H_pred = H_from_V(glacier.V, C_values,simulation)
     
     # === Post-Optimization Analysis ===
@@ -331,35 +333,66 @@ function split_regions(H_obs, dist_border, n_splits_H_obs, n_splits_dist_border)
 end
 
 
-function fill_with_nearest_neighbor(c_matrix, v_matrix)
-    # Flatten matrices and find indices of NaNs in C
+function normalize_values(values)
+    min_val = minimum(values)
+    max_val = maximum(values)
+    # Avoid division by zero if all values are the same
+    if min_val == max_val
+        return zeros(length(values))
+    else
+        return (values .- min_val) ./ (max_val - min_val)
+    end
+end
+
+function fill_with_nearest_neighbor(c_matrix, v_matrix, s_matrix, slope_matrix)
+    # Ensure v_matrix, s_matrix, and slope_matrix are of the same dimensions and aligned with c_matrix
     c_flat = vec(c_matrix)
     v_flat = vec(v_matrix)
+    s_flat = vec(s_matrix)
+    slope_flat = vec(slope_matrix)
     nan_indices = findall(isnan.(c_flat))
 
-    # Find indices of non-NaN values for interpolation
     valid_indices = findall(.!isnan.(c_flat))
 
-    # Determine the minimum and maximum values of C for constraining the interpolation
-    min_c_value = minimum(c_flat[valid_indices])
+    # Normalize the values from v_matrix, s_matrix, and slope_matrix
+    v_norm = normalize_values(v_flat[valid_indices])
+    s_norm = normalize_values(s_flat[valid_indices])
+    slope_norm = normalize_values(slope_flat[valid_indices])
+
+    # Update strategy: average the normalized values for valid indices
+    combined_values = (v_norm + slope_norm + s_norm) / 3
+
+    min_c_value = minimum(filter(x -> x != 0, c_flat[valid_indices]))
     max_c_value = maximum(c_flat[valid_indices])
 
-    # Create an interpolator for the valid indices of C, mapping them to their indices in V
-    interp = interpolate((valid_indices,), v_flat[valid_indices], Gridded(Constant()))
+    # Create an interpolator for the combined metric/score, now using normalized values
+    interp = interpolate((valid_indices,), combined_values, Gridded(Constant()))
 
-    # Fill in NaNs using nearest neighbor interpolation
     for nan_idx in nan_indices
-        # Find the nearest valid index for interpolation
         nearest_idx = argmin(abs.(valid_indices .- nan_idx))
-        # Use the corresponding value from V for the nearest valid C index, constrained by min and max C values
         interpolated_value = interp[valid_indices[nearest_idx]]
         c_flat[nan_idx] = clamp(interpolated_value, min_c_value, max_c_value)
     end
 
-    # Reshape back to the original matrix size
     return reshape(c_flat, size(c_matrix))
 end
 
+function safe_gaussian_filter(matrix, kernel_size)
+    # Create a mask of where the NaNs are
+    nan_mask = isnan.(matrix)
+
+    # Replace NaNs with the median of the non-NaN values
+    median_val = median(matrix[.!nan_mask])
+    matrix[nan_mask] .= median_val
+
+    # Apply the Gaussian filter
+    filtered_matrix = imfilter(matrix, Kernel.gaussian(kernel_size))
+
+    # Restore NaNs
+    filtered_matrix[nan_mask] .= NaN
+
+    return filtered_matrix
+end
 
 function H_from_V(V::Matrix{<:Real}, C::Matrix{<:Real}, simulation::SIM) where {SIM <: Simulation}
     params::Sleipnir.Parameters = simulation.parameters

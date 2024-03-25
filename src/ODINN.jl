@@ -29,6 +29,7 @@ using PyCall
 using Downloads
 using TimerOutputs
 using Interpolations
+using ImageFiltering
 
 # ##############################################
 # ############    PARAMETERS     ###############
