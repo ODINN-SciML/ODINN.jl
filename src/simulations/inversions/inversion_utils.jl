@@ -192,7 +192,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
 
     # === Glacier Initialization ===
     Huginn.initialize_iceflow_model(model.iceflow, glacier_idx, glacier, params)
-    simulation.model.iceflow.A[] = 5.0e-17
+    simulation.model.iceflow.A[] = 5.0e-17 # Temperate glaciers value
     
     # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
@@ -216,11 +216,10 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     upper_bound = params.inversion.upper_bound
     optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), Optimization.AutoForwardDiff())
 
-    n_regions = params.inversion.regions_split
 
     # === Region-based Optimization and Prediction ===
+    n_regions = params.inversion.regions_split
     regions = split_regions(glacier.H_glathida, glacier.dist_border, n_regions[1], n_regions[2])
-
 
     total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
     C_values = zeros(size(glacier.H_glathida))
@@ -243,20 +242,23 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         C_values[realsol[1] .!= 0].= sol[1] 
     end
 
-    
+    # === Interpolate and smooth basal sliding ===
     C_values = fill_with_nearest_neighbor(C_values, glacier.V, glacier.S, glacier.slope)
     C_values[glacier.V .== 0] .= NaN
-    C_values = safe_gaussian_filter(C_values, 3)
-    total_H_pred = H_from_V(glacier.V, C_values,simulation)
+    
+    C_values = safe_gaussian_filter(C_values, (3,3), 5.0, 5.0)
+   
+    H_pred = H_from_V(glacier.V, C_values,simulation)
+    
+    #H_pred[total_H_pred .!= 0] .= total_H_pred[total_H_pred .!= 0]
+
+    V_pred = surface_V(H_pred, C_values, simulation)
     
     # === Post-Optimization Analysis ===
     # Prepare observed values for comparison
-    H_obs, V_obs = glacier.H_glathida, glacier.V
-    Vx, Vy = Huginn.surface_V(H_obs, simulation)
-    V_pred = sqrt.(Vx.^2 + Vy.^2)
-    H_obs = H_obs[1:end-1, 1:end-1]
-    V_obs = V_obs[1:end-1, 1:end-1]
-
+    H_obs  = glacier.H_glathida[1:end-1, 1:end-1] 
+    V_obs = glacier.V[1:end-1, 1:end-1]
+  
     # Compute absolute differences
     H_diff = abs.(total_H_pred - H_obs)
     V_diff = abs.(V_pred - V_obs)
@@ -273,7 +275,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         simulation.model.iceflow.A[],
         simulation.model.iceflow.n[],
         C_values,
-        total_H_pred, H_obs, H_diff,
+        H_pred, H_obs, H_diff,
         V_pred, V_obs, V_diff,
         MSE,
         simulation.glaciers[glacier_idx].Δx,
@@ -332,7 +334,6 @@ function split_regions(H_obs, dist_border, n_splits_H_obs, n_splits_dist_border)
     return regions
 end
 
-
 function normalize_values(values)
     min_val = minimum(values)
     max_val = maximum(values)
@@ -377,16 +378,16 @@ function fill_with_nearest_neighbor(c_matrix, v_matrix, s_matrix, slope_matrix)
     return reshape(c_flat, size(c_matrix))
 end
 
-function safe_gaussian_filter(matrix, kernel_size)
+function safe_gaussian_filter(matrix, kernel_size, σx, σy)
     # Create a mask of where the NaNs are
     nan_mask = isnan.(matrix)
 
     # Replace NaNs with the median of the non-NaN values
-    median_val = median(matrix[.!nan_mask])
+    median_val = mean(matrix[.!nan_mask])
     matrix[nan_mask] .= median_val
 
     # Apply the Gaussian filter
-    filtered_matrix = imfilter(matrix, Kernel.gaussian(kernel_size))
+    filtered_matrix = imfilter(matrix, Kernel.gaussian((σx, σy),kernel_size))
 
     # Restore NaNs
     filtered_matrix[nan_mask] .= NaN
@@ -428,6 +429,39 @@ function H_from_V(V::Matrix{<:Real}, C::Matrix{<:Real}, simulation::SIM) where {
     replace!(H, NaN=>0.0)
     replace!(H, Inf=>0.0)
     return H   
+end
+
+function surface_V(H::Matrix{<:Real}, C::Matrix{<:Real}, simulation::SIM) where {SIM <: Simulation}
+    params::Sleipnir.Parameters = simulation.parameters
+    
+    iceflow_model = simulation.model.iceflow
+    glacier::Sleipnir.Glacier2D = simulation.glaciers[iceflow_model.glacier_idx[]]
+    B = glacier.B
+    Δx = glacier.Δx
+    Δy = glacier.Δy
+    A = iceflow_model.A
+    n = iceflow_model.n
+    ρ = params.physical.ρ
+    g = params.physical.g
+    
+    # Update glacier surface altimetry
+    S = glacier.S
+    C = deepcopy(C)
+    C[glacier.V .== 0] .= 0
+    C = C[1:end-1, 1:end-1]
+    
+    # All grid variables computed in a staggered grid
+    # Compute surface gradients on edges
+    dSdx = Huginn.diff_x(S) / Δx
+    dSdy = Huginn.diff_y(S) / Δy
+    ∇S = sqrt.(Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2)
+    
+    Γꜛ = 2.0 * A[] * (ρ * g)^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
+    
+       
+    V =  Γꜛ .* H.^(n[] + 1) .* ∇S .+ C
+
+    return V
 end
 # === [End] Steady State Inversion ===
 
