@@ -5,6 +5,8 @@ export run₀, run_ss
 
 Out-place run of classic inversion model. 
 """
+
+# TODO: MERGE both run₀ and run_ss into one, introduce parameter in inversionparameters to choose steady state or transient
 function run₀(simulation::Inversion)
 
     enable_multiprocessing(simulation.parameters)
@@ -33,7 +35,9 @@ function run_ss(simulation::Inversion)
 
 end
 
-# === [Begin] Transient Inversion ===  # Frame work is here, however function is not physically correct
+# NOTE:  Frame work is here, however function is not physically correct
+#        Use elements and general flow in the framework as guidance 
+# === [Begin] Transient Inversion ===  
 function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion) 
     
     ####### Retrieve parameters #######
@@ -242,7 +246,8 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         C_values[realsol[1] .!= 0].= sol[1] 
     end
 
-    # === Interpolate and smooth basal sliding ===
+    # === Interpolate and smooth basal sliding === # NOTE:  this part results in non physically correct H and V
+
     C_values = fill_with_nearest_neighbor(C_values, glacier.V, glacier.S, glacier.slope)
     C_values[glacier.V .== 0] .= NaN
     
