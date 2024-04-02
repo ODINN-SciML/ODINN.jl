@@ -196,7 +196,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
 
     # === Glacier Initialization ===
     Huginn.initialize_iceflow_model(model.iceflow, glacier_idx, glacier, params)
-    simulation.model.iceflow.A[] = 5.0e-17 # Temperate glaciers value
+    simulation.model.iceflow.A[] = 7.57382e-17 # Temperate glaciers value
     
     # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
@@ -247,15 +247,14 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     end
 
     # === Interpolate and smooth basal sliding === # NOTE:  this part results in non physically correct H and V
-
-    C_values = fill_with_nearest_neighbor(C_values, glacier.V, glacier.S, glacier.slope)
+    C_values = fill_with_nearest_neighbor(C_values)
     C_values[glacier.V .== 0] .= NaN
     
-    C_values = safe_gaussian_filter(C_values, (3,3), 5.0, 5.0)
+    C_values = safe_gaussian_filter(C_values, (5,5), 1.0, 1.0)
    
     H_pred = H_from_V(glacier.V, C_values,simulation)
     
-    #H_pred[total_H_pred .!= 0] .= total_H_pred[total_H_pred .!= 0]
+    H_pred[total_H_pred .!= 0] .= total_H_pred[total_H_pred .!= 0]
 
     V_pred = surface_V(H_pred, C_values, simulation)
     
@@ -339,48 +338,17 @@ function split_regions(H_obs, dist_border, n_splits_H_obs, n_splits_dist_border)
     return regions
 end
 
-function normalize_values(values)
-    min_val = minimum(values)
-    max_val = maximum(values)
-    # Avoid division by zero if all values are the same
-    if min_val == max_val
-        return zeros(length(values))
-    else
-        return (values .- min_val) ./ (max_val - min_val)
-    end
-end
 
-function fill_with_nearest_neighbor(c_matrix, v_matrix, s_matrix, slope_matrix)
-    # Ensure v_matrix, s_matrix, and slope_matrix are of the same dimensions and aligned with c_matrix
-    c_flat = vec(c_matrix)
-    v_flat = vec(v_matrix)
-    s_flat = vec(s_matrix)
-    slope_flat = vec(slope_matrix)
-    nan_indices = findall(isnan.(c_flat))
+function fill_with_nearest_neighbor(C)
+    gtable = georef((; C)) # georeference array C into grid
 
-    valid_indices = findall(.!isnan.(c_flat))
+    inds = findall(!isnan, gtable.C) # find indices with data
 
-    # Normalize the values from v_matrix, s_matrix, and slope_matrix
-    v_norm = normalize_values(v_flat[valid_indices])
-    s_norm = normalize_values(s_flat[valid_indices])
-    slope_norm = normalize_values(slope_flat[valid_indices])
+    data = gtable[inds, :] # view of geotable
 
-    # Update strategy: average the normalized values for valid indices
-    combined_values = (v_norm + slope_norm + s_norm) / 3
+    interp = data |> Interpolate(gtable.geometry) # interpolate over grid
 
-    min_c_value = minimum(filter(x -> x != 0, c_flat[valid_indices]))
-    max_c_value = maximum(c_flat[valid_indices])
-
-    # Create an interpolator for the combined metric/score, now using normalized values
-    interp = interpolate((valid_indices,), combined_values, Gridded(Constant()))
-
-    for nan_idx in nan_indices
-        nearest_idx = argmin(abs.(valid_indices .- nan_idx))
-        interpolated_value = interp[valid_indices[nearest_idx]]
-        c_flat[nan_idx] = clamp(interpolated_value, min_c_value, max_c_value)
-    end
-
-    return reshape(c_flat, size(c_matrix))
+    return asarray(interp, "C")
 end
 
 function safe_gaussian_filter(matrix, kernel_size, σx, σy)
