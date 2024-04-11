@@ -1,4 +1,4 @@
-export run₀, run_ss
+export run₀
 
 """
     run_inversion!(simulation::Inversion)
@@ -6,22 +6,8 @@ export run₀, run_ss
 Out-place run of classic inversion model. 
 """
 
-# TODO: MERGE both run₀ and run_ss into one, introduce parameter in inversionparameters to choose steady state or transient
+#TODO: add flag for different inversion modes, when those are available
 function run₀(simulation::Inversion)
-
-    enable_multiprocessing(simulation.parameters)
-
-    println("Running out-place transient ice flow inversion model...\n")
-
-    inversion_params_list = @showprogress pmap((glacier_idx) -> invert_iceflow_transient(glacier_idx, simulation), 1:length(simulation.glaciers))
-
-    simulation.inversion = inversion_params_list
-
-    @everywhere GC.gc() # run garbage collector
-
-end
-
-function run_ss(simulation::Inversion)
 
     enable_multiprocessing(simulation.parameters)
 
@@ -173,7 +159,7 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     MSE = (MSE_H  + MSE_V) / 2  # Simple average of H and V MSEs for overall MSE
 
     # Create InversionMetrics instance with all the necessary fields
-    inversion_metrics = InversionMetrics(glacier.rgi_id,optimized_A, optimized_n, optimized_C, 
+    inversion_metrics = InversionResults(glacier.rgi_id,optimized_A, optimized_n, optimized_C, 
                                         H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, 
                                         MSE_V, #change
                                         simulation.glaciers[glacier_idx].Δx,              
@@ -274,7 +260,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     MSE = 0.0
 
     # Compile inversion metrics
-    inversion_metrics = InversionMetrics(
+    inversion_metrics = InversionResults(
         glacier.rgi_id,
         simulation.model.iceflow.A[],
         simulation.model.iceflow.n[],

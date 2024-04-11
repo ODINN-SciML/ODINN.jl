@@ -1,6 +1,6 @@
 export Inversion
 
-mutable struct InversionMetrics{F <: Real}
+mutable struct InversionResults{F <: Real} 
     rgi_id::Union{String, Nothing}
     A::F
     n::F
@@ -18,11 +18,30 @@ mutable struct InversionMetrics{F <: Real}
     lat::F 
 end
 
+Base.:(==)(a::InversionResults, b::InversionResults) = 
+    a.rgi_id == b.rgi_id &&
+    a.A == b.A &&
+    a.n == b.n &&
+    a.C .== b.C &&
+    all(a.C .== b.C) &&
+    all(a.H_pred .== b.H_pred) &&
+    all(a.H_obs .== b.H_obs) &&
+    all(a.H_diff .== b.H_diff) &&
+    all(a.V_pred .== b.V_pred) &&
+    all(a.V_obs .== b.V_obs) &&
+    all(a.V_diff .== b.V_diff) &&
+    a.MSE == b.MSE &&
+    a.Δx == b.Δx &&
+    a.Δy == b.Δy &&
+    a.lon == b.lon &&
+    a.lat == b.lat
+
+
 mutable struct Inversion  <: Simulation 
     model::Sleipnir.Model
     glaciers::Vector{Sleipnir.AbstractGlacier}
     parameters::Sleipnir.Parameters
-    inversion::Vector{InversionMetrics}
+    inversion::Vector{InversionResults}
 end
 
 """
@@ -45,7 +64,7 @@ function Inversion(
     inversion = Inversion(model,
                             glaciers,
                             parameters,
-                            Vector{InversionMetrics}([]))
+                            Vector{InversionResults}([]))
 
     return inversion
 end

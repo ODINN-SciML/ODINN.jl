@@ -1,23 +1,23 @@
 export InversionParameters
 
-mutable struct InversionParameters <: AbstractParameters
-    initial_conditions::Vector{Float64}
-    lower_bound::Vector{Float64}
-    upper_bound::Vector{Float64}
+mutable struct InversionParameters{F<:AbstractFloat} <: AbstractParameters
+    initial_conditions::Vector{F}
+    lower_bound::Vector{F}
+    upper_bound::Vector{F}
     regions_split::Vector{Int}
-    x_tol::Float64
-    f_tol::Float64
+    x_tol::F
+    f_tol::F
     solver::Any  
 end
 
 """
-    InversionParameters(;
-        initial_conditions::Vector{Float64} = [1.0],
-        lower_bound::Vector{Float64} = [0.0],
-        upper_bound::Vector{Float64} = [Inf],
+    InversionParameters{F<:AbstractFloat}(;
+        initial_conditions::Vector{F} = [1.0],
+        lower_bound::Vector{F} = [0.0],
+        upper_bound::Vector{F} = [Inf],
         regions_split::Vector{Int} = [1, 1],
-        x_tol::Float64 = 1.0e-3,
-        f_tol::Float64 = 1.0e-3,
+        x_tol::F = 1.0e-3,
+        f_tol::F = 1.0e-3,
         solver = BFGS()
     )
 
@@ -27,21 +27,21 @@ Initialize the parameters for the inversion process.
 - `initial_conditions`: Starting point for optimization.
 - `lower_bound`: Lower bounds for optimization variables.
 - `upper_bound`: Upper bounds for optimization variables.
-- `regions_split`: Defines amount of region split based on altitude and distance to border for the inversion process.
+- `regions_split`: Defines the amount of region split based on altitude and distance to border for the inversion process.
 - `x_tol`: Tolerance for variables convergence.
 - `f_tol`: Tolerance for function value convergence.
 - `solver`: Optimization solver to be used.
 """
-function InversionParameters(;
-        initial_conditions::Vector{Float64} = [1.0],
-        lower_bound::Vector{Float64} = [0.0],
-        upper_bound::Vector{Float64} = [Inf],
+function InversionParameters{}(;
+        initial_conditions::Vector{F} = [1.0],
+        lower_bound::Vector{F} = [0.0],
+        upper_bound::Vector{F} = [Inf],
         regions_split::Vector{Int} = [1, 1],
-        x_tol::Float64 = 1.0e-3,
-        f_tol::Float64 = 1.0e-3,
+        x_tol::F = 1.0e-3,
+        f_tol::F = 1.0e-3,
         solver = BFGS()
-    )
-    inversionparameters = InversionParameters(initial_conditions, lower_bound, upper_bound, regions_split, x_tol, f_tol, solver)
+    ) where F <: AbstractFloat
+    inversionparameters = InversionParameters{F}(initial_conditions, lower_bound, upper_bound, regions_split, x_tol, f_tol, solver)
     
     return inversionparameters
 end

@@ -42,7 +42,7 @@ function UDEparameters(;
     return UDE_parameters
 end
 
-include("Inversionparameters.jl")
+include("InversionParameters.jl")
 
 """
 Parameters(;

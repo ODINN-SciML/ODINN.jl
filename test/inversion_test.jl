@@ -1,4 +1,4 @@
-function inversion_test(;steady_state = false)
+function inversion_test(;steady_state = false, save_refs = false)
     rgi_ids = ["RGI60-11.01450", "RGI60-11.00638"]
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
@@ -33,10 +33,22 @@ function inversion_test(;steady_state = false)
     inversion = Inversion(model, glaciers, params)
 
     if steady_state
-        run_ss(inversion)
+        run₀(inversion)
         ss = inversion.inversion
-        @test ss !== nothing 
+        
+        if save_refs
+            # Save the ss object to a JLD2 file when save_refs is true
+            jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"); ss)
+        end
+        # Load the reference ss object from the JLD2 file for comparison
+        ss_ref = load(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"), "ss")
+        
+        # Perform the comparison test between ss and ss_ref
+        @test ss[1].H_pred == ss_ref[1].H_pred
+        
     end
+    
 end
+
 
 

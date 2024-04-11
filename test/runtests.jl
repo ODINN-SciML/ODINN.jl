@@ -26,6 +26,6 @@ atol = 0.01
 atol = 2.0
 @testset "PDE and UDE SIA solvers with MB" pde_solve_test(atol; MB=true, fast=true)
 
-@testset "Inversion Tests" inversion_test(steady_state = true)
+@testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 # @testset "SIA UDE training" begin include("UDE_train.jl") end
 
