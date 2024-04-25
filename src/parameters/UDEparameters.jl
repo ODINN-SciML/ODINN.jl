@@ -1,9 +1,10 @@
-
-  mutable struct UDEparameters <: AbstractParameters
+export UDEparameters
+mutable struct UDEparameters <: AbstractParameters
     sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
     optimization_method::String
     loss_type::String
     scale_loss::Bool
+    target::String
 end
 
 Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.optimization_method == b.optimization_method && a.loss_type == b.loss_type && 
@@ -16,6 +17,7 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.o
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
         scale_loss::Bool = true
+        target::String = "D"
         )
 Initialize the parameters for the training of the UDE.
 Keyword arguments
@@ -29,7 +31,8 @@ function UDEparameters(;
             sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
-            scale_loss::Bool = true
+            scale_loss::Bool = true,
+            target::String = "D"
             )
     # Verify that the optimization method is correct
     @assert ((optimization_method == "AD+AD") || (optimization_method == "AD+Diff")) "Wrong optimization method! Needs to be either `AD+AD` or `AD+Diff`"
@@ -37,7 +40,7 @@ function UDEparameters(;
 
     # Build the solver parameters based on input values
     UDE_parameters = UDEparameters(sensealg, optimization_method,
-                                    loss_type, scale_loss)
+                                    loss_type, scale_loss, target)
 
     return UDE_parameters
 end

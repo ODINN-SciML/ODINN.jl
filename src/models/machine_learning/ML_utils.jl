@@ -17,7 +17,7 @@ function get_NN(θ_trained)
     if !isnothing(θ_trained)
         θ = θ_trained
     end
-    return UA, θ
+    return UA, θ, UA_f
 end
 
 """
@@ -25,9 +25,8 @@ end
 
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
-function predict_A̅(UA_f, θ, temp)
-    UA = UA_f(θ)
-    return UA(temp) .* 1e-17
+function predict_A̅(U, temp)
+    return U(temp) .* 1e-18
 end
 
 function sigmoid_A(x) 
@@ -59,20 +58,22 @@ function generate_plot_folders(path)
     end
 end
 
+# From Cuffey and Paterson
+const A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
+                              2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
+const A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
+
 # Polynomial fit for Cuffey and Paterson data 
-function A_polyfit(A_values)
-    return fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
-end
+A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
 
-"""
-    A_fake(temp, noise=false)
+const noise_A_magnitude = 5e-18  # magnitude of noise to be added to A
+const rng_seed() = MersenneTwister(666)   # Random seed
 
-Fake law establishing a theoretical relationship between ice viscosity (A) and long-term air temperature.
-"""
-function A_fake(temp, A_noise=nothing, noise=false)
+function A_fake(temp, noise=false)
     # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
     A = A_f.(temp) # polynomial fit
-    if noise[]
+    if noise
+        A_noise = rand(rng_seed()) .* noise_A_magnitude
         A = abs.(A .+ A_noise)
     end
     return A
@@ -97,18 +98,33 @@ function predict_diffusivity(UD_f, θ, X)
 end
 
 """
-    config_training_state(θ_trained)
+    generate_batches(batch_size, UD, target, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
 
-Configure training state with current epoch and its loss history. 
+Generates batches for the UE inversion problem based on input data and feed them to the loss function.
 """
-function config_training_state(θ_trained)
-    if length(θ_trained) == 0
-        reset_epochs()
-    else
-        # Remove loss history from unfinished trainings
-        deleteat!(loss_history, current_epoch:length(loss_history))
-    end
+function generate_batches(simulation::S; shuffle=true) where {S <: Simulation}
+    # Repeat simulations for batches
+    batch_ids::Vector{Int} = collect(1:length(simulation.glaciers))
+    rgi_ids::Vector{String} = [glacier.rgi_id for glacier in simulation.glaciers]
+    batches = (batch_ids, rgi_ids)
+    train_loader = Flux.Data.DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
+
+    return train_loader
 end
+
+# """
+#     config_training_state(θ_trained)
+
+# Configure training state with current epoch and its loss history. 
+# """
+# function config_training_state(θ_trained)
+#     if length(θ_trained) == 0
+#         reset_epochs()
+#     else
+#         # Remove loss history from unfinished trainings
+#         deleteat!(loss_history, current_epoch:length(loss_history))
+#     end
+# end
 
 """
     update_training_state(batch_size, n_gdirs)
@@ -116,17 +132,17 @@ end
 Update training state to know if the training has completed an epoch. 
 If so, reset minibatches, update history loss and bump epochs.
 """
-function update_training_state(l, batch_size, n_gdirs)
+function update_training_state!(simulation, l)
     # Update minibatch count and loss for the current epoch
-    global current_minibatches += batch_size
-    global loss_epoch += l
-    if current_minibatches >= n_gdirs
+    simulation.parameters.hyper.current_minibatch += simulation.parameters.hyper.batch_size
+    simulation.parameters.hyper.loss_epoch += l
+    if simulation.parameters.hyper.current_minibatch >= length(simulation.glaciers)
         # Track evolution of loss per epoch
-        push!(loss_history, loss_epoch)
-        println("Epoch #$(current_epoch[]) - Loss $(loss_type[]): ", loss_epoch)
+        push!(simulation.parameters.hyper.loss_history, simulation.parameters.hyper.loss_epoch)
+        println("Epoch #$(simulation.parameters.hyper.current_epoch): ", simulation.parameters.hyper.loss_epoch)
         # Bump epoch and reset loss and minibatch count
-        global current_epoch += 1
-        global current_minibatches = 0
-        global loss_epoch = 0.0
+        simulation.parameters.hyper.current_epoch += 1
+        simulation.parameters.hyper.current_minibatch = 0
+        simulation.parameters.hyper.loss_epoch = 0.0
     end
 end
