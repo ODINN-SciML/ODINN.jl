@@ -64,7 +64,7 @@ const A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -
 const A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
 
 # Polynomial fit for Cuffey and Paterson data 
-A_f = fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
+A_f = Polynomials.fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
 
 const noise_A_magnitude = 5e-18  # magnitude of noise to be added to A
 const rng_seed() = MersenneTwister(666)   # Random seed

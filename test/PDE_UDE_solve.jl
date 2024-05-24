@@ -60,3 +60,5 @@ function ude_solve_test(atol; MB=false, fast=true)
 
     # We run the simulation
     @time run!(functional_inversion)
+
+end
