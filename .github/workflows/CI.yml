@@ -36,7 +36,7 @@ jobs:
       - name: Create environment with micromamba 🐍🖤
         uses: mamba-org/setup-micromamba@v1
         with: 
-          micromamba-version: '1.3.1-0'
+          micromamba-version: '1.5.6-0'
           environment-file: ./environment.yml
           environment-name: oggm_env                # it is recommendable to add both name and yml file. 
           init-shell: bash
@@ -82,26 +82,3 @@ jobs:
         with:
           token: ${{secrets.CODECOV_TOKEN}}
           files: lcov.info
-  # docs:
-  #   name: Documentation
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: write
-  #     statuses: write
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #     - uses: julia-actions/setup-julia@v1
-  #       with:
-  #         version: '1.9'
-  #     - uses: julia-actions/julia-buildpkg@v1
-  #       env:
-  #           PYTHON : /home/runner/micromamba/envs/oggm_env/bin/python
-  #     - uses: julia-actions/julia-docdeploy@v1
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #     - run: |
-  #         julia --project=docs -e '
-  #           using Documenter: DocMeta, doctest
-  #           using ODINN
-  #           DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
-  #           doctest(ODINN)'

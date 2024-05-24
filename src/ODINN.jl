@@ -13,13 +13,14 @@ using Statistics, LinearAlgebra, Random, Polynomials
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
-using Optimization, Optim, OptimizationOptimJL
+using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers
 using IterTools: ncycle
+using Zygote
 using ChainRules: @ignore_derivatives
 using Base: @kwdef
 using Flux
 using Tullio
-using Infiltrator
+using Infiltrator, Cthulhu
 using Plots, PlotThemes
 Plots.theme(:wong2) # sets overall theme for Plots
 import Pkg

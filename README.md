@@ -7,9 +7,9 @@
 
 <img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/ODINN_logo_final.png" width="250">
 
-### ⚠️ New preprint available! ⚠️
+### ⚠️ New publication available! ⚠️
 
-For a detailed description of the model and the application of Universal Differential Equations to glacier ice flow modelling, take a look at [our preprint at Geoscientific Model Development](https://gmd.copernicus.org/preprints/gmd-2023-120/). 
+For a detailed description of the model and the application of Universal Differential Equations to glacier ice flow modelling, take a look at [our recent publication at Geoscientific Model Development](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html). 
 
 ### OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
 
@@ -75,14 +75,15 @@ A stable API is still being designed, which will be available in the next releas
 
 If you want to cite this work, please use this BibTex citation from [our latest preprint](https://gmd.copernicus.org/preprints/gmd-2023-120/):
 ```
-@article{bolibar_universal_2023,
-	title = {Universal {Differential} {Equations} for glacier ice flow modelling},
-	volume = {2023},
-	url = {https://gmd.copernicus.org/preprints/gmd-2023-120/},
-	doi = {10.5194/gmd-2023-120},
-	journal = {Geoscientific Model Development Discussions},
-	author = {Bolibar, J. and Sapienza, F. and Maussion, F. and Lguensat, R. and Wouters, B. and Pérez, F.},
+@article{bolibar_sapienza_universal_2023,
+	title = {Universal differential equations for glacier ice flow modelling},
+	author = {Bolibar, J. and Sapienza, F. and Maussion, F. and Lguensat, R. and Wouters, B. and P\'erez, F.},
+	journal = {Geoscientific Model Development},
+	volume = {16},
 	year = {2023},
-	pages = {1--26},
+	number = {22},
+	pages = {6671--6687},
+	url = {https://gmd.copernicus.org/articles/16/6671/2023/},
+	doi = {10.5194/gmd-16-6671-2023}
 }
 ```

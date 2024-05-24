@@ -20,11 +20,8 @@ include("inversion_test.jl")
 # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"]="nul"
 
-atol = 0.01
-@testset "PDE and UDE SIA solvers without MB" pde_solve_test(atol; MB=false, fast=true)
-
 atol = 2.0
-@testset "PDE and UDE SIA solvers with MB" pde_solve_test(atol; MB=true, fast=true)
+@testset "UDE SIA2D training with MB" ude_solve_test(atol; MB=true)
 
 @testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 # @testset "SIA UDE training" begin include("UDE_train.jl") end
