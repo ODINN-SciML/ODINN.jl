@@ -42,6 +42,8 @@ function UDEparameters(;
     return UDE_parameters
 end
 
+include("InversionParameters.jl")
+
 """
 Parameters(;
         physical::PhysicalParameters = PhysicalParameters(),
@@ -50,6 +52,7 @@ Parameters(;
         solver::SolverParameters = SolverParameters(),
         hyper::Hyperparameters = Hyperparameters(),
         UDE::UDEparameters = UDEparameters()
+        inversion::InversionParameters = InversionParameters()
         )
 Initialize ODINN parameters
 
@@ -58,17 +61,17 @@ Keyword arguments
     
 """
 function Parameters(;
-            physical::PhysicalParameters = PhysicalParameters(),
-            simulation::SimulationParameters = SimulationParameters(),
-            OGGM::OGGMparameters = OGGMparameters(),
-            solver::SolverParameters = SolverParameters(),
-            hyper::Hyperparameters = Hyperparameters(),
-            UDE::UDEparameters = UDEparameters()
-            ) 
+    physical::PhysicalParameters = PhysicalParameters(),
+    simulation::SimulationParameters = SimulationParameters(),
+    OGGM::OGGMparameters = OGGMparameters(),
+    solver::SolverParameters = SolverParameters(),
+    hyper::Hyperparameters = Hyperparameters(),
+    UDE::UDEparameters = UDEparameters(),
+    inversion::InversionParameters = InversionParameters()  
+    ) 
 
-    # Build the parameters based on all the subtypes of parameters
-    parameters = Sleipnir.Parameters(physical, simulation, OGGM,
-                                     hyper, solver, UDE)
+    
+    parameters = Sleipnir.Parameters(physical, simulation, OGGM, hyper, solver, UDE, inversion)  
 
     if simulation.multiprocessing
         enable_multiprocessing(parameters)
@@ -80,3 +83,6 @@ function Parameters(;
 
     return parameters
 end
+
+
+
