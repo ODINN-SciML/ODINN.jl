@@ -5,7 +5,7 @@ get_NN()
 Generates a neural network.
 """
 function get_NN(θ_trained)
-    UA = Chain(
+    UA = Flux.Chain(
         Dense(1,3, x->softplus.(x)),
         Dense(3,10, x->softplus.(x)),
         Dense(10,3, x->softplus.(x)),

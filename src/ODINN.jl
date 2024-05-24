@@ -29,6 +29,8 @@ using ProgressMeter
 using PyCall
 using Downloads
 using TimerOutputs
+using GeoStats
+using ImageFiltering
 
 # ##############################################
 # ############    PARAMETERS     ###############

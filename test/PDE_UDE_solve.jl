@@ -1,5 +1,3 @@
-
-
 function ude_solve_test(atol; MB=false, fast=true)
 
     working_dir = joinpath(homedir(), "OGGM/ODINN_tests")
@@ -62,6 +60,3 @@ function ude_solve_test(atol; MB=false, fast=true)
 
     # We run the simulation
     @time run!(functional_inversion)
-
-
-end
