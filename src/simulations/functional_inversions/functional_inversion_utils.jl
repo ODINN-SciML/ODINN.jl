@@ -28,7 +28,7 @@ function train_UDE!(simulation::FunctionalInversion)
     train_batches = generate_batches(simulation)
     θ = simulation.model.machine_learning.θ
 
-    optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), Optimization.AutoReverseDiff())
+    optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), Optimization.AutoZygote())
     optprob = OptimizationProblem(optf, θ)
     
     if simulation.parameters.UDE.target == "A"
@@ -127,15 +127,13 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) whe
     # Initialize glacier ice flow model
     initialize_iceflow_model(model.iceflow[batch_id], batch_id, glacier, params)
 
-    params.solver.tstops =  @ignore_derivatives Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
+    params.solver.tstops =  Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
     stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, params.solver.tstops) #closure
     function action!(integrator)
         if params.simulation.use_MB 
             # Compute mass balance
-            @ignore_derivatives begin 
-                MB_timestep!(model, glacier, params.solver.step, integrator.t; batch_id = batch_id)
-                apply_MB_mask!(integrator.u, glacier, model.iceflow[batch_id])
-            end
+            MB_timestep!(model, glacier, params.solver.step, integrator.t; batch_id = batch_id)
+            apply_MB_mask!(integrator.u, glacier, model.iceflow[batch_id])
         end
         # Apply parametrization
         apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
