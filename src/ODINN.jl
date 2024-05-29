@@ -18,7 +18,7 @@ using IterTools: ncycle
 using Zygote
 using ChainRules: @ignore_derivatives
 using Base: @kwdef
-using Flux
+using Flux, Lux, ComponentArrays
 using Tullio
 using Infiltrator, Cthulhu
 using Plots, PlotThemes

@@ -5,19 +5,18 @@ get_NN()
 Generates a neural network.
 """
 function get_NN(θ_trained)
-    UA = Flux.Chain(
-        Dense(1,3, x->softplus.(x)),
-        Dense(3,10, x->softplus.(x)),
-        Dense(10,3, x->softplus.(x)),
-        Dense(3,1, sigmoid_A)
+    UA = Lux.Chain(
+        Lux.Dense(1,3, x->Lux.softplus.(x)),
+        Lux.Dense(3,10, x->Lux.softplus.(x)),
+        Lux.Dense(10,3, x->Lux.softplus.(x)),
+        Lux.Dense(3,1, sigmoid_A)
     )
-    UA = Flux.f64(UA)
-    # See if parameters need to be retrained or not
-    θ, UA_f = Flux.destructure(UA)
+    θ, st = Lux.setup(Random.default_rng(), UA)
+    θ = ComponentArray{Float64}(θ)
     if !isnothing(θ_trained)
         θ = θ_trained
     end
-    return UA, θ, UA_f
+    return UA, θ, st
 end
 
 """
@@ -26,7 +25,7 @@ end
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
 function predict_A̅(U, temp)
-    return U(temp) .* 1e-18
+    return U(temp)[1] .* 1e-18
 end
 
 function sigmoid_A(x) 
@@ -83,12 +82,12 @@ function build_D_features(H::Matrix, temp, ∇S)
     ∇S_flat = ∇S[inn1(H) .!= 0.0] # flatten
     H_flat = H[H .!= 0.0] # flatten
     T_flat = repeat(temp,length(H_flat))
-    X = Flux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
+    X = Lux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
     return X
 end
 
 function build_D_features(H::Float64, temp::Float64, ∇S::Float64)
-    X = Flux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
+    X = Lux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
     return X
 end
 

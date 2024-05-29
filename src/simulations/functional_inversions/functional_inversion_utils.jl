@@ -216,7 +216,7 @@ end
 
 function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integrator, batch_id::I) where {I <: Integer}
     # We load the ML model with the parameters
-    U = simulation.model.machine_learning.NN_f(θ)
+    U = NN(simulation.model.machine_learning.architecture, simulation.model.machine_learning.st, convert(typeof(simulation.model.machine_learning.θ),θ))
     # We generate the ML parametrization based on the target 
     if simulation.parameters.UDE.target == "A"
         A = predict_A̅(U, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
@@ -242,7 +242,7 @@ callback_plots_A = function (θ, l, simulation) # callback function to observe t
     p = sortperm(avg_temps)
     avg_temps = avg_temps[p]
     # We load the ML model with the parameters
-    U = simulation.model.machine_learning.NN_f(θ)
+    U = NN(simulation.model.machine_learning.architecture, simulation.model.machine_learning.st, convert(typeof(simulation.model.machine_learning.θ),θ))
     pred_A = predict_A̅(U, collect(-23.0:1.0:0.0)')
     pred_A = Float64[pred_A...] # flatten
     true_A = A_fake(avg_temps, true)

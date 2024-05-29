@@ -217,28 +217,6 @@ function generate_batches(batch_size, UA, gdirs, gdir_refs, tspan::Tuple; shuffl
     return train_loader
 end
 
-
-"""
-    get_NN()
-
-Generates a neural network.
-"""
-function get_NN(θ_trained)
-    UA = Chain(
-        Dense(1,3, x->softplus.(x)),
-        Dense(3,10, x->softplus.(x)),
-        Dense(10,3, x->softplus.(x)),
-        Dense(3,1, sigmoid_A)
-    )
-    UA = Flux.f64(UA)
-    # See if parameters need to be retrained or not
-    θ, UA_f = Flux.destructure(UA)
-    if !isempty(θ_trained)
-        θ = θ_trained
-    end
-    return UA_f, θ
-end
-
 function get_NN_inversion(θ_trained, target)
     if target == "D"
         U, θ = get_NN_inversion_D(θ_trained)

@@ -27,35 +27,36 @@ function Model(;
     return model
 end
 
-mutable struct NN{F <: AbstractFloat} <: MLmodel 
-    architecture::Flux.Chain
-    NN_f::Optimisers.Restructure
-    θ::Vector{F}
+mutable struct NN{T1, T2, T3} <: MLmodel 
+    architecture::T1
+    st::T2
+    θ::T3
 end
+(f::NN)(u) = f.architecture(u, f.θ, f.st)
 
 """
     NN(params::Parameters;
-        architecture::Union{Flux.Chain, Nothing} = nothing,
+        architecture::Union{Lux.Chain, Nothing} = nothing,
         θ::Union{Vector{AbstractFloat}, Nothing} = nothing)
         
         Feed-forward neural network.
 
 Keyword arguments
 =================
-    - `architecture`: `Flux.Chain` neural network architecture
+    - `architecture`: `Lux.Chain` neural network architecture
     - `θ`: Neural network parameters
 """
 function NN(params::Sleipnir.Parameters;
-            architecture::Union{Flux.Chain, Nothing} = nothing,
-            θ::Union{Vector{F}, Nothing} = nothing) where {F <: AbstractFloat}
+            architecture::Union{Lux.Chain, Nothing} = nothing,
+            θ::Union{ComponentArray{F}, Nothing} = nothing) where {F <: AbstractFloat}
 
     if isnothing(architecture)
-        architecture, θ, NN_f = get_NN(θ)
+        architecture, θ, st = get_NN(θ)
     end
 
     # Build the simulation parameters based on input values
     ft = params.simulation.float_type
-    neural_net = NN{ft}(architecture, NN_f, θ)
+    neural_net = NN(architecture, st, θ)
 
     return neural_net
 end

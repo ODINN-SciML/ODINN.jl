@@ -4,7 +4,7 @@ export Hyperparameters
     current_epoch::I
     current_minibatch::I
     loss_history::Vector{F}
-    optimizer::Union{Optim.FirstOrderOptimizer, Flux.Optimise.AbstractOptimiser, Optimisers.AbstractRule}
+    optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule}
     loss_epoch::F
     epochs::I
     batch_size::I
@@ -33,7 +33,7 @@ function Hyperparameters(;
             current_epoch::Int64 = 1,
             current_minibatch::Int64 = 1,
             loss_history::Vector{Float64} = zeros(Float64, 0),
-            optimizer::Union{Optim.FirstOrderOptimizer, Flux.Optimise.AbstractOptimiser, Optimisers.AbstractRule} = BFGS(initial_stepnorm=0.001),
+            optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule} = BFGS(initial_stepnorm=0.001),
             loss_epoch::Float64 = 0.0,
             epochs::Int64 = 50,
             batch_size::Int64 = 15
