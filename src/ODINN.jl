@@ -35,7 +35,7 @@ using EnzymeCore
 
 # This is equivalent to `@ignore_derivatives`
 EnzymeCore.EnzymeRules.inactive(::typeof(Huginn.define_callback_steps), args...) = nothing
-EnzymeCore.EnzymeRules.inactive(::typeof(MB_timestep!), args...) = nothing
+EnzymeCore.EnzymeRules.inactive(::typeof(Muninn.MB_timestep!), args...) = nothing
 EnzymeCore.EnzymeRules.inactive(::typeof(apply_MB_mask!), args...) = nothing
 
 # ##############################################

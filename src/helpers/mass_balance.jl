@@ -43,16 +43,10 @@ end
 function MB_timestep!(MB, mb_model::MB_model, climate, S, S_coords, t, step)
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
-    @timeit to "Climate step" begin
     get_cumulative_climate!(climate, period)
-    end
     # Convert climate dataset to 2D based on the glacier's DEM
-    @timeit to "Climate 2D step" begin
     downscale_2D_climate!(climate, S, S_coords)
-    end
-    @timeit to "Compute MB" begin
     MB .= compute_MB(mb_model, climate.climate_2D_step[])
-    end
 end
 
 function apply_MB_mask!(H, MB, MB_total, context::Tuple)
