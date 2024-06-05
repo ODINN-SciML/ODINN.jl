@@ -5,7 +5,7 @@
 [![CompatHelper](https://github.com/ODINN-SciML/ODINN.jl/actions/workflows/CompatHelper.yml/badge.svg)](https://github.com/ODINN-SciML/ODINN.jl/actions/workflows/CompatHelper.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8033313.svg)](https://doi.org/10.5281/zenodo.8033313)
 
-<img src="https://github.com/ODINN-SciML/ODINN.jl/tree/new_API/plots/ODINN_sticker_original.png" width="250">
+<img src="https://github.com/ODINN-SciML/ODINN.jl/blob/new_API/plots/ODINN_sticker_original.png?raw=true" width="250">
 
 ### ⚠️ New publication available! ⚠️
 
