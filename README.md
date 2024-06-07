@@ -67,13 +67,46 @@ From this point, it is possible to use ODINN with multiprocessing and to run Pyt
 
 ODINN works as a back-end of OGGM, utilizing all its tools to retrieve RGI data, topographical data, climate data and other datasets from the OGGM shop. We use these data to specify the initial state of the simulations, and to retrieve the climate data to force the model. Everything related to the mass balance and ice flow dynamics models is written 100% in Julia. This allows us to run tests with this toy model for any glacier on Earth. In order to choose a glacier, you just need to specify the RGI ID, which you can find [here](https://www.glims.org/maps/glims). 
 
-## Upcoming changes 🆕
+## How to use ODINN
 
-A stable API is still being designed, which will be available in the next release. If you plan to start using the model, please contact us, although we recommend to wait until next release for a smoother experience. 
+ODINN's architecture makes it really straightforward to retrieve all the necessary glacier and climate data for both the initial conditions and the loss function of a problem. Here's a quick example based on a `FunctionalInversion` using Universal Differential Equations:
+
+```julia
+using ODINN
+
+# We create the necessary parameters
+params = Parameters(OGGM = OGGMparameters(working_dir=joinpath(homedir(), "OGGM/ODINN_tests")),
+		    simulation = SimulationParameters(working_dir=working_dir,
+						      tspan=(2010.0, 2015.0),
+						      workers=5),
+		    hyper = Hyperparameters(batch_size=4,
+					    epochs=10,
+					    optimizer=ODINN.ADAM(0.01)),
+		    UDE = UDEparameters(target = "A")
+		   ) 
+
+# We define which glacier RGI IDs we want to work with
+rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351"]
+
+# We specify a model based on an iceflow model, a mass balance model and a machine learning model
+model = Model(iceflow = SIA2Dmodel(params),
+	      mass_balance = mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+	      machine_learning = NN(params))
+
+# We initialize the glaciers with all the necessary data 
+glaciers = initialize_glaciers(rgi_ids, params)
+
+# We specify the type of simulation we want to perform
+functional_inversion = FunctionalInversion(model, glaciers, params)
+
+# And finally, we just run! the simulation
+run!(functional_inversion)
+
+````	
 
 ## How to cite 📖
 
-If you want to cite this work, please use this BibTex citation from [our latest preprint](https://gmd.copernicus.org/preprints/gmd-2023-120/):
+If you want to cite this work, please use this BibTex citation from [our latest paper](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html):
 ```
 @article{bolibar_sapienza_universal_2023,
 	title = {Universal differential equations for glacier ice flow modelling},
