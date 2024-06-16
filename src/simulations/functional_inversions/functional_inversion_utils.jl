@@ -142,7 +142,7 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) whe
     cb_MB = DiscreteCallback(stop_condition, action!)
 
     # Run iceflow UDE for this glacier
-    du = params.simulation.use_iceflow ? Huginn.SIA2D : Huginn.noSIA2D
+    du = params.simulation.use_iceflow ? Huginn.SIA2D! : Huginn.noSIA2D!
     iceflow_sol = simulate_iceflow_UDE!(θ, simulation, model, params, cb_MB, batch_id; du = du)
 
     println("simulation finished for $batch_id")
