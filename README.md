@@ -11,7 +11,7 @@
 
 For a detailed description of the model and the application of Universal Differential Equations to glacier ice flow modelling, take a look at [our recent publication at Geoscientific Model Development](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html). 
 
-### About ODINN.jl
+## About ODINN.jl
 
 Global glacier evolution model using Universal Differential Equations to model and discover processes of climate-glacier interactions. 
 
@@ -26,11 +26,11 @@ Global glacier evolution model using Universal Differential Equations to model a
 In order to install `ODINN` in a given environment, just do in the REPL:
 ```julia
 julia> ] # enter Pkg mode
-(@v1.9) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
+(@v1.10) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
 (MyEnvironment) pkg> add ODINN
 ```
 
-## ODINN initialization: integration with OGGM and multiprocessing 
+### Installing ODINN's Python dependencies
 
 ODINN depends on some Python packages, mainly [OGGM](https://github.com/OGGM/oggm) and [xarray](https://github.com/pydata/xarray). In order to install the necessary Python dependencies in an easy manner, we are providing a Python environment (`oggm_env`) in `environment.yml`. To install and activate the environment, we recommend using [micromamba](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html):
 
@@ -54,14 +54,7 @@ julia> exit()
 using ODINN
 ```
 
-So now you can start working with ODINN with PyCall correctly configured. These configuration step only needs to be done the first time, so from now on ODINN should be able to correctly find your Python libraries. If you ever want to change your conda environment, you would just need to repeat the steps above. The next step is to start a new Julia session and import `ODINN` (or just run your script which uses ODINN, e.g. `toy_model.jl`). If you want to run ODINN using multiprocessing you can enable it using the following command in Julia:
-
-```julia
-processes = 16
-ODINN.enable_multiprocessing(processes)
-```
-
-From this point, it is possible to use ODINN with multiprocessing and to run Python from Julia running the different commands available in the PyCall documentation. In order to get a better idea on how this works, we recommend checking the toy model example [toy_model.jl](https://github.com/ODINN-SciML/ODINN.jl/blob/main/scripts/toy_model.jl). 
+So now you can start working with ODINN with PyCall correctly configured. These configuration step only needs to be done the first time, so from now on ODINN should be able to correctly find your Python libraries. If you ever want to change your conda environment, you would just need to repeat the steps above. 
 
 ### Using OGGM for the initial conditions of the training/simulations 
 
