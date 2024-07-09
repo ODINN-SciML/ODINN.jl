@@ -11,9 +11,9 @@
 
 For a detailed description of the model and the application of Universal Differential Equations to glacier ice flow modelling, take a look at [our recent publication at Geoscientific Model Development](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html). 
 
-### OGGM (Open Global Glacier Model) + DIfferential equation Neural Networks
+### About ODINN.jl
 
-Global glacier model using Universal Differential Equations to model and discover processes of climate-glacier interactions. 
+Global glacier evolution model using Universal Differential Equations to model and discover processes of climate-glacier interactions. 
 
 `ODINN.jl` uses neural networks and differential equations in order to combine mechanistic models describing glacier physical processes (e.g. ice creep, basal sliding, surface mass balance) with machine learning. Neural networks are used to learn parts of the equations, which then can be interpreted in a mathematical form (e.g. using SINDy) in order to update the original equation from the process. ODINN uses the Open Global Glacier Model ([OGGM](oggm.org/), Maussion et al., 2019) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. This is done calling Python from Julia using PyCall. Then, all the simulations and processing are performed in Julia, benefitting from its high performance and the SciML ecosystem. 
 
