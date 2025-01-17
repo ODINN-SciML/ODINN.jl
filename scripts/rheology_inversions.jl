@@ -25,7 +25,7 @@ processes = 10
 ODINN.enable_multiprocessing(processes)
 # Flags
 ODINN.set_use_MB(false)
-ODINN.make_plots(true)    
+ODINN.make_plots(true)
 # UDE training
 ODINN.set_train(true)    # Train UDE
 ODINN.set_retrain(false) # Re-use previous NN weights to continue training
@@ -33,10 +33,6 @@ ODINN.set_retrain(false) # Re-use previous NN weights to continue training
 function run()
 
     tspan = (2017, 2018) # period in years for simulation
-
-    # Configure OGGM settings in all workers
-    working_dir = joinpath(homedir(), "Python/OGGM_data_D")
-    oggm_config(working_dir)    
 
     gtd_file, rgi_ids = ODINN.get_glathida_path_and_IDs()
     @infiltrate

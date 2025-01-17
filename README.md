@@ -67,16 +67,19 @@ ODINN's architecture makes it really straightforward to retrieve all the necessa
 ```julia
 using ODINN
 
+# Data are automatically downloaded, retrieve the local paths
+rgi_paths = get_rgi_paths()
+
 # We create the necessary parameters
-params = Parameters(OGGM = OGGMparameters(working_dir=joinpath(homedir(), "OGGM/ODINN_tests")),
-		    simulation = SimulationParameters(working_dir=working_dir,
-						      tspan=(2010.0, 2015.0),
-						      workers=5),
+params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
+									tspan=(2010.0, 2015.0),
+									workers=5,
+									rgi_paths=rgi_paths),
 		    hyper = Hyperparameters(batch_size=4,
 					    epochs=10,
 					    optimizer=ODINN.ADAM(0.01)),
 		    UDE = UDEparameters(target = "A")
-		   ) 
+		   )
 
 # We define which glacier RGI IDs we want to work with
 rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351"]
@@ -86,7 +89,7 @@ model = Model(iceflow = SIA2Dmodel(params),
 	      mass_balance = mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 	      machine_learning = NN(params))
 
-# We initialize the glaciers with all the necessary data 
+# We initialize the glaciers with all the necessary data
 glaciers = initialize_glaciers(rgi_ids, params)
 
 # We specify the type of simulation we want to perform

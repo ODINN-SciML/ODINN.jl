@@ -12,6 +12,8 @@ nglaciers = 1
 
 function API_test(tspan)
 
+    rgi_paths = get_rgi_paths()
+
     to = get_timer("ODINN")
     reset_timer!(to)
 
@@ -23,10 +25,11 @@ function API_test(tspan)
                                                             use_MB=true,
                                                             use_iceflow=true,
                                                             multiprocessing=true,
-                                                            workers=1),
+                                                            workers=1,
+                                                            rgi_paths=rgi_paths),
                             physical=PhysicalParameters(A=2e-17),
                             solver=SolverParameters(reltol=1e-7))
-    # Create an ODINN model based on a 2D Shallow Ice Approximation, 
+    # Create an ODINN model based on a 2D Shallow Ice Approximation,
     # a TI model with 1 DDF, and a neural network
     model = Model(iceflow = SIA2Dmodel(parameters),
                   mass_balance = TImodel1(parameters; DDF=8.0/1000.0, acc_factor=1.0/1000.0),
@@ -40,7 +43,7 @@ function API_test(tspan)
     prediction = Prediction(model, glaciers, parameters)
 
     # We run the simulation
-    @timeit get_timer("ODINN") "Run prediction" run!(prediction) 
+    @timeit get_timer("ODINN") "Run prediction" run!(prediction)
     @show to
 
     display(ODINN.Makie.heatmap(prediction.results[1].S))

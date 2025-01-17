@@ -11,7 +11,7 @@ using Test
 # using Random
 # using Distributed
 # using Statistics, LinearAlgebra, Random, Polynomials
-# using HDF5  
+# using HDF5
 # using JLD2
 # using OrdinaryDiffEq, DiffEqFlux
 # using Zygote: @ignore_derivatives
@@ -20,8 +20,7 @@ using Test
 # using Infiltrator
 # using Plots
 # using ProgressMeter, ParallelDataTransfer
-# using Dates 
-# using PyCall
+# using Dates
 # using Makie, CairoMakie
 
 # @everywhere begin 

@@ -1,7 +1,6 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
-using PyCall
 # Update SSL certificate to avoid issue in GitHub Actions CI
 certifi = pyimport("certifi")
 ENV["SSL_CERT_FILE"] = certifi.where()

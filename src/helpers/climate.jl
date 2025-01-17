@@ -75,7 +75,7 @@ end
 """
     apply_t_grad!(climate, g_dem)
 
-Applies temperature gradients to the glacier 2D climate data based on a DEM.  
+Applies temperature gradients to the glacier 2D climate data based on a DEM.
 """
 function apply_t_cumul_grad!(climate, S)
     # We apply the gradients to the temperature
@@ -96,24 +96,23 @@ function apply_t_grad!(climate, dem)
 end
 
 """
-    downscale_2D_climate(climate, g_dem)
+    downscale_2D_climate(climate, S, S_coords)
 
 Projects climate data to the glacier matrix by simply copying the closest gridpoint to all matrix gridpoints.
-Generates a new xarray Dataset which is returned.   
+Generates a new RasterStack which is returned.
 """
 function downscale_2D_climate!(climate, S, S_coords)
     # Update 2D climate structure
-    # /!\ AVOID USING `.` IN JULIA TO ASSIGN. IT'S NOT HANDLED BY XARRAY. USE `=` INSTEAD
-    climate.climate_2D_step[].temp.data = climate.climate_step[].avg_temp.data .* ones(size(climate.climate_2D_step[].temp.data))
-    climate.climate_2D_step[].PDD.data = climate.climate_step[].temp.data .* ones(size(climate.climate_2D_step[].PDD.data))
-    climate.climate_2D_step[].snow.data = climate.climate_step[].prcp.data .* ones(size(climate.climate_2D_step[].snow.data))
-    climate.climate_2D_step[].rain.data = climate.climate_step[].prcp.data .* ones(size(climate.climate_2D_step[].rain.data))
+    climate.climate_2D_step.temp .= climate.climate_step.avg_temp.data
+    climate.climate_2D_step.PDD .= climate.climate_step.temp.data
+    climate.climate_2D_step.snow .= climate.climate_step.prcp.data
+    climate.climate_2D_step.rain .= climate.climate_step.prcp.data
     # Update gradients
-    climate.climate_2D_step[].gradient.data = climate.climate_step[].gradient.data
-    climate.climate_2D_step[].avg_gradient.data = climate.climate_step[].avg_gradient.data
+    climate.climate_2D_step.gradient .= climate.climate_step.gradient.data
+    climate.climate_2D_step.avg_gradient .= climate.climate_step.avg_gradient.data
 
     # Apply temperature gradients and compute snow/rain fraction for the selected period
-    apply_t_cumul_grad!(climate.climate_2D_step[], reshape(S, size(S))) # Reproject current S with xarray structure
+    apply_t_cumul_grad!(climate.climate_2D_step, reshape(S, size(S))) # Reproject current S with the RasterStack structure
 end
 
 function downscale_2D_climate(climate, S, S_coords)
@@ -125,21 +124,33 @@ function downscale_2D_climate(climate, S, S_coords)
     rain_2D = climate.prcp.data .* dummy_grid
 
     # We generate a new dataset with the scaled data
-    climate_2D = xr.Dataset(
-        data_vars=Dict([
-            ("temp", (["y","x"], temp_2D)),
-            ("PDD", (["y","x"], PDD_2D)),
-            ("snow", (["y","x"], snow_2D)),
-            ("rain", (["y","x"], rain_2D)),
-            ("gradient", climate.gradient.data),
-            ("avg_gradient", climate.avg_gradient.data)
-            ]),
-        coords=Dict([
-            ("x", S_coords.x),
-            ("y", S_coords.y)
-        ]),
-        attrs=climate.attrs
+    data_vars=Dict(
+        "temp" => temp_2D,
+        "PDD" => PDD_2D,
+        "snow" => snow_2D,
+        "rain" => rain_2D,
+        "gradient" => climate.gradient.data,
+        "avg_gradient" => climate.avg_gradient.data
     )
+    climate_2D = RasterStack(
+        data_vars, (X(S_coords.x), Y(S_coords.y))
+        metadata=metadata(climate)
+    )
+    # climate_2D = xr.Dataset(
+    #     data_vars=Dict([
+    #         ("temp", (["y","x"], temp_2D)),
+    #         ("PDD", (["y","x"], PDD_2D)),
+    #         ("snow", (["y","x"], snow_2D)),
+    #         ("rain", (["y","x"], rain_2D)),
+    #         ("gradient", climate.gradient.data),
+    #         ("avg_gradient", climate.avg_gradient.data)
+    #         ]),
+    #     coords=Dict([
+    #         ("x", S_coords.x),
+    #         ("y", S_coords.y)
+    #     ]),
+    #     attrs=climate.attrs
+    # )
 
     # Apply temperature gradients and compute snow/rain fraction for the selected period
     apply_t_cumul_grad!(climate_2D, reshape(S, size(S))) # Reproject current S with xarray structure
@@ -150,7 +161,7 @@ end
 """
     trim_period(period, climate)
 
-Trims a time period based on the time range of a climate series. 
+Trims a time period based on the time range of a climate series.
 """
 function trim_period(period, climate)
     if any(climate.time[1].dt.date.data[1] > period[1])
@@ -175,46 +186,47 @@ end
 partial_year(float::AbstractFloat) = partial_year(Day, float)
 
 
-function get_longterm_temps(gdir::PyObject, tspan)
-    climate = xr.open_dataset(joinpath(gdir.dir, "raw_climate_$tspan.nc")) # load only once at the beginning
-    dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
-    apply_t_grad!(climate, dem)
-    longterm_temps = climate.groupby("time.year").mean().temp.data
-    return longterm_temps
-end
+# function get_longterm_temps(gdir::PyObject, tspan)
+#     climate = xr.open_dataset(joinpath(gdir.dir, "raw_climate_$tspan.nc")) # load only once at the beginning
+#     dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
+#     apply_t_grad!(climate, dem)
+#     longterm_temps = climate.groupby("time.year").mean().temp.data
+#     return longterm_temps
+# end
 
-function get_longterm_temps(gdir::PyObject, climate::PyObject)
-    dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
-    apply_t_grad!(climate, dem)
-    longterm_temps = climate.groupby("time.year").mean().temp.data
-    return longterm_temps
-end
+# function get_longterm_temps(gdir::PyObject, climate::PyObject)
+#     dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
+#     apply_t_grad!(climate, dem)
+#     longterm_temps = climate.groupby("time.year").mean().temp.data
+#     return longterm_temps
+# end
 
 ### Data structures
 @kwdef mutable struct ClimateDataset
-    raw_climate::PyObject # Raw climate dataset for the whole simulation
+    raw_climate::RasterStack # Raw climate dataset for the whole simulation
     # Buffers to avoid memory allocations
-    climate_raw_step::Ref{PyObject} # Raw climate trimmed for the current step
-    climate_step::Ref{PyObject} # Climate data for the current step
+    climate_raw_step::Ref{RasterStack} # Raw climate trimmed for the current step
+    climate_step::Ref{RasterStack} # Climate data for the current step
     climate_2D_step::Ref{PyObject} # 2D climate data for the current step to feed to the MB model
     longterm_temps::Vector{Float64} # Longterm temperatures for the ice rheology
-    avg_temps::Ref{PyObject} # Intermediate buffer for computing average temperatures
-    avg_gradients::Ref{PyObject} # Intermediate buffer for computing average gradients
+    avg_temps::Ref{RasterStack} # Intermediate buffer for computing average temperatures
+    avg_gradients::Ref{RasterStack} # Intermediate buffer for computing average gradients
 end
 
-function init_climate(gdir::PyObject, tspan, step, S, S_coords::PyObject)
-    dummy_period = partial_year(Day, tspan[1]):Day(1):partial_year(Day, tspan[1] + step)
-    raw_climate::PyObject = xr.open_dataset(joinpath(gdir.dir, "raw_climate_$tspan.nc"))
-    climate_step = Ref{PyObject}(get_cumulative_climate(raw_climate.sel(time=dummy_period)))
-    climate_2D_step = Ref{PyObject}(downscale_2D_climate(climate_step[], S, S_coords))
-    longterm_temps = get_longterm_temps(gdir, raw_climate)
+# function init_climate(gdir::PyObject, tspan, step, S, S_coords::PyObject)
+function init_climate(rgi_id::String, params::Parameters, step, S, S_coords::Dict{String, Integer})
+    rgi_path = params.simulation.rgi_paths[rgi_id]
+    dummy_period = partial_year(Day, params.simulation.tspan[1]):Day(1):partial_year(Day, params.simulation.tspan[1] + step)
+    raw_climate = RasterStack(joinpath(rgi_path, "raw_climate_$(params.simulation.tspan).nc"))
+    climate_step = get_cumulative_climate(raw_climate[At(dummy_period)])
+    climate_2D_step = downscale_2D_climate(climate_step, S, S_coords)
+    longterm_temps = get_longterm_temps(rgi_id, raw_climate)
     climate = ClimateDataset(raw_climate = raw_climate,
-                            climate_raw_step = raw_climate.sel(time=dummy_period),
-                            #climate_cum_step = raw_climate.sel(time=dummy_period).sum(),
+                            climate_raw_step = raw_climate[At(dummy_period)],
                             climate_step = climate_step,
                             climate_2D_step = climate_2D_step,
                             longterm_temps = longterm_temps,
-                            avg_temps = raw_climate.sel(time=dummy_period).temp.mean(),
-                            avg_gradients = raw_climate.sel(time=dummy_period).gradient.mean())
+                            avg_temps = mean(raw_climate[At(dummy_period)].temp),
+                            avg_gradients = mean(raw_climate[At(dummy_period)].gradient))
     return climate
 end

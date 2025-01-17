@@ -18,7 +18,7 @@ using Plots
 using Infiltrator
 using Distributed
 using JLD2
-using Statistics  
+using Statistics
 # using AbbreviatedStackTraces
 
 # Activate to avoid GKS backend Plot issues in the JupyterHub
@@ -32,8 +32,8 @@ function run_toy_model()
     ODINN.enable_multiprocessing(processes)
     # Flags
     ODINN.set_use_MB(true)
-    ODINN.make_plots(true)    
-    # Spin up 
+    ODINN.make_plots(true)
+    # Spin up
     ODINN.set_run_spinup(false) # Run the spin-up random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)n
     ODINN.set_use_spinup(false) # Use the updated spinup
     # Reference simulations
@@ -47,14 +47,10 @@ function run_toy_model()
 
     tspan = (2010.0, 2015.0) # period in years for simulation
 
-    # Configure OGGM settings in all workers
-    working_dir = joinpath(homedir(), "Python/OGGM_data")
-    oggm_config(working_dir)
-
     # Defining glaciers to be modelled with RGI IDs
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
-                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
-                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]#, 
+                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",
+                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316"]#,
                 # "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
 
     # rgi_ids = rgi_ids[1:2]

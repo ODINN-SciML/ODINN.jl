@@ -42,14 +42,10 @@ function run()
 
     tspan = (2017, 2018) # period in years for simulation (also for spin-up)
 
-    # Configure OGGM settings in all workers
-    working_dir = joinpath(homedir(), "Python/OGGM_data_diffusivity")
-    oggm_config(working_dir)    
-
     # Defining glaciers to be modelled with RGI IDs
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
-                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",                	
-                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316", 
+                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",
+                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316",
                 "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###

@@ -98,7 +98,7 @@ function predict_diffusivity(UD_f, θ, X)
 end
 
 """
-    generate_batches(batch_size, UD, target, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
+    generate_batches(simulation::S; shuffle=true)
 
 Generates batches for the UE inversion problem based on input data and feed them to the loss function.
 """
@@ -127,9 +127,9 @@ end
 # end
 
 """
-    update_training_state(batch_size, n_gdirs)
-    
-Update training state to know if the training has completed an epoch. 
+    update_training_state(simulation, l)
+
+Update training state to know if the training has completed an epoch.
 If so, reset minibatches, update history loss and bump epochs.
 """
 function update_training_state!(simulation, l)
