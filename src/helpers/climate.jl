@@ -2,10 +2,10 @@
 ############  FUNCTIONS   #####################
 ###############################################
 
-export get_cumulative_climate!, get_cumulative_climate, get_raw_climate_data, 
-        apply_t_cumul_grad!, apply_t_grad!, downscale_2D_climate!, 
-        downscale_2D_climate, ClimateDataset, trim_period, partial_year, 
-        get_longterm_temps, init_climate
+export get_cumulative_climate!, get_cumulative_climate, get_raw_climate_data,
+        apply_t_cumul_grad!, apply_t_grad!, downscale_2D_climate!,
+        downscale_2D_climate, ClimateDataset, trim_period, partial_year,
+        init_climate
 
 using Dates # to provide correct Julian time slices 
 
@@ -136,21 +136,6 @@ function downscale_2D_climate(climate, S, S_coords)
         data_vars, (X(S_coords.x), Y(S_coords.y))
         metadata=metadata(climate)
     )
-    # climate_2D = xr.Dataset(
-    #     data_vars=Dict([
-    #         ("temp", (["y","x"], temp_2D)),
-    #         ("PDD", (["y","x"], PDD_2D)),
-    #         ("snow", (["y","x"], snow_2D)),
-    #         ("rain", (["y","x"], rain_2D)),
-    #         ("gradient", climate.gradient.data),
-    #         ("avg_gradient", climate.avg_gradient.data)
-    #         ]),
-    #     coords=Dict([
-    #         ("x", S_coords.x),
-    #         ("y", S_coords.y)
-    #     ]),
-    #     attrs=climate.attrs
-    # )
 
     # Apply temperature gradients and compute snow/rain fraction for the selected period
     apply_t_cumul_grad!(climate_2D, reshape(S, size(S))) # Reproject current S with xarray structure
@@ -185,21 +170,6 @@ function partial_year(period::Type{<:Period}, float)
 end
 partial_year(float::AbstractFloat) = partial_year(Day, float)
 
-
-# function get_longterm_temps(gdir::PyObject, tspan)
-#     climate = xr.open_dataset(joinpath(gdir.dir, "raw_climate_$tspan.nc")) # load only once at the beginning
-#     dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
-#     apply_t_grad!(climate, dem)
-#     longterm_temps = climate.groupby("time.year").mean().temp.data
-#     return longterm_temps
-# end
-
-# function get_longterm_temps(gdir::PyObject, climate::PyObject)
-#     dem = rioxarray.open_rasterio(gdir.get_filepath("dem"))
-#     apply_t_grad!(climate, dem)
-#     longterm_temps = climate.groupby("time.year").mean().temp.data
-#     return longterm_temps
-# end
 
 ### Data structures
 @kwdef mutable struct ClimateDataset
