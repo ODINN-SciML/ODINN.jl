@@ -107,7 +107,7 @@ function generate_batches(simulation::S; shuffle=true) where {S <: Simulation}
     batch_ids::Vector{Int} = collect(1:length(simulation.glaciers))
     rgi_ids::Vector{String} = [glacier.rgi_id for glacier in simulation.glaciers]
     batches = (batch_ids, rgi_ids)
-    train_loader = Flux.Data.DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
+    train_loader = Flux.DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
 
     return train_loader
 end

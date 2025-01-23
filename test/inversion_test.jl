@@ -1,5 +1,5 @@
 function inversion_test(;steady_state = false, save_refs = false)
-    rgi_ids = ["RGI60-11.01450", "RGI60-11.00638"]
+    rgi_ids = ["RGI60-11.01450", "RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
