@@ -13,18 +13,15 @@ function params_constructor_specified(save_refs::Bool = false)
 
     hyparams = Hyperparameters(current_epoch=1,
                               current_minibatch=1,
-                              loss_history=Vector{Float64[]},
+                              loss_history=zeros(Float64, 0),
                               optimizer=BFGS(),
                               epochs=10,
                               batch_size=15)
 
     physical_params = PhysicalParameters(ρ = 900.0,
                                         g = 9.81,
-                                        n = 3,
-                                        A = 4e-17,
                                         ϵ = 1e-3,
-                                        C = 1.0,
-                                        η₀ = 1.0, 
+                                        η₀ = 1.0,
                                         maxA = 8e-17,
                                         minA = 8.5e-20,
                                         maxTlaw = 1.0,
@@ -43,7 +40,7 @@ function params_constructor_specified(save_refs::Bool = false)
                                             workers = 10,
                                             rgi_paths = rgi_paths)
 
-    ude_params = UDEparameters(sensealg = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
+    ude_params = UDEparameters(sensealg = InterpolatingAdjoint(autojacvec=EnzymeVJP()),
                                 optimization_method = "AD+AD",
                                 loss_type = "V",
                                 scale_loss = true)

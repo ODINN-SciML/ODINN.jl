@@ -14,7 +14,7 @@ end
     Hyperparameters(;
         current_epoch::Int64 = nothing,
         current_minibatch::Int64 = nothing,
-        loss_history::Vector{Float64} = Vector{Float64}[],
+        loss_history::Vector{Float64} = zeros(Float64, 0),
         optimizer::Optim.FirstOrderOptimizer = BFGS(initial_stepnorm=0.001),
         epochs::Int64 = 50,
         batch_size::Int64 = 15

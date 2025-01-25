@@ -183,7 +183,6 @@ partial_year(float::AbstractFloat) = partial_year(Day, float)
     avg_gradients::Ref{RasterStack} # Intermediate buffer for computing average gradients
 end
 
-# function init_climate(gdir::PyObject, tspan, step, S, S_coords::PyObject)
 function init_climate(rgi_id::String, params::Parameters, step, S, S_coords::Dict{String, Integer})
     rgi_path = params.simulation.rgi_paths[rgi_id]
     dummy_period = partial_year(Day, params.simulation.tspan[1]):Day(1):partial_year(Day, params.simulation.tspan[1] + step)

@@ -1,9 +1,9 @@
 function inversion_test(;steady_state = false, save_refs = false)
-    rgi_ids = ["RGI60-11.01450", "RGI60-11.03638"]
+    rgi_ids = ["RGI60-07.00042", "RGI60-07.00065"]
     rgi_paths = get_rgi_paths()
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
-    params = Parameters(
+    params = ODINN.Parameters(
         simulation = SimulationParameters(
             use_MB = true,
             use_iceflow = true,
@@ -19,7 +19,7 @@ function inversion_test(;steady_state = false, save_refs = false)
         solver = SolverParameters(reltol = 1e-8)
     )
 
-    model = Model(
+    model = ODINN.Model(
         iceflow = SIA2Dmodel(params),
         mass_balance = TImodel1(params),
         machine_learning = nothing
