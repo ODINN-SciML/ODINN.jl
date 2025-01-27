@@ -155,21 +155,6 @@ function set_optimization_method(opt_method_i)
     @everywhere @eval ODINN global optimization_method = $opt_method_i
 end
 
-function get_gdir_refs(refs, gdirs)
-    gdir_refs = []
-
-    for (ref, gdir) in zip(refs, gdirs)
-        push!(gdir_refs, Dict("RGI_ID"=>gdir.rgi_id,
-                                "H"=>ref["H"],
-                                "H₀"=>ref["H₀"],
-                                "Vx"=>ref["Vx"],
-                                "Vy"=>ref["Vy"],
-                                "S"=>ref["S"],
-                                "B"=>ref["B"]))
-    end
-    return gdir_refs
-end
-
 """
     generate_batches(batch_size, UD, target, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
 

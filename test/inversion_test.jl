@@ -20,7 +20,7 @@ function inversion_test(;steady_state = false, save_refs = false)
     )
 
     model = ODINN.Model(
-        iceflow = SIA2Dmodel(params),
+        iceflow = SIA2Dmodel(params, C=0.),
         mass_balance = TImodel1(params),
         machine_learning = nothing
     )

@@ -111,7 +111,7 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     lower_bound = [0.0085] #2.7,0.0, 0.0]   
     upper_bound = [800.0] #3.3, 1.0, 1.0] 
     
-    optfun = OptimizationFunction(fn, Optimization.AutoForwardDiff(),) #cons=cons)
+    optfun = OptimizationFunction(fn, AutoEnzyme()) #cons=cons)
     optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound,ub = upper_bound,) #lcons = [0.0], ucons = [0.0])
     sol = solve(optprob, BFGS(), x_tol=1.0e-1, f_tol = 1e1)
 
@@ -187,7 +187,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
         # Apply parameter transformations for optimization
-         simulation.model.iceflow.C[] = x[1]
+        simulation.model.iceflow.C[] = x[1]
 
         # Extract and predict H values based on V observations
         H_obs = realsol[1][1:end-1, 1:end-1]
@@ -204,7 +204,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     initial_conditions = params.inversion.initial_conditions
     lower_bound = params.inversion.lower_bound
     upper_bound = params.inversion.upper_bound
-    optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), Optimization.AutoForwardDiff())
+    optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), AutoEnzyme())
 
 
     # === Region-based Optimization and Prediction ===

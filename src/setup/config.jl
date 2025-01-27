@@ -1,17 +1,4 @@
 
-function __init__()
-    if myid() == 1
-
-        # Create structural folders if needed
-        OGGM_path = joinpath(homedir(), "Python/OGGM_data")
-        if !isdir(OGGM_path)
-            mkpath(OGGM_path)
-        end
-
-    end
-end
-
-
 function clean()
     atexit() do
         run(`$(Base.julia_cmd())`)
