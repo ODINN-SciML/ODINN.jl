@@ -3,7 +3,7 @@ function inversion_test(;steady_state = false, save_refs = false)
     rgi_paths = get_rgi_paths()
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
-    params = ODINN.Parameters(
+    params = Parameters(
         simulation = SimulationParameters(
             use_MB = true,
             use_iceflow = true,
@@ -19,7 +19,7 @@ function inversion_test(;steady_state = false, save_refs = false)
         solver = SolverParameters(reltol = 1e-8)
     )
 
-    model = ODINN.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params, C=0.),
         mass_balance = TImodel1(params),
         machine_learning = nothing

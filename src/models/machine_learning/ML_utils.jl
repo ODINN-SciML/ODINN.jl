@@ -112,20 +112,6 @@ function generate_batches(simulation::S; shuffle=true) where {S <: Simulation}
     return train_loader
 end
 
-# """
-#     config_training_state(θ_trained)
-
-# Configure training state with current epoch and its loss history. 
-# """
-# function config_training_state(θ_trained)
-#     if length(θ_trained) == 0
-#         reset_epochs()
-#     else
-#         # Remove loss history from unfinished trainings
-#         deleteat!(loss_history, current_epoch:length(loss_history))
-#     end
-# end
-
 """
     update_training_state(simulation, l)
 

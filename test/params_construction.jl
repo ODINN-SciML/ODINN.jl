@@ -13,7 +13,7 @@ function params_constructor_specified(save_refs::Bool = false)
 
     hyparams = Hyperparameters(current_epoch=1,
                               current_minibatch=1,
-                              loss_history=zeros(Float64, 0),
+                              loss_history=Vector{Float64}(),
                               optimizer=BFGS(),
                               epochs=10,
                               batch_size=15)
