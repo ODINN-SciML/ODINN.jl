@@ -28,7 +28,7 @@ function train_UDE!(simulation::FunctionalInversion)
     train_batches = generate_batches(simulation)
     θ = simulation.model.machine_learning.θ
 
-    optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), Optimization.AutoReverseDiff())
+    optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), Optimization.AutoEnzyme())
     optprob = OptimizationProblem(optf, θ)
     
     if simulation.parameters.UDE.target == "A"
@@ -202,7 +202,7 @@ function simulate_iceflow_UDE!(
     # Compute average ice surface velocities for the simulated period
     model.iceflow[batch_id].H = iceflow_sol.u[end]
     model.iceflow[batch_id].H = ifelse.(model.iceflow[batch_id].H .> 0.0, model.iceflow[batch_id].H , 0.0)
-    
+
     # Average surface velocity
     Huginn.avg_surface_V(simulation; batch_id = batch_id)
 
@@ -211,7 +211,7 @@ function simulate_iceflow_UDE!(
     println("over here for $batch_id")
 
     # Surface topography
-    model.iceflow[batch_id].S = glacier.B .+ model.iceflow[batch_id].H 
+    model.iceflow[batch_id].S = glacier.B .+ model.iceflow[batch_id].H
 
     return iceflow_sol
 end
@@ -219,7 +219,7 @@ end
 function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integrator, batch_id::I) where {I <: Integer}
     # We load the ML model with the parameters
     U = simulation.model.machine_learning.NN_f(θ)
-    # We generate the ML parametrization based on the target 
+    # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
         A = predict_A̅(U, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
         simulation.model.iceflow[batch_id].A[] = A

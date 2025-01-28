@@ -13,7 +13,7 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.o
 
 """
     UDEparameters(;
-        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
+        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
         scale_loss::Bool = true
@@ -28,7 +28,7 @@ Keyword arguments
     - `scale_loss`: Determines if the loss function should be scaled or not.
 """
 function UDEparameters(;
-            sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)),
+            sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
             scale_loss::Bool = true,
@@ -51,7 +51,6 @@ include("InversionParameters.jl")
 Parameters(;
         physical::PhysicalParameters = PhysicalParameters(),
         simulation::SimulationParameters = SimulationParameters(),
-        OGGM::OGGMparameters = OGGMparameters(),
         solver::SolverParameters = SolverParameters(),
         hyper::Hyperparameters = Hyperparameters(),
         UDE::UDEparameters = UDEparameters()
@@ -61,28 +60,23 @@ Initialize ODINN parameters
 
 Keyword arguments
 =================
-    
+
 """
 function Parameters(;
     physical::PhysicalParameters = PhysicalParameters(),
     simulation::SimulationParameters = SimulationParameters(),
-    OGGM::OGGMparameters = OGGMparameters(),
     solver::SolverParameters = SolverParameters(),
     hyper::Hyperparameters = Hyperparameters(),
     UDE::UDEparameters = UDEparameters(),
-    inversion::InversionParameters = InversionParameters()  
-    ) 
+    inversion::InversionParameters = InversionParameters()
+    )
 
-    
-    parameters = Sleipnir.Parameters(physical, simulation, OGGM, hyper, solver, UDE, inversion)  
+
+    parameters = Sleipnir.Parameters(physical, simulation, hyper, solver, UDE, inversion)
 
     if simulation.multiprocessing
         enable_multiprocessing(parameters)
     end
-    # Config OGGM *after* setting multirprocessing 
-    # to ensure it is initialized in all workers
-    oggm_config(OGGM.working_dir; oggm_processes=OGGM.workers)
-
 
     return parameters
 end

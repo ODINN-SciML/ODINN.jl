@@ -33,30 +33,30 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}  
-      - name: Create environment with micromamba 🐍🖤
-        uses: mamba-org/setup-micromamba@v1
-        with: 
-          micromamba-version: '1.5.6-0'
-          environment-file: ./environment.yml
-          environment-name: oggm_env                # it is recommendable to add both name and yml file. 
-          init-shell: bash
-          cache-environment: true
-#           condarc-file: ./condarc.yml                # If necessary, we can include .condarc to configure environment
-      - name: Test creation of environment with micromamba 🔧🐍🖤
-        run: | 
-            which python
-            conda env export
-        shell: bash -el {0}
-      - name: Update certifi 🔒🔑
-        run: | 
-            pip install --upgrade certifi
-        shell: bash -el {0}
-#       - name: Test OGGM installation 🔧🌎 
-#         run: pytest.oggm
+#       - name: Create environment with micromamba 🐍🖤
+#         uses: mamba-org/setup-micromamba@v1
+#         with: 
+#           micromamba-version: '1.5.6-0'
+#           environment-file: ./environment.yml
+#           environment-name: oggm_env                # it is recommendable to add both name and yml file. 
+#           init-shell: bash
+#           cache-environment: true
+# #           condarc-file: ./condarc.yml                # If necessary, we can include .condarc to configure environment
+#       - name: Test creation of environment with micromamba 🔧🐍🖤
+#         run: | 
+#             which python
+#             conda env export
 #         shell: bash -el {0}
-      - name: Set ENV Variables for PyCall.jl 🐍 📞
-        run: export PYTHON=/home/runner/micromamba/envs/oggm_env/bin/python
-        shell: bash -el {0}
+#       - name: Update certifi 🔒🔑
+#         run: | 
+#             pip install --upgrade certifi
+#         shell: bash -el {0}
+# #       - name: Test OGGM installation 🔧🌎 
+# #         run: pytest.oggm
+# #         shell: bash -el {0}
+#       - name: Set ENV Variables for PyCall.jl 🐍 📞
+#         run: export PYTHON=/home/runner/micromamba/envs/oggm_env/bin/python
+#         shell: bash -el {0}
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}

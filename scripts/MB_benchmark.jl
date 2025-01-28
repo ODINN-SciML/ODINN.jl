@@ -1,3 +1,6 @@
+# TODO: update this script to use the new API
+# https://github.com/ODINN-SciML/ODINN.jl/issues/171
+
 ################################################
 ############  PYTHON ENVIRONMENT  ##############
 ################################################
@@ -61,23 +64,17 @@ function run_benchmark(analysis)
 
     tspan = (2010.0,2015.0) # period in years for simulation
 
-    # Configure OGGM settings in all workers
-    # Use a separate working dir to avoid conflicts with other simulations
-    working_dir = joinpath(homedir(), "Python/OGGM_memory_benchmark")
-
     #########################################
     ###########  CLIMATE DATA  ##############
     #########################################
 
     if analysis == "timeit"
 
-        @timeit to "oggm config" oggm_config(working_dir; processes=1)
-
         # Defining glaciers to be modelled with RGI IDs
         # RGI60-11.03638 # Argentière glacier
         # RGI60-11.01450 # Aletsch glacier
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
-    
+
         ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
         gdirs = @timeit to "init_gdirs" init_gdirs(rgi_ids)
 
@@ -109,13 +106,11 @@ function run_benchmark(analysis)
 
     elseif analysis == "profile"
 
-        @profview_allocs oggm_config(working_dir)
-
         # Defining glaciers to be modelled with RGI IDs
         # RGI60-11.03638 # Argentière glacier
         # RGI60-11.01450 # Aletsch glacier
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
-    
+
         ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
         gdirs = init_gdirs(rgi_ids)
 
@@ -136,8 +131,6 @@ function run_benchmark(analysis)
         #                                                                 UDE_settings=UDE_settings)
 
     elseif analysis == "types"
-
-        oggm_config(working_dir)
 
         # Defining glaciers to be modelled with RGI IDs
         # RGI60-11.03638 # Argentière glacier

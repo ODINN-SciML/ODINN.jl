@@ -14,7 +14,7 @@ end
     Hyperparameters(;
         current_epoch::Int64 = nothing,
         current_minibatch::Int64 = nothing,
-        loss_history::Vector{Float64} = Vector{Float64}[],
+        loss_history::Vector{Float64} = Vector{Float64}(),
         optimizer::Optim.FirstOrderOptimizer = BFGS(initial_stepnorm=0.001),
         epochs::Int64 = 50,
         batch_size::Int64 = 15
@@ -32,7 +32,7 @@ Keyword arguments
 function Hyperparameters(;
             current_epoch::Int64 = 1,
             current_minibatch::Int64 = 1,
-            loss_history::Vector{Float64} = zeros(Float64, 0),
+            loss_history::Vector{Float64} = Vector{Float64}(),
             optimizer::Union{Optim.FirstOrderOptimizer, Flux.Optimise.AbstractOptimiser, Optimisers.AbstractRule} = BFGS(initial_stepnorm=0.001),
             loss_epoch::Float64 = 0.0,
             epochs::Int64 = 50,

@@ -98,7 +98,7 @@ function predict_diffusivity(UD_f, θ, X)
 end
 
 """
-    generate_batches(batch_size, UD, target, gdirs_climate_batches, gdir_refs, context_batches; gtd_grids=nothing, shuffle=true)
+    generate_batches(simulation::S; shuffle=true)
 
 Generates batches for the UE inversion problem based on input data and feed them to the loss function.
 """
@@ -107,29 +107,15 @@ function generate_batches(simulation::S; shuffle=true) where {S <: Simulation}
     batch_ids::Vector{Int} = collect(1:length(simulation.glaciers))
     rgi_ids::Vector{String} = [glacier.rgi_id for glacier in simulation.glaciers]
     batches = (batch_ids, rgi_ids)
-    train_loader = Flux.Data.DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
+    train_loader = Flux.DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
 
     return train_loader
 end
 
-# """
-#     config_training_state(θ_trained)
-
-# Configure training state with current epoch and its loss history. 
-# """
-# function config_training_state(θ_trained)
-#     if length(θ_trained) == 0
-#         reset_epochs()
-#     else
-#         # Remove loss history from unfinished trainings
-#         deleteat!(loss_history, current_epoch:length(loss_history))
-#     end
-# end
-
 """
-    update_training_state(batch_size, n_gdirs)
-    
-Update training state to know if the training has completed an epoch. 
+    update_training_state(simulation, l)
+
+Update training state to know if the training has completed an epoch.
 If so, reset minibatches, update history loss and bump epochs.
 """
 function update_training_state!(simulation, l)

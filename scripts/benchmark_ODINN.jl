@@ -1,3 +1,6 @@
+# TODO: update this script to use the new API
+# https://github.com/ODINN-SciML/ODINN.jl/issues/171
+
 ################################################
 ############  PYTHON ENVIRONMENT  ##############
 ################################################
@@ -95,11 +98,6 @@ function run_benchmark()
     ODINN.set_optimization_method("AD+Diff")
 
     tspan = (2010.0,2015.0) # period in years for simulation
-
-    # Configure OGGM settings in all workers
-    # Use a separate working dir to avoid conflicts with other simulations
-    working_dir = joinpath(homedir(), "Python/OGGM_data_benchmark")
-    oggm_config(working_dir)
 
     # Defining glaciers to be modelled with RGI IDs
     # RGI60-11.03638 # Argentière glacier
