@@ -1,3 +1,6 @@
+# TODO: update this script to use the new API
+# https://github.com/ODINN-SciML/ODINN.jl/issues/171
+
 ################################################
 ############  PYTHON ENVIRONMENT  ##############
 ################################################

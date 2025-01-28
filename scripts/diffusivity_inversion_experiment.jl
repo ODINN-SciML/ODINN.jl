@@ -1,3 +1,6 @@
+# TODO: update this script to use the new API
+# https://github.com/ODINN-SciML/ODINN.jl/issues/171
+
 ## IMPORTANT: run this in the REPL before using ODINN! 
 ## Set up Python environment
 # global ENV["PYTHON"] = "/home/jovyan/.conda/envs/oggm_env/bin/python3.9" # same as "which python" 
