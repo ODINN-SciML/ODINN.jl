@@ -3,6 +3,7 @@
 run!
 Hyperparameters
 UDEparameters
+ODINN.ODINN
 ODINN.FunctionalInversion
 ODINN.simulate_iceflow_UDE!
 ODINN.InversionParameters
