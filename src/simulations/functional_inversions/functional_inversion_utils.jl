@@ -166,7 +166,7 @@ function simulate_iceflow_UDE!(
     params::Sleipnir.Parameters, 
     cb::DiscreteCallback,
     batch_id::I; 
-    du = Huginn.SIA2D) where {SIM <: Simulation})
+    du = Huginn.SIA2D) where {I <: Integer, SIM <: Simulation}
 
 Make forward simulation of the iceflow UDE determined in `du`.
 """
@@ -183,8 +183,6 @@ function simulate_iceflow_UDE!(
     apply_UDE_parametrization!(θ, simulation, nothing, batch_id)
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
-    println("Before solving ODE problem")
-
     iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H, params.simulation.tspan, tstops=params.solver.tstops, θ)
     iceflow_sol = solve(iceflow_prob, 
                         params.solver.solver, 
@@ -197,8 +195,6 @@ function simulate_iceflow_UDE!(
                         save_everystep=false,  
                         progress=false)
 
-    println("ODE problem solved for $batch_id")
-
     # Compute average ice surface velocities for the simulated period
     model.iceflow[batch_id].H = iceflow_sol.u[end]
     model.iceflow[batch_id].H = ifelse.(model.iceflow[batch_id].H .> 0.0, model.iceflow[batch_id].H , 0.0)
@@ -207,8 +203,6 @@ function simulate_iceflow_UDE!(
     Huginn.avg_surface_V(simulation; batch_id = batch_id)
 
     glacier = simulation.glaciers[batch_id]
-
-    println("over here for $batch_id")
 
     # Surface topography
     model.iceflow[batch_id].S = glacier.B .+ model.iceflow[batch_id].H

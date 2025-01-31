@@ -1,4 +1,17 @@
 __precompile__() # this module is safe to precompile
+
+"""
+ODINN
+
+ODINN is an open-source glacier evolution model and project that investigates innovative 
+hybrid methods to discover new laws governing glacier physics. 
+By leveraging differentiable programming techniques, we are developing hybrid models 
+that integrate differential equations describing ice flow with machine learning models 
+to learn and parameterize specific components of these equations. 
+This approach facilitates the discovery of parameterizations for glacier processes, 
+helping to bridge the gap between our current mechanistic understanding of glacier 
+physics and emerging observational data.
+"""
 module ODINN
 
 # ##############################################

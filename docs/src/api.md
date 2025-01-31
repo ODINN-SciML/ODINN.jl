@@ -1,0 +1,22 @@
+# API
+```@docs
+run!
+Hyperparameters
+UDEparameters
+ODINN.FunctionalInversion
+ODINN.simulate_iceflow_UDE!
+ODINN.InversionParameters
+ODINN.Inversion
+ODINN.update_training_state!
+ODINN.Parameters
+ODINN.InversionResults
+ODINN.sigmoid_A
+ODINN.Model
+ODINN.predict_A̅
+ODINN.enable_multiprocessing
+ODINN.generate_batches
+ODINN.sigmoid_A_inv
+ODINN.NN
+ODINN.get_NN
+ODINN.train_UDE!
+```
