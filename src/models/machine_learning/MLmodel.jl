@@ -1,4 +1,3 @@
-
 export NN
 
 include("ML_utils.jl")
@@ -27,6 +26,16 @@ function Model(;
     return model
 end
 
+"""
+    NN{F <: AbstractFloat}(architecture::Flux.Chain, NN_f::Optimisers.Restructure, θ::Vector{F})
+
+Feed-forward neural network.
+
+# Fields
+- `architecture`: `Flux.Chain` neural network architecture
+- `NN_f`: Neural network restructuring
+- `θ`: Neural network parameters
+"""
 mutable struct NN{F <: AbstractFloat} <: MLmodel 
     architecture::Flux.Chain
     NN_f::Optimisers.Restructure
@@ -37,13 +46,12 @@ end
     NN(params::Parameters;
         architecture::Union{Flux.Chain, Nothing} = nothing,
         θ::Union{Vector{AbstractFloat}, Nothing} = nothing)
-        
-        Feed-forward neural network.
 
-Keyword arguments
-=================
-    - `architecture`: `Flux.Chain` neural network architecture
-    - `θ`: Neural network parameters
+Creates a new feed-forward neural network.
+
+# Keyword arguments
+- `architecture`: `Flux.Chain` neural network architecture (optional)
+- `θ`: Neural network parameters (optional)
 """
 function NN(params::Sleipnir.Parameters;
             architecture::Union{Flux.Chain, Nothing} = nothing,

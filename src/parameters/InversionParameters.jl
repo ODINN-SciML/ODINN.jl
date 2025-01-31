@@ -1,5 +1,19 @@
 export InversionParameters
 
+"""
+    InversionParameters{F<:AbstractFloat}
+
+A mutable struct that holds parameters for inversion processes. This struct is a subtype of `AbstractParameters`.
+
+# Fields
+- `initial_conditions::Vector{F}`: A vector of initial conditions.
+- `lower_bound::Vector{F}`: A vector specifying the lower bounds for the parameters.
+- `upper_bound::Vector{F}`: A vector specifying the upper bounds for the parameters.
+- `regions_split::Vector{Int}`: A vector indicating how the regions are split.
+- `x_tol::F`: The tolerance for the solution's x-values.
+- `f_tol::F`: The tolerance for the function values.
+- `solver::Any`: The solver to be used for the inversion process.
+"""
 mutable struct InversionParameters{F<:AbstractFloat} <: AbstractParameters
     initial_conditions::Vector{F}
     lower_bound::Vector{F}
@@ -24,14 +38,15 @@ end
 Initialize the parameters for the inversion process.
 
 # Arguments
-- `initial_conditions`: Starting point for optimization.
-- `lower_bound`: Lower bounds for optimization variables.
-- `upper_bound`: Upper bounds for optimization variables.
-- `regions_split`: Defines the amount of region split based on altitude and distance to border for the inversion process.
-- `x_tol`: Tolerance for variables convergence.
-- `f_tol`: Tolerance for function value convergence.
+- `initial_conditions::Vector{F}`: Starting point for optimization.
+- `lower_bound::Vector{F}`: Lower bounds for optimization variables.
+- `upper_bound::Vector{F}`: Upper bounds for optimization variables.
+- `regions_split::Vector{Int}`: Defines the amount of region split based on altitude and distance to border for the inversion process.
+- `x_tol::F`: Tolerance for variables convergence.
+- `f_tol::F`: Tolerance for function value convergence.
 - `solver`: Optimization solver to be used.
 """
+
 function InversionParameters{}(;
         initial_conditions::Vector{F} = [1.0],
         lower_bound::Vector{F} = [0.0],
