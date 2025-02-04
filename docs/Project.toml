@@ -1,12 +1,12 @@
 name = "ODINN_docs"
-uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
+uuid = "d2f8849c-787d-4b1b-b5c4-4a8e20013fac"
 version = "0.1.0"
 
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 LiveServer = "16fef848-5104-11e9-1b77-fb7a48bbb589"
-ODINN = "c36d5296-eba1-40be-a153-0a8fa632a659"
+ODINN = { path = ".." }
 
 [compat]
 LiveServer = "1.4.0"
