@@ -34,10 +34,7 @@ makedocs(
     format=Documenter.HTML(
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://ODINN-SciML.github.io/ODINN.jl",
-        assets=String[],
-        repolink="https://github.com/ODINN-SciML/ODINN.jl",
-        size_threshold=400000,  # Increase the size threshold to 400 KiB
-        size_threshold_warn=300000,  # Set the warning threshold to 300 KiB
+        assets=String[]
     ),
     pages=[
         "Home" => "index.md",
