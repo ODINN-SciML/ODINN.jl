@@ -46,7 +46,6 @@ Initialize the parameters for the inversion process.
 - `f_tol::F`: Tolerance for function value convergence.
 - `solver`: Optimization solver to be used.
 """
-
 function InversionParameters{}(;
         initial_conditions::Vector{F} = [1.0],
         lower_bound::Vector{F} = [0.0],
