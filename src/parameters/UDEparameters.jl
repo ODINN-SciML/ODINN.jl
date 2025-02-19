@@ -60,7 +60,12 @@ Initialize ODINN parameters
 
 Keyword arguments
 =================
-
+  - `physical::PhysicalParameters`: Physical parameters for the simulation.
+  - `simulation::SimulationParameters`: Parameters related to the simulation setup.
+  - `solver::SolverParameters`: Parameters for the solver configuration.
+  - `hyper::Hyperparameters`: Hyperparameters for the model.
+  - `UDE::UDEparameters`: Parameters specific to the UDE (Universal Differential Equation).
+  - `inversion::InversionParameters`: Parameters for inversion processes.
 """
 function Parameters(;
     physical::PhysicalParameters = PhysicalParameters(),

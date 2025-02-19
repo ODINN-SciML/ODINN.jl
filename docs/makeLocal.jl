@@ -37,11 +37,3 @@ makedocs(
     ],
     checkdocs=:exports
 )
-
-deploydocs(
-    repo = "github.com/ODINN-SciML/ODINN.jl",
-    branch = "gh-pages",
-    devbranch = "docs",
-    push_preview = true,
-    forcepush = true,
-)

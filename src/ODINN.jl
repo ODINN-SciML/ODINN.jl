@@ -1,4 +1,17 @@
 __precompile__() # this module is safe to precompile
+
+# """
+# # ODINN.jl
+
+# ODINN is an open-source glacier evolution model and project that investigates innovative 
+# hybrid methods to discover new laws governing glacier physics. 
+# By leveraging differentiable programming techniques, we are developing hybrid models 
+# that integrate differential equations describing ice flow with machine learning models 
+# to learn and parameterize specific components of these equations. 
+# This approach facilitates the discovery of parameterizations for glacier processes, 
+# helping to bridge the gap between our current mechanistic understanding of glacier 
+# physics and emerging observational data.
+# """
 module ODINN
 
 # ##############################################
@@ -44,15 +57,15 @@ const global root_plots::String = joinpath(root_dir, "plots")
 # ############  ODINN LIBRARIES  ###############
 # ##############################################
 
-include(joinpath(ODINN.root_dir, "src/setup/config.jl"))
+include(joinpath(root_dir, "src/setup/config.jl"))
 # All parameters needed for the models
-include(joinpath(ODINN.root_dir, "src/parameters/Hyperparameters.jl"))
-include(joinpath(ODINN.root_dir, "src/parameters/UDEparameters.jl"))
+include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
+include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
 # ML models
-include(joinpath(ODINN.root_dir, "src/models/machine_learning/MLmodel.jl"))
+include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Simulations
-include(joinpath(ODINN.root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
-include(joinpath(ODINN.root_dir, "src/simulations/inversions/Inversion.jl"))
+include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
+include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 
 end # module
 
