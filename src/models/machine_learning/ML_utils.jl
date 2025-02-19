@@ -1,15 +1,22 @@
-
 """
-get_NN()
+    get_NN(θ_trained)
 
 Generates a neural network.
+
+# Arguments
+- `θ_trained`: Pre-trained neural network parameters (optional).
+
+# Returns
+- `UA`: `Flux.Chain` neural network architecture.
+- `θ`: Neural network parameters.
+- `UA_f`: Neural network restructuring.
 """
 function get_NN(θ_trained)
     UA = Flux.Chain(
-        Dense(1,3, x->softplus.(x)),
-        Dense(3,10, x->softplus.(x)),
-        Dense(10,3, x->softplus.(x)),
-        Dense(3,1, sigmoid_A)
+        Dense(1, 3, x -> softplus.(x)),
+        Dense(3, 10, x -> softplus.(x)),
+        Dense(10, 3, x -> softplus.(x)),
+        Dense(3, 1, sigmoid_A)
     )
     UA = Flux.f64(UA)
     # See if parameters need to be retrained or not
@@ -21,7 +28,7 @@ function get_NN(θ_trained)
 end
 
 """
-    predict_A̅(UA_f, θ, temp)
+    predict_A̅(U, temp)
 
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
@@ -29,13 +36,35 @@ function predict_A̅(U, temp)
     return U(temp) .* 1e-18
 end
 
-function sigmoid_A(x) 
+"""
+    sigmoid_A(x)
+
+Sigmoid activation function for the neural network output.
+
+# Arguments
+- `x`: Input value.
+
+# Returns
+- Sigmoid-transformed output value.
+"""
+function sigmoid_A(x)
     minA_out = 8.0e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
     maxA_out = 8.0
-    return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
+    return minA_out + (maxA_out - minA_out) / (1.0 + exp(-x))
 end
 
-function sigmoid_A_inv(x) 
+"""
+    sigmoid_A_inv(x)
+
+Inverse sigmoid activation function for the neural network output.
+
+# Arguments
+- `x`: Input value.
+
+# Returns
+- Inverse sigmoid-transformed output value.
+"""
+function sigmoid_A_inv(x)
     minA_out = 8.0e-4 # /!\     # these depend on predict_A̅, so careful when changing them!
     maxA_out = 8.0e2
     return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
@@ -113,12 +142,19 @@ function generate_batches(simulation::S; shuffle=true) where {S <: Simulation}
 end
 
 """
-    update_training_state(simulation, l)
+    update_training_state!(simulation::S, l) where {S <: Simulation}
 
-Update training state to know if the training has completed an epoch.
-If so, reset minibatches, update history loss and bump epochs.
+Update the training state to determine if the training has completed an epoch.
+If an epoch is completed, reset the minibatches, update the history loss, and increment the epoch count.
+
+# Arguments
+- `simulation`: The current state of the simulation or training process.
+- `l`: The current loss value or other relevant metric.
+
+# Returns
+- None. This function updates the state in place.
 """
-function update_training_state!(simulation, l)
+function update_training_state!(simulation::S, l) where {S <: Simulation}
     # Update minibatch count and loss for the current epoch
     simulation.parameters.hyper.current_minibatch += simulation.parameters.hyper.batch_size
     simulation.parameters.hyper.loss_epoch += l

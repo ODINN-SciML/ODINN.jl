@@ -1,3 +1,14 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-ODINN = "9dfbb203-361a-4d93-bfc6-416f4a72f2e8"
+DocumenterTools = "35a29f4d-8980-5a13-9543-d66fff28ecb8"
+Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
+LiveServer = "16fef848-5104-11e9-1b77-fb7a48bbb589"
+ODINN = "c36d5296-eba1-40be-a153-0a8fa632a659"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+
+[compat]
+DocumenterTools = "0.1.20"
+LiveServer = "1.4.0"
+
+[sources.ODINN]
+path = ".."

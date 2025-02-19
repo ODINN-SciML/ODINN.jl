@@ -15,7 +15,7 @@ For a detailed description of the model and the application of Universal Differe
 
 Global glacier evolution model using Universal Differential Equations to model and discover processes of climate-glacier interactions. 
 
-`ODINN.jl` uses neural networks and differential equations in order to combine mechanistic models describing glacier physical processes (e.g. ice creep, basal sliding, surface mass balance) with machine learning. Neural networks are used to learn parts of the equations, which then can be interpreted in a mathematical form (e.g. using SINDy) in order to update the original equation from the process. ODINN uses the Open Global Glacier Model ([OGGM](oggm.org/), Maussion et al., 2019) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. This is done calling Python from Julia using PyCall. Then, all the simulations and processing are performed in Julia, benefitting from its high performance and the SciML ecosystem. 
+`ODINN.jl` uses neural networks and differential equations in order to combine mechanistic models describing glacier physical processes (e.g. ice creep, basal sliding, surface mass balance) with machine learning. Neural networks are used to learn parts of the equations. ODINN uses the Open Global Glacier Model ([OGGM](oggm.org/), Maussion et al., 2019) through [Gungnir](https://github.com/ODINN-SciML/Gungnir) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. Then, all the simulations and processing are performed in Julia, benefitting from its high performance and the SciML ecosystem. 
 
 <center><img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/overview_figure.png" width="700"></center>
 
@@ -30,35 +30,9 @@ julia> ] # enter Pkg mode
 (MyEnvironment) pkg> add ODINN
 ```
 
-### Installing ODINN's Python dependencies
-
-ODINN depends on some Python packages, mainly [OGGM](https://github.com/OGGM/oggm) and [xarray](https://github.com/pydata/xarray). In order to install the necessary Python dependencies in an easy manner, we are providing a Python environment (`oggm_env`) in `environment.yml`. To install and activate the environment, we recommend using [micromamba](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html):
-
-```
-micromamba create -f environment.yml
-micromamba activate oggm_env
-```
-
-In order to call OGGM in Python from Julia, we use [PyCall.jl](https://github.com/JuliaPy/PyCall.jl). PyCall hooks on the Python installation and uses Python in a totally seamless way from Julia. 
-
-The path to this conda environment needs to be specified in the `ENV["PYTHON"]` variable in Julia, for PyCall to find it. This configuration is very easy to implement, it just requires providing the Python path to PyCall and building it:
-
-```julia
-julia # start Julia session
-
-julia> ENV["PYTHON"] = read(`which python`, String)[1:end-1] # trim backspace
-julia> import Pkg; Pkg.build("PyCall")
-julia> exit()
-
-# Now you can run your code using ODINN in a new Julia session; e.g.:
-using ODINN
-```
-
-So now you can start working with ODINN with PyCall correctly configured. These configuration step only needs to be done the first time, so from now on ODINN should be able to correctly find your Python libraries. If you ever want to change your conda environment, you would just need to repeat the steps above. 
-
 ### Using OGGM for the initial conditions of the training/simulations 
 
-ODINN works as a back-end of OGGM, utilizing all its tools to retrieve RGI data, topographical data, climate data and other datasets from the OGGM shop. We use these data to specify the initial state of the simulations, and to retrieve the climate data to force the model. Everything related to the mass balance and ice flow dynamics models is written 100% in Julia. This allows us to run tests with this toy model for any glacier on Earth. In order to choose a glacier, you just need to specify the RGI ID, which you can find [here](https://www.glims.org/maps/glims). 
+OGGM works as a front-end of ODINN, utilizing all its tools to retrieve RGI data, topographical data, climate data and other datasets from the OGGM shop. We use these data to specify the initial state of the simulations, and to retrieve the climate data to force the model. Everything related to the mass balance and ice flow dynamics models is written 100% in Julia. This allows us to run tests with this toy model for any glacier on Earth. In order to choose a glacier, you just need to specify the RGI ID, which you can find [here](https://www.glims.org/maps/glims). 
 
 ## How to use ODINN
 

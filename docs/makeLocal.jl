@@ -11,6 +11,7 @@ Pkg.activate(".")
 Pkg.develop(PackageSpec(path=".."))
 Pkg.instantiate()
 
+using Revise
 using Documenter, Literate
 using ODINN
 
@@ -32,15 +33,7 @@ makedocs(
     pages=[
         "Home" => "index.md",
         "Tutorial" => "tutorial.md",
-        "Index of functions and types" => "api.md"
+        "Index of functions and types" => "funcs_types.md"
     ],
     checkdocs=:exports
-)
-
-deploydocs(
-    repo = "github.com/ODINN-SciML/ODINN.jl",
-    branch = "gh-pages",
-    devbranch = "docs",
-    push_preview = true,
-    forcepush = true,
 )
