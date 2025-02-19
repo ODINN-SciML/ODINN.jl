@@ -6,9 +6,9 @@ LiveServer = "16fef848-5104-11e9-1b77-fb7a48bbb589"
 ODINN = "c36d5296-eba1-40be-a153-0a8fa632a659"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 
-[sources]
-ODINN = {path = ".."}
-
 [compat]
 DocumenterTools = "0.1.20"
 LiveServer = "1.4.0"
+
+[sources.ODINN]
+path = ".."
