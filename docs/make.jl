@@ -41,7 +41,7 @@ makedocs(
 deploydocs(
     repo = "github.com/ODINN-SciML/ODINN.jl",
     branch = "gh-pages",
-    devbranch = "docs",
+    devbranch = "new_API",
     push_preview = true,
     forcepush = true,
 )
