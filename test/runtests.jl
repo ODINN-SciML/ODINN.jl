@@ -18,6 +18,8 @@ include("inversion_test.jl")
 # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"]="nul"
 
+@testset "Run all tests" begin 
+
 atol = 2.0
 @testset "UDE SIA2D training with MB" ude_solve_test(atol; MB=true)
 
@@ -26,3 +28,4 @@ atol = 2.0
 @testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 # @testset "SIA UDE training" begin include("UDE_train.jl") end
 
+end
