@@ -14,11 +14,13 @@ Pkg.instantiate()
 using Revise
 using Documenter, Literate
 using ODINN
+include("src/doc_utils.jl")
 
 DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 
 # Convert tutorial/examples to markdown
-Literate.markdown("./src/tutorial.jl", "./src")
+Literate.markdown("./src/tutorials.jl", "./src";
+                  name = "tutorials", preprocess = replace_includes)
 
 # Which markdown files to compile to HTML
 makedocs(
@@ -32,7 +34,7 @@ makedocs(
     ),
     pages=[
         "Home" => "index.md",
-        "Tutorial" => "tutorial.md",
+        "Tutorials" => "tutorials.md",
         "Index of functions and types" => "funcs_types.md"
     ],
     checkdocs=:exports
@@ -41,7 +43,7 @@ makedocs(
 deploydocs(
     repo = "github.com/ODINN-SciML/ODINN.jl",
     branch = "gh-pages",
-    devbranch = "new_API",
+    devbranch = "main",
     push_preview = true,
     forcepush = true,
 )

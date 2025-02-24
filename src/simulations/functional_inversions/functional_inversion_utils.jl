@@ -40,9 +40,6 @@ function train_UDE!(simulation::FunctionalInversion)
     if simulation.parameters.UDE.target == "A"
         cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable 
     end
-
-    # @infiltrate
-    # y, back = Zygote._pullback(loss_iceflow, θ, collect(ncycle(train_batches, simulation.parameters.hyper.epochs))[1][1], simulation)
   
     println("Training iceflow UDE...")
     
@@ -52,9 +49,6 @@ function train_UDE!(simulation::FunctionalInversion)
                             callback=cb_plots,
                             progress=true)
 
-    # @infiltrate
-    # iceflow_trained.cache.f.grad(θ, θ, collect(ncycle(train_batches, simulation.parameters.hyper.epochs))[1][1], collect(ncycle(train_batches, simulation.parameters.hyper.epochs))[1][2])
-    
     return iceflow_trained
 end
 
