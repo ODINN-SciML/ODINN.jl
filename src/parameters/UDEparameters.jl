@@ -1,6 +1,8 @@
 export UDEparameters
 mutable struct UDEparameters <: AbstractParameters
     sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
+    optim_autoAD::AbstractADType
+    grad::Union{Function, Nothing}
     optimization_method::String
     loss_type::String
     scale_loss::Bool
@@ -29,6 +31,8 @@ Keyword arguments
 """
 function UDEparameters(;
             sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
+            optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
+            grad::Union{Function, Nothing} = nothing, 
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
             scale_loss::Bool = true,
@@ -39,7 +43,7 @@ function UDEparameters(;
     @assert ((loss_type == "V") || (loss_type == "H")) "Wrong loss type! Needs to be either `V` or `H`"
 
     # Build the solver parameters based on input values
-    UDE_parameters = UDEparameters(sensealg, optimization_method,
+    UDE_parameters = UDEparameters(sensealg, optim_autoAD, grad, optimization_method,
                                     loss_type, scale_loss, target)
 
     return UDE_parameters

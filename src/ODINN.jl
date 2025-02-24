@@ -30,6 +30,7 @@ using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimise
 using IterTools: ncycle
 using Zygote
 using ChainRules: @ignore_derivatives
+using SciMLBase: NoAD # probably add all the adtypes we use here
 using Base: @kwdef
 using Flux
 using Tullio
@@ -43,6 +44,9 @@ using Downloads
 using TimerOutputs
 using GeoStats
 using ImageFiltering
+
+# using Enzyme
+# Enzyme.API.runtimeActivity!(true)
 
 # ##############################################
 # ############    PARAMETERS     ###############

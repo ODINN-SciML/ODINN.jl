@@ -28,7 +28,13 @@ function train_UDE!(simulation::FunctionalInversion)
     train_batches = generate_batches(simulation)
     θ = simulation.model.machine_learning.θ
 
-    optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), Optimization.AutoEnzyme())
+    if isnothing(simulation.parameters.UDE.grad)
+        optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), simulation.parameters.UDE.optim_autoAD)
+    else
+        print("Using custom grad function.\n")
+        grad(f, U) = rand(Float64, dims(U))
+        optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), NoAD(), grad=grad)
+    end
     optprob = OptimizationProblem(optf, θ)
     
     if simulation.parameters.UDE.target == "A"
@@ -150,7 +156,7 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) whe
     println("simulation finished for $batch_id")
 
     # Update simulation results
-    results =  Sleipnir.create_results(simulation, batch_id, iceflow_sol; light=true, batch_id = batch_id)
+    results =  Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=true, batch_id = batch_id)
 
     println("Batch $batch_id finished!")
 
