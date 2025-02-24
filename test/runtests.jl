@@ -26,6 +26,5 @@ atol = 2.0
 @testset "Parameters constructors with specified values" params_constructor_specified()
 
 @testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
-# @testset "SIA UDE training" begin include("UDE_train.jl") end
 
 end
