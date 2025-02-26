@@ -10,6 +10,9 @@ function run!(simulation::FunctionalInversion)
     println("Running training of UDE...\n")
     results_list = train_UDE!(simulation)
 
+    # Setup final results
+    simulation.stats.niter = length(simulation.stats.losses)
+
     # TODO: Save when optimization is working
     # Sleipnir.save_results_file!(results_list, simulation)
 
@@ -26,27 +29,48 @@ function train_UDE!(simulation::FunctionalInversion)
     
     # Create batches for inversion training 
     train_batches = generate_batches(simulation)
+    # Extract index of glaciers
+    batch_ids = train_batches.data[1]
+
     θ = simulation.model.machine_learning.θ
 
+    # Simplify API for optimization problem
+    loss_function(θ, p) = loss_iceflow(θ, p[1], p[2])
+
     if isnothing(simulation.parameters.UDE.grad)
-        optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), simulation.parameters.UDE.optim_autoAD)
+        # optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), simulation.parameters.UDE.optim_autoAD)
+        optf = OptimizationFunction((θ, p, _, _) -> loss_function(θ, p), simulation.parameters.UDE.optim_autoAD)
     else
-        print("Using custom grad function.\n")
-        grad(f, U) = rand(Float64, dims(U))
-        optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), NoAD(), grad=grad)
+        @warn "Using custom grad function."
+        # Custom grad API for optimization problem
+        loss_iceflow_grad(du, u, p) = simulation.parameters.UDE.grad(du, u; simulation=simulation)
+        loss_iceflow_grad(du, u, p, _, _) = loss_iceflow_grad(du, u, p)
+        optf = OptimizationFunction((θ, p, _, _) -> loss_function(θ, p), NoAD(), grad=loss_iceflow_grad)
     end
-    optprob = OptimizationProblem(optf, θ)
-    
-    if simulation.parameters.UDE.target == "A"
-        cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable 
+    _p = (batch_ids, simulation)
+    optprob = OptimizationProblem(optf, θ, _p)
+
+    # Plot callback 
+    if isnothing(simulation.parameters.UDE.target)
+        cb_plots = (θ, l) -> false 
+    elseif simulation.parameters.UDE.target == "A"
+        cb_plots = (θ, l) -> false 
+        # This other option returns weird error right now, commenting for now
+        # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable 
+    else
+        raise("Simulation target not defined.")
     end
+    # Training diagnosis callback
+    cb_diagnosis(θ, l) = callback_diagnosis(θ, l, simulation)
+    # Combined callback
+    cb(θ, l) = CallbackOptimizationSet(θ, l; callbacks=(cb_plots, cb_diagnosis))
   
     println("Training iceflow UDE...")
     
     iceflow_trained = solve(optprob, 
                             simulation.parameters.hyper.optimizer, 
                             ncycle(train_batches, simulation.parameters.hyper.epochs), allow_f_increases=true,
-                            callback=cb_plots,
+                            callback=cb,
                             progress=true)
 
     return iceflow_trained
@@ -103,8 +127,6 @@ function loss_iceflow(θ, batch_ids::Vector{I}, simulation::FunctionalInversion)
         l_tot = (l_V + l_H)/length(simulation.results)
     end
 
-    println("Loss computed: $l_tot")
-
     return l_tot
     end # let
 end
@@ -112,7 +134,7 @@ end
 function predict_iceflow!(θ, simulation::FunctionalInversion, batch_ids::Vector{I}) where {I <: Integer}
     # Train UDE in parallel
     simulation.results = pmap((batch_id) -> batch_iceflow_UDE(θ, simulation, batch_id), batch_ids)
-    println("All batches finished")
+    # println("All batches finished")
 end
 
 function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) where {I <: Integer}
@@ -147,12 +169,12 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) whe
     du = params.simulation.use_iceflow ? Huginn.SIA2D : Huginn.noSIA2D
     iceflow_sol = simulate_iceflow_UDE!(θ, simulation, model, params, cb_MB, batch_id; du = du)
 
-    println("simulation finished for $batch_id")
+    # println("simulation finished for $batch_id")
 
     # Update simulation results
     results =  Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=true, batch_id = batch_id)
 
-    println("Batch $batch_id finished!")
+    # println("Batch $batch_id finished!")
 
     return results
 end
@@ -226,47 +248,3 @@ end
 function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
     return Huginn.SIA2D(H, simulation, t; batch_id = batch_id)
 end
-
-
-callback_plots_A = function (θ, l, simulation) # callback function to observe training
-
-    @ignore_derivatives begin
-        
-    update_training_state!(simulation, l)
-
-    avg_temps = Float64[mean(simulation.glaciers[i].climate.longterm_temps) for i in 1:length(simulation.glaciers)]
-    p = sortperm(avg_temps)
-    avg_temps = avg_temps[p]
-    # We load the ML model with the parameters
-    U = simulation.model.machine_learning.NN_f(θ)
-    pred_A = predict_A̅(U, collect(-23.0:1.0:0.0)')
-    pred_A = Float64[pred_A...] # flatten
-    true_A = A_fake(avg_temps, true)
-
-    yticks = collect(0.0:2e-17:8e-17)
-
-    training_path = joinpath(simulation.parameters.simulation.working_dir, "training")
-
-    Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
-    plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
-                        xlabel="Long-term air temperature (°C)", yticks=yticks,
-                        ylabel="A", ylims=(0.0, simulation.parameters.physical.maxA), lw = 3, c=:dodgerblue4,
-                        legend=:topleft)
-    if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
-        mkpath(joinpath(training_path,"png"))
-        mkpath(joinpath(training_path,"pdf"))
-    end
-    # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"png","epoch$(simulation.parameters.hyper.current_epoch).png"))
-    Plots.savefig(plot_epoch,joinpath(training_path,"pdf","epoch$(simulation.parameters.hyper.current_epoch).pdf"))
-
-    plot_loss = Plots.plot(simulation.parameters.hyper.loss_history, label="", xlabel="Epoch", yaxis=:log10,
-                ylabel="Loss (V)", lw = 3, c=:darkslategray3)
-    Plots.savefig(plot_loss,joinpath(training_path,"png","loss$(simulation.parameters.hyper.current_epoch).png"))
-    Plots.savefig(plot_loss,joinpath(training_path,"pdf","loss$(simulation.parameters.hyper.current_epoch).pdf"))
-
-    end #@ignore_derivatives 
-
-    return false
-end
-

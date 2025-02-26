@@ -12,6 +12,7 @@ using Optim
 using SciMLSensitivity
 
 include("params_construction.jl")
+include("grad_free_test.jl")
 include("PDE_UDE_solve.jl")
 include("inversion_test.jl")
 
@@ -19,6 +20,9 @@ include("inversion_test.jl")
 ENV["GKSwstype"]="nul"
 
 @testset "Run all tests" begin 
+
+@testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB=false)
+@testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB=true)
 
 atol = 2.0
 @testset "UDE SIA2D training with MB" ude_solve_test(atol; MB=true)
