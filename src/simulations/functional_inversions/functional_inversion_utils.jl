@@ -28,27 +28,23 @@ Trains UDE based on the current FunctionalInversion.
 function train_UDE!(simulation::FunctionalInversion) 
     
     # Create batches for inversion training 
-    train_batches = generate_batches(simulation)
-    # Extract index of glaciers
-    batch_ids = train_batches.data[1]
+    train_loader = generate_batches(simulation)
 
     θ = simulation.model.machine_learning.θ
 
-    # Simplify API for optimization problem
-    loss_function(θ, p) = loss_iceflow(θ, p[1], p[2])
-
+    # Simplify API for optimization problem and include data loaded in argument for minibatch
+    loss_function(θ, glacier_data_loader) = loss_iceflow(θ, glacier_data_loader.data[1], simulation)
+    
     if isnothing(simulation.parameters.UDE.grad)
-        # optf = OptimizationFunction((θ, _, batch_ids, rgi_ids)->loss_iceflow(θ, batch_ids, simulation), simulation.parameters.UDE.optim_autoAD)
-        optf = OptimizationFunction((θ, p, _, _) -> loss_function(θ, p), simulation.parameters.UDE.optim_autoAD)
+        optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @warn "Using custom grad function."
         # Custom grad API for optimization problem
-        loss_iceflow_grad(du, u, p) = simulation.parameters.UDE.grad(du, u; simulation=simulation)
-        loss_iceflow_grad(du, u, p, _, _) = loss_iceflow_grad(du, u, p)
-        optf = OptimizationFunction((θ, p, _, _) -> loss_function(θ, p), NoAD(), grad=loss_iceflow_grad)
+        loss_iceflow_grad!(dθ, θ, glacier_data_loader) = simulation.parameters.UDE.grad(dθ, θ; simulation=simulation)
+        optf = OptimizationFunction(loss_function, NoAD(), grad=loss_iceflow_grad!)
     end
-    _p = (batch_ids, simulation)
-    optprob = OptimizationProblem(optf, θ, _p)
+
+    optprob = OptimizationProblem(optf, θ, train_loader)
 
     # Plot callback 
     if isnothing(simulation.parameters.UDE.target)
@@ -69,7 +65,7 @@ function train_UDE!(simulation::FunctionalInversion)
     
     iceflow_trained = solve(optprob, 
                             simulation.parameters.hyper.optimizer, 
-                            ncycle(train_batches, simulation.parameters.hyper.epochs), allow_f_increases=true,
+                            maxiters=simulation.parameters.hyper.epochs,
                             callback=cb,
                             progress=true)
 
