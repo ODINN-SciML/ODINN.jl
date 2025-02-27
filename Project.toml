@@ -6,6 +6,7 @@ version = "1.0.0"
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ChainRules = "082447d4-558c-5d27-93f4-14fc19e9eca2"
+ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
 Cthulhu = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
