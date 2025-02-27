@@ -28,6 +28,7 @@ using OrdinaryDiffEq
 using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers
 using IterTools: ncycle
+using ComponentArrays
 using Zygote
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet
@@ -46,8 +47,6 @@ using GeoStats
 using ImageFiltering
 using Printf
 
-# using Enzyme
-# Enzyme.API.runtimeActivity!(true)
 
 # ##############################################
 # ############    PARAMETERS     ###############

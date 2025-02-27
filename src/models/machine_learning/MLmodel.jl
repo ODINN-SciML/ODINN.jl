@@ -39,7 +39,7 @@ Feed-forward neural network.
 mutable struct NN{F <: AbstractFloat} <: MLmodel 
     architecture::Flux.Chain
     NN_f::Optimisers.Restructure
-    θ::Vector{F}
+    θ::ComponentArray{F}
 end
 
 """
@@ -55,7 +55,7 @@ Creates a new feed-forward neural network.
 """
 function NN(params::Sleipnir.Parameters;
             architecture::Union{Flux.Chain, Nothing} = nothing,
-            θ::Union{Vector{F}, Nothing} = nothing) where {F <: AbstractFloat}
+            θ::Union{ComponentArray{F}, Nothing} = nothing) where {F <: AbstractFloat}
 
     if isnothing(architecture)
         architecture, θ, NN_f = get_NN(θ)
