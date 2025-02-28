@@ -23,6 +23,8 @@ using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
 using Statistics, LinearAlgebra, Random, Polynomials
+using Enzyme
+Enzyme.API.runtimeActivity!(true) # This reduces performance but fixes AD issues
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity

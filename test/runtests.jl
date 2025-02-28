@@ -2,6 +2,8 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 using Revise
+using Enzyme
+Enzyme.API.runtimeActivity!(true) # This reduces performance but fixes AD issues
 using ODINN
 using Test
 using JLD2
