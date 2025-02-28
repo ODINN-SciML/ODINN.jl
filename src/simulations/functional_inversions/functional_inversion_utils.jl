@@ -201,8 +201,7 @@ function simulate_iceflow_UDE!(
     apply_UDE_parametrization!(θ, simulation, nothing, batch_id)
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
-    # tstops = params.solver.tstops
-    tstops = Enzyme.Const(params.solver.tstops)
+    tstops = Enzyme.Const(params.solver.tstops) # Not clear if we need to make tstops constant, try to remove Enzyme.Const once AD is working
     iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H, params.simulation.tspan, tstops=tstops, θ)
     iceflow_sol = solve(iceflow_prob, 
                         params.solver.solver, 

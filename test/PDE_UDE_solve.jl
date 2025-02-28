@@ -26,16 +26,7 @@ function ude_solve_test(atol; MB=false, fast=true)
                         hyper = Hyperparameters(batch_size=4,
                                                 epochs=4,
                                                 optimizer=ODINN.ADAM(0.01)),
-                        UDE = UDEparameters(target = "A"),
-                        # solver = SolverParameters(
-                        #     solver = DABDF2(),
-                        #     # reltol = 1e-8,
-                        #     # step= 1.0/12.0,
-                        #     # save_everystep = false,
-                        #     # tstops = nothing,
-                        #     # progress = true,
-                        #     # progress_steps = 10,
-                        #     )
+                        UDE = UDEparameters(target = "A")
                         )
 
     ## Retrieving simulation data for the following glaciers
