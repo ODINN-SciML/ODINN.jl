@@ -62,7 +62,7 @@ function NN(params::Sleipnir.Parameters;
     end
 
     # Build the simulation parameters based on input values
-    ft = params.simulation.float_type
+    ft = Sleipnir.Float
     neural_net = NN{ft}(architecture, NN_f, θ)
 
     return neural_net
