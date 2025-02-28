@@ -32,8 +32,9 @@ using ComponentArrays
 using Zygote
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet
+using MLUtils: DataLoader
 using Base: @kwdef
-using Flux
+using Lux
 using Tullio
 using Infiltrator, Cthulhu
 using Plots, PlotThemes

@@ -1,31 +1,38 @@
 """
-    get_NN(θ_trained)
+    get_NN(θ_trained, ft)
 
 Generates a neural network.
 
 # Arguments
 - `θ_trained`: Pre-trained neural network parameters (optional).
+- `ft`: Float type used. 
 
 # Returns
-- `UA`: `Flux.Chain` neural network architecture.
+- `UA`: `Lux.Chain` neural network architecture.
 - `θ`: Neural network parameters.
-- `UA_f`: Neural network restructuring.
+- `st`: Lux state.
 """
-function get_NN(θ_trained)
-    UA = Flux.Chain(
+function get_NN(θ_trained, ft)
+    UA = Lux.Chain(
         Dense(1, 3, x -> softplus.(x)),
         Dense(3, 10, x -> softplus.(x)),
         Dense(10, 3, x -> softplus.(x)),
         Dense(3, 1, sigmoid_A)
     )
-    UA = Flux.f64(UA)
-    # See if parameters need to be retrained or not
-    θ, UA_f = Flux.destructure(UA)
-    θ = ComponentArray(θ=θ)
+    θ, st = Lux.setup(rng_seed(), UA)
     if !isnothing(θ_trained)
         θ = θ_trained
     end
-    return UA, θ, UA_f
+
+    # TODO: To re-write with the new type stability fix 
+    if ft == Float64
+        UA = f64(UA)
+        θ = f64(θ)
+        st = f64(st)
+    end
+
+    θ = ComponentArray(θ=θ)
+    return UA, θ, st
 end
 
 """
@@ -113,12 +120,12 @@ function build_D_features(H::Matrix, temp, ∇S)
     ∇S_flat = ∇S[inn1(H) .!= 0.0] # flatten
     H_flat = H[H .!= 0.0] # flatten
     T_flat = repeat(temp,length(H_flat))
-    X = Flux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
+    X = Lux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
     return X
 end
 
 function build_D_features(H::Float64, temp::Float64, ∇S::Float64)
-    X = Flux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
+    X = Lux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
     return X
 end
 
@@ -136,9 +143,10 @@ function generate_batches(simulation::S; shuffle=true) where {S <: Simulation}
     # Repeat simulations for batches
     batch_ids::Vector{Int} = collect(1:length(simulation.glaciers))
     rgi_ids::Vector{String} = [glacier.rgi_id for glacier in simulation.glaciers]
+    # Combined batch object 
     batches = (batch_ids, rgi_ids)
-    train_loader = Flux.DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
-
+    # Create train loeader use for simulations
+    train_loader = DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
     return train_loader
 end
 

@@ -33,7 +33,8 @@ function train_UDE!(simulation::FunctionalInversion)
     θ = simulation.model.machine_learning.θ
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(θ, glacier_data_loader) = loss_iceflow(θ, glacier_data_loader.data[1], simulation)
+    # glacier_data_batch is a pair of the data sampled (e.g, glacier_data_batch = (id, glacier))
+    loss_function(θ, glacier_data_batch) = loss_iceflow(θ, glacier_data_batch[1], simulation)
     
     if isnothing(simulation.parameters.UDE.grad)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
@@ -67,7 +68,7 @@ function train_UDE!(simulation::FunctionalInversion)
                             simulation.parameters.hyper.optimizer, 
                             maxiters=simulation.parameters.hyper.epochs,
                             callback=cb,
-                            progress=true)
+                            progress=false)
 
     return iceflow_trained
 end
@@ -76,6 +77,8 @@ function loss_iceflow(θ, batch_ids::Vector{I}, simulation::FunctionalInversion)
 
     # simulation.model.machine_learning.θ = θ # update model parameters
     predict_iceflow!(θ, simulation, batch_ids)
+
+    loss = simulation.parameters.UDE.empirical_loss_function
 
     # Compute loss function for the full batch
     let l_V = 0.0, l_H =  0.0
@@ -96,20 +99,20 @@ function loss_iceflow(θ, batch_ids::Vector{I}, simulation::FunctionalInversion)
             # Ice thickness
             if !isnothing(H_ref)
                 normHref = mean(H_ref.^2)^0.5
-                l_H_loc = Flux.Losses.mse(H, H_ref; agg=mean) 
+                l_H_loc = loss(H, H_ref) 
                 l_H += normHref^(-1) * l_H_loc
             end
             # Ice surface velocities
             normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
-            l_V_loc = Flux.Losses.mse(Vx_pred, inn1(Vx_ref); agg=mean) + Flux.Losses.mse(Vy_pred, inn1(Vy_ref); agg=mean)
+            l_V_loc = loss(Vx_pred, inn1(Vx_ref)) + loss(Vy_pred, inn1(Vy_ref))
             l_V += normVref^(-1) * l_V_loc
         else
             # Ice thickness
             if !isnothing(H_ref)
-                l_H += Flux.Losses.mse(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]; agg=mean) 
+                l_H += loss(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0]) 
             end
             # Ice surface velocities
-            l_V += Flux.Losses.mse(V_pred[V_ref .!= 0.0], V_ref[V_ref.!= 0.0]; agg=mean)
+            l_V += loss(V_pred[V_ref .!= 0.0], V_ref[V_ref.!= 0.0])
         end
     end # for
 
@@ -230,10 +233,13 @@ end
 
 function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integrator, batch_id::I) where {I <: Integer}
     # We load the ML model with the parameters
-    U = simulation.model.machine_learning.NN_f(θ)
+    model = simulation.model.machine_learning.architecture
+    st = simulation.model.machine_learning.st
+    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
+
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(U, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
         simulation.model.iceflow[batch_id].A[] = A
     # elseif simulation.parameters.UDE.target == "D"
     #     parametrization = U()

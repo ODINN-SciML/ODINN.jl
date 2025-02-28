@@ -5,6 +5,7 @@ mutable struct UDEparameters <: AbstractParameters
     grad::Union{Function, Nothing}
     optimization_method::String
     loss_type::String
+    empirical_loss_function::Lux.AbstractLossFunction
     scale_loss::Bool
     target::Union{String, Nothing}
 end
@@ -35,6 +36,7 @@ function UDEparameters(;
             grad::Union{Function, Nothing} = nothing, 
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
+            empirical_loss_function::Lux.AbstractLossFunction = Lux.MSELoss(; agg=mean),
             scale_loss::Bool = true,
             target::Union{String, Nothing} = "D"
             )
@@ -44,7 +46,7 @@ function UDEparameters(;
 
     # Build the solver parameters based on input values
     UDE_parameters = UDEparameters(sensealg, optim_autoAD, grad, optimization_method,
-                                    loss_type, scale_loss, target)
+                                    loss_type, empirical_loss_function, scale_loss, target)
 
     return UDE_parameters
 end
