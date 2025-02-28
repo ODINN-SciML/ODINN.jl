@@ -28,8 +28,10 @@ using OrdinaryDiffEq
 using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers
 using IterTools: ncycle
+using ComponentArrays
 using Zygote
 using ChainRules: @ignore_derivatives
+using SciMLBase: NoAD, CallbackSet
 using Base: @kwdef
 using Flux
 using Tullio
@@ -43,6 +45,8 @@ using Downloads
 using TimerOutputs
 using GeoStats
 using ImageFiltering
+using Printf
+
 
 # ##############################################
 # ############    PARAMETERS     ###############
@@ -64,6 +68,7 @@ include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
 # ML models
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Simulations
+include(joinpath(root_dir, "src/simulations/training_stats/TrainingStats.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 

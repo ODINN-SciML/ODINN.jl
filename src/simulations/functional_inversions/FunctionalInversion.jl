@@ -17,6 +17,7 @@ mutable struct FunctionalInversion  <: Simulation
     glaciers::Vector{Sleipnir.AbstractGlacier}
     parameters::Sleipnir.Parameters
     results::Vector{Results}
+    stats::TrainingStats
 end
 
 """
@@ -50,7 +51,8 @@ function FunctionalInversion(
     functional_inversion = FunctionalInversion(model,
                             glaciers,
                             parameters,
-                            Vector{Results}([]))
+                            Vector{Results}([]),
+                            TrainingStats())
 
     return functional_inversion
 end
@@ -60,3 +62,4 @@ end
 ###############################################
 
 include("functional_inversion_utils.jl")
+include("callback_utils.jl")

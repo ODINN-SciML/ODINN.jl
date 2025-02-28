@@ -1,10 +1,12 @@
 export UDEparameters
 mutable struct UDEparameters <: AbstractParameters
     sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
+    optim_autoAD::AbstractADType
+    grad::Union{Function, Nothing}
     optimization_method::String
     loss_type::String
     scale_loss::Bool
-    target::String
+    target::Union{String, Nothing}
 end
 
 Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.optimization_method == b.optimization_method && a.loss_type == b.loss_type && 
@@ -17,7 +19,7 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.o
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
         scale_loss::Bool = true
-        target::String = "D"
+        target::Union{String, Nothing} = "D"
         )
 Initialize the parameters for the training of the UDE.
 Keyword arguments
@@ -29,17 +31,19 @@ Keyword arguments
 """
 function UDEparameters(;
             sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
+            optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
+            grad::Union{Function, Nothing} = nothing, 
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
             scale_loss::Bool = true,
-            target::String = "D"
+            target::Union{String, Nothing} = "D"
             )
     # Verify that the optimization method is correct
     @assert ((optimization_method == "AD+AD") || (optimization_method == "AD+Diff")) "Wrong optimization method! Needs to be either `AD+AD` or `AD+Diff`"
     @assert ((loss_type == "V") || (loss_type == "H")) "Wrong loss type! Needs to be either `V` or `H`"
 
     # Build the solver parameters based on input values
-    UDE_parameters = UDEparameters(sensealg, optimization_method,
+    UDE_parameters = UDEparameters(sensealg, optim_autoAD, grad, optimization_method,
                                     loss_type, scale_loss, target)
 
     return UDE_parameters

@@ -21,6 +21,7 @@ function get_NN(θ_trained)
     UA = Flux.f64(UA)
     # See if parameters need to be retrained or not
     θ, UA_f = Flux.destructure(UA)
+    θ = ComponentArray(θ=θ)
     if !isnothing(θ_trained)
         θ = θ_trained
     end
