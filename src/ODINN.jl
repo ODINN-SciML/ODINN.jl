@@ -46,7 +46,7 @@ using Distributed
 using ProgressMeter
 using Downloads
 using TimerOutputs
-using GeoStats
+# using GeoStats
 using ImageFiltering
 using Printf
 
