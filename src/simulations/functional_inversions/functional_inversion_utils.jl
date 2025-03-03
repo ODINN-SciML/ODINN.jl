@@ -105,7 +105,8 @@ function loss_iceflow(θ, batch_ids::Vector{I}, simulation::FunctionalInversion)
             end
             # Ice surface velocities
             normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
-            l_V_loc = loss(Vx_pred, inn1(Vx_ref)) + loss(Vy_pred, inn1(Vy_ref))
+            # l_V_loc = loss(Vx_pred, inn1(Vx_ref)) + loss(Vy_pred, inn1(Vy_ref))
+            l_V_loc = loss(Vx_pred, Vx_ref) + loss(Vy_pred, Vy_ref)
             l_V += normVref^(-1) * l_V_loc
         else
             # Ice thickness
@@ -153,7 +154,8 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) whe
 
     tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
     params.solver.tstops = tstops
-    stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, Enzyme.Const(tstops)) #closure
+    # stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, Enzyme.Const(tstops)) #closure
+    stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, tstops)
     function action!(integrator)
         if params.simulation.use_MB 
             # Compute mass balance
@@ -209,8 +211,8 @@ function simulate_iceflow_UDE!(
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
     # Constant definition of tstops with Enzyme returns error.
-    tstops = Enzyme.Const(params.solver.tstops) # Not clear if we need to make tstops constant, try to remove Enzyme.Const once AD is working
-    # tstops = params.solver.tstops
+    # tstops = Enzyme.Const(params.solver.tstops) # Not clear if we need to make tstops constant, try to remove Enzyme.Const once AD is working
+    tstops = params.solver.tstops
     
     iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H, params.simulation.tspan, tstops=tstops, θ)
     
