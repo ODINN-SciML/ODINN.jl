@@ -1,6 +1,8 @@
 using Pkg; Pkg.activate(".")
 
 using Revise
+using Optimization
+using EnzymeCore
 using Enzyme
 
 # Enzyme.API.runtimeActivity!(true)
@@ -40,13 +42,13 @@ working_dir = joinpath(homedir(), "OGGM/ODINN_tests")
 
 sensealgs = [ODINN.QuadratureAdjoint(autojacvec=ODINN.ReverseDiffVJP(true)), 
              ODINN.GaussAdjoint(autojacvec=ODINN.EnzymeVJP())]
-adtypes = [ODINN.AutoZygote()]
+adtypes = [Optimization.AutoEnzyme(; mode=set_runtime_activity(EnzymeCore.Reverse))]
 
 @testset "Run all simulations" begin 
 
 for sensealg in sensealgs
     for adtype in adtypes
-        
+
         print("\nTesting\n")
         @show sensealg
         @show adtype
@@ -80,7 +82,7 @@ for sensealg in sensealgs
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]#, "RGI60-08.00213", "RGI60-04.04351"]
 
         model = Model(iceflow = SIA2Dmodel(params),
-                        mass_balance = mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+                        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
                         machine_learning = NeuralNetwork(params))
 
         # We retrieve some glaciers for the simulation
@@ -94,7 +96,7 @@ for sensealg in sensealgs
         run!(functional_inversion)
         @test true
         end
-        
+
     end
 end
 
