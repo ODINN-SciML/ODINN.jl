@@ -47,7 +47,7 @@ function ude_solve_test(atol; MB=false, fast=true)
     # end
 
     model = Model(iceflow = SIA2Dmodel(params),
-                  mass_balance = mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+                  mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
                   machine_learning = NeuralNetwork(params))
 
     # We retrieve some glaciers for the simulation

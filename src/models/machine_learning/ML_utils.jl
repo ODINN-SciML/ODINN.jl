@@ -4,6 +4,7 @@
 Generates a neural network.
 
 # Arguments
+- `ft`: Float type.
 - `θ_trained`: Pre-trained neural network parameters (optional).
 - `ft`: Float type used. 
 

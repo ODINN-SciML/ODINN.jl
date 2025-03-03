@@ -29,6 +29,7 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     ####### Retrieve parameters #######
     model = simulation.model
     params = simulation.parameters
+    glacier_idx = Sleipnir.Int(glacier_idx)
     glacier = simulation.glaciers[glacier_idx]
     
     glacier_id = isnothing(glacier.rgi_id) ? "unnamed" : glacier.rgi_id
@@ -181,7 +182,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     println("Processing glacier: ", glacier_id)
 
     # === Glacier Initialization ===
-    Huginn.initialize_iceflow_model(model.iceflow, glacier_idx, glacier, params)
+    Huginn.initialize_iceflow_model(model.iceflow, Sleipnir.Int(glacier_idx), glacier, params)
     simulation.model.iceflow.A[] = 7.57382e-17 # Temperate glaciers value
     
     # === Objective Function Definition ===
@@ -264,10 +265,10 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         glacier.rgi_id,
         simulation.model.iceflow.A[],
         simulation.model.iceflow.n[],
-        C_values,
-        H_pred, H_obs, H_diff,
-        V_pred, V_obs, V_diff,
-        MSE,
+        Sleipnir.Float.(C_values),
+        Sleipnir.Float.(H_pred), H_obs, Sleipnir.Float.(H_diff),
+        Sleipnir.Float.(V_pred), V_obs, Sleipnir.Float.(V_diff),
+        Sleipnir.Float(MSE),
         simulation.glaciers[glacier_idx].Δx,
         simulation.glaciers[glacier_idx].Δy,
         simulation.glaciers[glacier_idx].cenlon,

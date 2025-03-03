@@ -140,6 +140,7 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) whe
     
     model = simulation.model
     params = simulation.parameters
+    batch_id = Sleipnir.Int(batch_id)
     glacier = simulation.glaciers[batch_id]
 
     # glacier_id = isnothing(glacier.gdir) ? "unnamed" : glacier.rgi_id

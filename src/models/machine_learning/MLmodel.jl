@@ -11,7 +11,7 @@ function Model(;
     mass_balance::Union{MBM, Nothing}
     machine_learning::Union{MLM, Nothing},
     ) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
-    
+
 Initialize Model at ODINN level (iceflow + mass balance + machine learning).
 
 """
@@ -36,7 +36,7 @@ Feed-forward neural network.
 - `NN_f`: Neural network restructuring
 - `θ`: Neural network parameters
 """
-mutable struct NeuralNetwork{F <: AbstractFloat} <: MLmodel 
+mutable struct NeuralNetwork{F <: AbstractFloat} <: MLmodel
     architecture::Lux.Chain
     θ::ComponentArray{F}
     st::NamedTuple
@@ -58,7 +58,7 @@ function NeuralNetwork(params::Sleipnir.Parameters;
             θ::Union{ComponentArray{F}, Nothing} = nothing) where {F <: AbstractFloat}
 
     # Float type
-    ft = params.simulation.float_type
+    ft = Sleipnir.Float
 
     if isnothing(architecture)
         # architecture, θ, NN_f = get_NN(θ)
