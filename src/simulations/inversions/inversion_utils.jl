@@ -187,17 +187,21 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     
     # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
+        # Unless they are explicitely shared, the argument names of this function must
+        # be different from those of the function in which we are defining objfun
+        # Otherwise this can result in AD issues
+
         # Apply parameter transformations for optimization
         simulation.model.iceflow.C[] = x[1]
 
         # Extract and predict H values based on V observations
-        H_obs = realsol[1][1:end-1, 1:end-1]
-        V_obs = realsol[2]
-        H_pred = Huginn.H_from_V(V_obs, simulation)
+        Hobs = realsol[1][1:end-1, 1:end-1]
+        Vobs = realsol[2]
+        Hpred = Huginn.H_from_V(Vobs, simulation)
 
         # Calculate and return the weighted mean squared error
-        mask_H = H_obs .!= 0
-        ofv_H = weighted_mse(H_obs[mask_H], H_pred[mask_H], 1.0)
+        mask_H = Hobs .!= 0
+        ofv_H = weighted_mse(Hobs[mask_H], Hpred[mask_H], 1.0)
         return ofv_H
     end
 
@@ -205,6 +209,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     initial_conditions = params.inversion.initial_conditions
     lower_bound = params.inversion.lower_bound
     upper_bound = params.inversion.upper_bound
+    Enzyme.API.strictAliasing!(false)
     optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), simulation.parameters.UDE.optim_autoAD)
 
 

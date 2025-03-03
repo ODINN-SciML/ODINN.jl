@@ -2,7 +2,11 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 using Revise
+using Optimization
+using EnzymeCore
 using Enzyme
+# Enzyme.API.runtimeActivity!(true) # This reduces performance but fixes AD issues
+Enzyme.API.strictAliasing!(false)
 using ODINN
 using Test
 using JLD2

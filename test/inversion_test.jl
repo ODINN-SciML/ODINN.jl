@@ -16,7 +16,10 @@ function inversion_test(;steady_state = false, save_refs = false)
             rgi_paths = rgi_paths,
             ice_thickness_source = "Farinotti19",
         ),
-        solver = SolverParameters(reltol = 1e-8)
+        solver = SolverParameters(reltol = 1e-8),
+        UDE = UDEparameters(
+            optim_autoAD = Optimization.AutoEnzyme(; mode=set_runtime_activity(EnzymeCore.Reverse))
+        )
     )
 
     model = Model(

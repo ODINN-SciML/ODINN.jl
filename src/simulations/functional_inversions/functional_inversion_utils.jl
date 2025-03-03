@@ -34,9 +34,10 @@ function train_UDE!(simulation::FunctionalInversion)
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
     # glacier_data_batch is a pair of the data sampled (e.g, glacier_data_batch = (id, glacier))
-    loss_function(θ, glacier_data_batch) = loss_iceflow(θ, glacier_data_batch[1], simulation)
-    
+    loss_function(θloc, glacier_data_batch) = loss_iceflow(θloc, glacier_data_batch[1], simulation)
+
     if isnothing(simulation.parameters.UDE.grad)
+        Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @warn "Using custom grad function."
@@ -132,7 +133,8 @@ end
 
 function predict_iceflow!(θ, simulation::FunctionalInversion, batch_ids::Vector{I}) where {I <: Integer}
     # Train UDE in parallel
-    simulation.results = pmap((batch_id) -> batch_iceflow_UDE(θ, simulation, batch_id), batch_ids)
+    # TODO: put back pmap instead of map once AD issues are fixed
+    simulation.results = map((batch_id) -> batch_iceflow_UDE(θ, simulation, batch_id), batch_ids)
     # println("All batches finished")
 end
 
@@ -149,8 +151,9 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) whe
     # Initialize glacier ice flow model
     initialize_iceflow_model(model.iceflow[batch_id], batch_id, glacier, params)
 
-    params.solver.tstops =  @ignore_derivatives Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
-    stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, params.solver.tstops) #closure
+    tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
+    params.solver.tstops = tstops
+    stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, Enzyme.Const(tstops)) #closure
     function action!(integrator)
         if params.simulation.use_MB 
             # Compute mass balance
@@ -206,8 +209,8 @@ function simulate_iceflow_UDE!(
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
     # Constant definition of tstops with Enzyme returns error.
-    # tstops = Enzyme.Const(params.solver.tstops) # Not clear if we need to make tstops constant, try to remove Enzyme.Const once AD is working
-    tstops = params.solver.tstops
+    tstops = Enzyme.Const(params.solver.tstops) # Not clear if we need to make tstops constant, try to remove Enzyme.Const once AD is working
+    # tstops = params.solver.tstops
     
     iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H, params.simulation.tspan, tstops=tstops, θ)
     
