@@ -2,6 +2,7 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 using Revise
+using Enzyme
 using ODINN
 using Test
 using JLD2

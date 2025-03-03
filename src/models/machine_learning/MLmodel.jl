@@ -1,4 +1,4 @@
-export NN
+export NeuralNetwork
 
 include("ML_utils.jl")
 
@@ -36,10 +36,10 @@ Feed-forward neural network.
 - `NN_f`: Neural network restructuring
 - `θ`: Neural network parameters
 """
-mutable struct NN{F <: AbstractFloat} <: MLmodel 
-    architecture::Flux.Chain
-    NN_f::Optimisers.Restructure
+mutable struct NeuralNetwork{F <: AbstractFloat} <: MLmodel 
+    architecture::Lux.Chain
     θ::ComponentArray{F}
+    st::NamedTuple
 end
 
 """
@@ -53,17 +53,21 @@ Creates a new feed-forward neural network.
 - `architecture`: `Flux.Chain` neural network architecture (optional)
 - `θ`: Neural network parameters (optional)
 """
-function NN(params::Sleipnir.Parameters;
-            architecture::Union{Flux.Chain, Nothing} = nothing,
+function NeuralNetwork(params::Sleipnir.Parameters;
+            architecture::Union{Lux.Chain, Nothing} = nothing,
             θ::Union{ComponentArray{F}, Nothing} = nothing) where {F <: AbstractFloat}
 
+    # Float type
+    ft = params.simulation.float_type
+
     if isnothing(architecture)
-        architecture, θ, NN_f = get_NN(θ)
+        # architecture, θ, NN_f = get_NN(θ)
+        architecture, θ, st = get_NN(θ, ft)
     end
 
     # Build the simulation parameters based on input values
-    ft = params.simulation.float_type
-    neural_net = NN{ft}(architecture, NN_f, θ)
+    neural_net = NeuralNetwork{ft}(architecture, θ, st)
 
     return neural_net
 end
+

@@ -23,6 +23,8 @@ using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
 using Statistics, LinearAlgebra, Random, Polynomials
+using Enzyme
+# Enzyme.API.runtimeActivity!(true) # This reduces performance but fixes AD issues
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
@@ -32,8 +34,9 @@ using ComponentArrays
 using Zygote
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet
+using MLUtils: DataLoader
 using Base: @kwdef
-using Flux
+using Lux
 using Tullio
 using Infiltrator, Cthulhu
 using Plots, PlotThemes
@@ -43,10 +46,9 @@ using Distributed
 using ProgressMeter
 using Downloads
 using TimerOutputs
-using GeoStats
+# using GeoStats
 using ImageFiltering
 using Printf
-
 
 # ##############################################
 # ############    PARAMETERS     ###############
