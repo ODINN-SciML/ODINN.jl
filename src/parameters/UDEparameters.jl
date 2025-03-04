@@ -1,4 +1,17 @@
 export UDEparameters
+
+"""
+A mutable struct that holds parameters for a UDE (Universal Differential Equation).
+
+    UDEparameters <: AbstractParameters
+
+# Keyword arguments
+- `sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm`: The sensitivity algorithm used for adjoint sensitivity analysis.
+- `optimization_method::String`: The optimization method to be used.
+- `loss_type::String`: The type of loss function to be used.
+- `scale_loss::Bool`: A boolean indicating whether to scale the loss.
+- `target::String`: The target variable for the optimization.
+"""
 mutable struct UDEparameters <: AbstractParameters
     sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
     optimization_method::String
@@ -12,6 +25,8 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.o
 
 
 """
+Function to initialize the parameters for the training of a UDE.
+
     UDEparameters(;
         sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
         optimization_method::String = "AD+AD",
@@ -19,7 +34,7 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.o
         scale_loss::Bool = true
         target::String = "D"
         )
-Initialize the parameters for the training of the UDE.
+
 Keyword arguments
 =================
     - `sensealg`: Sensitivity algorithm from SciMLSensitivity.jl to be used.
@@ -48,15 +63,21 @@ end
 include("InversionParameters.jl")
 
 """
-Parameters(;
-        physical::PhysicalParameters = PhysicalParameters(),
-        simulation::SimulationParameters = SimulationParameters(),
-        solver::SolverParameters = SolverParameters(),
-        hyper::Hyperparameters = Hyperparameters(),
-        UDE::UDEparameters = UDEparameters()
-        inversion::InversionParameters = InversionParameters()
-        )
-Initialize ODINN parameters
+Constructor for the `Parameters` type. Since some of the subtypes of parameters are defined
+in different packages of the ODINN ecosystem, this constructor will call the constructors of
+the different subtypes and return a `Parameters` object with the corresponding subtypes. 
+The `Parameters` mutable struct is defined in `Sleipnir.jl` using abstract types, which are
+later on defined in the different packages of the ODINN ecosystem.
+
+    Parameters(;
+            physical::PhysicalParameters = PhysicalParameters(),
+            simulation::SimulationParameters = SimulationParameters(),
+            solver::SolverParameters = SolverParameters(),
+            hyper::Hyperparameters = Hyperparameters(),
+            UDE::UDEparameters = UDEparameters()
+            inversion::InversionParameters = InversionParameters()
+            )
+
 
 Keyword arguments
 =================
