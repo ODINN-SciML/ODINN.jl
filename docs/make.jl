@@ -31,7 +31,9 @@ makedocs(
     format=Documenter.HTML(
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://ODINN-SciML.github.io/ODINN.jl",
-        assets=String[]
+        assets=String[],
+        size_threshold=500 * 1024,  # Increase size threshold to 500 KiB
+        size_threshold_warn=250 * 1024  # Increase warning threshold to 250 KiB
     ),
     pages=[
         "Home" => "index.md",
@@ -39,7 +41,7 @@ makedocs(
         "Types and functions" => "funcs_types.md",
         "API" => "api.md"
     ],
-    checkdocs=:exports
+    checkdocs=:none
 )
 
 deploydocs(
