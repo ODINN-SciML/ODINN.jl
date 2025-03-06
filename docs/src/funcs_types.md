@@ -31,7 +31,7 @@ Sleipnir.PhysicalParameters
 Sleipnir.PhysicalParameters()
 ```
 
-### Physical parameters
+### Solver parameters
 
 Solver parameters determine all aspects related to the numerical scheme used to solve the differential equations of glacier ice flow.
 
@@ -128,7 +128,7 @@ ODINN.NN
 ODINN.NN(params::Sleipnir.Parameters)
 ```
 
-## Simulations
+## Simulations
 
 One can run different types of simulations in `ODINN.jl`. Any specific type of simulation must be a subtype of `Simulation`. All simulations share the same common interface designed around multiple dispatch. Basically, once a simulation type has been created, one can easily run by calling `run!(simulation)`.
 
@@ -167,4 +167,25 @@ ODINN.FunctionalInversion(
     glaciers::Vector{G},
     parameters::Sleipnir.Parameters
     ) where {G <: Sleipnir.AbstractGlacier}
+```
+
+## Results and plotting
+
+Every `Simulation` type has an associated `Results` object(s), one for each one of the glaciers in the simulation. This object, as its name indicates, stores all the results of the simulation, which can be used for data anlysis and plotting. These types are handled by `Sleipnir.jl`. 
+
+```@docs
+Sleipnir.Results
+Sleipnir.Results(glacier::G, ifm::IF) where {G <: AbstractGlacier, F <: AbstractFloat, IF <: AbstractModel, I <: Int}
+```
+
+One of the main things one can do with a `Results` object, is plotting them. The main function to do so is the following one:
+
+```@docs
+Sleipnir.plot_glacier
+```
+
+Another option is to generate a video of the evolution of the glacier's ice thickness during the simulation:
+
+```@docs
+Sleipnir.plot_glacier_vid
 ```

@@ -5,7 +5,7 @@ A mutable struct that holds parameters for a UDE (Universal Differential Equatio
 
     UDEparameters <: AbstractParameters
 
-# Keyword arguments
+# Fields
 - `sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm`: The sensitivity algorithm used for adjoint sensitivity analysis.
 - `optimization_method::String`: The optimization method to be used.
 - `loss_type::String`: The type of loss function to be used.
@@ -25,22 +25,27 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.o
 
 
 """
-Function to initialize the parameters for the training of a UDE.
+    UDEparameters(; sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
+                   optimization_method::String = "AD+AD",
+                   loss_type::String = "V",
+                   scale_loss::Bool = true,
+                   target::String = "D")
 
-    UDEparameters(;
-        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
-        optimization_method::String = "AD+AD",
-        loss_type::String = "V",
-        scale_loss::Bool = true
-        target::String = "D"
-        )
+Constructs a set of parameters for the UDE (Universal Differential Equation) model.
 
-Keyword arguments
-=================
-    - `sensealg`: Sensitivity algorithm from SciMLSensitivity.jl to be used.
-    - `optimization_method`: Optimization method for the UDE.
-    - `loss_type`: Type of loss function to be used. Can be either `V` (ice velocities), or `H` (ice thickness).
-    - `scale_loss`: Determines if the loss function should be scaled or not.
+# Arguments
+- `sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm`: The sensitivity algorithm to use. Defaults to `GaussAdjoint(autojacvec=EnzymeVJP())`.
+- `optimization_method::String`: The optimization method to use. Must be either `"AD+AD"` or `"AD+Diff"`. Defaults to `"AD+AD"`.
+- `loss_type::String`: The type of loss function to use. Must be either `"V"` or `"H"`. Defaults to `"V"`.
+- `scale_loss::Bool`: Whether to scale the loss. Defaults to `true`.
+- `target::String`: The target for the optimization. Defaults to `"D"`.
+
+# Returns
+- A set of parameters for the UDE model.
+
+# Throws
+- `AssertionError` if `optimization_method` is not `"AD+AD"` or `"AD+Diff"`.
+- `AssertionError` if `loss_type` is not `"V"` or `"H"`.
 """
 function UDEparameters(;
             sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
