@@ -51,6 +51,8 @@ using GeoStats
 using ImageFiltering
 using Printf
 
+using Zygote
+
 # ##############################################
 # ############    PARAMETERS     ###############
 # ##############################################
@@ -74,6 +76,8 @@ include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 include(joinpath(root_dir, "src/simulations/training_stats/TrainingStats.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
+# Inversion 
+include(joinpath(root_dir, "src/inverse/gradient.jl"))
 
 end # module
 

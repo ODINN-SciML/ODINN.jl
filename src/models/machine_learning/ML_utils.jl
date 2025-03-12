@@ -42,7 +42,7 @@ end
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
 function predict_A̅(U, temp)
-    return U(temp) .* 1e-18
+    return 10.0f0.^U(temp) .* 1e-18
 end
 
 """
@@ -57,8 +57,8 @@ Sigmoid activation function for the neural network output.
 - Sigmoid-transformed output value.
 """
 function sigmoid_A(x)
-    minA_out = 8.0e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0
+    minA_out = log10(8.0e-3) # /!\     # these depend on predict_A̅, so careful when changing them!
+    maxA_out = log10(8.0)
     return minA_out + (maxA_out - minA_out) / (1.0 + exp(-x))
 end
 
