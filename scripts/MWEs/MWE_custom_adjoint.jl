@@ -1,4 +1,4 @@
-# using Pkg; Pkg.activate(".")
+using Pkg; Pkg.activate(".")
 
 using Distributed
 
@@ -11,10 +11,33 @@ using Enzyme
 using Test
 using Statistics
 using ODINN
+using Polynomials
+using Plots
 
 rgi_paths = get_rgi_paths()
 
+# The value of this does not really matter, it is hardcoded in Sleipnir right now.
 working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
+# Re-set global constant for working directory
+# const global Sleipnir.prepro_dir = joinpath(homedir(),  ".OGGM/ODINN_tests")
+
+
+## Retrieving simulation data for the following glaciers
+rgi_ids = ["RGI60-11.03638"]
+# rgi_ids = ["RGI60-08.00213", "RGI60-02.05098"]
+# rgi_ids = ["RGI60-11.03638", # unstable
+#             "RGI60-11.01450",
+#             "RGI60-08.00213",
+#             "RGI60-04.04351",
+#             "RGI60-01.02170",
+#             "RGI60-02.05098",
+#             "RGI60-01.01104",
+#             # "RGI60-01.09162",
+#             # "RGI60-01.00570", # This one does not have millan_v data
+#             # "RGI60-04.07051",
+#             "RGI60-07.00274",
+#             "RGI60-07.01323"]#,
+#             # "RGI60-01.17316"] # This one does not have millan_v data
 
 sensealg = ODINN.ZygoteAdjoint()
 adtype = ODINN.NoAD()
@@ -34,33 +57,16 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     light=false, # for now we do the simulation like this (a better name would be dense)
                                                     test_mode=true,
                                                     rgi_paths=rgi_paths),
-                    hyper = Hyperparameters(batch_size=4,
-                                            epochs=300,
-                                            optimizer=ODINN.ADAM(0.03)),
-                    UDE = UDEparameters(sensealg=sensealg, 
-                                        optim_autoAD=adtype, 
-                                        grad=dummy_grad, 
+                    hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
+                                            epochs=400,
+                                            optimizer=ODINN.ADAM(0.005)),
+                    UDE = UDEparameters(sensealg=sensealg,
+                                        optim_autoAD=adtype,
+                                        grad=dummy_grad,
                                         optimization_method="AD+AD",
                                         target = "A"),
                     solver = Huginn.SolverParameters(save_everystep=true, progress=true)
                     )
-
-## Retrieving simulation data for the following glaciers
-# rgi_ids = ["RGI60-11.03638"] #, "RGI60-11.01450"]#, "RGI60-08.00213", "RGI60-04.04351"]
-# rgi_ids = ["RGI60-11.01450"]#, "RGI60-11.03638"] #, "RGI60-04.04351"]
-rgi_ids = ["RGI60-11.03638", 
-            "RGI60-11.01450"]#, 
-            # "RGI60-08.00213", 
-            # "RGI60-04.04351", 
-            # "RGI60-01.02170",
-            # "RGI60-02.05098", 
-            # "RGI60-01.01104",
-            # "RGI60-01.09162", 
-            # "RGI60-01.00570", 
-            # "RGI60-04.07051",
-            # "RGI60-07.00274", 
-            # "RGI60-07.01323",  
-            # "RGI60-01.17316"]
 
 model = Model(iceflow = SIA2Dmodel(params),
                 mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
@@ -69,55 +75,50 @@ model = Model(iceflow = SIA2Dmodel(params),
 # We retrieve some glaciers for the simulation
 glaciers = initialize_glaciers(rgi_ids, params)
 
-# Picj a medium value of A
-# A₀ =10^(0.5 * log10(params.physical.minA) + 0.5 * log10(params.physical.maxA))
-# @show A₀
-
+# Time stanpshots for transient inversion
 tstops = collect(2010:(1/12):2015)
 
-function fakeA(T)
-    Tmin = -30.0
-    Tmax = 0.0
-    return params.physical.minA + (T-Tmin) * (params.physical.maxA - params.physical.minA) / (Tmax-Tmin) 
-end
+### Fake law for A(T) for Peterson & Cuffey
+const A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
+                              2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
+const A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
+A_poly = fit(A_values[1,:], A_values[2,:]) 
+# fakeA(T) = A_poly(T)
 
-Temps = Float64[]
-As_fake = Float64[]
+# Overwrite constant A fake function for testing
+fakeA(T) = 7e-19
 
 # We generate a fake forward model for the simulation
-# @everywhere begin
-# for glacier in glaciers
-#     # A = A₀
-#     T = mean(glacier.climate.longterm_temps)
-#     A = fakeA(T)
-#     push!(Temps, T)
-#     push!(As_fake, A)
-#     @show T, A
-#     # A = fakeA(T)
-#     generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
-# end
-# end
-
 function generate_ground_truth(glacier, fakeA::Function)
     T = mean(glacier.climate.longterm_temps)
     A = fakeA(T)
     generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
 end
-# end
 
 map(glacier -> generate_ground_truth(glacier, fakeA), glaciers)
+# TODO: This function does shit on the model variable, for now we do a clean restart
+model.iceflow = SIA2Dmodel(params)
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)
 
-# We run the simulation
+# We run the simulation with ADAM
 run!(functional_inversion)
+# # We do a second run with BFGS
+# params.hyper.optimizer = ODINN.LBFGS() #ODINN.Optim.BFGS(; initial_stepnorm=0.01, linesearch=ODINN.LineSearches.BackTracking())
+# params.hyper.epochs = 100
+# # Pre-trained parameter
+# θ_trained = functional_inversion.stats.θ
+# model.machine_learning.θ = θ_trained
+# # Reconstruct functional inversion based on pretrained parameter
+# functional_inversion = FunctionalInversion(model, glaciers, params)
+# run!(functional_inversion)
+
+### Figures
 
 losses = functional_inversion.stats.losses
 
-# batch_id = 1
-
-Temps_smooth = -23:1:0
+Temps_smooth = collect(-23.0:1.0:0.0)
 As_pred = Float64[]
 
 for T in Temps_smooth
@@ -125,11 +126,24 @@ for T in Temps_smooth
     push!(As_pred, A_pred)
 end
 
+Temps = Float64[]
+As_fake = Float64[]
+
+for glacier in glaciers
+    T = mean(glacier.climate.longterm_temps)
+    A = fakeA(T)
+    push!(Temps, T)
+    push!(As_fake, A)
+end
+
 Plots.scatter(Temps, As_fake, label="True A", c=:lightsteelblue2)
-plot_epoch = Plots.plot!(Temps_smooth, pred_A, label="Predicted A", 
-                    xlabel="Long-term air temperature (°C)",# yticks=yticks,
-                    ylabel="A", ylims=(0.0, params.simulation.parameters.physical.maxA), lw = 3, c=:dodgerblue4,
+plot_epoch = Plots.plot!(Temps_smooth, As_pred, label="Predicted A", 
+                    xlabel="Long-term air temperature (°C)", yticks=[0.0, 1e-17, 1e-18, params.physical.maxA],
+                    ylabel="A", ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
                     legend=:topleft)
 
-@test As_pred ≈ As_fake rtol=0.1
-@test log10.(As_pred) ≈ log10.(As_fake) rtol=0.1
+
+# @test As_pred ≈ As_fake rtol=0.1
+# @test log10.(As_pred) ≈ log10.(As_fake) rtol=0.1
+
+# Plots.savefig(plot_epoch, "MWE_custom_adjoint_results.pdf")

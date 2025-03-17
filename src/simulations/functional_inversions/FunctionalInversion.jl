@@ -12,7 +12,7 @@ An object representing a functional inversion simulation (i.e. the inversion of 
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
 - `results::Vector{Results}`: A vector to store the results of the simulation.
 """
-mutable struct FunctionalInversion  <: Simulation 
+mutable struct FunctionalInversion <: Simulation
     model::Sleipnir.Model
     glaciers::Vector{Sleipnir.AbstractGlacier}
     parameters::Sleipnir.Parameters
@@ -43,9 +43,13 @@ function FunctionalInversion(
     parameters::Sleipnir.Parameters
     ) where {G <: Sleipnir.AbstractGlacier}
 
-    # Generate multiple instances of the models for Reverse Diff compatibility
-    model.iceflow = [deepcopy(model.iceflow) for _ in 1:length(glaciers)]
-    model.mass_balance = [deepcopy(model.mass_balance) for _ in 1:length(glaciers)]
+    # Generate multiple instances of the models for differentiation compatibility
+    if !(model.iceflow isa Vector) || ((model.iceflow isa Vector) && (length(model.iceflow) != length(glaciers)))
+        model.iceflow = [deepcopy(model.iceflow) for _ in 1:length(glaciers)]
+    end
+    if !(model.mass_balance isa Vector) || ((model.mass_balance isa Vector) && (length(model.mass_balance) != length(glaciers)))
+        model.mass_balance = [deepcopy(model.mass_balance) for _ in 1:length(glaciers)]
+    end
 
     # Build the results struct based on input values
     functional_inversion = FunctionalInversion(model,

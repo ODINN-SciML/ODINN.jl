@@ -30,7 +30,7 @@ Enzyme.API.strictAliasing!(false)
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
-using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers
+using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers, LineSearches
 using IterTools: ncycle
 using ComponentArrays
 using ChainRules: @ignore_derivatives
@@ -70,12 +70,12 @@ include(joinpath(root_dir, "src/setup/config.jl"))
 # All parameters needed for the models
 include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
-# ML models
-include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Simulations
 include(joinpath(root_dir, "src/simulations/training_stats/TrainingStats.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
+# ML models
+include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Inversion 
 include(joinpath(root_dir, "src/inverse/gradient.jl"))
 

@@ -55,7 +55,7 @@ function callback_diagnosis(θ, l, simulation)
 
     push!(simulation.stats.losses, l)
     if length(simulation.stats.losses) % 1 == 0
-        @printf "Iteration: [%4d / %4d] \t Loss: %.20f \n" length(simulation.stats.losses) simulation.parameters.hyper.epochs l
+        @printf "Iteration: [%4d / %4d]\t Loss: %.20f\t Improvement: %.10f %%\n" length(simulation.stats.losses) simulation.parameters.hyper.epochs l (l/simulation.stats.losses[begin])
     end
 
     return false

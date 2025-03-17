@@ -15,9 +15,10 @@ Generates a neural network.
 """
 function get_NN(θ_trained, ft)
     UA = Lux.Chain(
-        Dense(1, 3, x -> softplus.(x)),
-        Dense(3, 10, x -> softplus.(x)),
-        Dense(10, 3, x -> softplus.(x)),
+        Dense(1, 3, x -> softplus.(x);  init_weight=Lux.glorot_normal),
+        Dense(3, 10, x -> softplus.(x); init_weight=Lux.glorot_normal),
+        Dense(10, 3, x -> softplus.(x); init_weight=Lux.glorot_normal),
+        # Dense(3, 1, sigmoid)
         Dense(3, 1, sigmoid_A)
     )
     θ, st = Lux.setup(rng_seed(), UA)
@@ -44,6 +45,25 @@ Predicts the value of A with a neural network based on the long-term air tempera
 function predict_A̅(U, temp)
     return 10.0f0.^U(temp) .* 1e-18
 end
+
+# function predict_A̅(U, temp)
+#     # Scaled variables
+#     minT = -30.0f0
+#     maxT =   5.0f0 
+#     minA = 6.0f-20
+#     maxA = 8.0f-17
+#     minLogA = log10(minA)
+#     maxLogA = log10(maxA)
+#     temp_scaled = 10 .* (temp .- (minT+maxT)) ./ (maxT-minT)
+#     # Output of NN. This value will be O(1)
+#     nn_output_log_raw = U(temp_scaled)
+#     # Scale for sigmoid
+#     nn_output_log_scaled = minLogA .+ (maxLogA-minLogA) ./ (1.0 .+ exp.(-nn_output_log_raw))
+#     # nn_output_log_scaled = (minLogA + maxLogA)/2 .+ (maxLogA - minLogA) .* nn_output_log_raw
+#     nn_output_scaled = 10.0f0.^nn_output_log_scaled
+#     @assert minLogA .<= only(nn_output_log_scaled) .<= maxLogA
+#     return nn_output_scaled
+# end
 
 """
     sigmoid_A(x)
@@ -140,16 +160,36 @@ end
 
 Generates batches for the UE inversion problem based on input data and feed them to the loss function.
 """
-function generate_batches(simulation::S; shuffle=true) where {S <: Simulation}
-    # Repeat simulations for batches
-    batch_ids::Vector{Int} = collect(1:length(simulation.glaciers))
-    rgi_ids::Vector{String} = [glacier.rgi_id for glacier in simulation.glaciers]
-    # Combined batch object 
-    batches = (batch_ids, rgi_ids)
+function generate_simulation_batches(simulation::FunctionalInversion)
+    nbatches = 1 #simulation.parameters.hyper.batchsize
+    ninstances = length(simulation.glaciers)
+    # Forward runs still don't have multiple results
+    if length(simulation.results) < 1
+        # TODO: Pass empty results object: machine learning should not be here!
+        return [FunctionalInversion(Sleipnir.Model([simulation.model.iceflow[i]], [simulation.model.mass_balance[i]], simulation.model.machine_learning), [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats) for i in 1:ninstances]
+    else
+        return [FunctionalInversion(Sleipnir.Model([simulation.model.iceflow[i]], [simulation.model.mass_balance[i]], simulation.model.machine_learning), [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats) for i in 1:ninstances]
+    end
+end
+
+function merge_batches(results::Vector)
+    return reduce(vcat,results)
+end
+
+function generate_batches(simulation::S; shuffle=false) where {S <: Simulation}
+    if shuffle
+        @warn "You are shuffling the batches used for paralelization."
+    end
+    # Combined batch object
+    # simulations = ODINN.generate_simulation_batches(simulation)
+    simulations = ([simulation])
+    # @infiltrate
     # Create train loeader use for simulations
-    train_loader = DataLoader(batches, batchsize=simulation.parameters.hyper.batch_size, shuffle=shuffle)
+    # batchsize is already set in generate simulation
+    train_loader = DataLoader(simulations, batchsize=1, shuffle=shuffle)
     return train_loader
 end
+
 
 """
     update_training_state!(simulation::S, l) where {S <: Simulation}

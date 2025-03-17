@@ -1,4 +1,5 @@
 export NeuralNetwork
+export ParallelBatch
 
 include("ML_utils.jl")
 
@@ -70,4 +71,3 @@ function NeuralNetwork(params::Sleipnir.Parameters;
 
     return neural_net
 end
-
