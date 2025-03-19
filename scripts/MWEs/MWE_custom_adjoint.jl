@@ -48,10 +48,14 @@ dummy_grad = function (du, u; simulation::Union{FunctionalInversion, Nothing}=no
     du .= maximum(abs.(u)) .* rand(Float64, size(u))
 end
 
+# TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
+δt = 1/12
+
 params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     use_MB=false,
                                                     velocities=true,
                                                     tspan=(2010.0, 2015.0),
+                                                    step=δt, 
                                                     multiprocessing=false,
                                                     workers=1,
                                                     light=false, # for now we do the simulation like this (a better name would be dense)
@@ -65,7 +69,9 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                         grad=dummy_grad,
                                         optimization_method="AD+AD",
                                         target = "A"),
-                    solver = Huginn.SolverParameters(save_everystep=true, progress=true)
+                    solver = Huginn.SolverParameters(step=δt,
+                                                     save_everystep=true, 
+                                                     progress=true)
                     )
 
 model = Model(iceflow = SIA2Dmodel(params),
@@ -76,7 +82,7 @@ model = Model(iceflow = SIA2Dmodel(params),
 glaciers = initialize_glaciers(rgi_ids, params)
 
 # Time stanpshots for transient inversion
-tstops = collect(2010:(1/12):2015)
+tstops = collect(2010:δt:2015)
 
 ### Fake law for A(T) for Peterson & Cuffey
 const A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
@@ -97,7 +103,7 @@ end
 
 map(glacier -> generate_ground_truth(glacier, fakeA), glaciers)
 # TODO: This function does shit on the model variable, for now we do a clean restart
-model.iceflow = SIA2Dmodel(params)
+# model.iceflow = SIA2Dmodel(params)
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)

@@ -23,7 +23,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
 
     simulations = ODINN.generate_simulation_batches(simulation)
     loss_grad = pmap(simulation -> SIA2D_grad_batch!(θ, simulation), simulations)
-    
+
     # Retrieve loss function
     losses = getindex.(loss_grad, 1)
     loss = sum(losses)
@@ -82,36 +82,37 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         # TODO: We do simply forward Euler, but we can probably write ODE for dλ
 
-        """
-        Define SIA2D forward map for the adjoint mode
-        """
-        function SIA2D_adjoint(θ, H::Matrix{R}, t::R, batch_id::I) where {R <: Real, I <: Integer}
-            # make prediction with neural network
-            # A = apply_UDE_parametrization(θ, simulation, batch_id)
-            A = apply_UDE_parametrization(θ, simulation, batch_id)
-            simulation.model.iceflow[batch_id].A[] = A
-            # println("A during grad calculation:")
-            # @show A
-            # dH is computed as follows
-            Huginn.SIA2D(H, simulation, t; batch_id)
-        end
-
         println("Value of A used during gradient")
         @show apply_UDE_parametrization(θ, simulation, i)
 
         # This time does not really matter since SIA2D does not depend explicetely on time,
         # but we make it explicit here in case we want to customize this in the future.
         t₀ = 2010.0e0 
-        ∂f∂H_closure(H) = SIA2D_adjoint(θ, H, t₀, i)
+        # TODO: Try with the closure, should be the same
+        # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(θ, _dH, _H, simulation, t₀, i)
+        # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(Enzyme.Const(θ), _dH, _H, Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
 
         # I wrote the for loop without really caring much about indices, so they may be one index off
         for j in reverse(2:k)
 
+            # Zygote adjoint implementation
             # Create pullback function to evaluate VJPs
-            dH_H, ∂f∂H_pullback = Zygote.pullback(∂f∂H_closure, H[j])
+            # dH_H, ∂f∂H_pullback = Zygote._pullback(∂f∂H_closure, H[j])
 
             # Compute VJP with adjoint variable
-            λ_∂f∂H, = ∂f∂H_pullback(λ[j])
+            # Transpose operation
+            # _, λ_∂f∂H = ∂f∂H_pullback(λ[j])
+            # λ_∂f∂H, = ∂f∂H_pullback(λ[j])
+
+            # Enzyme adjoint implementation
+            dH_H = Enzyme.make_zero(H[j])
+            λ_∂f∂H = Enzyme.make_zero(H[j])
+
+            # TODO: Now initializing adjoint as ones, remove this next line
+            λ[j] = ones(size(λ[j])...)
+
+            Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(H[j], λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
+            @show maximum(abs.(λ_∂f∂H))
 
             # Compute derivative of local contribution to loss function
             # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
@@ -125,26 +126,48 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
             ### Compute loss function
-            ∂f∂θ_closure(θ) = SIA2D_adjoint(θ, H[j], t₀, i)
-            dH_λ, ∂f∂θ_pullback = Zygote.pullback(∂f∂θ_closure, θ)
-            λ_∂f∂θ, = ∂f∂θ_pullback(λ[j-1])
+            ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint(_θ, _dH, H[j], simulation, t₀, i)
+            # Zygote adjoint implementation
+            # TODO: change this to _pullback
+            # dH_λ, ∂f∂θ_pullback = Zygote.pullback(∂f∂θ_closure, θ)
+            # Compute loss with transpose of adjoint
+            # λ_∂f∂θ, = ∂f∂θ_pullback(λ[j-1])
+
+            # Enzyme implementation
+            # TODO: Check on indices of λ
+            # TODO: Change the function definition to remove closure and passing Const()
+            dH_λ = Enzyme.make_zero(H[j])
+            λ_∂f∂θ = Enzyme.make_zero(θ)
+            Enzyme.autodiff(Reverse, ∂f∂θ_closure, Const, Duplicated(dH_λ, λ[j]), Duplicated(θ, λ_∂f∂θ))
+
             dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
             # Run simple test that both closures are computing the same primal
             @assert dH_H ≈ dH_λ "Result from forward pass needs to coincide for both closures when computing the pullback."
         end
 
-        # Return final evaluation of gradient
-        # dθ .= dLdθ
+        # Return final evaluations of gradient
         push!(dLdθs_vector, dLdθ)
-        # @show apply_UDE_parametrization(θ, simulation, i)
-        # @show norm(dLdθ)
+
     end
 
     @assert ℓ ≈ loss "Loss in forward and reverse do not coincide: $(ℓ) != $(loss)"
-    @show loss
     return loss, dLdθs_vector
 
+end
+
+"""
+Define SIA2D forward map for the adjoint mode
+"""
+function SIA2D_adjoint(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R, batch_id::I) where {R <: Real, I <: Integer}
+    # make prediction with neural network
+    A = apply_UDE_parametrization(_θ, simulation, batch_id)
+    simulation.model.iceflow[batch_id].A[] = A
+
+    # dH is computed as follows
+    Huginn.SIA2D!(_dH, _H, simulation, t; batch_id=batch_id)
+
+    return nothing
 end
 
 """

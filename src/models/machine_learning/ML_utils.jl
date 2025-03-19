@@ -182,7 +182,9 @@ function generate_batches(simulation::S; shuffle=false) where {S <: Simulation}
     end
     # Combined batch object
     # simulations = ODINN.generate_simulation_batches(simulation)
-    simulations = ([simulation])
+    # simulations = ([1,2,3],)
+    simulations = [simulation]
+    # simulations = ([simulation],)
     # @infiltrate
     # Create train loeader use for simulations
     # batchsize is already set in generate simulation

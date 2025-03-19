@@ -100,7 +100,6 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optimisers.Adam)
 
     @info "Training with ADAM"
     # Create batches for inversion training
-    # TODO: Think the logic of the data loader!!!
     simulation_train_loader = generate_batches(simulation)
 
     θ = simulation.model.machine_learning.θ
@@ -121,15 +120,14 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optimisers.Adam)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom discrete adjoint method."
-        # Custom grad API for optimization problem
-        # loss_iceflow_grad!(dθ, θ, glacier_data_loader) = simulation.parameters.UDE.grad(dθ, θ; simulation=simulation)
-        # loss_iceflow_grad!(dθ, θ, _simulation) = SIA2D_grad!(dθ, θ, _simulation)
-        loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, only(simulation_loader))
-        loss_iceflow_grad!(dθ, θ, simulation_loader) = SIA2D_grad!(dθ, θ, only(simulation_loader))
-        optf = OptimizationFunction(loss_function, NoAD(), grad=loss_iceflow_grad!)
+
+        loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1])
+        loss_function_grad!(_dθ, _θ, simulation_loader) = SIA2D_grad!(_dθ, _θ, simulation_loader[1])
+
+        optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
-    # TODO: Rewrite train loader
+    # optprob = OptimizationProblem(optf, θ, nothing)
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Plot callback
@@ -304,9 +302,7 @@ function batch_iceflow_UDE(θ, simulation::FunctionalInversion)
 
         # Run iceflow UDE for this glacier
         du = params.simulation.use_iceflow ? Huginn.SIA2D! : Huginn.noSIA2D
-        iceflow_sol = simulate_iceflow_UDE!(θ, simulation, simulation.model, params, cb_MB, batch_id; du = du)
-
-        # println("simulation finished for $batch_id")
+        iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb_MB, batch_id; du = du)
 
         # Update simulation results
         result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=simulation.parameters.simulation.light, batch_id = batch_id)
@@ -322,8 +318,6 @@ end
 function simulate_iceflow_UDE!(
     θ,
     simulation::SIM,
-    model::Sleipnir.Model,
-    params::Sleipnir.Parameters,
     cb::DiscreteCallback,
     batch_id::I;
     du = Huginn.SIA2D) where {I <: Integer, SIM <: Simulation}
@@ -333,11 +327,12 @@ Make forward simulation of the iceflow UDE determined in `du`.
 function simulate_iceflow_UDE!(
     θ,
     simulation::SIM,
-    model::Sleipnir.Model,
-    params::Sleipnir.Parameters,
     cb::DiscreteCallback,
     batch_id::I;
     du = Huginn.SIA2D) where {I <: Integer, SIM <: Simulation}
+
+    model = simulation.model
+    params = simulation.parameters
 
     # TODO: make this more general
     # @infiltrate
