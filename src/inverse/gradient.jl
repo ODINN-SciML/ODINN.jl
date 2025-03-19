@@ -114,6 +114,33 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(H[j], λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
             @show maximum(abs.(λ_∂f∂H))
 
+            dH_H = Enzyme.make_zero(H[j])
+            λ_∂f∂H = Enzyme.make_zero(H[j])
+            _H = zero(H[j])
+            _H[1,:] .= 1.0
+            _H[:,1] .= 1.0
+            _H = abs.(randn(size(H[j])[1],size(H[j])[2]))
+            Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(_H, λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
+            @show maximum(abs.(λ_∂f∂H))
+
+            @infiltrate
+
+            _H = zero(H[j])
+            _H[1,:] .= 1.0
+            _H[:,1] .= 1.0
+            _H = abs.(randn(size(H[j])[1],size(H[j])[2]))
+
+            λ  = ones(size(_H))
+            λ[1,:] .= 1.0
+            λ[:,1] .= 1.0
+            t₀ = 2010.0
+
+            dH_H = Enzyme.make_zero(λ)
+            λ_∂f∂H = Enzyme.make_zero(_H)
+
+            Enzyme.autodiff(Reverse, SIA2D_adjoint_test, Const, Duplicated(dH_H, λ), Duplicated(_H, λ_∂f∂H), Enzyme.Const(t₀))
+            @show maximum(abs.(λ_∂f∂H))
+
             # Compute derivative of local contribution to loss function
             # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
             β = 2.0
@@ -161,14 +188,85 @@ Define SIA2D forward map for the adjoint mode
 """
 function SIA2D_adjoint(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R, batch_id::I) where {R <: Real, I <: Integer}
     # make prediction with neural network
-    A = apply_UDE_parametrization(_θ, simulation, batch_id)
-    simulation.model.iceflow[batch_id].A[] = A
+    # A = apply_UDE_parametrization(_θ, simulation, batch_id)
+    # simulation.model.iceflow[batch_id].A[] = A
 
     # dH is computed as follows
-    Huginn.SIA2D!(_dH, _H, simulation, t; batch_id=batch_id)
+    _dH .= Huginn.SIA2D(_H, simulation, t; batch_id=batch_id)
 
     return nothing
 end
+
+function SIA2D_adjoint_test(_dH::Matrix{R}, _H::Matrix{R}, t::R) where {R <: Real}
+    # make prediction with neural network
+    # A = apply_UDE_parametrization(_θ, simulation, batch_id)
+    # simulation.model.iceflow[batch_id].A[] = A
+
+    # dH is computed as follows
+    # _dH .= Huginn.SIA2D(_H, simulation, t)
+    SIA2D!(_dH, _H, t)
+
+    return nothing
+end
+
+@views diff_x(A) = (A[begin + 1:end, :] .- A[1:end - 1, :])
+@views diff_y(A) = (A[:, begin + 1:end] .- A[:, 1:end - 1])
+@views avg(A) = 0.25 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
+@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
+@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
+@views inn(A) = A[2:end-1,2:end-1]
+@views inn1(A) = A[1:end-1,1:end-1]
+
+function SIA2D!(dH::Matrix{R}, H::Matrix{R}, t::R) where {R <:Real}
+    
+    S = abs.(randn(size(H)[1],size(H)[2]))
+    Δx = 10.0
+    Δy = 10.0
+    n = 3
+    ρ = 900.0
+    g = 9.81
+    A = 5e-18
+
+    # All grid variables computed in a staggered grid
+    # Compute surface gradients on edges
+    dSdx = diff_x(S) / Δx
+    dSdy = diff_y(S) / Δy
+    ∇Sx = avg_y(dSdx)
+    ∇Sy = avg_x(dSdy)
+    ∇S  = (∇Sx.^2 .+ ∇Sy.^2).^((n[] - 1)/2) 
+
+    H̄ = avg(H)
+    Γ = 2.0 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
+    D = Γ .* H̄.^(n + 2) .* ∇S
+    
+    # Compute flux components
+    @views dSdx_edges = diff_x(S[:,2:end - 1]) ./ Δx
+    @views dSdy_edges = diff_y(S[2:end - 1,:]) ./ Δy
+
+    # Cap surface elevaton differences with the upstream ice thickness to
+    # impose boundary condition of the SIA equation
+    # We need to do this with Tullio or something else that allow us to set indices.
+    η₀ = 1.0
+    dSdx_edges = @views @. min(dSdx_edges,  η₀ * H[2:end, 2:end-1]/Δx)
+    dSdx_edges = @views @. max(dSdx_edges, -η₀ * H[1:end-1, 2:end-1]/Δx)
+    dSdy_edges = @views @. min(dSdy_edges,  η₀ * H[2:end-1, 2:end]/Δy)
+    dSdy_edges = @views @. max(dSdy_edges, -η₀ * H[2:end-1, 1:end-1]/Δy)
+
+    Dx = avg_y(D)
+    Dy = avg_x(D)
+    Fx = .-Dx .* dSdx_edges
+    Fy = .-Dy .* dSdy_edges 
+
+    # #  Flux divergence
+    Fxx = diff_x(Fx) / Δx
+    Fyy = diff_y(Fy) / Δy
+
+    # inn(dH) .= -(Fx[2:199,:] - Fx[1:198,:]) / Δx * 0.0001
+    # inn(dH) .= -(diff_x(Fx)) / Δx * 0.0001
+    inn(dH) .= .-(Fxx .+ Fyy) 
+    @show maximum(dH)
+end
+
 
 """
 Copy of apply_UDE_parametrization! but without inplacement
