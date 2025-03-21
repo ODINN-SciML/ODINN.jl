@@ -44,7 +44,7 @@ Predicts the value of A with a neural network based on the long-term air tempera
 """
 function predict_A̅(U, temp)
     # return 10.0f0.^U(temp) .* 1e-18
-    return U(temp) .* 1e-17
+    return U(temp) .* 1e-18
 end
 
 # function predict_A̅(U, temp)

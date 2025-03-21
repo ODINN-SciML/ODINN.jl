@@ -25,19 +25,19 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 ## Retrieving simulation data for the following glaciers
 rgi_ids = ["RGI60-11.03638"]
 # rgi_ids = ["RGI60-08.00213", "RGI60-02.05098"]
-# rgi_ids = ["RGI60-11.03638", # unstable
-#             "RGI60-11.01450",
+# rgi_ids = [#"RGI60-11.03638",
+#             # "RGI60-11.01450",
 #             "RGI60-08.00213",
 #             "RGI60-04.04351",
 #             "RGI60-01.02170",
 #             "RGI60-02.05098",
-#             "RGI60-01.01104",
+#             # "RGI60-01.01104",
 #             # "RGI60-01.09162",
 #             # "RGI60-01.00570", # This one does not have millan_v data
 #             # "RGI60-04.07051",
 #             "RGI60-07.00274",
 #             "RGI60-07.01323"]#,
-#             # "RGI60-01.17316"] # This one does not have millan_v data
+            # "RGI60-01.17316"] # This one does not have millan_v data
 
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
@@ -54,8 +54,8 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=true,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=400,
-                                            optimizer=ODINN.ADAM(0.002)),
+                                            epochs=100,
+                                            optimizer=ODINN.ADAM(0.005)),
                                             # optimizer=ODINN.Descent(0.001)),
                     UDE = UDEparameters(sensealg=ODINN.ZygoteAdjoint(),
                                         optim_autoAD=ODINN.NoAD(),
@@ -96,7 +96,7 @@ end
 
 map(glacier -> generate_ground_truth(glacier, fakeA), glaciers)
 # TODO: This function does shit on the model variable, for now we do a clean restart
-# model.iceflow = SIA2Dmodel(params)
+model.iceflow = SIA2Dmodel(params)
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)
