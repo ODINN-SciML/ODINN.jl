@@ -96,7 +96,7 @@ end
 """
 ADAM Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::Optimisers.Adam)
+function train_UDE!(simulation::FunctionalInversion, optimizer::Optimisers.AbstractRule)
 
     @info "Training with ADAM"
     # Create batches for inversion training
