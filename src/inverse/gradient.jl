@@ -26,6 +26,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
 
     # Retrieve loss function
     losses = getindex.(loss_grad, 1)
+    # @show losses
     loss = sum(losses)
     # Retrive gradient
     dθs  = getindex.(loss_grad, 2)
@@ -86,9 +87,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         # TODO: We do simply forward Euler, but we can probably write ODE for dλ
 
-        println("Value of A used during gradient")
-        @show apply_UDE_parametrization(θ, simulation, i)
-
         # This time does not really matter since SIA2D does not depend explicetely on time,
         # but we make it explicit here in case we want to customize this in the future.
         t₀ = 2010.0e0 
@@ -99,7 +97,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         for j in reverse(2:k)
 
             # β = 2.0
-            # normalization = mean(H_ref[j][H_ref[j] .> 0.0])^β
+            # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
             normalization = 1.0
             # Compute derivative of local contribution to loss function
             # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
@@ -163,6 +161,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
                 λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(θ, λ[j-1], H[j], simulation, t₀; batch_id = i)
 
+                # TODO: Sign of the gradient is correct, but magnitude is still a bit OrdinaryDiffEq
+                # TODO: Check on the adjoint calculation again to see what is missing or wrong
+                # TODO: This measn that the continuous manual adjoint works for few glaciers
                 dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
             else
