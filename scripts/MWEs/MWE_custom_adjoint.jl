@@ -39,14 +39,6 @@ rgi_ids = ["RGI60-11.03638"]
 #             "RGI60-07.01323"]#,
 #             # "RGI60-01.17316"] # This one does not have millan_v data
 
-sensealg = ODINN.ZygoteAdjoint()
-adtype = ODINN.NoAD()
-
-
-# Define dummy grad
-dummy_grad = function (du, u; simulation::Union{FunctionalInversion, Nothing}=nothing)
-    du .= maximum(abs.(u)) .* rand(Float64, size(u))
-end
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
@@ -55,7 +47,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     use_MB=false,
                                                     velocities=true,
                                                     tspan=(2010.0, 2015.0),
-                                                    step=δt, 
+                                                    step=δt,
                                                     multiprocessing=false,
                                                     workers=1,
                                                     light=false, # for now we do the simulation like this (a better name would be dense)
@@ -63,10 +55,11 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
                                             epochs=400,
-                                            optimizer=ODINN.ADAM(0.005)),
-                    UDE = UDEparameters(sensealg=sensealg,
-                                        optim_autoAD=adtype,
-                                        grad=dummy_grad,
+                                            optimizer=ODINN.ADAM(0.002)),
+                                            # optimizer=ODINN.Descent(0.001)),
+                    UDE = UDEparameters(sensealg=ODINN.ZygoteAdjoint(),
+                                        optim_autoAD=ODINN.NoAD(),
+                                        grad=ODINNContinuousAdjoint(),
                                         optimization_method="AD+AD",
                                         target = "A"),
                     solver = Huginn.SolverParameters(step=δt,
@@ -92,7 +85,7 @@ A_poly = fit(A_values[1,:], A_values[2,:])
 # fakeA(T) = A_poly(T)
 
 # Overwrite constant A fake function for testing
-fakeA(T) = 7e-19
+fakeA(T) = 2.21e-18
 
 # We generate a fake forward model for the simulation
 function generate_ground_truth(glacier, fakeA::Function)

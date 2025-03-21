@@ -38,7 +38,9 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     end
 
     @assert typeof(θ) == typeof(sum(dθs))
-    dθ = sum(dθs)
+    @assert norm(sum(dθs)) > 0.0
+
+    dθ .= sum(dθs)
 end
 
 """
@@ -66,6 +68,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         # Reference data
         t_ref = only(simulation.glaciers[i].data).t
         H_ref = only(simulation.glaciers[i].data).H
+        Δx = simulation.glaciers[i].Δx
+        Δy = simulation.glaciers[i].Δy
 
         @assert t ≈ t_ref "Reference times of simulation and reference data do not coincide."
         @assert length(H) == length(H_ref)
@@ -92,86 +96,88 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(θ, _dH, _H, simulation, t₀, i)
         # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(Enzyme.Const(θ), _dH, _H, Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
 
-        # I wrote the for loop without really caring much about indices, so they may be one index off
         for j in reverse(2:k)
 
-            # Zygote adjoint implementation
-            # Create pullback function to evaluate VJPs
-            # dH_H, ∂f∂H_pullback = Zygote._pullback(∂f∂H_closure, H[j])
-
-            # Compute VJP with adjoint variable
-            # Transpose operation
-            # _, λ_∂f∂H = ∂f∂H_pullback(λ[j])
-            # λ_∂f∂H, = ∂f∂H_pullback(λ[j])
-
-            # Enzyme adjoint implementation
-            dH_H = Enzyme.make_zero(H[j])
-            λ_∂f∂H = Enzyme.make_zero(H[j])
-
-            # TODO: Now initializing adjoint as ones, remove this next line
-            λ[j] = ones(size(λ[j])...)
-
-            Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(H[j], λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
-            @show maximum(abs.(λ_∂f∂H))
-
-            dH_H = Enzyme.make_zero(H[j])
-            λ_∂f∂H = Enzyme.make_zero(H[j])
-            _H = zero(H[j])
-            _H[1,:] .= 1.0
-            _H[:,1] .= 1.0
-            _H = abs.(randn(size(H[j])[1],size(H[j])[2]))
-            Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(_H, λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
-            @show maximum(abs.(λ_∂f∂H))
-
-            @infiltrate
-
-            _H = zero(H[j])
-            _H[1,:] .= 1.0
-            _H[:,1] .= 1.0
-            _H = abs.(randn(size(H[j])[1],size(H[j])[2]))
-
-            λ  = ones(size(_H))
-            λ[1,:] .= 1.0
-            λ[:,1] .= 1.0
-            t₀ = 2010.0
-
-            dH_H = Enzyme.make_zero(λ)
-            λ_∂f∂H = Enzyme.make_zero(_H)
-
-            Enzyme.autodiff(Reverse, SIA2D_adjoint_test, Const, Duplicated(dH_H, λ), Duplicated(_H, λ_∂f∂H), Enzyme.Const(t₀))
-            @show maximum(abs.(λ_∂f∂H))
-
-            # Compute derivative of local contribution to loss function
-            # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
-            β = 2.0
+            # β = 2.0
             # normalization = mean(H_ref[j][H_ref[j] .> 0.0])^β
             normalization = 1.0
-            ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * normalization)
+            # Compute derivative of local contribution to loss function
+            # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
+            ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * Δx * Δy * normalization)
             ℓ += Δt[j-1] * simulation.parameters.UDE.empirical_loss_function(H[j], H_ref[j]) / normalization
-            ### Compute adjoint
-            # Update time-dependent adjoint
-            λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
-            ### Compute loss function
-            ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint(_θ, _dH, H[j], simulation, t₀, i)
-            # Zygote adjoint implementation
-            # TODO: change this to _pullback
-            # dH_λ, ∂f∂θ_pullback = Zygote.pullback(∂f∂θ_closure, θ)
-            # Compute loss with transpose of adjoint
-            # λ_∂f∂θ, = ∂f∂θ_pullback(λ[j-1])
+            if typeof(simulation.parameters.UDE.grad) <: ODINNZygoteAdjoint
 
-            # Enzyme implementation
-            # TODO: Check on indices of λ
-            # TODO: Change the function definition to remove closure and passing Const()
-            dH_λ = Enzyme.make_zero(H[j])
-            λ_∂f∂θ = Enzyme.make_zero(θ)
-            Enzyme.autodiff(Reverse, ∂f∂θ_closure, Const, Duplicated(dH_λ, λ[j]), Duplicated(θ, λ_∂f∂θ))
+                # Zygote adjoint implementation
+                # Create pullback function to evaluate VJPs
+                ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(θ, _dH, _H, simulation, t₀, i)
+                dH_H, ∂f∂H_pullback = Zygote.pullback(∂f∂H_closure, H[j])
 
-            dLdθ .+= Δt[j-1] .* λ_∂f∂θ
+                # Compute VJP with adjoint variable
+                # Transpose operation
+                # _, λ_∂f∂H = ∂f∂H_pullback(λ[j])
+                λ_∂f∂H, = ∂f∂H_pullback(λ[j])
 
-            # Run simple test that both closures are computing the same primal
-            @assert dH_H ≈ dH_λ "Result from forward pass needs to coincide for both closures when computing the pullback."
+                ### Update adjoint
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+
+                ### Compute loss function
+                ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint(_θ, _dH, H[j], simulation, t₀, i)
+                dH_λ, ∂f∂θ_pullback = Zygote.pullback(∂f∂θ_closure, θ)
+                # Compute loss with transpose of adjoint
+                λ_∂f∂θ, = ∂f∂θ_pullback(λ[j-1])
+
+                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
+                # Run simple test that both closures are computing the same primal
+                # @assert dH_H ≈ dH_λ "Result from forward pass needs to coincide for both closures when computing the pullback."
+
+            elseif typeof(simulation.parameters.UDE.grad) <: ODINNEnzymeAdjoint
+
+                # Enzyme adjoint implementation
+                dH_H = Enzyme.make_zero(H[j])
+                λ_∂f∂H = Enzyme.make_zero(H[j])
+
+                # TODO: Now initializing adjoint as ones, remove this next line
+                λ[j] = ones(size(λ[j])...)
+                λ[j] = H[j] .+ randn(size(H[j])...)
+
+                Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(H[j], λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
+                @show maximum(abs.(λ_∂f∂H))
+
+                ### Update adjoint
+                # TODO: Check sign of ∂ℓ∂H
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+
+                dH_λ = Enzyme.make_zero(H[j])
+                λ_∂f∂θ = Enzyme.make_zero(θ)
+                Enzyme.autodiff(Reverse, ∂f∂θ_closure, Const, Duplicated(dH_λ, λ[j]), Duplicated(θ, λ_∂f∂θ))
+
+            elseif typeof(simulation.parameters.UDE.grad) <: ODINNContinuousAdjoint
+
+                # Custom adjoint
+                λ_∂f∂H = VJP_λ_∂SIA∂H_continuous(λ[j], H[j], simulation, t₀; batch_id = i)
+                # @show maximum(abs.(λ_∂f∂H))
+
+                ### Update adjoint
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+
+                λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(θ, λ[j-1], H[j], simulation, t₀; batch_id = i)
+
+                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
+
+            else
+                @error "No AD method specificed."
+            end
+
         end
+
+        ### Finite diff check of gradient
+        # @infiltrate
+        # ϵ = 1e-5
+        # loss_update = loss_iceflow_transient(θ .+ ϵ .* dLdθ, simulation)
+        # δl = loss_update - loss
+        # println("This ratio should be ≈ 1")
+        # @show (δl / norm(dLdθ)^2) / ϵ
 
         # Return final evaluations of gradient
         push!(dLdθs_vector, dLdθ)
@@ -188,8 +194,8 @@ Define SIA2D forward map for the adjoint mode
 """
 function SIA2D_adjoint(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R, batch_id::I) where {R <: Real, I <: Integer}
     # make prediction with neural network
-    # A = apply_UDE_parametrization(_θ, simulation, batch_id)
-    # simulation.model.iceflow[batch_id].A[] = A
+    A = apply_UDE_parametrization(_θ, simulation, batch_id)
+    simulation.model.iceflow[batch_id].A[] = A
 
     # dH is computed as follows
     _dH .= Huginn.SIA2D(_H, simulation, t; batch_id=batch_id)

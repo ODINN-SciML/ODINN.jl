@@ -1,8 +1,8 @@
 export UDEparameters
-mutable struct UDEparameters <: AbstractParameters
+mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
     sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
     optim_autoAD::AbstractADType
-    grad::Union{Function, Nothing}
+    grad::Union{ADJ, Nothing}
     optimization_method::String
     loss_type::String
     empirical_loss_function::Lux.AbstractLossFunction
@@ -33,13 +33,13 @@ Keyword arguments
 function UDEparameters(;
             sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
             optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
-            grad::Union{Function, Nothing} = nothing, 
+            grad::Union{ADJ, Nothing} = nothing, 
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
             empirical_loss_function::Lux.AbstractLossFunction = Lux.MSELoss(; agg=mean),
             scale_loss::Bool = true,
             target::Union{String, Nothing} = "D"
-            )
+            ) where {ADJ <: AbstractAdjointMethod}
     # Verify that the optimization method is correct
     @assert ((optimization_method == "AD+AD") || (optimization_method == "AD+Diff")) "Wrong optimization method! Needs to be either `AD+AD` or `AD+Diff`"
     @assert ((loss_type == "V") || (loss_type == "H")) "Wrong loss type! Needs to be either `V` or `H`"
