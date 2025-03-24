@@ -14,6 +14,8 @@ using ODINN
 using Polynomials
 using Plots
 
+Enzyme.API.strictAliasing!(false)
+
 rgi_paths = get_rgi_paths()
 
 # The value of this does not really matter, it is hardcoded in Sleipnir right now.
@@ -63,7 +65,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
                                             epochs=400,
-                                            optimizer=ODINN.ADAM(0.005)),
+                                            optimizer=ODINN.ADAM(0.01)),
                     UDE = UDEparameters(sensealg=sensealg,
                                         optim_autoAD=adtype,
                                         grad=dummy_grad,
