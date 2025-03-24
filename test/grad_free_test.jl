@@ -28,7 +28,7 @@ function grad_free_test(;use_MB::Bool=false)
                                                 optimizer=ODINN.ADAM(0.01)),
                         UDE = UDEparameters(sensealg=sensealg, 
                                             optim_autoAD=adtype, 
-                                            grad=DummyAdjoint(grad=dummy_grad), 
+                                            grad=ODINNDummyAdjoint(grad=dummy_grad),
                                             optimization_method="AD+AD",
                                             target = "A")
                         )

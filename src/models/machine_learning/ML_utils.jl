@@ -14,13 +14,17 @@ Generates a neural network.
 - `st`: Lux state.
 """
 function get_NN(θ_trained, ft)
-    UA = Lux.Chain(
+    UA = Lux.Chain( # Light network for debugging
         Dense(1, 3, x -> softplus.(x)),
-        Dense(3, 10, x -> softplus.(x)),
-        Dense(10, 3, x -> softplus.(x)),
-        # Dense(3, 1, sigmoid)
         Dense(3, 1, sigmoid_A)
     )
+    # UA = Lux.Chain(
+    #     Dense(1, 3, x -> softplus.(x)),
+    #     Dense(3, 10, x -> softplus.(x)),
+    #     Dense(10, 3, x -> softplus.(x)),
+    #     # Dense(3, 1, sigmoid)
+    #     Dense(3, 1, sigmoid_A)
+    # )
     θ, st = Lux.setup(rng_seed(), UA)
     if !isnothing(θ_trained)
         θ = θ_trained

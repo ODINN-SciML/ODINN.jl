@@ -10,8 +10,11 @@ mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
     target::Union{String, Nothing}
 end
 
-Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.optimization_method == b.optimization_method && a.loss_type == b.loss_type && 
-                                      a.scale_loss == b.scale_loss 
+Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
+    a.optim_autoAD == b.optim_autoAD && a.grad == b.grad &&
+    a.optimization_method == b.optimization_method && a.loss_type == b.loss_type &&
+    a.empirical_loss_function == b.empirical_loss_function && a.scale_loss == b.scale_loss &&
+    a.target == b.target
 
 
 """
