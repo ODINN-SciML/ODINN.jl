@@ -82,8 +82,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         # Adjoint setup
         # Define empty object to store adjoint in reverse mode
-        λ  = [zeros(N) for _ in 1:k]
-        dLdθ = zero(θ)
+        λ  = [Enzyme.make_zero(result.B) for _ in 1:k]
+        dH_λ = [Enzyme.make_zero(H[1]) for _ in 1:k]
+        dLdθ = Enzyme.make_zero(θ)
 
         # TODO: We do simply forward Euler, but we can probably write ODE for dλ
 
@@ -131,24 +132,92 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
             elseif typeof(simulation.parameters.UDE.grad) <: ODINNEnzymeAdjoint
 
+
                 # Enzyme adjoint implementation
                 dH_H = Enzyme.make_zero(H[j])
                 λ_∂f∂H = Enzyme.make_zero(H[j])
+                _simulation = Enzyme.make_zero(simulation)
+                smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
                 # TODO: Now initializing adjoint as ones, remove this next line
-                λ[j] = ones(size(λ[j])...)
-                λ[j] = H[j] .+ randn(size(H[j])...)
+                # λ[j] = ones(size(λ[j])...)
+                # λ[j] = randn(size(λ[j])...)
 
-                Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(H[j], λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
+                Enzyme.autodiff(Reverse, SIA2D_adjoint, Const,
+                                Enzyme.Const(θ),
+                                Duplicated(dH_H, λ[j]),
+                                Duplicated(H[j], λ_∂f∂H),
+                                Enzyme.Duplicated(simulation, _simulation),
+                                Enzyme.Const(smodel),
+                                Enzyme.Const(t₀),
+                                Enzyme.Const(i))
+                # Enzyme.autodiff(Reverse, SIA2D_adjoint_enzyme, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(H[j], λ_∂f∂H), Enzyme.Duplicated(simulation, _simulation), Enzyme.Duplicated(simulation.model.iceflow, _iceflow_models), Enzyme.Duplicated(simulation.glaciers, _glaciers), Enzyme.Const(t₀), Enzyme.Const(i))
                 @show maximum(abs.(λ_∂f∂H))
 
-                ### Update adjoint
-                # TODO: Check sign of ∂ℓ∂H
+
+
+                ### Compute adjoint
+                # Update time-dependent adjoint
                 λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
 
-                dH_λ = Enzyme.make_zero(H[j])
+                ### Compute loss function
+                # ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint_enzyme(_θ, _dH, H[j], simulation, simulation.model.iceflow, simulation.gloaciers, t₀, i)
+                # ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint(_θ, _dH, H[j], simulation, t₀, i)
+
+                # Enzyme implementation
+                # TODO: Check on indices of λ
+                # TODO: Change the function definition to remove closure and passing Const()
                 λ_∂f∂θ = Enzyme.make_zero(θ)
-                Enzyme.autodiff(Reverse, ∂f∂θ_closure, Const, Duplicated(dH_λ, λ[j]), Duplicated(θ, λ_∂f∂θ))
+                _simulation = Enzyme.make_zero(simulation)
+                # The target variable needs to be set to one in order to be differentiated in the buffer variable if it's zero
+                # if _simulation.model.iceflow[i].A[] == 0.0
+                _simulation.model.iceflow[i].A[] = 1.0
+                # end
+                _smodel = Enzyme.make_zero(smodel)
+                _H = Enzyme.make_zero(H[j])
+
+                @infiltrate
+
+                # temp = [5.0]
+                # _temp = Enzyme.make_zero(temp)
+                # Enzyme.autodiff(Reverse, predict_A̅, Active,
+                #                 Duplicated(smodel, _smodel), 
+                #                 Duplicated(temp, _temp))
+
+                # _smodel = Enzyme.make_zero(smodel)
+                # _iceflow = Enzyme.make_zero(simulation.model.iceflow[1])
+                # _iceflow.A[] = 1.0
+                # Enzyme.autodiff(Reverse, NN_enzyme!, Const,
+                #                 Duplicated(smodel, _smodel),
+                #                 Duplicated(simulation.model.iceflow[1], _iceflow))
+
+                Enzyme.autodiff(Reverse, apply_UDE_parametrization_enzyme!, Const, 
+                                Duplicated(θ, λ_∂f∂θ), 
+                                Duplicated(simulation, _simulation), 
+                                Duplicated(smodel, _smodel), 
+                                Const(i))
+
+                Enzyme.autodiff(Reverse, apply_UDE_parametrization_enzyme, Active, 
+                                Duplicated(θ, λ_∂f∂θ), 
+                                Duplicated(simulation, _simulation), 
+                                Duplicated(smodel, _smodel), 
+                                Const(i))
+
+                # @show maximum(abs.(λ_∂f∂θ))
+
+                # Enzyme.autodiff(Reverse, SIA2D_adjoint_enzyme, Const, Duplicated(dH_λ, λ[j]), Duplicated(θ, λ_∂f∂θ), Duplicated(H[j], λ_∂f∂H), Enzyme.Duplicated(simulation, _simulation), Enzyme.Duplicated(simulation.model.iceflow, _iceflow_models), Enzyme.Duplicated(simulation.glaciers, _glaciers), Enzyme.Const(t₀), Enzyme.Const(i))
+                Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, 
+                                Duplicated(θ, λ_∂f∂θ), 
+                                Duplicated(dH_λ[j], λ[j]), 
+                                Duplicated(H[j], _H), 
+                                Duplicated(simulation, _simulation), 
+                                Duplicated(smodel, _smodel), 
+                                Const(t₀), 
+                                Const(i))
+                @show maximum(abs.(λ_∂f∂θ))
+
+                # Run simple test that both closures are computing the same primal
+                # @assert dH_H ≈ dH_λ[j] "Result from forward pass needs to coincide for both closures when computing the pullback."
 
             elseif typeof(simulation.parameters.UDE.grad) <: ODINNContinuousAdjoint
 
@@ -170,6 +239,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 @error "No AD method specificed."
             end
 
+            # Run simple test that both closures are computing the same primal
+            @assert dH_H ≈ dH_λ[j] "Result from forward pass needs to coincide for both closures when computing the pullback."
         end
 
         ### Finite diff check of gradient
@@ -181,8 +252,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         # @show (δl / norm(dLdθ)^2) / ϵ
 
         # Return final evaluations of gradient
+        # @show maximum(abs.(dLdθ))
         push!(dLdθs_vector, dLdθ)
-
     end
 
     @assert ℓ ≈ loss "Loss in forward and reverse do not coincide: $(ℓ) != $(loss)"
@@ -193,119 +264,48 @@ end
 """
 Define SIA2D forward map for the adjoint mode
 """
-function SIA2D_adjoint(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R, batch_id::I) where {R <: Real, I <: Integer}
+function SIA2D_adjoint(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
     # make prediction with neural network
-    A = apply_UDE_parametrization(_θ, simulation, batch_id)
-    simulation.model.iceflow[batch_id].A[] = A
+    apply_UDE_parametrization_enzyme!(_θ, simulation, smodel, batch_id)
 
     # dH is computed as follows
-    _dH .= Huginn.SIA2D(_H, simulation, t; batch_id=batch_id)
+    Huginn.SIA2D!(_dH, _H, simulation, t; batch_id=batch_id)
 
     return nothing
 end
 
-function SIA2D_adjoint_test(_dH::Matrix{R}, _H::Matrix{R}, t::R) where {R <: Real}
-    # make prediction with neural network
-    # A = apply_UDE_parametrization(_θ, simulation, batch_id)
-    # simulation.model.iceflow[batch_id].A[] = A
 
-    # dH is computed as follows
-    # _dH .= Huginn.SIA2D(_H, simulation, t)
-    SIA2D!(_dH, _H, t)
+# """
+# Copy of apply_UDE_parametrization! but without inplacement
+# """
+# function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id::I) where {I <: Integer}
+#     # We load the ML model with the parameters
+#     model = simulation.model.machine_learning.architecture
+#     st = simulation.model.machine_learning.st
+#     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
-    return nothing
-end
+#     # We generate the ML parametrization based on the target
+#     if simulation.parameters.UDE.target == "A"
+#         A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+#         return A
+#     end
+# end
 
-@views diff_x(A) = (A[begin + 1:end, :] .- A[1:end - 1, :])
-@views diff_y(A) = (A[:, begin + 1:end] .- A[:, 1:end - 1])
-@views avg(A) = 0.25 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
-@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
-@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
-@views inn(A) = A[2:end-1,2:end-1]
-@views inn1(A) = A[1:end-1,1:end-1]
+# """
+# Use just to generate results, don't need to change this API.
+# """
+# function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) where {F <: AbstractFloat}
+#     # We load the ML model with the parameters
+#     model = simulation.model.machine_learning.architecture
+#     st = simulation.model.machine_learning.st
+#     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
-function SIA2D!(dH::Matrix{R}, H::Matrix{R}, t::R) where {R <:Real}
-    
-    S = abs.(randn(size(H)[1],size(H)[2]))
-    Δx = 10.0
-    Δy = 10.0
-    n = 3
-    ρ = 900.0
-    g = 9.81
-    A = 5e-18
-
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
-    dSdx = diff_x(S) / Δx
-    dSdy = diff_y(S) / Δy
-    ∇Sx = avg_y(dSdx)
-    ∇Sy = avg_x(dSdy)
-    ∇S  = (∇Sx.^2 .+ ∇Sy.^2).^((n[] - 1)/2) 
-
-    H̄ = avg(H)
-    Γ = 2.0 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
-    D = Γ .* H̄.^(n + 2) .* ∇S
-    
-    # Compute flux components
-    @views dSdx_edges = diff_x(S[:,2:end - 1]) ./ Δx
-    @views dSdy_edges = diff_y(S[2:end - 1,:]) ./ Δy
-
-    # Cap surface elevaton differences with the upstream ice thickness to
-    # impose boundary condition of the SIA equation
-    # We need to do this with Tullio or something else that allow us to set indices.
-    η₀ = 1.0
-    dSdx_edges = @views @. min(dSdx_edges,  η₀ * H[2:end, 2:end-1]/Δx)
-    dSdx_edges = @views @. max(dSdx_edges, -η₀ * H[1:end-1, 2:end-1]/Δx)
-    dSdy_edges = @views @. min(dSdy_edges,  η₀ * H[2:end-1, 2:end]/Δy)
-    dSdy_edges = @views @. max(dSdy_edges, -η₀ * H[2:end-1, 1:end-1]/Δy)
-
-    Dx = avg_y(D)
-    Dy = avg_x(D)
-    Fx = .-Dx .* dSdx_edges
-    Fy = .-Dy .* dSdy_edges 
-
-    # #  Flux divergence
-    Fxx = diff_x(Fx) / Δx
-    Fyy = diff_y(Fy) / Δy
-
-    # inn(dH) .= -(Fx[2:199,:] - Fx[1:198,:]) / Δx * 0.0001
-    # inn(dH) .= -(diff_x(Fx)) / Δx * 0.0001
-    inn(dH) .= .-(Fxx .+ Fyy) 
-    @show maximum(dH)
-end
-
-
-"""
-Copy of apply_UDE_parametrization! but without inplacement
-"""
-function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id::I) where {I <: Integer}
-    # We load the ML model with the parameters
-    model = simulation.model.machine_learning.architecture
-    st = simulation.model.machine_learning.st
-    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
-
-    # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
-        return A
-    end
-end
-
-"""
-Use just to generate results, don't need to change this API.
-"""
-function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) where {F <: AbstractFloat}
-    # We load the ML model with the parameters
-    model = simulation.model.machine_learning.architecture
-    st = simulation.model.machine_learning.st
-    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
-
-    # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [T])[1]
-        return A
-    end
-end
+#     # We generate the ML parametrization based on the target
+#     if simulation.parameters.UDE.target == "A"
+#         A = predict_A̅(smodel, [T])[1]
+#         return A
+#     end
+# end
 
 
 """

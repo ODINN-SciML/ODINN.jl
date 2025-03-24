@@ -14,6 +14,8 @@ using ODINN
 using Polynomials
 using Plots
 
+Enzyme.API.strictAliasing!(false)
+
 rgi_paths = get_rgi_paths()
 
 # The value of this does not really matter, it is hardcoded in Sleipnir right now.

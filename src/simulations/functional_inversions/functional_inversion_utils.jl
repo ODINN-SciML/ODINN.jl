@@ -96,7 +96,7 @@ end
 """
 ADAM Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::Optimisers.AbstractRule)
+function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <: Optimisers.AbstractRule}
 
     @info "Training with ADAM"
     # Create batches for inversion training
@@ -371,6 +371,37 @@ function simulate_iceflow_UDE!(
     return iceflow_sol
 end
 
+function NN_enzyme!(smodel, iceflow) 
+    # We generate the ML parametrization based on the target
+    iceflow.A[] = predict_A̅(smodel, [-5.0])
+    return nothing
+end
+
+function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
+    # We load the ML model with the parameters
+    smodel.ps = θ.θ
+    smodel.st = simulation.model.machine_learning.st
+    # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
+
+    # We generate the ML parametrization based on the target
+    if simulation.parameters.UDE.target == "A"
+        @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
+        simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
+    end
+end
+
+function apply_UDE_parametrization_enzyme(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
+    # We load the ML model with the parameters
+    smodel.ps = θ.θ
+    smodel.st = simulation.model.machine_learning.st
+    # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
+
+    # We generate the ML parametrization based on the target
+    if simulation.parameters.UDE.target == "A"
+        return predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+    end
+end
+
 function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integrator, batch_id::I) where {I <: Integer}
     # We load the ML model with the parameters
     model = simulation.model.machine_learning.architecture
@@ -385,6 +416,32 @@ function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integra
         # @info "Value of A used in UDE simulation:"
     # elseif simulation.parameters.UDE.target == "D"
     #     parametrization = U()
+    end
+end
+
+function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) where {F <: AbstractFloat}
+    # We load the ML model with the parameters
+    model = simulation.model.machine_learning.architecture
+    st = simulation.model.machine_learning.st
+    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
+
+    # We generate the ML parametrization based on the target
+    if simulation.parameters.UDE.target == "A"
+        A = predict_A̅(smodel, [T])[1]
+        return A
+    end
+end
+
+function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id::I) where {I <: Integer}
+    # We load the ML model with the parameters
+    model = simulation.model.machine_learning.architecture
+    st = simulation.model.machine_learning.st
+    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
+
+    # We generate the ML parametrization based on the target
+    if simulation.parameters.UDE.target == "A"
+        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+        return A
     end
 end
 
