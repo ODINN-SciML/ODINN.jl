@@ -1,7 +1,7 @@
 function grad_free_test(;use_MB::Bool=false)
 
     # The choice of sensitivity algorithm should not matter
-    sensealg = ODINN.ZygoteAdjoint()
+    sensealg = SciMLSensitivity.ZygoteAdjoint()
     adtype = ODINN.NoAD()
 
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
@@ -26,9 +26,9 @@ function grad_free_test(;use_MB::Bool=false)
                         hyper = Hyperparameters(batch_size=4,
                                                 epochs=10,
                                                 optimizer=ODINN.ADAM(0.01)),
-                        UDE = UDEparameters(sensealg=sensealg, 
-                                            optim_autoAD=adtype, 
-                                            grad=DummyAdjoint(grad=dummy_grad), 
+                        UDE = UDEparameters(sensealg=sensealg,
+                                            optim_autoAD=adtype,
+                                            grad=DummyAdjoint(grad=dummy_grad),
                                             optimization_method="AD+AD",
                                             target = "A")
                         )

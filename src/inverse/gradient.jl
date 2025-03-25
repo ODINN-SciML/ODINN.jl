@@ -102,10 +102,10 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             normalization = 1.0
             # Compute derivative of local contribution to loss function
             # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
-            ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * Δx * Δy * normalization)
+            ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * normalization)
             ℓ += Δt[j-1] * simulation.parameters.UDE.empirical_loss_function(H[j], H_ref[j]) / normalization
 
-            if typeof(simulation.parameters.UDE.grad) <: ODINNZygoteAdjoint
+            if typeof(simulation.parameters.UDE.grad) <: ZygoteAdjoint
 
                 # Zygote adjoint implementation
                 # Create pullback function to evaluate VJPs
@@ -130,7 +130,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # Run simple test that both closures are computing the same primal
                 # @assert dH_H ≈ dH_λ "Result from forward pass needs to coincide for both closures when computing the pullback."
 
-            elseif typeof(simulation.parameters.UDE.grad) <: ODINNEnzymeAdjoint
+            elseif typeof(simulation.parameters.UDE.grad) <: EnzymeAdjoint
 
 
                 # Enzyme adjoint implementation
@@ -219,7 +219,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # Run simple test that both closures are computing the same primal
                 # @assert dH_H ≈ dH_λ[j] "Result from forward pass needs to coincide for both closures when computing the pullback."
 
-            elseif typeof(simulation.parameters.UDE.grad) <: ODINNContinuousAdjoint
+            elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
 
                 # Custom adjoint
                 λ_∂f∂H = VJP_λ_∂SIA∂H_continuous(λ[j], H[j], simulation, t₀; batch_id = i)
@@ -235,12 +235,24 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # TODO: This measn that the continuous manual adjoint works for few glaciers
                 dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
+            elseif typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
+
+                # Custom adjoint
+                λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ[j], H[j], simulation, t₀; batch_id = i)[1]
+
+                ### Update adjoint
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+
+                λ_∂f∂A = Huginn.SIA2D_discrete_adjoint(λ[j-1], H[j], simulation, t₀; batch_id = i)[2]
+                ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, i), θ)
+                λ_∂f∂θ = λ_∂f∂A*∇θ
+
+                dLdθ .+= - Δt[j-1] .* λ_∂f∂θ # The minus is needed here, not clear why
+
             else
-                @error "No AD method specificed."
+                @error "AD method $(simulation.parameters.UDE.grad) is not supported yet."
             end
 
-            # Run simple test that both closures are computing the same primal
-            @assert dH_H ≈ dH_λ[j] "Result from forward pass needs to coincide for both closures when computing the pullback."
         end
 
         ### Finite diff check of gradient

@@ -10,8 +10,11 @@ mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
     target::Union{String, Nothing}
 end
 
-Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.optimization_method == b.optimization_method && a.loss_type == b.loss_type && 
-                                      a.scale_loss == b.scale_loss 
+Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
+    a.optim_autoAD == b.optim_autoAD && a.grad == b.grad &&
+    a.optimization_method == b.optimization_method && a.loss_type == b.loss_type &&
+    a.empirical_loss_function == b.empirical_loss_function && a.scale_loss == b.scale_loss &&
+    a.target == b.target
 
 
 """
@@ -33,7 +36,7 @@ Keyword arguments
 function UDEparameters(;
             sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
             optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
-            grad::Union{ADJ, Nothing} = nothing, 
+            grad::ADJ = SciMLSensitivityAdjoint(),
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
             empirical_loss_function::Lux.AbstractLossFunction = Lux.MSELoss(; agg=mean),
@@ -45,7 +48,7 @@ function UDEparameters(;
     @assert ((loss_type == "V") || (loss_type == "H")) "Wrong loss type! Needs to be either `V` or `H`"
 
     # Build the solver parameters based on input values
-    UDE_parameters = UDEparameters(sensealg, optim_autoAD, grad, optimization_method,
+    UDE_parameters = UDEparameters{typeof(grad)}(sensealg, optim_autoAD, grad, optimization_method,
                                     loss_type, empirical_loss_function, scale_loss, target)
 
     return UDE_parameters

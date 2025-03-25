@@ -1,18 +1,18 @@
-# -*- coding: utf-8 -*-
+
 """
     halfar_solution(t, r, θ)
 
-Returns the evaluation of the Halfar solutions for the SIA equation. 
+Returns the evaluation of the Halfar solutions for the SIA equation.
 
 Arguments:
     - t: time
     - r: radial distance. The solutions have polar symmetry around the center of origin
-    - ν = (A, H₀, R₀) 
+    - ν = (A, H₀, R₀)
 """
 function halfar_solution(t, r, ν)
 
     # parameters of Halfar solutions
-    A, h₀, r₀ = ν 
+    A, h₀, r₀ = ν
 
     Γ = 2 * A * (ρ * g)^n / (n+2)
     τ₀ = (7/4)^3 * r₀^4 / ( 18 * Γ * h₀^7 )   # characteristic time
