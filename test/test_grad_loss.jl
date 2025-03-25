@@ -48,25 +48,10 @@ function test_grad_discreteAdjoint()
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)
 
-
-    ### Fake law for A(T) for Peterson & Cuffey
-    A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
-                                2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
-    A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
-    A_poly = fit(A_values[1,:], A_values[2,:])
-    # fakeA(T) = A_poly(T)
-
     # Overwrite constant A fake function for testing
     fakeA(T) = 2.21e-18
 
-    # We generate a fake forward model for the simulation
-    function generate_ground_truth(glacier, fakeA::Function)
-        T = mean(glacier.climate.longterm_temps)
-        A = fakeA(T)
-        generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
-    end
-
-    map(glacier -> generate_ground_truth(glacier, fakeA), glaciers)
+    map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, params, model, tstops), glaciers)
     # TODO: This function does shit on the model variable, for now we do a clean restart
     model.iceflow = SIA2Dmodel(params)
 
@@ -165,25 +150,10 @@ function test_grad_continuousAdjoint()
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)
 
-
-    ### Fake law for A(T) for Peterson & Cuffey
-    A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
-                                2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
-    A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
-    A_poly = fit(A_values[1,:], A_values[2,:])
-    # fakeA(T) = A_poly(T)
-
     # Overwrite constant A fake function for testing
     fakeA(T) = 2.21e-18
 
-    # We generate a fake forward model for the simulation
-    function generate_ground_truth(glacier, fakeA::Function)
-        T = mean(glacier.climate.longterm_temps)
-        A = fakeA(T)
-        generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
-    end
-
-    map(glacier -> generate_ground_truth(glacier, fakeA), glaciers)
+    map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, params, model, tstops), glaciers)
     # TODO: This function does shit on the model variable, for now we do a clean restart
     model.iceflow = SIA2Dmodel(params)
 

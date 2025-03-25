@@ -120,13 +120,22 @@ function generate_plot_folders(path)
     end
 end
 
-# From Cuffey and Paterson
-const A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
-                              2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
-const A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
+"""
+    A_law_PetersonCuffey()
 
-# Polynomial fit for Cuffey and Paterson data 
-A_f = Polynomials.fit(A_values[1,:], A_values[2,:]) # degree = length(xs) - 1
+Returns a law of the coefficient A as a polynomial of the temperature.
+The values used to fit the polynomial come from Peterson & Cuffey.
+"""
+function A_law_PetersonCuffey()
+    # Law of A(T) from Peterson & Cuffey
+    A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
+                                2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
+    A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
+    return Polynomials.fit(A_values[1,:], A_values[2,:])
+end
+
+# Polynomial fit for Cuffey and Paterson data
+A_f = A_law_PetersonCuffey() # degree = length(xs) - 1
 
 const noise_A_magnitude = 5e-18  # magnitude of noise to be added to A
 const rng_seed() = MersenneTwister(666)   # Random seed
@@ -157,6 +166,32 @@ end
 function predict_diffusivity(UD_f, θ, X)
     UD = UD_f(θ)
     return UD(X)[1,:]
+end
+
+"""
+    generate_ground_truth(glacier::G, fakeA::Function, params, model, tstops::Vector{F})
+
+Generates ground truth data and populate glacier with the ground truth observation
+given a fake law of A.
+
+Arguments:
+- `glacier::G`: Glacier instance.
+- `fakeA::Function`: Function that maps a temperature to A.
+- `params::`: The simulation parameters.
+- `model`:: The model that includes iceflow and a machine learning model.
+- `tstops`:: Vector of time points where the solver should stop.
+"""
+function generate_ground_truth(
+    glacier::G,
+    fakeA::Function,
+    params,
+    model,
+    tstops::Vector{F}
+) where {G <: Sleipnir.AbstractGlacier, F <: AbstractFloat}
+    T = mean(glacier.climate.longterm_temps)
+    A = fakeA(T)
+    # Generate a fake forward model for the simulation
+    generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
 end
 
 """
