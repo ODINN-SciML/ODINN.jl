@@ -26,7 +26,7 @@ function test_grad_discreteAdjoint()
             optimizer=ODINN.ADAM(0.005)),
             # optimizer=ODINN.Descent(0.001)),
         UDE = UDEparameters(
-            sensealg=ODINN.ZygoteAdjoint(),
+            sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
             grad=DiscreteAdjoint(),
             optimization_method="AD+AD",
@@ -128,7 +128,7 @@ function test_grad_continuousAdjoint()
             optimizer=ODINN.ADAM(0.005)),
             # optimizer=ODINN.Descent(0.001)),
         UDE = UDEparameters(
-            sensealg=ODINN.ZygoteAdjoint(),
+            sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
             grad=ContinuousAdjoint(),
             optimization_method="AD+AD",

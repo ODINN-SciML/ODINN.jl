@@ -22,7 +22,6 @@ jobs:
       matrix:
         version:
           - '1.10'
-        python: [3.9]
         os:
           - ubuntu-latest
         arch:

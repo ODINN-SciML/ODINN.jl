@@ -31,12 +31,11 @@ ENV["GKSwstype"]="nul"
 # @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB=false)
 # @testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB=true)
 
-# atol = 2.0
-# @testset "UDE SIA2D training with MB" ude_solve_test(atol; MB=true)
+# @testset "UDE SIA2D training with MB" ude_solve_test(; MB=true)
 
-# @testset "Parameters constructors with specified values" params_constructor_specified()
+@testset "Parameters constructors with specified values" params_constructor_specified()
 
-# @testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
+@testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 
 @testset "Continuous adjoint of SIA2D" test_adjoint_SIAD2D_continuous()
 

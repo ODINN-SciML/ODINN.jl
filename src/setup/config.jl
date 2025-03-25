@@ -6,11 +6,6 @@ function clean()
     exit()
  end
 
-"""
-    Initialize_ODINN(processes, python_path)
-
-Initializes ODINN by configuring multiprocessing for a given number of processes. 
-"""
 function enable_multiprocessing(params::Sleipnir.Parameters)
     procs = params.simulation.workers
     if procs > 0 && params.simulation.multiprocessing

@@ -17,6 +17,15 @@ SciMLSensitivity, or computed using the adjoint implemented in ODINN.
 abstract type AbstractAdjointMethod end
 
 """
+Struct that defines the SciMLSensitivity adjoint flavor. This is the default
+behavior in ODINN.
+
+`SciMLSensitivityAdjoint`
+"""
+@kwdef struct SciMLSensitivityAdjoint <: AbstractAdjointMethod
+end
+
+"""
 Continuous adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
@@ -35,13 +44,9 @@ end
 Discrete adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
-`DiscreteAdjoint{F <: AbstractFloat}`
-
-# Fields
-- `step::F`: Step size to use in the backward of the ODE.
+`DiscreteAdjoint`
 """
-@kwdef struct DiscreteAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
-    step::F = 1/12
+@kwdef struct DiscreteAdjoint <: AbstractAdjointMethod
 end
 
 """
@@ -62,23 +67,15 @@ end
 """
 Enzyme AD of SIA2D with manual implementation of the backward in the ODE scheme.
 
-`EnzymeAdjoint{F <: AbstractFloat}`
-
-# Fields
-- `step::F`: Step size to use in the backward of the ODE.
+`EnzymeAdjoint`
 """
-@kwdef struct EnzymeAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
-    step::F = 1/12
+@kwdef struct EnzymeAdjoint <: AbstractAdjointMethod
 end
 
 """
 Zygote AD of SIA2D with manual implementation of the backward in the ODE scheme.
 
-`ZygoteAdjoint{F <: AbstractFloat}`
-
-# Fields
-- `step::F`: Step size to use in the backward of the ODE.
+`ZygoteAdjoint`
 """
-@kwdef struct ZygoteAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
-    step::F = 1/12
+@kwdef struct ZygoteAdjoint <: AbstractAdjointMethod
 end

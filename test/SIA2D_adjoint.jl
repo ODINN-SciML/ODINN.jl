@@ -28,7 +28,7 @@ function test_adjoint_SIAD2D_continuous()
             test_mode=true,
             rgi_paths=rgi_paths),
         UDE = UDEparameters(
-            sensealg=ODINN.ZygoteAdjoint(),
+            sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
             grad=ContinuousAdjoint(),
             optimization_method="AD+AD",

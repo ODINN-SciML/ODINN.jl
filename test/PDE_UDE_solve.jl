@@ -1,4 +1,4 @@
-function ude_solve_test(atol; MB=false, fast=true)
+function ude_solve_test(; MB=false, fast=true)
 
     rgi_paths = get_rgi_paths()
 

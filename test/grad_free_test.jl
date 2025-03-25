@@ -1,7 +1,7 @@
 function grad_free_test(;use_MB::Bool=false)
 
     # The choice of sensitivity algorithm should not matter
-    sensealg = ODINN.ZygoteAdjoint()
+    sensealg = SciMLSensitivity.ZygoteAdjoint()
     adtype = ODINN.NoAD()
 
     rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
