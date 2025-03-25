@@ -37,7 +37,7 @@ working_dir = joinpath(homedir(), "OGGM/ODINN_tests")
 
 # Just EnzymeVJP and ReverseDiffVJP are compatible with Interpolating adjoints
 
-sensealgs = [ODINN.ZygoteAdjoint()]
+sensealgs = [SciMLSensitivity.ZygoteAdjoint()]
 adtypes   = [ODINN.NoAD()]
 
 # sensealgs = [ODINN.QuadratureAdjoint(autojacvec=ODINN.ReverseDiffVJP(true)), 

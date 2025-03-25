@@ -53,7 +53,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     # Simplify API for optimization problem and include data loaded in argument for minibatch
     loss_function(_θ, (_simulation)) = loss_iceflow_transient(_θ, _simulation)
 
-    if isnothing(simulation.parameters.UDE.grad)
+    if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
@@ -115,7 +115,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     # _glacier_data_batch has a simulation! 
 
 
-    if isnothing(simulation.parameters.UDE.grad)
+    if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
