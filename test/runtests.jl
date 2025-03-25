@@ -14,7 +14,6 @@ using OrdinaryDiffEq
 using Optim
 using SciMLSensitivity
 using Random
-using Polynomials
 using Statistics
 
 include("params_construction.jl")

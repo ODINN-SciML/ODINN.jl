@@ -1,7 +1,7 @@
 export AbstractAdjointMethod
-export ODINNContinuousAdjoint, ODINNDiscreteAdjoint
-export ODINNDummyAdjoint
-export ODINNEnzymeAdjoint, ODINNZygoteAdjoint
+export ContinuousAdjoint, DiscreteAdjoint
+export DummyAdjoint
+export EnzymeAdjoint, ZygoteAdjoint
 
 """
     AbstractAdjointMethod
@@ -20,13 +20,13 @@ abstract type AbstractAdjointMethod end
 Continuous adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
-`ODINNContinuousAdjoint{F <: AbstractFloat}`
+`ContinuousAdjoint{F <: AbstractFloat}`
 
 # Fields
 - `reltol::F`: Relative tolerance to be used in the ODE solver of the adjoint.
 - `abstol::F`: Absolute tolerance to be used in the ODE solver of the adjoint.
 """
-@kwdef struct ODINNContinuousAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
+@kwdef struct ContinuousAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
     reltol::F = 1e-6
     abstol::F = 1e-6
 end
@@ -35,12 +35,12 @@ end
 Discrete adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
-`ODINNDiscreteAdjoint{F <: AbstractFloat}`
+`DiscreteAdjoint{F <: AbstractFloat}`
 
 # Fields
 - `step::F`: Step size to use in the backward of the ODE.
 """
-@kwdef struct ODINNDiscreteAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
+@kwdef struct DiscreteAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
     step::F = 1/12
 end
 
@@ -49,36 +49,36 @@ Struct to provide a dummy gradient. It does not have to be the true gradient.
 Mainly used to test that the optimization pileline works independenly of the
 gradient calculation.
 
-`ODINNDummyAdjoint`
+`DummyAdjoint`
 
 # Fields:
 - `grad::Function`: In-place function `f(du, u; kwargs)` that fills the first
     argument `du` with the gradient values.
 """
-@kwdef struct ODINNDummyAdjoint <: AbstractAdjointMethod
+@kwdef struct DummyAdjoint <: AbstractAdjointMethod
     grad::Function
 end
 
 """
 Enzyme AD of SIA2D with manual implementation of the backward in the ODE scheme.
 
-`ODINNEnzymeAdjoint{F <: AbstractFloat}`
+`EnzymeAdjoint{F <: AbstractFloat}`
 
 # Fields
 - `step::F`: Step size to use in the backward of the ODE.
 """
-@kwdef struct ODINNEnzymeAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
+@kwdef struct EnzymeAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
     step::F = 1/12
 end
 
 """
 Zygote AD of SIA2D with manual implementation of the backward in the ODE scheme.
 
-`ODINNZygoteAdjoint{F <: AbstractFloat}`
+`ZygoteAdjoint{F <: AbstractFloat}`
 
 # Fields
 - `step::F`: Step size to use in the backward of the ODE.
 """
-@kwdef struct ODINNZygoteAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
+@kwdef struct ZygoteAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
     step::F = 1/12
 end

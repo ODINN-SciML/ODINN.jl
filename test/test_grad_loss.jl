@@ -28,7 +28,7 @@ function test_grad_discreteAdjoint()
         UDE = UDEparameters(
             sensealg=ODINN.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
-            grad=ODINNDiscreteAdjoint(),
+            grad=DiscreteAdjoint(),
             optimization_method="AD+AD",
             target = "A"),
         solver = Huginn.SolverParameters(
@@ -130,7 +130,7 @@ function test_grad_continuousAdjoint()
         UDE = UDEparameters(
             sensealg=ODINN.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
-            grad=ODINNContinuousAdjoint(),
+            grad=ContinuousAdjoint(),
             optimization_method="AD+AD",
             target = "A"),
         solver = Huginn.SolverParameters(

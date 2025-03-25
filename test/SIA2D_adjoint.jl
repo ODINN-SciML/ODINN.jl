@@ -30,7 +30,7 @@ function test_adjoint_SIAD2D_continuous()
         UDE = UDEparameters(
             sensealg=ODINN.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
-            grad=ODINNContinuousAdjoint(),
+            grad=ContinuousAdjoint(),
             optimization_method="AD+AD",
             target = "A"),
         solver = Huginn.SolverParameters(
