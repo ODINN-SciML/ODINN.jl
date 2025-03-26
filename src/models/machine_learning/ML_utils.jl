@@ -121,12 +121,12 @@ function generate_plot_folders(path)
 end
 
 """
-    A_law_PetersonCuffey()
+    A_law_PatersonCuffey()
 
 Returns a law of the coefficient A as a polynomial of the temperature.
 The values used to fit the polynomial come from Peterson & Cuffey.
 """
-function A_law_PetersonCuffey()
+function A_law_PatersonCuffey()
     # Law of A(T) from Peterson & Cuffey
     A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
                                 2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
@@ -135,7 +135,7 @@ function A_law_PetersonCuffey()
 end
 
 # Polynomial fit for Cuffey and Paterson data
-A_f = A_law_PetersonCuffey() # degree = length(xs) - 1
+A_f = A_law_PatersonCuffey() # degree = length(xs) - 1
 
 const noise_A_magnitude = 5e-18  # magnitude of noise to be added to A
 const rng_seed() = MersenneTwister(666)   # Random seed

@@ -13,6 +13,7 @@ using Statistics
 using ODINN
 using Polynomials
 using Plots
+using SciMLSensitivity
 
 Enzyme.API.strictAliasing!(false)
 
@@ -57,11 +58,11 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
                                             epochs=100,
-                                            optimizer=ODINN.ADAM(0.005)),
-                                            # optimizer=ODINN.Descent(0.001)),
+                                            # optimizer=ODINN.ADAM(0.005)),
+                                            optimizer=ODINN.Descent(0.01)),
                     UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(),
                                         optim_autoAD=ODINN.NoAD(),
-                                        grad=ContinuousAdjoint(),
+                                        grad=DiscreteAdjoint(),
                                         optimization_method="AD+AD",
                                         target = "A"),
                     solver = Huginn.SolverParameters(step=δt,
@@ -79,7 +80,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time stanpshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-# A_poly = ODINN.A_law_PetersonCuffey()
+# A_poly = ODINN.A_law_PatersonCuffey()
 # fakeA(T) = A_poly(T)
 
 # Overwrite constant A fake function for testing

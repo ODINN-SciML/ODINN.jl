@@ -119,7 +119,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
         Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
-        @info "Training with custom discrete adjoint method."
+        @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
 
         loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1])
         loss_function_grad!(_dθ, _θ, simulation_loader) = SIA2D_grad!(_dθ, _θ, simulation_loader[1])
