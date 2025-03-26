@@ -15,6 +15,9 @@ using Optim
 using SciMLSensitivity
 using Random
 using Statistics
+using Zygote
+using Printf
+using Lux
 
 include("params_construction.jl")
 include("grad_free_test.jl")
@@ -22,6 +25,7 @@ include("PDE_UDE_solve.jl")
 include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
+include("test_grad_Enzyme.jl")
 
 # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"]="nul"
@@ -42,5 +46,7 @@ ENV["GKSwstype"]="nul"
 @testset "Manual implementation of the backward with discrete adjoint" test_grad_discreteAdjoint()
 
 @testset "Manual implementation of the backward with continuous adjoint" test_grad_continuousAdjoint()
+
+@testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D()
 
 end

@@ -243,7 +243,7 @@ If an epoch is completed, reset the minibatches, update the history loss, and in
 - `l`: The current loss value or other relevant metric.
 
 # Returns
-- None. This function updates the state in place.
+- None. This function updates the state in-place.
 """
 function update_training_state!(simulation::S, l) where {S <: Simulation}
     # Update minibatch count and loss for the current epoch

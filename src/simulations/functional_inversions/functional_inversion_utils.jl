@@ -385,7 +385,7 @@ function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, 
 
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
-        @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
+        # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
         simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
     end
 end
