@@ -25,8 +25,6 @@ using Reexport
 using Statistics, LinearAlgebra, Random, Polynomials
 using EnzymeCore
 using Enzyme
-# Enzyme.API.runtimeActivity!(true) # This reduces performance but fixes AD issues
-Enzyme.API.strictAliasing!(false)
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity

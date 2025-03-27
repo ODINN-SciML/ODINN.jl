@@ -90,7 +90,7 @@ function test_grad_Enzyme_SIAD2D()
         Duplicated(θ, ∂θ_enzyme),
         Duplicated(dH_λ, vecBackwardSIA2D_enzyme_θ),
         Duplicated(H, _H),
-        Duplicated(simulation, _simulation),
+        Duplicated(s, _simulation),
         Duplicated(smodel, _smodel),
         Const(t),
         Const(glacier_idx)

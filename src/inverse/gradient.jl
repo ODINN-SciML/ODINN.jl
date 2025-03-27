@@ -300,6 +300,7 @@ function generate_glacier_prediction!(glacier::AbstractGlacier, params::Sleipnir
     ts = only(prediction.results).t
     Hs = only(prediction.results).H
 
+    @assert length(ts)==length(tstops) "The number of time steps of the simulated PDE solution and UDE solution do not match."
     @assert ts ≈ tstops "Timestops of simulated PDE solution and UDE solution do not match."
 
     # Lets create a very simple static glacier
