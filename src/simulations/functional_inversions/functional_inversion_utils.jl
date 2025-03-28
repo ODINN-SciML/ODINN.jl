@@ -178,13 +178,26 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
         @assert size(H_ref[begin]) == size(H[begin])
 
         β = 2.0
+        normalization = 1.0
         for τ in 2:length(H)
             # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
-            normalization = 1.0
             # l_H += loss_function(H[τ], H_ref[τ]) / normalization
-            l_H += Δt[τ-1] * loss_function(H[τ], H_ref[τ]) / normalization
+            # println("mean(H[τ].^2)=",mean(H[τ].^2))
+            # println("mean(H_ref[τ].^2)=",mean(H_ref[τ].^2))
+            # println("mean((H[τ]-H_ref[τ]).^2)=",mean((H[τ]-H_ref[τ]).^2))
+            # println("loss_function(H[τ], H_ref[τ])=",loss_function(H[τ], H_ref[τ]))
+            # H_diff = H[τ] - H_ref[τ]
+            # distance_to_border = 3
+            # pixel_of_interest = (H_diff[is_in_glacier(H_ref[τ], distance_to_border)]).^2
+            # println("pixel_of_interest:",size(pixel_of_interest))
+            mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))/normalization)
+            # mean_error = mean(pixel_of_interest)
+            println("mean_error=",mean_error)
+            l_H += Δt[τ-1] * mean_error
+            # l_H += loss_function(H[τ], H_ref[τ]) / normalization
         end
     end
+    println("l_H=",l_H)
 
     return l_H
 
@@ -282,7 +295,6 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
 
     tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
     params.solver.tstops = tstops
-    # stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, Enzyme.Const(tstops)) #closure
     stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, tstops)
     function action!(integrator)
         if params.simulation.use_MB
@@ -294,8 +306,7 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
             end
         end
         # Apply parametrization
-        # TODO: Why is this here??? I commented this next line, seems no necesary
-        # apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
+        apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
     end
 
     cb_MB = DiscreteCallback(stop_condition, action!)
@@ -333,7 +344,8 @@ function simulate_iceflow_UDE!(
 
     # TODO: make this more general
     # @infiltrate
-    apply_UDE_parametrization!(θ, simulation, nothing, batch_id)
+    apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
+    # TODO: check everywhere else this function is needed
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
     iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H₀, params.simulation.tspan, θ; tstops=params.solver.tstops)

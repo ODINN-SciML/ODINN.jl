@@ -47,6 +47,8 @@ ENV["GKSwstype"]="nul"
 
 @testset "Manual implementation of the backward with continuous adjoint" test_grad_continuousAdjoint()
 
+@testset "Comparison of the manual backward of the loss terms with Enzyme" test_grad_loss_term()
+
 @testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D()
 
 end

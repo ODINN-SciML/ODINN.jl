@@ -50,7 +50,7 @@ Inverse by glacier
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     # Run forward simulation to trigger Result
-    loss = loss_iceflow_transient(θ, simulation)
+    loss_val = loss_iceflow_transient(θ, simulation)
     # Let's compute the forward loss inside gradient
     ℓ = 0.0
     # Extract relevant data
@@ -88,22 +88,23 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         # TODO: We do simply forward Euler, but we can probably write ODE for dλ
 
-        # This time does not really matter since SIA2D does not depend explicetely on time,
-        # but we make it explicit here in case we want to customize this in the future.
-        t₀ = 2010.0e0 
+        t₀ = simulation.parameters.simulation.tspan[1]
         # TODO: Try with the closure, should be the same
         # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint!(θ, _dH, _H, simulation, t₀, i)
         # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint!(Enzyme.Const(θ), _dH, _H, Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
 
+        normalization = 1.0
+        ∂L∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H, H_ref; normalization=prod(N)/normalization)
         for j in reverse(2:k)
 
             # β = 2.0
             # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
-            normalization = 1.0
             # Compute derivative of local contribution to loss function
             # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
-            ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * normalization)
-            ℓ += Δt[j-1] * simulation.parameters.UDE.empirical_loss_function(H[j], H_ref[j]) / normalization
+            # ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * normalization)
+            # ∂ℓ∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)/normalization)
+            ∂ℓ∂H = ∂L∂H[j]
+            ℓ += Δt[j-1] * loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)/normalization)
 
             if typeof(simulation.parameters.UDE.grad) <: ZygoteAdjoint
 
@@ -214,8 +215,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         push!(dLdθs_vector, dLdθ)
     end
 
-    @assert ℓ ≈ loss "Loss in forward and reverse do not coincide: $(ℓ) != $(loss)"
-    return loss, dLdθs_vector
+    @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
+    return loss_val, dLdθs_vector
 
 end
 
