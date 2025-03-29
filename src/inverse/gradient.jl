@@ -94,17 +94,14 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint!(Enzyme.Const(θ), _dH, _H, Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
 
         normalization = 1.0
-        ∂L∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H, H_ref; normalization=prod(N)/normalization)
+        ∂L∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H, H_ref; normalization=prod(N)*normalization)
         for j in reverse(2:k)
 
             # β = 2.0
             # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
             # Compute derivative of local contribution to loss function
-            # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
-            # ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * normalization)
-            # ∂ℓ∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)/normalization)
             ∂ℓ∂H = ∂L∂H[j]
-            ℓ += Δt[j-1] * loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)/normalization)
+            ℓ += Δt[j-1] * loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)*normalization)
 
             if typeof(simulation.parameters.UDE.grad) <: ZygoteAdjoint
 

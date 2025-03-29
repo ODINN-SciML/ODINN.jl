@@ -293,49 +293,28 @@ function test_grad_loss_term()
     @test (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres)
 end
 
-# function test_grad_discreteAdjoint_Halfar()
+function test_grad_discreteAdjoint_Halfar()
+    Random.seed!(1234)
 
-    # function _loss(R₀, t₁, h₀, r₀, A, n)#, physicalParams)
-    #     # Function to be differentiated wrt A that returns the Halfar solution
-    #     return Huginn.halfar_solution(R₀, t₁, h₀, r₀, A[1], n)#, physicalParams)
-    # end
-    # function _loss!(H₁, R₀, t₁, h₀, r₀, A, n)#, physicalParams)
-    #     # Function to be differentiated wrt A that returns the Halfar solution
-    #     H₁[:,:] .= Huginn.halfar_solution(R₀, t₁, h₀, r₀, A[1], n)#, physicalParams)
-    #     return nothing
-    # end
-
-    function _loss!(l, R₀, h₀, r₀, A, n, tstops, H_ref)
-        # loss_function = Lux.MSELoss(; agg=mean) # simulation.parameters.UDE.empirical_loss_function
-        lossType = L2SumWithinGlacier()
+    function _loss!(l, R₀, h₀, r₀, A, n, tstops, H_ref, physicalParams, lossType)
         normalization = 1.0
         l_H = 0.0
         Δt = diff(tstops)
-        # _H₁ = [Huginn.halfar_solution(R₀, tstops[τ], h₀, r₀, A[1], n) for τ in range(1,length(tstops))]
-        # l[1] = sum(loss(lossType, _H₁[2:end], H_ref[2:end]; normalization=prod(size(H_ref[1]))/normalization))
         for τ in range(2,length(tstops))
-        # τ = length(tstops)
             t₁ = tstops[τ]
-            _H₁ = Huginn.halfar_solution(R₀, t₁, h₀, r₀, A[1], n)
+            _H₁ = halfar_solution(R₀, t₁, h₀, r₀, A[1], n, physicalParams)
             mean_error = loss(lossType, _H₁, H_ref[τ]; normalization=prod(size(H_ref[τ]))/normalization)
-            # H_diff = _H₁ - H_ref[τ]
-            # distance_to_border = 3
-            # pixel_of_interest = (H_diff[is_in_glacier(H_ref[τ], distance_to_border)]).^2
-            # println("pixel_of_interest:",size(pixel_of_interest))
-            # mean_error = mean(pixel_of_interest)
             println("mean_error=",mean_error)
             l_H += Δt[τ-1] * mean_error
-            # l_H += loss_function(H_diff) / normalization # Δt[τ-1] * 
         end
         l[1] = l_H
         return nothing
     end
 
-    # Enzyme.API.strictAliasing!(false)
-
+    lossType = L2SumWithinGlacier()
     A = 8e-18
     t₀ = 5.0
-    t₁ = 10.0*0+6.0
+    t₁ = 6.0
     h₀ = 500
     r₀ = 1000
     n = 3.0
@@ -363,7 +342,7 @@ end
             optim_autoAD=ODINN.NoAD(),
             grad=DiscreteAdjoint(),
             optimization_method="AD+AD",
-            empirical_loss_function=L2SumWithinGlacier(),
+            empirical_loss_function=lossType,
             target = "A"
         ),
         solver=SolverParameters(
@@ -374,12 +353,9 @@ end
         )
     )
 
-
     # Bed (it has to be flat for the Halfar solution)
     B = zeros((nx,ny))
-
     model = Model(iceflow = SIA2Dmodel(parameters), mass_balance = nothing, machine_learning = NeuralNetwork(parameters))
-
 
     θ = model.machine_learning.θ
     modelNN = model.machine_learning.architecture
@@ -390,36 +366,27 @@ end
 
     # Initial condition of the glacier
     R₀ = [sqrt((Δx * (i - nx/2))^2 + (Δy * (j - ny/2))^2) for i in 1:nx, j in 1:ny]
-    H₀ = Huginn.halfar_solution(R₀, t₀, h₀, r₀, A_θ, n)#, parameters.physical)
+    H₀ = halfar_solution(R₀, t₀, h₀, r₀, A_θ, n, parameters.physical)
     S = B + H₀
-    # Final expected solution
-    # H₁ = Huginn.halfar_solution(R₀, t₁, h₀, r₀, A, n)#, parameters.physical)
 
     # Define glacier object
     climate = Sleipnir.DummyClimate2D(longterm_temps=[T])
-    # println("H₀ in Glacier2D:",mean(H₀.^2))
     glacier = Glacier2D(rgi_id = "toy", climate = climate, H₀ = H₀, S = S, B = B, A = A, n=n,
                         Δx=Δx, Δy=Δy, nx=nx, ny=ny, C = 0.0)
     glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
-
     fakeA(T) = A
-
     map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, parameters, model, tstops), glaciers)
-    # TODO: This function does shit on the model variable, for now we do a clean restart
+    # TODO: This function messes up with the model variable, for now we do a clean restart
     model.iceflow = SIA2Dmodel(parameters)
 
     # We create an ODINN prediction
     simulation = FunctionalInversion(model, glaciers, parameters)
-
-
     physicalParams = parameters.physical
 
-
-
+    # Compute gradient of with Halfar solution wrt A
     A_θ = [A_θ]
     ∂A_enzyme = Enzyme.make_zero(A_θ)
-    # Compute gradient of Halfar solution wrt A
     dl_enzyme = [1.]
     l_enzyme = Enzyme.make_zero(dl_enzyme)
     H_ref = only(simulation.glaciers[1].data).H
@@ -433,51 +400,32 @@ end
         Enzyme.Const(n),
         Enzyme.Const(tstops),
         Enzyme.Const(H_ref),
+        Enzyme.Const(physicalParams),
+        Enzyme.Const(lossType),
     )
-    # model = simulation.model.machine_learning.architecture
-    # st = simulation.model.machine_learning.st
-    # smodel = StatefulLuxLayer{true}(model, θ.θ, st)
-    # A_θ = ODINN.predict_A̅(smodel, [T])[1]
 
-    # _loss!(l_enzyme, R₀, h₀, r₀, A_θ, n, tstops, H_ref)
+    # _loss!(l_enzyme, R₀, h₀, r₀, A_θ, n, tstops, H_ref, physicalParams, lossType)
     println("l_enzyme=",l_enzyme)
     println("∂A_enzyme=",∂A_enzyme)
-    # @assert false
-
-    # Compute gradient with manual implementation of the backward + discrete adjoint of SIA2D
 
     ∇θ, = Zygote.gradient(_θ -> ODINN.grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
     # println("∇θ in test=",∇θ)
-    dθ_enzyme = ∂A_enzyme[1]*∇θ
+    dθ_halfar = ∂A_enzyme[1]*∇θ
 
+    # Compute gradient with manual implementation of the backward + discrete adjoint of SIA2D
     dθ = zero(θ)
     SIA2D_grad!(dθ, θ, simulation)
 
-    ratio, angle, relerr = stats_err_arrays(dθ, dθ_enzyme)
+    ratio, angle, relerr = stats_err_arrays(dθ, dθ_halfar)
 
-# end
-
-
-# @assert false
-# function tmp(l, R, t, h₀, r₀, A, n)
-#     l[:,:] = halfar_solution(R, t, h₀, r₀, A, n)
-# end
-# # halfar_solution(R, t::F, h₀::Re, r₀::Re, A::Vector{F}, n::F)
-
-# t = 5.
-# A_θ = [1e-17]
-# ∂A_enzyme = Enzyme.make_zero(A_θ)
-# dl_enzyme = one(R₀)
-# l_enzyme = Enzyme.make_zero(dl_enzyme)
-# Enzyme.autodiff(
-#     Reverse, tmp, Const,
-#     Duplicated(l_enzyme, dl_enzyme),
-#     Enzyme.Const(R₀),
-#     Enzyme.Const(t),
-#     Enzyme.Const(h₀),
-#     Enzyme.Const(r₀),
-#     Duplicated(A_θ, ∂A_enzyme),
-#     Enzyme.Const(n),
-# )
-
-# tmp(l_enzyme, R₀, t, h₀, r₀, A_θ, n)
+    # TODO: fix this test
+    thres_ratio = 1e0
+    thres_angle = 1e-15
+    thres_relerr = 1e1
+    if !( (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr) )
+        println("ratio  = ",ratio)
+        println("angle  = ",angle)
+        println("relerr = ",relerr)
+    end
+    @test (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr)
+end

@@ -178,23 +178,12 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
         @assert size(H_ref[begin]) == size(H[begin])
 
         β = 2.0
-        normalization = 1.0
         for τ in 2:length(H)
+            normalization = 1.0
             # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
-            # l_H += loss_function(H[τ], H_ref[τ]) / normalization
-            # println("mean(H[τ].^2)=",mean(H[τ].^2))
-            # println("mean(H_ref[τ].^2)=",mean(H_ref[τ].^2))
-            # println("mean((H[τ]-H_ref[τ]).^2)=",mean((H[τ]-H_ref[τ]).^2))
-            # println("loss_function(H[τ], H_ref[τ])=",loss_function(H[τ], H_ref[τ]))
-            # H_diff = H[τ] - H_ref[τ]
-            # distance_to_border = 3
-            # pixel_of_interest = (H_diff[is_in_glacier(H_ref[τ], distance_to_border)]).^2
-            # println("pixel_of_interest:",size(pixel_of_interest))
-            mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))/normalization)
-            # mean_error = mean(pixel_of_interest)
+            mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
             println("mean_error=",mean_error)
             l_H += Δt[τ-1] * mean_error
-            # l_H += loss_function(H[τ], H_ref[τ]) / normalization
         end
     end
     println("l_H=",l_H)
