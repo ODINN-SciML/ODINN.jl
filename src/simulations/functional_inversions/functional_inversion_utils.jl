@@ -182,11 +182,9 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
             normalization = 1.0
             # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
             mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
-            println("mean_error=",mean_error)
             l_H += Δt[τ-1] * mean_error
         end
     end
-    println("l_H=",l_H)
 
     return l_H
 

@@ -304,7 +304,6 @@ function test_grad_discreteAdjoint_Halfar()
             t₁ = tstops[τ]
             _H₁ = halfar_solution(R₀, t₁, h₀, r₀, A[1], n, physicalParams)
             mean_error = loss(lossType, _H₁, H_ref[τ]; normalization=prod(size(H_ref[τ]))/normalization)
-            println("mean_error=",mean_error)
             l_H += Δt[τ-1] * mean_error
         end
         l[1] = l_H
