@@ -5,7 +5,7 @@ mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
     grad::Union{ADJ, Nothing}
     optimization_method::String
     loss_type::String
-    empirical_loss_function::Lux.AbstractLossFunction
+    empirical_loss_function::AbstractLoss
     scale_loss::Bool
     target::Union{String, Nothing}
 end
@@ -22,6 +22,7 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
         sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
+        empirical_loss_function::AbstractLoss = L2Sum(),
         scale_loss::Bool = true
         target::Union{String, Nothing} = "D"
         )
@@ -31,6 +32,7 @@ Keyword arguments
     - `sensealg`: Sensitivity algorithm from SciMLSensitivity.jl to be used.
     - `optimization_method`: Optimization method for the UDE.
     - `loss_type`: Type of loss function to be used. Can be either `V` (ice velocities), or `H` (ice thickness).
+    - `empirical_loss_function`: Empirical loss function to use.
     - `scale_loss`: Determines if the loss function should be scaled or not.
 """
 function UDEparameters(;
@@ -39,7 +41,7 @@ function UDEparameters(;
             grad::ADJ = SciMLSensitivityAdjoint(),
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
-            empirical_loss_function::Lux.AbstractLossFunction = Lux.MSELoss(; agg=mean),
+            empirical_loss_function::AbstractLoss = L2Sum(),
             scale_loss::Bool = true,
             target::Union{String, Nothing} = "D"
             ) where {ADJ <: AbstractAdjointMethod}

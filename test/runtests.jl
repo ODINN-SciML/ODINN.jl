@@ -41,12 +41,16 @@ ENV["GKSwstype"]="nul"
 
 @testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 
-@testset "Continuous adjoint of SIA2D" test_adjoint_SIAD2D_continuous()
+@testset "Continuous adjoint of SIA2D vs finite differences" test_adjoint_SIAD2D_continuous()
 
-@testset "Manual implementation of the backward with discrete adjoint" test_grad_discreteAdjoint()
+@testset "Manual implementation of the backward with discrete adjoint vs finite differences" test_grad_discreteAdjoint()
 
-@testset "Manual implementation of the backward with continuous adjoint" test_grad_continuousAdjoint()
+@testset "Manual implementation of the backward with continuous adjoint vs finite differences" test_grad_continuousAdjoint()
+
+@testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
 
 @testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D()
+
+# @testset "Manual implementation of the backward with discrete adjoint vs Halfar solution with Enzyme" test_grad_discreteAdjoint_Halfar()
 
 end

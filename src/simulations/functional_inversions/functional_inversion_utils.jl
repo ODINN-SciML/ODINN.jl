@@ -179,10 +179,10 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
 
         β = 2.0
         for τ in 2:length(H)
-            # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
             normalization = 1.0
-            # l_H += loss_function(H[τ], H_ref[τ]) / normalization
-            l_H += Δt[τ-1] * loss_function(H[τ], H_ref[τ]) / normalization
+            # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
+            mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
+            l_H += Δt[τ-1] * mean_error
         end
     end
 
@@ -282,7 +282,6 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
 
     tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
     params.solver.tstops = tstops
-    # stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, Enzyme.Const(tstops)) #closure
     stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, tstops)
     function action!(integrator)
         if params.simulation.use_MB
@@ -294,8 +293,7 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
             end
         end
         # Apply parametrization
-        # TODO: Why is this here??? I commented this next line, seems no necesary
-        # apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
+        apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
     end
 
     cb_MB = DiscreteCallback(stop_condition, action!)
@@ -333,7 +331,8 @@ function simulate_iceflow_UDE!(
 
     # TODO: make this more general
     # @infiltrate
-    apply_UDE_parametrization!(θ, simulation, nothing, batch_id)
+    apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
+    # TODO: check everywhere else this function is needed
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
     iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H₀, params.simulation.tspan, θ; tstops=params.solver.tstops)

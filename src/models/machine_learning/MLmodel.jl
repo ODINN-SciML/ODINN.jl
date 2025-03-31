@@ -1,5 +1,4 @@
 export NeuralNetwork
-export ParallelBatch
 
 include("ML_utils.jl")
 
