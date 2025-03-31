@@ -74,6 +74,7 @@ end
 
 """
 Zygote AD of SIA2D with manual implementation of the backward in the ODE scheme.
+This flavor is not supported yet.
 
 `ZygoteAdjoint`
 """

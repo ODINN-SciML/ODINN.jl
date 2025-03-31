@@ -194,6 +194,27 @@ function generate_ground_truth(
     generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
 end
 
+function build_simulation_batch(simulation::FunctionalInversion, i::I, nbatches::I=1) where {I <: Integer}
+    iceflow = simulation.model.iceflow[i]
+    massbalance = simulation.model.mass_balance[i]
+    ml = simulation.model.machine_learning
+    model = Sleipnir.Model{typeof(iceflow), typeof(massbalance), typeof(ml)}([iceflow], [massbalance], ml)
+    ####
+    # iceflow = simulation.model.iceflow[(i-1)*nbatches+1:i*nbatches]
+    # massbalance = simulation.model.mass_balance[(i-1)*nbatches+1:i*nbatches]
+    # ml = simulation.model.machine_learning
+    # Sleipnir.Model{typeof(iceflow[1]), typeof(massbalance[1]), typeof(ml)}(iceflow, massbalance, ml)
+    ####
+    if length(simulation.results) < 1
+        # TODO: Pass empty results object: machine learning should not be here!
+        return FunctionalInversion{typeof(simulation.glaciers[i]), typeof(model), typeof(simulation.parameters)}(model, [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats)
+        # return FunctionalInversion{typeof(simulation.glaciers[i*nbatches]), typeof(model), typeof(simulation.parameters)}(model, simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, simulation.results, simulation.stats)
+    else
+        return FunctionalInversion{typeof(simulation.glaciers[i]), typeof(model), typeof(simulation.parameters)}(model, [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats)
+        # return FunctionalInversion{typeof(simulation.glaciers[i*nbatches]), typeof(model), typeof(simulation.parameters)}(model, simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, [simulation.results[(i-1)*nbatches+1:i*nbatches]], simulation.stats)
+    end
+end
+
 """
     generate_batches(simulation::S; shuffle=true)
 
@@ -205,14 +226,8 @@ function generate_simulation_batches(simulation::FunctionalInversion)
     @assert ninstances % nbatches == 0
     folds = Int(ninstances / nbatches)
     # Forward runs still don't have multiple results
-    if length(simulation.results) < 1
-        # TODO: Pass empty results object: machine learning should not be here!
-        return [FunctionalInversion(Sleipnir.Model([simulation.model.iceflow[i]], [simulation.model.mass_balance[i]], simulation.model.machine_learning), [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats) for i in 1:ninstances]
-        # return [FunctionalInversion(Sleipnir.Model(simulation.model.iceflow[(i-1)*nbatches+1:i*nbatches], simulation.model.mass_balance[(i-1)*nbatches+1:i*nbatches], simulation.model.machine_learning), simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, simulation.results, simulation.stats) for i in 1:folds]
-    else
-        return [FunctionalInversion(Sleipnir.Model([simulation.model.iceflow[i]], [simulation.model.mass_balance[i]], simulation.model.machine_learning), [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats) for i in 1:ninstances]
-        # return [FunctionalInversion(Sleipnir.Model(simulation.model.iceflow[(i-1)*nbatches+1:i*nbatches], simulation.model.mass_balance[(i-1)*nbatches+1:i*nbatches], simulation.model.machine_learning), simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, [simulation.results[(i-1)*nbatches+1:i*nbatches]], simulation.stats) for i in 1:folds]
-    end
+    return [build_simulation_batch(simulation, i, nbatches) for i in 1:ninstances]
+    # return [build_simulation_batch(simulation, i, nbatches) for i in 1:folds]
 end
 
 function merge_batches(results::Vector)
@@ -243,7 +258,7 @@ If an epoch is completed, reset the minibatches, update the history loss, and in
 - `l`: The current loss value or other relevant metric.
 
 # Returns
-- None. This function updates the state in place.
+- None. This function updates the state in-place.
 """
 function update_training_state!(simulation::S, l) where {S <: Simulation}
     # Update minibatch count and loss for the current epoch
