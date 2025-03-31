@@ -37,12 +37,12 @@ working_dir = joinpath(homedir(), "OGGM/ODINN_tests")
 
 # Just EnzymeVJP and ReverseDiffVJP are compatible with Interpolating adjoints
 
-# sensealgs = [ODINN.ZygoteAdjoint()]
-# adtypes   = [ODINN.NoAD()]
+sensealgs = [SciMLSensitivity.ZygoteAdjoint()]
+adtypes   = [ODINN.NoAD()]
 
-sensealgs = [ODINN.QuadratureAdjoint(autojacvec=ODINN.ReverseDiffVJP(true)), 
-             ODINN.GaussAdjoint(autojacvec=ODINN.EnzymeVJP())]
-adtypes = [Optimization.AutoEnzyme(; mode=set_runtime_activity(EnzymeCore.Reverse))]
+# sensealgs = [ODINN.QuadratureAdjoint(autojacvec=ODINN.ReverseDiffVJP(true)), 
+#              ODINN.GaussAdjoint(autojacvec=ODINN.EnzymeVJP())]
+# adtypes = [Optimization.AutoEnzyme(; mode=set_runtime_activity(EnzymeCore.Reverse))]
 
 @testset "Run all simulations" begin 
 
@@ -55,9 +55,9 @@ for sensealg in sensealgs
         print("\n")
 
         # Define dummy grad
-        # dummy_grad = function (du, u; simulation::Union{FunctionalInversion, Nothing}=nothing)
-        #     du .= maximum(abs.(u)) .* rand(Float64, size(u))
-        # end
+        dummy_grad = function (du, u; simulation::Union{FunctionalInversion, Nothing}=nothing)
+            du .= maximum(abs.(u)) .* rand(Float64, size(u))
+        end
 
         params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                             use_MB=false,
@@ -65,21 +65,22 @@ for sensealg in sensealgs
                                                             tspan=(2010.0, 2015.0),
                                                             multiprocessing=false,
                                                             workers=1,
+                                                            light=false, # for now we do the simulation like this (a better name would be dense)
                                                             test_mode=true,
                                                             rgi_paths=rgi_paths),
                             hyper = Hyperparameters(batch_size=4,
-                                                    epochs=10,
+                                                    epochs=2,
                                                     optimizer=ODINN.ADAM(0.01)),
                             UDE = UDEparameters(sensealg=sensealg, 
                                                 optim_autoAD=adtype, 
-                                                # grad=dummy_grad, 
-                                                grad=nothing, 
+                                                grad=dummy_grad, 
+                                                # grad=nothing, 
                                                 optimization_method="AD+AD",
                                                 target = "A")
                             )
 
         ## Retrieving simulation data for the following glaciers
-        rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]#, "RGI60-08.00213", "RGI60-04.04351"]
+        rgi_ids = ["RGI60-11.03638"] #, "RGI60-11.01450"]#, "RGI60-08.00213", "RGI60-04.04351"]
 
         model = Model(iceflow = SIA2Dmodel(params),
                         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),

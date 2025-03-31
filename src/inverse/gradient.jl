@@ -26,6 +26,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
 
     # Retrieve loss function
     losses = getindex.(loss_grad, 1)
+    # @show losses
     loss = sum(losses)
     # Retrive gradient
     dθs  = getindex.(loss_grad, 2)
@@ -38,7 +39,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     end
 
     @assert typeof(θ) == typeof(sum(dθs))
-    @assert norm(sum(dθs)) > 0.0
+    @assert norm(sum(dθs)) > 0.0 "‖∑dθs‖=$(norm(sum(dθs))) but should be greater than 0"
 
     dθ .= sum(dθs)
 end
@@ -49,7 +50,7 @@ Inverse by glacier
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     # Run forward simulation to trigger Result
-    loss = loss_iceflow_transient(θ, simulation)
+    loss_val = loss_iceflow_transient(θ, simulation)
     # Let's compute the forward loss inside gradient
     ℓ = 0.0
     # Extract relevant data
@@ -81,36 +82,33 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         # Adjoint setup
         # Define empty object to store adjoint in reverse mode
-        λ  = [zeros(N) for _ in 1:k]
-        dLdθ = zero(θ)
+        λ  = [Enzyme.make_zero(result.B) for _ in 1:k]
+        dH_λ = [Enzyme.make_zero(H[1]) for _ in 1:k]
+        dLdθ = Enzyme.make_zero(θ)
 
         # TODO: We do simply forward Euler, but we can probably write ODE for dλ
 
-        println("Value of A used during gradient")
-        @show apply_UDE_parametrization(θ, simulation, i)
-
-        # This time does not really matter since SIA2D does not depend explicetely on time,
-        # but we make it explicit here in case we want to customize this in the future.
-        t₀ = 2010.0e0 
+        t₀ = simulation.parameters.simulation.tspan[1]
         # TODO: Try with the closure, should be the same
-        # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(θ, _dH, _H, simulation, t₀, i)
-        # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(Enzyme.Const(θ), _dH, _H, Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
+        # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint!(θ, _dH, _H, simulation, t₀, i)
+        # ∂f∂H_closure(_dH, _H) = SIA2D_adjoint!(Enzyme.Const(θ), _dH, _H, Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
 
+        normalization = 1.0
+        ∂L∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H, H_ref; normalization=prod(N)*normalization)
         for j in reverse(2:k)
 
             # β = 2.0
-            # normalization = mean(H_ref[j][H_ref[j] .> 0.0])^β
-            normalization = 1.0
+            # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
             # Compute derivative of local contribution to loss function
-            # TODO: Update this based on the actual value of the loss function as ∂(parameters.UDE.empirical_loss_function)/∂H
-            ∂ℓ∂H = 2 .* (H[j] .- H_ref[j]) ./ (prod(N) * Δx * Δy * normalization)
-            ℓ += Δt[j-1] * simulation.parameters.UDE.empirical_loss_function(H[j], H_ref[j]) / normalization
+            ∂ℓ∂H = ∂L∂H[j]
+            ℓ += Δt[j-1] * loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)*normalization)
 
-            if typeof(simulation.parameters.UDE.grad) <: ODINNZygoteAdjoint
+            if typeof(simulation.parameters.UDE.grad) <: ZygoteAdjoint
 
-                # Zygote adjoint implementation
+                @assert false "Differentiation of SIA2D with Zygote is not supported as it cannot handle in-place operations"
+
                 # Create pullback function to evaluate VJPs
-                ∂f∂H_closure(_dH, _H) = SIA2D_adjoint(θ, _dH, _H, simulation, t₀, i)
+                ∂f∂H_closure(_dH, _H) = SIA2D_adjoint!(θ, _dH, _H, simulation, t₀, i)
                 dH_H, ∂f∂H_pullback = Zygote.pullback(∂f∂H_closure, H[j])
 
                 # Compute VJP with adjoint variable
@@ -122,7 +120,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
 
                 ### Compute loss function
-                ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint(_θ, _dH, H[j], simulation, t₀, i)
+                ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint!(_θ, _dH, H[j], simulation, t₀, i)
                 dH_λ, ∂f∂θ_pullback = Zygote.pullback(∂f∂θ_closure, θ)
                 # Compute loss with transpose of adjoint
                 λ_∂f∂θ, = ∂f∂θ_pullback(λ[j-1])
@@ -131,28 +129,50 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # Run simple test that both closures are computing the same primal
                 # @assert dH_H ≈ dH_λ "Result from forward pass needs to coincide for both closures when computing the pullback."
 
-            elseif typeof(simulation.parameters.UDE.grad) <: ODINNEnzymeAdjoint
+            elseif typeof(simulation.parameters.UDE.grad) <: EnzymeAdjoint
 
-                # Enzyme adjoint implementation
                 dH_H = Enzyme.make_zero(H[j])
                 λ_∂f∂H = Enzyme.make_zero(H[j])
+                _simulation = Enzyme.make_zero(simulation)
+                smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
-                # TODO: Now initializing adjoint as ones, remove this next line
-                λ[j] = ones(size(λ[j])...)
-                λ[j] = H[j] .+ randn(size(H[j])...)
-
-                Enzyme.autodiff(Reverse, SIA2D_adjoint, Const, Enzyme.Const(θ), Duplicated(dH_H, λ[j]), Duplicated(H[j], λ_∂f∂H), Enzyme.Const(simulation), Enzyme.Const(t₀), Enzyme.Const(i))
-                @show maximum(abs.(λ_∂f∂H))
+                λH = deepcopy(λ[j]) # Need to copy because Enzyme changes the backward gradient in-place
+                Enzyme.autodiff(
+                    Reverse, SIA2D_adjoint!, Const,
+                    Enzyme.Const(θ),
+                    Duplicated(dH_H, λH),
+                    Duplicated(H[j], λ_∂f∂H),
+                    Enzyme.Duplicated(simulation, _simulation),
+                    Enzyme.Const(smodel),
+                    Enzyme.Const(t₀),
+                    Enzyme.Const(i)
+                )
 
                 ### Update adjoint
-                # TODO: Check sign of ∂ℓ∂H
                 λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
 
-                dH_λ = Enzyme.make_zero(H[j])
                 λ_∂f∂θ = Enzyme.make_zero(θ)
-                Enzyme.autodiff(Reverse, ∂f∂θ_closure, Const, Duplicated(dH_λ, λ[j]), Duplicated(θ, λ_∂f∂θ))
+                _simulation = Enzyme.make_zero(simulation)
+                _smodel = Enzyme.make_zero(smodel)
+                _H = Enzyme.make_zero(H[j])
 
-            elseif typeof(simulation.parameters.UDE.grad) <: ODINNContinuousAdjoint
+                λθ = deepcopy(λ[j-1]) # Need to copy because Enzyme changes the backward gradient in-place
+                Enzyme.autodiff(
+                    Reverse, SIA2D_adjoint!, Const,
+                    Duplicated(θ, λ_∂f∂θ),
+                    Duplicated(dH_λ[j], λθ),
+                    Duplicated(H[j], _H),
+                    Duplicated(simulation, _simulation),
+                    Duplicated(smodel, _smodel),
+                    Const(t₀),
+                    Const(i)
+                )
+
+                # Run simple test that both closures are computing the same primal
+                @assert dH_H ≈ dH_λ[j] "Result from forward pass needs to coincide for both closures when computing the pullback."
+                dLdθ .+= - Δt[j-1] .* λ_∂f∂θ # The minus is needed here, not clear why
+
+            elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
 
                 # Custom adjoint
                 λ_∂f∂H = VJP_λ_∂SIA∂H_continuous(λ[j], H[j], simulation, t₀; batch_id = i)
@@ -163,10 +183,27 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
                 λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(θ, λ[j-1], H[j], simulation, t₀; batch_id = i)
 
+                # TODO: Sign of the gradient is correct, but magnitude is still a bit OrdinaryDiffEq
+                # TODO: Check on the adjoint calculation again to see what is missing or wrong
+                # TODO: This measn that the continuous manual adjoint works for few glaciers
                 dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
+            elseif typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
+
+                # Custom adjoint
+                λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ[j], H[j], simulation, t₀; batch_id = i)[1]
+
+                ### Update adjoint
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+
+                λ_∂f∂A = Huginn.SIA2D_discrete_adjoint(λ[j-1], H[j], simulation, t₀; batch_id = i)[2]
+                ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, i), θ)
+                λ_∂f∂θ = λ_∂f∂A*∇θ
+
+                dLdθ .+= - Δt[j-1] .* λ_∂f∂θ # The minus is needed here, not clear why
+
             else
-                @error "No AD method specificed."
+                @error "AD method $(simulation.parameters.UDE.grad) is not supported yet."
             end
 
         end
@@ -181,130 +218,58 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         # Return final evaluations of gradient
         push!(dLdθs_vector, dLdθ)
-
     end
 
-    @assert ℓ ≈ loss "Loss in forward and reverse do not coincide: $(ℓ) != $(loss)"
-    return loss, dLdθs_vector
+    @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
+    return loss_val, dLdθs_vector
 
 end
 
 """
 Define SIA2D forward map for the adjoint mode
 """
-function SIA2D_adjoint(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R, batch_id::I) where {R <: Real, I <: Integer}
+function SIA2D_adjoint!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
     # make prediction with neural network
-    A = apply_UDE_parametrization(_θ, simulation, batch_id)
-    simulation.model.iceflow[batch_id].A[] = A
+    apply_UDE_parametrization_enzyme!(_θ, simulation, smodel, batch_id)
 
     # dH is computed as follows
-    _dH .= Huginn.SIA2D(_H, simulation, t; batch_id=batch_id)
+    Huginn.SIA2D!(_dH, _H, simulation, t; batch_id=batch_id)
 
     return nothing
 end
 
-function SIA2D_adjoint_test(_dH::Matrix{R}, _H::Matrix{R}, t::R) where {R <: Real}
-    # make prediction with neural network
-    # A = apply_UDE_parametrization(_θ, simulation, batch_id)
-    # simulation.model.iceflow[batch_id].A[] = A
 
-    # dH is computed as follows
-    # _dH .= Huginn.SIA2D(_H, simulation, t)
-    SIA2D!(_dH, _H, t)
+# """
+# Copy of apply_UDE_parametrization! but without inplacement
+# """
+# function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id::I) where {I <: Integer}
+#     # We load the ML model with the parameters
+#     model = simulation.model.machine_learning.architecture
+#     st = simulation.model.machine_learning.st
+#     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
-    return nothing
-end
+#     # We generate the ML parametrization based on the target
+#     if simulation.parameters.UDE.target == "A"
+#         A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+#         return A
+#     end
+# end
 
-@views diff_x(A) = (A[begin + 1:end, :] .- A[1:end - 1, :])
-@views diff_y(A) = (A[:, begin + 1:end] .- A[:, 1:end - 1])
-@views avg(A) = 0.25 .* ( A[1:end-1,1:end-1] .+ A[2:end,1:end-1] .+ A[1:end-1,2:end] .+ A[2:end,2:end] )
-@views avg_x(A) = 0.5 .* ( A[1:end-1,:] .+ A[2:end,:] )
-@views avg_y(A) = 0.5 .* ( A[:,1:end-1] .+ A[:,2:end] )
-@views inn(A) = A[2:end-1,2:end-1]
-@views inn1(A) = A[1:end-1,1:end-1]
+# """
+# Use just to generate results, don't need to change this API.
+# """
+# function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) where {F <: AbstractFloat}
+#     # We load the ML model with the parameters
+#     model = simulation.model.machine_learning.architecture
+#     st = simulation.model.machine_learning.st
+#     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
-function SIA2D!(dH::Matrix{R}, H::Matrix{R}, t::R) where {R <:Real}
-    
-    S = abs.(randn(size(H)[1],size(H)[2]))
-    Δx = 10.0
-    Δy = 10.0
-    n = 3
-    ρ = 900.0
-    g = 9.81
-    A = 5e-18
-
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
-    dSdx = diff_x(S) / Δx
-    dSdy = diff_y(S) / Δy
-    ∇Sx = avg_y(dSdx)
-    ∇Sy = avg_x(dSdy)
-    ∇S  = (∇Sx.^2 .+ ∇Sy.^2).^((n[] - 1)/2) 
-
-    H̄ = avg(H)
-    Γ = 2.0 * A * (ρ * g)^n / (n+2) # 1 / m^3 s 
-    D = Γ .* H̄.^(n + 2) .* ∇S
-    
-    # Compute flux components
-    @views dSdx_edges = diff_x(S[:,2:end - 1]) ./ Δx
-    @views dSdy_edges = diff_y(S[2:end - 1,:]) ./ Δy
-
-    # Cap surface elevaton differences with the upstream ice thickness to
-    # impose boundary condition of the SIA equation
-    # We need to do this with Tullio or something else that allow us to set indices.
-    η₀ = 1.0
-    dSdx_edges = @views @. min(dSdx_edges,  η₀ * H[2:end, 2:end-1]/Δx)
-    dSdx_edges = @views @. max(dSdx_edges, -η₀ * H[1:end-1, 2:end-1]/Δx)
-    dSdy_edges = @views @. min(dSdy_edges,  η₀ * H[2:end-1, 2:end]/Δy)
-    dSdy_edges = @views @. max(dSdy_edges, -η₀ * H[2:end-1, 1:end-1]/Δy)
-
-    Dx = avg_y(D)
-    Dy = avg_x(D)
-    Fx = .-Dx .* dSdx_edges
-    Fy = .-Dy .* dSdy_edges 
-
-    # #  Flux divergence
-    Fxx = diff_x(Fx) / Δx
-    Fyy = diff_y(Fy) / Δy
-
-    # inn(dH) .= -(Fx[2:199,:] - Fx[1:198,:]) / Δx * 0.0001
-    # inn(dH) .= -(diff_x(Fx)) / Δx * 0.0001
-    inn(dH) .= .-(Fxx .+ Fyy) 
-    @show maximum(dH)
-end
-
-
-"""
-Copy of apply_UDE_parametrization! but without inplacement
-"""
-function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id::I) where {I <: Integer}
-    # We load the ML model with the parameters
-    model = simulation.model.machine_learning.architecture
-    st = simulation.model.machine_learning.st
-    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
-
-    # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
-        return A
-    end
-end
-
-"""
-Use just to generate results, don't need to change this API.
-"""
-function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) where {F <: AbstractFloat}
-    # We load the ML model with the parameters
-    model = simulation.model.machine_learning.architecture
-    st = simulation.model.machine_learning.st
-    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
-
-    # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [T])[1]
-        return A
-    end
-end
+#     # We generate the ML parametrization based on the target
+#     if simulation.parameters.UDE.target == "A"
+#         A = predict_A̅(smodel, [T])[1]
+#         return A
+#     end
+# end
 
 
 """
@@ -341,6 +306,7 @@ function generate_glacier_prediction!(glacier::AbstractGlacier, params::Sleipnir
     ts = only(prediction.results).t
     Hs = only(prediction.results).H
 
+    @assert length(ts)==length(tstops) "The number of time steps of the simulated PDE solution and UDE solution do not match."
     @assert ts ≈ tstops "Timestops of simulated PDE solution and UDE solution do not match."
 
     # Lets create a very simple static glacier

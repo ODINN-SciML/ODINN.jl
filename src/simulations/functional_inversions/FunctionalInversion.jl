@@ -12,10 +12,10 @@ An object representing a functional inversion simulation (i.e. the inversion of 
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
 - `results::Vector{Results}`: A vector to store the results of the simulation.
 """
-mutable struct FunctionalInversion <: Simulation
-    model::Sleipnir.Model
-    glaciers::Vector{Sleipnir.AbstractGlacier}
-    parameters::Sleipnir.Parameters
+mutable struct FunctionalInversion{G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters} <: Simulation
+    model::M
+    glaciers::Vector{G}
+    parameters::P
     results::Vector{Results}
     stats::TrainingStats
 end
@@ -38,10 +38,10 @@ Constructor for FunctionalInversion struct with glacier model information, glaci
 - `FunctionalInversion`: A new instance of the FunctionalInversion struct.
 """
 function FunctionalInversion(
-    model::Sleipnir.Model,
+    model::M,
     glaciers::Vector{G},
-    parameters::Sleipnir.Parameters
-    ) where {G <: Sleipnir.AbstractGlacier}
+    parameters::P
+    ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 
     # Generate multiple instances of the models for differentiation compatibility
     if !(model.iceflow isa Vector) || ((model.iceflow isa Vector) && (length(model.iceflow) != length(glaciers)))

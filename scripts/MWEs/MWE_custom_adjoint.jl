@@ -13,6 +13,9 @@ using Statistics
 using ODINN
 using Polynomials
 using Plots
+using SciMLSensitivity
+
+Enzyme.API.strictAliasing!(false)
 
 rgi_paths = get_rgi_paths()
 
@@ -25,19 +28,19 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 ## Retrieving simulation data for the following glaciers
 rgi_ids = ["RGI60-11.03638"]
 # rgi_ids = ["RGI60-08.00213", "RGI60-02.05098"]
-# rgi_ids = ["RGI60-11.03638", # unstable
-#             "RGI60-11.01450",
+# rgi_ids = [#"RGI60-11.03638",
+#             # "RGI60-11.01450",
 #             "RGI60-08.00213",
 #             "RGI60-04.04351",
 #             "RGI60-01.02170",
 #             "RGI60-02.05098",
-#             "RGI60-01.01104",
+#             # "RGI60-01.01104",
 #             # "RGI60-01.09162",
 #             # "RGI60-01.00570", # This one does not have millan_v data
 #             # "RGI60-04.07051",
 #             "RGI60-07.00274",
 #             "RGI60-07.01323"]#,
-#             # "RGI60-01.17316"] # This one does not have millan_v data
+            # "RGI60-01.17316"] # This one does not have millan_v data
 
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
@@ -54,12 +57,14 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=true,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=400,
-                                            optimizer=ODINN.ADAM(0.002)),
-                                            # optimizer=ODINN.Descent(0.001)),
-                    UDE = UDEparameters(sensealg=ODINN.ZygoteAdjoint(),
+                                            epochs=100,
+                                            # optimizer=ODINN.ADAM(0.005)),
+                                            optimizer=ODINN.Descent(0.01)),
+                    UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
                                         optim_autoAD=ODINN.NoAD(),
-                                        grad=ODINNContinuousAdjoint(),
+                                        # optim_autoAD = AutoZygote(),
+                                        # optim_autoAD = AutoEnzyme(; mode=ODINN.EnzymeCore.set_runtime_activity(ODINN.EnzymeCore.Reverse)),
+                                        grad=DiscreteAdjoint(),
                                         optimization_method="AD+AD",
                                         target = "A"),
                     solver = Huginn.SolverParameters(step=δt,
@@ -77,26 +82,15 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time stanpshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-### Fake law for A(T) for Peterson & Cuffey
-const A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
-                              2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
-const A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
-A_poly = fit(A_values[1,:], A_values[2,:]) 
+# A_poly = ODINN.A_law_PatersonCuffey()
 # fakeA(T) = A_poly(T)
 
 # Overwrite constant A fake function for testing
 fakeA(T) = 2.21e-18
 
-# We generate a fake forward model for the simulation
-function generate_ground_truth(glacier, fakeA::Function)
-    T = mean(glacier.climate.longterm_temps)
-    A = fakeA(T)
-    generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
-end
-
-map(glacier -> generate_ground_truth(glacier, fakeA), glaciers)
+map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, params, model, tstops), glaciers)
 # TODO: This function does shit on the model variable, for now we do a clean restart
-# model.iceflow = SIA2Dmodel(params)
+model.iceflow = SIA2Dmodel(params)
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)

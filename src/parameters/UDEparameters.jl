@@ -5,13 +5,16 @@ mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
     grad::Union{ADJ, Nothing}
     optimization_method::String
     loss_type::String
-    empirical_loss_function::Lux.AbstractLossFunction
+    empirical_loss_function::AbstractLoss
     scale_loss::Bool
     target::Union{String, Nothing}
 end
 
-Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.optimization_method == b.optimization_method && a.loss_type == b.loss_type && 
-                                      a.scale_loss == b.scale_loss 
+Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
+    a.optim_autoAD == b.optim_autoAD && a.grad == b.grad &&
+    a.optimization_method == b.optimization_method && a.loss_type == b.loss_type &&
+    a.empirical_loss_function == b.empirical_loss_function && a.scale_loss == b.scale_loss &&
+    a.target == b.target
 
 
 """
@@ -19,6 +22,7 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg && a.o
         sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
+        empirical_loss_function::AbstractLoss = L2Sum(),
         scale_loss::Bool = true
         target::Union{String, Nothing} = "D"
         )
@@ -28,15 +32,16 @@ Keyword arguments
     - `sensealg`: Sensitivity algorithm from SciMLSensitivity.jl to be used.
     - `optimization_method`: Optimization method for the UDE.
     - `loss_type`: Type of loss function to be used. Can be either `V` (ice velocities), or `H` (ice thickness).
+    - `empirical_loss_function`: Empirical loss function to use.
     - `scale_loss`: Determines if the loss function should be scaled or not.
 """
 function UDEparameters(;
             sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
             optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
-            grad::Union{ADJ, Nothing} = nothing, 
+            grad::ADJ = SciMLSensitivityAdjoint(),
             optimization_method::String = "AD+AD",
             loss_type::String = "V",
-            empirical_loss_function::Lux.AbstractLossFunction = Lux.MSELoss(; agg=mean),
+            empirical_loss_function::AbstractLoss = L2Sum(),
             scale_loss::Bool = true,
             target::Union{String, Nothing} = "D"
             ) where {ADJ <: AbstractAdjointMethod}
@@ -45,7 +50,7 @@ function UDEparameters(;
     @assert ((loss_type == "V") || (loss_type == "H")) "Wrong loss type! Needs to be either `V` or `H`"
 
     # Build the solver parameters based on input values
-    UDE_parameters = UDEparameters(sensealg, optim_autoAD, grad, optimization_method,
+    UDE_parameters = UDEparameters{typeof(grad)}(sensealg, optim_autoAD, grad, optimization_method,
                                     loss_type, empirical_loss_function, scale_loss, target)
 
     return UDE_parameters
