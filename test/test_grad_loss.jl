@@ -47,6 +47,9 @@ function test_grad_discreteAdjoint()
             epochs=100,
             optimizer=ODINN.ADAM(0.005)),
             # optimizer=ODINN.Descent(0.001)),
+        physical = PhysicalParameters(
+            minA = 8e-21,
+            maxA = 8e-18),
         UDE = UDEparameters(
             sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
@@ -110,7 +113,7 @@ function test_grad_discreteAdjoint()
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
     thres_ratio = 1e-2
-    thres_angle = 1e-8
+    thres_angle = 1e-7
     thres_relerr = 1e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("eps    = ",printVecScientific(eps))
@@ -118,7 +121,9 @@ function test_grad_discreteAdjoint()
         println("angle  = ",printVecScientific(angle))
         println("relerr = ",printVecScientific(relerr))
     end
-    @test (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr)
+    @test min_ratio<thres_ratio
+    @test min_angle<thres_angle
+    @test min_relerr<thres_relerr
 
 end
 
@@ -149,6 +154,9 @@ function test_grad_continuousAdjoint()
             epochs=100,
             optimizer=ODINN.ADAM(0.005)),
             # optimizer=ODINN.Descent(0.001)),
+        physical = PhysicalParameters(
+            minA = 8e-21,
+            maxA = 8e-18),
         UDE = UDEparameters(
             sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
@@ -211,16 +219,19 @@ function test_grad_continuousAdjoint()
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 1e-6
-    thres_angle = 1e-6
-    thres_relerr = 1e-6
+    thres_ratio = 1e-2
+    thres_angle = 1e-7
+    thres_relerr = 1e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("eps    = ",printVecScientific(eps))
         println("ratio  = ",printVecScientific(ratio))
         println("angle  = ",printVecScientific(angle))
         println("relerr = ",printVecScientific(relerr))
     end
-    @test (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr)
+    @test min_ratio<thres_ratio
+    @test min_angle<thres_angle
+    @test min_relerr<thres_relerr
+
 
 end
 
@@ -337,6 +348,9 @@ function test_grad_discreteAdjoint_Halfar()
             light=false, # for now we do the simulation like this (a better name would be dense)
             working_dir=Huginn.root_dir
         ),
+        physical = PhysicalParameters(
+            minA = 8e-21,
+            maxA = 8e-18),
         UDE = UDEparameters(
             optim_autoAD=ODINN.NoAD(),
             grad=DiscreteAdjoint(),

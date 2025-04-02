@@ -26,16 +26,16 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
 
     # Retrieve loss function
     losses = getindex.(loss_grad, 1)
-    # @show losses
     loss = sum(losses)
     # Retrive gradient
     dθs  = getindex.(loss_grad, 2)
     dθs = ODINN.merge_batches(dθs)
 
     if maximum(norm.(dθs)) > 1e7
-        @show losses
-        @show norm.(dθs)
-        @warn "Potential unstable gradient for glacier"
+        glacier_ids = findall(>(1e7), norm.(dθs))
+        for id in glacier_ids
+            @warn "Potential unstable gradient for glacier $(simulation.glaciers[id].rgi_id): ‖dθ‖=$(norm.(dθs)[id]) \n Try reducing the temporal stepsize Δt used for reverse simulation."
+        end
     end
 
     @assert typeof(θ) == typeof(sum(dθs))
@@ -95,6 +95,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         normalization = 1.0
         ∂L∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H, H_ref; normalization=prod(N)*normalization)
+
         for j in reverse(2:k)
 
             # β = 2.0
@@ -179,13 +180,11 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # @show maximum(abs.(λ_∂f∂H))
 
                 ### Update adjoint
-                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+                ∂ℓ∂H_cont = ∂ℓ∂H / (Δx * Δy)
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H_cont)
 
                 λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(θ, λ[j-1], H[j], simulation, t₀; batch_id = i)
 
-                # TODO: Sign of the gradient is correct, but magnitude is still a bit OrdinaryDiffEq
-                # TODO: Check on the adjoint calculation again to see what is missing or wrong
-                # TODO: This measn that the continuous manual adjoint works for few glaciers
                 dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
             elseif typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
@@ -194,13 +193,14 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ[j], H[j], simulation, t₀; batch_id = i)[1]
 
                 ### Update adjoint
-                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 λ_∂f∂A = Huginn.SIA2D_discrete_adjoint(λ[j-1], H[j], simulation, t₀; batch_id = i)[2]
                 ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, i), θ)
                 λ_∂f∂θ = λ_∂f∂A*∇θ
 
-                dLdθ .+= - Δt[j-1] .* λ_∂f∂θ # The minus is needed here, not clear why
+                ### Update gradient
+                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
             else
                 @error "AD method $(simulation.parameters.UDE.grad) is not supported yet."
@@ -210,11 +210,14 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         ### Finite diff check of gradient
         # @infiltrate
-        # ϵ = 1e-5
+        # ϵ = 1e-9
         # loss_update = loss_iceflow_transient(θ .+ ϵ .* dLdθ, simulation)
-        # δl = loss_update - loss
+        # δl = loss_update - loss_val
         # println("This ratio should be ≈ 1")
         # @show (δl / norm(dLdθ)^2) / ϵ
+
+        # λ_∂f∂H_disc = Huginn.SIA2D_discrete_adjoint(λ[1], H[1], simulation, t₀; batch_id = i)[1]
+        # λ_∂f∂H_cont = VJP_λ_∂SIA∂H_continuous(λ[1], H[1], simulation, t₀; batch_id = i)
 
         # Return final evaluations of gradient
         push!(dLdθs_vector, dLdθ)
@@ -294,8 +297,8 @@ function generate_glacier_prediction!(glacier::AbstractGlacier, params::Sleipnir
 
     prediction = Huginn.Prediction(model, [glacier], params)
 
-    # Update model iceflow parameter topo
-    # prediction.model.iceflow.A[] = A
+    # Update model iceflow parameter 
+    prediction.model.iceflow.A = Ref(A)
 
     Huginn.run!(prediction)
 

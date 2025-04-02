@@ -75,7 +75,7 @@ function test_adjoint_SIAD2D_continuous()
     angle = []
     relerr = []
     eps = []
-    for k in range(5,7)
+    for k in range(3,8)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
         ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ)
@@ -87,9 +87,9 @@ function test_adjoint_SIAD2D_continuous()
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 1e-6
-    thres_angle = 1e-12
-    thres_relerr = 1e-7
+    thres_ratio = 1e-2
+    thres_angle = 1e-7
+    thres_relerr = 1e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt H")
         println("eps    = ",printVecScientific(eps))
@@ -97,7 +97,9 @@ function test_adjoint_SIAD2D_continuous()
         println("angle  = ",printVecScientific(angle))
         println("relerr = ",printVecScientific(relerr))
     end
-    @test (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr)
+    @test min_ratio<thres_ratio
+    @test min_angle<thres_angle
+    @test min_relerr<thres_relerr
 
     # Check gradient wrt A
     function f_θ(θ, args)

@@ -13,18 +13,17 @@ Generates a neural network.
 - `θ`: Neural network parameters.
 - `st`: Lux state.
 """
-function get_NN(θ_trained, ft)
-    UA = Lux.Chain( # Light network for debugging
-        Dense(1, 3, x -> softplus.(x)),
-        Dense(3, 1, sigmoid_A)
-    )
-    # UA = Lux.Chain(
+function get_NN(θ_trained, ft, lims)
+    # UA = Lux.Chain( # Light network for debugging
     #     Dense(1, 3, x -> softplus.(x)),
-    #     Dense(3, 10, x -> softplus.(x)),
-    #     Dense(10, 3, x -> softplus.(x)),
-    #     # Dense(3, 1, sigmoid)
-    #     Dense(3, 1, sigmoid_A)
+    #     Dense(3, 1, Base.Fix2(sigmoid_A, lims))
     # )
+    UA = Lux.Chain(
+        Dense(1, 3, x -> softplus.(x)),
+        Dense(3, 10, x -> softplus.(x)),
+        Dense(10, 3, x -> softplus.(x)),
+        Dense(3, 1, Base.Fix2(sigmoid_A, lims))
+    )
     θ, st = Lux.setup(rng_seed(), UA)
     if !isnothing(θ_trained)
         θ = θ_trained
@@ -47,7 +46,7 @@ end
 Predicts the value of A with a neural network based on the long-term air temperature.
 """
 function predict_A̅(U, temp)
-    return only(U(temp)) * 1e-18
+    return only(U(temp))
 end
 
 # function predict_A̅(U, temp)
@@ -80,9 +79,9 @@ Sigmoid activation function for the neural network output.
 # Returns
 - Sigmoid-transformed output value.
 """
-function sigmoid_A(x)
-    minA_out = 8.0e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0
+function sigmoid_A(x, lims)
+    minA_out = lims[1]
+    maxA_out = lims[2]
     return minA_out + (maxA_out - minA_out) / (1.0 + exp(-x))
 end
 

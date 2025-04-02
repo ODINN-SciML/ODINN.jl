@@ -26,20 +26,20 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 
 ## Retrieving simulation data for the following glaciers
-rgi_ids = ["RGI60-11.03638"]
-# rgi_ids = ["RGI60-08.00213", "RGI60-02.05098"]
-# rgi_ids = [#"RGI60-11.03638",
-#             # "RGI60-11.01450",
-#             "RGI60-08.00213",
-#             "RGI60-04.04351",
-#             "RGI60-01.02170",
-#             "RGI60-02.05098",
-#             # "RGI60-01.01104",
-#             # "RGI60-01.09162",
-#             # "RGI60-01.00570", # This one does not have millan_v data
-#             # "RGI60-04.07051",
-#             "RGI60-07.00274",
-#             "RGI60-07.01323"]#,
+# rgi_ids = ["RGI60-11.03638"]
+# rgi_ids = ["RGI60-11.03638", "RGI60-07.01323"]
+rgi_ids = ["RGI60-11.03638",
+            # "RGI60-11.01450",
+            "RGI60-08.00213",
+            # "RGI60-04.04351",
+            "RGI60-01.02170",
+            "RGI60-02.05098",
+            # "RGI60-01.01104",
+            # "RGI60-01.09162",
+            # "RGI60-01.00570", # This one does not have millan_v data
+            # "RGI60-04.07051",
+            "RGI60-07.00274",
+            "RGI60-07.01323"]#,
             # "RGI60-01.17316"] # This one does not have millan_v data
 
 
@@ -57,14 +57,17 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=true,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=100,
-                                            # optimizer=ODINN.ADAM(0.005)),
-                                            optimizer=ODINN.Descent(0.01)),
+                                            epochs=200,
+                                            optimizer=ODINN.ADAM(0.005)),
+                                            # optimizer=ODINN.Descent(0.01)),
+                    physical = PhysicalParameters(minA = 8e-21,
+                                                  maxA = 8e-18),
                     UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
                                         optim_autoAD=ODINN.NoAD(),
                                         # optim_autoAD = AutoZygote(),
                                         # optim_autoAD = AutoEnzyme(; mode=ODINN.EnzymeCore.set_runtime_activity(ODINN.EnzymeCore.Reverse)),
-                                        grad=DiscreteAdjoint(),
+                                        # grad=DiscreteAdjoint(),
+                                        grad=ContinuousAdjoint(),
                                         optimization_method="AD+AD",
                                         target = "A"),
                     solver = Huginn.SolverParameters(step=δt,
@@ -82,11 +85,11 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time stanpshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-# A_poly = ODINN.A_law_PatersonCuffey()
-# fakeA(T) = A_poly(T)
+A_poly = ODINN.A_law_PatersonCuffey()
+fakeA(T) = A_poly(T) * 1e-1
 
 # Overwrite constant A fake function for testing
-fakeA(T) = 2.21e-18
+# fakeA(T) = (T+50)/50 * 1.21e-18 - T/50 * 4.24e-18
 
 map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, params, model, tstops), glaciers)
 # TODO: This function does shit on the model variable, for now we do a clean restart
