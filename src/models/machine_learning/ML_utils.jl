@@ -15,6 +15,7 @@ Generates a neural network.
 """
 function get_NN(θ_trained, ft; lightNN=false)
     if lightNN
+        @warn "Using light mode of neural network"
         UA = Lux.Chain( # Light network for debugging
             Dense(1, 3, x -> softplus.(x)),
             Dense(3, 1, sigmoid)

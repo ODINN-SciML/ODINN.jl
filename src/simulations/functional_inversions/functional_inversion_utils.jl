@@ -415,7 +415,9 @@ function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) wh
 
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [T])[1]
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        A = predict_A̅(smodel, [T], (min_NN, max_NN))[1]
         return A
     end
 end

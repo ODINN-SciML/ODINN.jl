@@ -43,9 +43,11 @@ ENV["GKSwstype"]="nul"
 
 @testset "Continuous adjoint of SIA2D vs finite differences" test_adjoint_SIAD2D_continuous()
 
-@testset "Manual implementation of the backward with discrete adjoint vs finite differences" test_grad_discreteAdjoint()
+@testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_discreteAdjoint_discreteVJP()
 
-@testset "Manual implementation of the backward with continuous adjoint vs finite differences" test_grad_continuousAdjoint()
+@testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_discreteAdjoint_continuousVJP()
+
+@testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_continuousAdjoint_discreteVJP()
 
 @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
 
