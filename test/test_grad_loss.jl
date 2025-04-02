@@ -1,26 +1,4 @@
 
-import Pkg
-Pkg.activate(dirname(Base.current_project()))
-
-using Revise
-using Optimization
-using EnzymeCore
-using Enzyme
-using ODINN
-using Test
-using JLD2
-using Plots
-using Infiltrator
-using OrdinaryDiffEq
-using Optim
-using SciMLSensitivity
-using Random
-using Statistics
-using Zygote
-using Printf
-using Lux
-
-
 function test_grad_discreteAdjoint()
 
     rgi_ids = ["RGI60-11.03638"]
@@ -322,7 +300,7 @@ function test_grad_discreteAdjoint_Halfar()
     end
 
     lossType = L2SumWithinGlacier()
-    A = 8e-18
+    A = 8e-19
     t₀ = 5.0
     t₁ = 6.0
     h₀ = 500
@@ -374,7 +352,9 @@ function test_grad_discreteAdjoint_Halfar()
     modelNN = model.machine_learning.architecture
     st = model.machine_learning.st
     smodel = StatefulLuxLayer{true}(modelNN, θ.θ, st)
-    A_θ = ODINN.predict_A̅(smodel, [T])[1]
+    min_NN = parameters.physical.minA
+    max_NN = parameters.physical.maxA
+    A_θ = ODINN.predict_A̅(smodel, [T], (min_NN, max_NN))[1]
     println("A_θ=",A_θ)
 
     # Initial condition of the glacier

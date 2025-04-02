@@ -359,12 +359,6 @@ function simulate_iceflow_UDE!(
     return iceflow_sol
 end
 
-function NN_enzyme!(smodel, iceflow) 
-    # We generate the ML parametrization based on the target
-    iceflow.A[] = predict_A̅(smodel, [-5.0])
-    return nothing
-end
-
 function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
     # We load the ML model with the parameters
     smodel.ps = θ.θ
@@ -374,7 +368,9 @@ function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, 
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
         # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
-        simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))
     end
 end
 
@@ -386,7 +382,9 @@ function apply_UDE_parametrization_enzyme(θ, simulation::FunctionalInversion, s
 
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
-        return predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        return predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
     end
 end
 
@@ -399,7 +397,9 @@ function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integra
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
         T_mean = mean(simulation.glaciers[batch_id].climate.longterm_temps)
-        A = predict_A̅(smodel, [T_mean])[1]
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        A = predict_A̅(smodel, [T_mean], (min_NN, max_NN))[1]
         simulation.model.iceflow[batch_id].A[] = A
         # @info "Value of A used in UDE simulation:"
     # elseif simulation.parameters.UDE.target == "D"
@@ -428,7 +428,9 @@ function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id
 
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
         return A
     end
 end

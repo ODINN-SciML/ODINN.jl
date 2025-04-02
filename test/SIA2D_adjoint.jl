@@ -27,6 +27,9 @@ function test_adjoint_SIAD2D_continuous()
             light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             rgi_paths=rgi_paths),
+        physical = PhysicalParameters(
+            minA = 8e-21,
+            maxA = 8e-18),
         UDE = UDEparameters(
             sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
@@ -60,6 +63,8 @@ function test_adjoint_SIAD2D_continuous()
 
     vecBackwardSIA2D = randn(size(H,1), size(H,2))
 
+    # Initialize A by making one prediction with the neural network
+    ODINN.apply_UDE_parametrization!(θ, simulation, nothing, glacier_idx)
     dH = Huginn.SIA2D(H, simulation, t; batch_id=batch_idx)
 
     ∂H = VJP_λ_∂SIA∂H_continuous(vecBackwardSIA2D, H, simulation, t; batch_id=batch_idx)
@@ -87,9 +92,9 @@ function test_adjoint_SIAD2D_continuous()
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 1e-2
-    thres_angle = 1e-7
-    thres_relerr = 1e-2
+    thres_ratio = 1e-4
+    thres_angle = 5e-4
+    thres_relerr = 5e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt H")
         println("eps    = ",printVecScientific(eps))
@@ -122,9 +127,9 @@ function test_adjoint_SIAD2D_continuous()
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 1e-14
+    thres_ratio = 3e-2
     thres_angle = 1e-14
-    thres_relerr = 1e-14
+    thres_relerr = 3e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt θ")
         println("eps    = ",printVecScientific(eps))

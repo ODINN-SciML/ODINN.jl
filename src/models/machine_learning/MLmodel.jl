@@ -70,15 +70,8 @@ function NeuralNetwork(params::P;
     # Float type
     ft = Sleipnir.Float
 
-    min_NN = params.physical.minA
-    max_NN = params.physical.maxA
-
-    if !isnothing(min_NN) & !isnothing(max_NN)
-        @warn "Neural network caps output values to be in the range [$(min_NN), $(max_NN)]"
-    end
-
     if isnothing(architecture)
-        architecture, θ, st = get_NN(θ, ft, (min_NN, max_NN))
+        architecture, θ, st = get_NN(θ, ft)
     end
 
     # Build the simulation parameters based on input values

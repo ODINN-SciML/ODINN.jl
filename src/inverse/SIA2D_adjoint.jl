@@ -175,7 +175,7 @@ function VJP_λ_∂SIA∂θ_continuous(
     ∇λ∇S_y = Huginn.avg_x(∇λ∇S_y_edges)
     ∇λ∇S = ∇λ∇S_x .+ ∇λ∇S_y
 
-    return - (Δx * Δy) * sum(∂D∂A .* ∇λ∇S) .* ∇θ
+    return - sum(∂D∂A .* ∇λ∇S) .* ∇θ
 end
 
 # Repeated function
@@ -187,7 +187,9 @@ function grad_apply_UDE_parametrization(θ, simulation::SIM, batch_id::I) where 
 
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
         # println("Value of A during internal gradient evaluation:")
         # @show A
         return A
