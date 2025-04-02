@@ -93,8 +93,8 @@ function test_adjoint_SIAD2D_continuous()
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
     thres_ratio = 1e-4
-    thres_angle = 5e-4
-    thres_relerr = 5e-2
+    thres_angle = 2e-4
+    thres_relerr = 2e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt H")
         println("eps    = ",printVecScientific(eps))

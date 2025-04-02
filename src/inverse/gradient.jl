@@ -34,7 +34,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     if maximum(norm.(dθs)) > 1e7
         glacier_ids = findall(>(1e7), norm.(dθs))
         for id in glacier_ids
-            @warn "Potential unstable gradient for glacier $(simulation.glaciers[id].rgi_id): ‖dθ‖=$(norm.(dθs)[id]) \n Try reducing the temporal stepsize Δt used for reverse simulation."
+            @warn "Potential unstable gradient for glacier $(simulation.glaciers[id].rgi_id): ‖dθ‖=$(norm(dθs)[id]) \n Try reducing the temporal stepsize Δt used for reverse simulation."
         end
     end
 
@@ -118,7 +118,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ_∂f∂H, = ∂f∂H_pullback(λ[j])
 
                 ### Update adjoint
-                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 ### Compute loss function
                 ∂f∂θ_closure(_dH, _θ) = SIA2D_adjoint!(_θ, _dH, H[j], simulation, t₀, i)
@@ -126,7 +126,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # Compute loss with transpose of adjoint
                 λ_∂f∂θ, = ∂f∂θ_pullback(λ[j-1])
 
-                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
                 # Run simple test that both closures are computing the same primal
                 # @assert dH_H ≈ dH_λ "Result from forward pass needs to coincide for both closures when computing the pullback."
 
@@ -150,7 +149,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 )
 
                 ### Update adjoint
-                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .- ∂ℓ∂H)
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 λ_∂f∂θ = Enzyme.make_zero(θ)
                 _simulation = Enzyme.make_zero(simulation)
@@ -171,7 +170,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
                 # Run simple test that both closures are computing the same primal
                 @assert dH_H ≈ dH_λ[j] "Result from forward pass needs to coincide for both closures when computing the pullback."
-                dLdθ .+= - Δt[j-1] .* λ_∂f∂θ # The minus is needed here, not clear why
 
             elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
 
@@ -180,12 +178,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # @show maximum(abs.(λ_∂f∂H))
 
                 ### Update adjoint
-                ∂ℓ∂H_cont = ∂ℓ∂H / (Δx * Δy)
-                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H_cont)
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(θ, λ[j-1], H[j], simulation, t₀; batch_id = i)
-
-                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
             elseif typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
 
@@ -199,12 +194,12 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, i), θ)
                 λ_∂f∂θ = λ_∂f∂A*∇θ
 
-                ### Update gradient
-                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
-
             else
                 @error "AD method $(simulation.parameters.UDE.grad) is not supported yet."
             end
+
+            ### Update gradient
+            dLdθ .+= Δt[j-1] .* λ_∂f∂θ
 
         end
 

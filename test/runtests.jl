@@ -49,7 +49,7 @@ ENV["GKSwstype"]="nul"
 
 @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
 
-@testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D()
+@testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D() # Run this test in a dedicated REPL as it produces an error when Enzyme has been used before
 
 # @testset "Manual implementation of the backward with discrete adjoint vs Halfar solution with Enzyme" test_grad_discreteAdjoint_Halfar()
 

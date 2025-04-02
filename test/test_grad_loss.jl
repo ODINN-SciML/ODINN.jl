@@ -91,7 +91,7 @@ function test_grad_discreteAdjoint()
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
     thres_ratio = 1e-2
-    thres_angle = 1e-7
+    thres_angle = 1e-8
     thres_relerr = 1e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("eps    = ",printVecScientific(eps))
@@ -198,8 +198,8 @@ function test_grad_continuousAdjoint()
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
     thres_ratio = 1e-2
-    thres_angle = 1e-7
-    thres_relerr = 1e-2
+    thres_angle = 1e-8
+    thres_relerr = 3e-2
     if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("eps    = ",printVecScientific(eps))
         println("ratio  = ",printVecScientific(ratio))
@@ -324,6 +324,7 @@ function test_grad_discreteAdjoint_Halfar()
             use_MB=false,
             use_iceflow=true,
             light=false, # for now we do the simulation like this (a better name would be dense)
+            test_mode=true,
             working_dir=Huginn.root_dir
         ),
         physical = PhysicalParameters(

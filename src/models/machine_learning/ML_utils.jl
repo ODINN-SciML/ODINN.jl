@@ -1,28 +1,32 @@
 """
-    get_NN(θ_trained, ft)
+    get_NN(θ_trained, ft; lightNN=false)
 
 Generates a neural network.
 
 # Arguments
 - `θ_trained`: Pre-trained neural network parameters (optional).
 - `ft`: Float type used.
+- `lightNN`: Boolean that determines if a light architecture is returned or not.
 
 # Returns
 - `UA`: `Lux.Chain` neural network architecture.
 - `θ`: Neural network parameters.
 - `st`: Lux state.
 """
-function get_NN(θ_trained, ft)
-    # UA = Lux.Chain( # Light network for debugging
-    #     Dense(1, 3, x -> softplus.(x)),
-    #     Dense(3, 1, Base.Fix2(sigmoid_A, lims))
-    # )
-    UA = Lux.Chain(
-        Dense(1, 3, x -> softplus.(x)),
-        Dense(3, 10, x -> softplus.(x)),
-        Dense(10, 3, x -> softplus.(x)),
-        Dense(3, 1, sigmoid)
-    )
+function get_NN(θ_trained, ft; lightNN=false)
+    if lightNN
+        UA = Lux.Chain( # Light network for debugging
+            Dense(1, 3, x -> softplus.(x)),
+            Dense(3, 1, sigmoid)
+        )
+    else
+        UA = Lux.Chain(
+            Dense(1, 3, x -> softplus.(x)),
+            Dense(3, 10, x -> softplus.(x)),
+            Dense(10, 3, x -> softplus.(x)),
+            Dense(3, 1, sigmoid)
+        )
+    end
     θ, st = Lux.setup(rng_seed(), UA)
     if !isnothing(θ_trained)
         θ = θ_trained
