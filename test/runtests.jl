@@ -39,7 +39,7 @@ ENV["GKSwstype"]="nul"
 
 @testset "Parameters constructors with specified values" params_constructor_specified()
 
-@testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
+@testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D() # This test must be run first, otherwise Enzyme compilation fails because it was used before
 
 @testset "Continuous adjoint of SIA2D vs finite differences" test_adjoint_SIAD2D_continuous()
 
@@ -51,8 +51,8 @@ ENV["GKSwstype"]="nul"
 
 @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
 
-@testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D() # Run this test in a dedicated REPL as it produces an error when Enzyme has been used before
-
 @testset "Manual implementation of the backward with discrete adjoint vs Halfar solution with Enzyme" test_grad_discreteAdjoint_Halfar()
+
+@testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 
 end
