@@ -92,7 +92,7 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
     thres_ratio = thres[1]
     thres_angle = thres[2]
     thres_relerr = thres[3]
-    if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
+    if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("eps    = ",printVecScientific(eps))
         printVecScientific("ratio  = ",ratio,thres_ratio)
         printVecScientific("angle  = ",angle,thres_angle)
@@ -133,7 +133,7 @@ function test_grad_loss_term()
     da = backward_loss(lossType, a, b; normalization=norm)
     ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
     thres = 1e-14
-    if !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
+    if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
         printVecScientific("ratio  = ",[ratio],thres)
         printVecScientific("angle  = ",[angle],thres)
         printVecScientific("relerr = ",[relerr],thres)
@@ -165,7 +165,7 @@ function test_grad_loss_term()
     da = backward_loss(lossType, a, b; normalization=norm)
     ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
     thres = 1e-14
-    if !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
+    if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
         printVecScientific("ratio  = ",[ratio],thres)
         printVecScientific("angle  = ",[angle],thres)
         printVecScientific("relerr = ",[relerr],thres)
@@ -307,7 +307,7 @@ function test_grad_discreteAdjoint_Halfar()
     thres_ratio = 5e-1
     thres_angle = 1e-15
     thres_relerr = 5e-1
-    if !( (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr) )
+    if printDebug | !( (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr) )
         printVecScientific("ratio  = ",[ratio],thres_ratio)
         printVecScientific("angle  = ",[angle],thres_angle)
         printVecScientific("relerr = ",[relerr],thres_relerr)
