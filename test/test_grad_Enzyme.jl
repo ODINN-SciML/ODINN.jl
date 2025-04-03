@@ -106,9 +106,9 @@ function test_grad_Enzyme_SIAD2D()
     thres_relerr = 2e-5
     if !( (abs(ratio_H)<thres_ratio) & (abs(angle_H)<thres_angle) & (abs(relerr_H)<thres_relerr) )
         println("Gradient wrt H")
-        println("ratio  = ",@sprintf("%9.2e", ratio_H))
-        println("angle  = ",@sprintf("%9.2e", angle_H))
-        println("relerr = ",@sprintf("%9.2e", relerr_H))
+        printVecScientific("ratio  = ",[ratio_H],thres_ratio)
+        printVecScientific("angle  = ",[angle_H],thres_angle)
+        printVecScientific("relerr = ",[relerr_H],thres_relerr)
     end
     @test (abs(ratio_H)<thres_ratio) & (abs(angle_H)<thres_angle) & (abs(relerr_H)<thres_relerr)
 
@@ -118,9 +118,9 @@ function test_grad_Enzyme_SIAD2D()
     thres_relerr = 1e-14
     if !( (abs(ratio_θ)<thres_ratio) & (abs(angle_θ)<thres_angle) & (abs(relerr_θ)<thres_relerr) )
         println("Gradient wrt θ")
-        println("ratio  = ",@sprintf("%9.2e", ratio_θ))
-        println("angle  = ",@sprintf("%9.2e", angle_θ))
-        println("relerr = ",@sprintf("%9.2e", relerr_θ))
+        printVecScientific("ratio  = ",[ratio_θ],thres_ratio)
+        printVecScientific("angle  = ",[angle_θ],thres_angle)
+        printVecScientific("relerr = ",[relerr_θ],thres_relerr)
     end
     @test (abs(ratio_θ)<thres_ratio) & (abs(angle_θ)<thres_angle) & (abs(relerr_θ)<thres_relerr)
 

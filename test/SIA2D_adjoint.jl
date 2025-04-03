@@ -83,7 +83,7 @@ function test_adjoint_SIAD2D_continuous()
     for k in range(3,8)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ)
+        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)
@@ -106,7 +106,7 @@ function test_adjoint_SIAD2D_continuous()
     @test min_angle<thres_angle
     @test min_relerr<thres_relerr
 
-    # Check gradient wrt A
+    # Check gradient wrt θ
     function f_θ(θ, args)
         H, simulation, t, vecBackwardSIA2D = args
         return _loss(H, θ, simulation, t, vecBackwardSIA2D)
@@ -118,7 +118,7 @@ function test_adjoint_SIAD2D_continuous()
     for k in range(5,7)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂θ_num = Huginn.compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ)
+        ∂θ_num = Huginn.compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ; varStr="of θ")
         ratio_k, angle_k, relerr_k = Huginn.stats_err_arrays(∂θ, ∂θ_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)

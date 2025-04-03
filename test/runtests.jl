@@ -43,16 +43,16 @@ ENV["GKSwstype"]="nul"
 
 @testset "Continuous adjoint of SIA2D vs finite differences" test_adjoint_SIAD2D_continuous()
 
-@testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_discreteAdjoint_discreteVJP()
+@testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method=DiscreteVJP()); thres=[1e-2, 1e-8, 1e-2])
 
-@testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_discreteAdjoint_continuousVJP()
+@testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method=ContinuousVJP()); thres=[1e-2, 1e-8, 3e-2])
 
-@testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_continuousAdjoint_discreteVJP()
+@testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=DiscreteVJP()); thres=[2e-4, 1e-8, 1e-3])
 
 @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
 
 @testset "Consistency between discrete adjoint and Enzyme AD" test_grad_Enzyme_SIAD2D() # Run this test in a dedicated REPL as it produces an error when Enzyme has been used before
 
-# @testset "Manual implementation of the backward with discrete adjoint vs Halfar solution with Enzyme" test_grad_discreteAdjoint_Halfar()
+@testset "Manual implementation of the backward with discrete adjoint vs Halfar solution with Enzyme" test_grad_discreteAdjoint_Halfar()
 
 end

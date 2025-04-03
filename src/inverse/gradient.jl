@@ -77,11 +77,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         # Dimensions
         N = size(result.B)
         k = length(H)
-
         t₀ = simulation.parameters.simulation.tspan[1]
-
         normalization = 1.0
-
         dLdθ = Enzyme.make_zero(θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
@@ -181,7 +178,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 function f_adjoint_rev(dλ, λ, p, τ)
                     t = -τ
                     λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H_itp(t), simulation, t; batch_id = i)[1]
-                    dλ .= .+ λ_∂f∂H
+                    dλ .= λ_∂f∂H
                 end
             else
                 @error "VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet."
@@ -193,7 +190,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             function effect!(integrator)
                 t = - integrator.t
                 ∂ℓ∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H_itp(t), H_ref_itp(t); normalization=prod(N)*normalization)
-                integrator.u .= integrator.u .+ (1/12) .* ∂ℓ∂H
+                integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             cb_adjoint_loss = DiscreteCallback(stop_condition, effect!)
 
@@ -202,7 +199,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Include contribution of loss from last step since this is not accounted for in the discrete callback
             if simulation.parameters.simulation.tspan[2] ∈ t_ref
                 t_final = simulation.parameters.simulation.tspan[2]
-                λ₁ .+= (1/12) .* backward_loss(simulation.parameters.UDE.empirical_loss_function, H_itp(t_final), H_ref_itp(t_final); normalization=prod(N)*normalization)
+                λ₁ .+= simulation.parameters.simulation.step .* backward_loss(simulation.parameters.UDE.empirical_loss_function, H_itp(t_final), H_ref_itp(t_final); normalization=prod(N)*normalization)
                 # λ₁ .-= only(backward_loss(simulation.parameters.UDE.empirical_loss_function, [H_itp(t_final)], [H_ref_itp(t_final)]; normalization=prod(N)*normalization))
             end
             # Define ODE Problem with time in reverse
