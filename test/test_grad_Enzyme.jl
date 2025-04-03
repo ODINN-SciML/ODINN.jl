@@ -104,7 +104,7 @@ function test_grad_Enzyme_SIAD2D()
     thres_ratio = 1e-10
     thres_angle = 1e-10
     thres_relerr = 2e-5
-    if !( (abs(ratio_H)<thres_ratio) & (abs(angle_H)<thres_angle) & (abs(relerr_H)<thres_relerr) )
+    if printDebug | !( (abs(ratio_H)<thres_ratio) & (abs(angle_H)<thres_angle) & (abs(relerr_H)<thres_relerr) )
         println("Gradient wrt H")
         printVecScientific("ratio  = ",[ratio_H],thres_ratio)
         printVecScientific("angle  = ",[angle_H],thres_angle)
@@ -116,7 +116,7 @@ function test_grad_Enzyme_SIAD2D()
     thres_ratio = 1e-14
     thres_angle = 1e-15
     thres_relerr = 1e-14
-    if !( (abs(ratio_θ)<thres_ratio) & (abs(angle_θ)<thres_angle) & (abs(relerr_θ)<thres_relerr) )
+    if printDebug | !( (abs(ratio_θ)<thres_ratio) & (abs(angle_θ)<thres_angle) & (abs(relerr_θ)<thres_relerr) )
         println("Gradient wrt θ")
         printVecScientific("ratio  = ",[ratio_θ],thres_ratio)
         printVecScientific("angle  = ",[angle_θ],thres_angle)

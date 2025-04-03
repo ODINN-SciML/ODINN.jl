@@ -95,12 +95,12 @@ function test_adjoint_SIAD2D_continuous()
     thres_ratio = 1e-4
     thres_angle = 2e-4
     thres_relerr = 2e-2
-    if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
+    if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt H")
         println("eps    = ",printVecScientific(eps))
-        println("ratio  = ",printVecScientific(ratio))
-        println("angle  = ",printVecScientific(angle))
-        println("relerr = ",printVecScientific(relerr))
+        printVecScientific("ratio  = ",ratio,thres_ratio)
+        printVecScientific("angle  = ",angle,thres_angle)
+        printVecScientific("relerr = ",relerr,thres_relerr)
     end
     @test min_ratio<thres_ratio
     @test min_angle<thres_angle
@@ -130,12 +130,12 @@ function test_adjoint_SIAD2D_continuous()
     thres_ratio = 3e-2
     thres_angle = 1e-14
     thres_relerr = 3e-2
-    if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
+    if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt θ")
         println("eps    = ",printVecScientific(eps))
-        println("ratio  = ",printVecScientific(ratio))
-        println("angle  = ",printVecScientific(angle))
-        println("relerr = ",printVecScientific(relerr))
+        printVecScientific("ratio  = ",ratio,thres_ratio)
+        printVecScientific("angle  = ",angle,thres_angle)
+        printVecScientific("relerr = ",relerr,thres_relerr)
     end
     @test (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr)
 end
