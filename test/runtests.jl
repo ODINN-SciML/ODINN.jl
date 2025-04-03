@@ -49,6 +49,8 @@ ENV["GKSwstype"]="nul"
 
 @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=DiscreteVJP()); thres=[2e-4, 1e-8, 1e-3])
 
+@testset "Manual implementation of the continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=ODINN.EnzymeVJP()); thres=[2e-4, 1e-8, 1e-3])
+
 @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
 
 @testset "Manual implementation of the backward with discrete adjoint vs Halfar solution with Enzyme" test_grad_discreteAdjoint_Halfar()

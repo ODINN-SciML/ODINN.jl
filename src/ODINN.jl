@@ -82,6 +82,7 @@ include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Inversion
 include(joinpath(root_dir, "src/inverse/SIA2D_adjoint.jl"))
+include(joinpath(root_dir, "src/inverse/AD_utils.jl"))
 include(joinpath(root_dir, "src/inverse/gradient.jl"))
 
 end # module

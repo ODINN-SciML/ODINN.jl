@@ -99,61 +99,13 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 ℓ += Δt[j-1] * loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)*normalization)
 
                 ### Custom VJP to compute the adjoint
-                if typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP
-                    λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ[j], H[j], simulation, t₀; batch_id = i)[1]
-                elseif typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP
-                    λ_∂f∂H = VJP_λ_∂SIA∂H_continuous(λ[j], H[j], simulation, t₀; batch_id = i)
-                elseif typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP
-                    dH_H = Enzyme.make_zero(H[j])
-                    λ_∂f∂H = Enzyme.make_zero(H[j])
-                    _simulation = Enzyme.make_zero(simulation)
-                    smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
-
-                    λH = deepcopy(λ[j]) # Need to copy because Enzyme changes the backward gradient in-place
-                    Enzyme.autodiff(
-                        Reverse, SIA2D_adjoint!, Const,
-                        Enzyme.Const(θ),
-                        Duplicated(dH_H, λH),
-                        Duplicated(H[j], λ_∂f∂H),
-                        Enzyme.Duplicated(simulation, _simulation),
-                        Enzyme.Const(smodel),
-                        Enzyme.Const(t₀),
-                        Enzyme.Const(i)
-                    )
-                else
-                    @error "VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet."
-                end
+                λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, t₀, i)
 
                 ### Update adjoint
                 λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 ### Custom VJP for grad of loss function
-                if typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP
-                    λ_∂f∂A = Huginn.SIA2D_discrete_adjoint(λ[j-1], H[j], simulation, t₀; batch_id = i)[2]
-                    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, i), θ)
-                    λ_∂f∂θ = λ_∂f∂A*∇θ
-                elseif typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP
-                    λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(θ, λ[j-1], H[j], simulation, t₀; batch_id = i)
-                elseif typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP
-                    λ_∂f∂θ = Enzyme.make_zero(θ)
-                    _simulation = Enzyme.make_zero(simulation)
-                    _smodel = Enzyme.make_zero(smodel)
-                    _H = Enzyme.make_zero(H[j])
-
-                    λθ = deepcopy(λ[j-1]) # Need to copy because Enzyme changes the backward gradient in-place
-                    Enzyme.autodiff(
-                        Reverse, SIA2D_adjoint!, Const,
-                        Duplicated(θ, λ_∂f∂θ),
-                        Duplicated(dH_λ[j], λθ),
-                        Duplicated(H[j], _H),
-                        Duplicated(simulation, _simulation),
-                        Duplicated(smodel, _smodel),
-                        Const(t₀),
-                        Const(i)
-                    )
-                    # Run simple test that both closures are computing the same primal
-                    @assert dH_H ≈ dH_λ[j] "Result from forward pass needs to coincide for both closures when computing the pullback."
-                end
+                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀, i)
 
                 ### Update gradient
                 # @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
@@ -174,10 +126,11 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             t_nodes, weights = GaussQuadrature(simulation.parameters.simulation.tspan..., simulation.parameters.UDE.grad.n_quadrature)
 
             ### Define the reverse ODE problem
-            if typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP
+            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP)
                 function f_adjoint_rev(dλ, λ, p, τ)
                     t = -τ
-                    λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H_itp(t), simulation, t; batch_id = i)[1]
+                    # λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H_itp(t), simulation, t; batch_id = i)[1]
+                    λ_∂f∂H, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ, H_itp(t), θ, simulation, t, i)
                     dλ .= λ_∂f∂H
                 end
             else
@@ -218,13 +171,11 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                             abstol=simulation.parameters.UDE.grad.abstol)
 
             ### Numerical integration using quadrature to compute gradient
-            if typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP
+            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP)
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(-t_nodes[j])
                     _H = H_itp(t_nodes[j])
-                    λ_∂f∂A = Huginn.SIA2D_discrete_adjoint(λ_sol, _H, simulation, t_nodes[j]; batch_id = i)[2]
-                    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, i), θ)
-                    λ_∂f∂θ = λ_∂f∂A * ∇θ
+                    λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ_sol, _H, θ, nothing, zero(λ_sol), simulation, t_nodes[j], i)
                     dLdθ .+= weights[j] .* λ_∂f∂θ
                 end
             else
