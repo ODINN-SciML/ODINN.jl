@@ -2,8 +2,6 @@ using Pkg; Pkg.activate(".")
 
 using Distributed
 
-# @everywhere begin
-
 using Revise
 using Optimization
 # using EnzymeCore
@@ -58,16 +56,12 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=400,
-                                            optimizer=ODINN.ADAM(0.005)),
-                                            # optimizer=ODINN.Descent(0.01)),
+                                            epochs=500,
+                                            optimizer=ODINN.ADAM(0.01)),
                     physical = PhysicalParameters(minA = 8e-21,
                                                   maxA = 8e-17),
                     UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
                                         optim_autoAD=ODINN.NoAD(),
-                                        # optim_autoAD = AutoZygote(),
-                                        # optim_autoAD = AutoEnzyme(; mode=ODINN.EnzymeCore.set_runtime_activity(ODINN.EnzymeCore.Reverse)),
-                                        # grad=DiscreteAdjoint(VJP_method=ContinuousVJP()),
                                         grad=ContinuousAdjoint(),
                                         optimization_method="AD+AD",
                                         target = "A"),
@@ -87,10 +81,8 @@ glaciers = initialize_glaciers(rgi_ids, params)
 tstops = collect(2010:δt:2015)
 
 A_poly = ODINN.A_law_PatersonCuffey()
-fakeA(T) = A_poly(T)# * 1e-1
+fakeA(T) = A_poly(T)
 
-# Overwrite constant A fake function for testing
-# fakeA(T) = (T+50)/50 * 1.21e-18 - T/50 * 4.24e-18
 
 map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, params, model, tstops), glaciers)
 # TODO: This function does shit on the model variable, for now we do a clean restart

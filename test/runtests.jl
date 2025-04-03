@@ -31,7 +31,7 @@ const printDebug = true
 # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"]="nul"
 
-@testset "Run all tests" begin 
+@testset "Run all tests" begin
 
 # @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB=false)
 # @testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB=true)
