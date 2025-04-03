@@ -21,7 +21,7 @@ function test_grad_Enzyme_SIAD2D()
         UDE = UDEparameters(
             sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
-            grad=DiscreteAdjoint(),
+            grad=DiscreteAdjoint(VJP_method=EnzymeVJP()),
             optimization_method="AD+AD",
             target = "A"),
         solver = Huginn.SolverParameters(
