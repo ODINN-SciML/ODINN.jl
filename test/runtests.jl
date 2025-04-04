@@ -1,7 +1,12 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
-using Revise
+if !parse(Bool, get(ENV, "CI", "false"))
+    using Revise
+    const printDebug = true
+else
+    const printDebug = false
+end
 using Optimization
 using EnzymeCore
 using Enzyme
@@ -26,7 +31,6 @@ include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
 include("test_grad_Enzyme.jl")
-const printDebug = true
 
 # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"]="nul"
