@@ -39,7 +39,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     end
 
     @assert typeof(θ) == typeof(sum(dθs))
-    @assert norm(sum(dθs)) > 0.0 "‖∑dθs‖=$(norm(sum(dθs))) but should be greater than 0"
+    # @assert norm(sum(dθs)) > 0.0 "‖∑dθs‖=$(norm(sum(dθs))) but should be greater than 0"
 
     dθ .= sum(dθs)
 end

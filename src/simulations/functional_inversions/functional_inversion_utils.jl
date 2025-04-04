@@ -1,5 +1,3 @@
-
-
 """
 run!(simulation::FunctionalInversion)
 
@@ -8,7 +6,29 @@ In-place run of the model.
 function run!(simulation::FunctionalInversion)
 
     println("Running training of UDE...\n")
-    sol = train_UDE!(simulation)
+
+    # Set expected total number of epochs from beginning for the callback
+    simulation.stats.niter = sum(simulation.parameters.hyper.epochs)
+
+    if !(typeof(simulation.parameters.hyper.optimizer) <: Vector)
+        # One single optimizer
+        sol = train_UDE!(simulation)
+    else
+        # Multiple optimizers
+        optimizers = simulation.parameters.hyper.optimizer
+        epochs = simulation.parameters.hyper.epochs
+        @assert length(optimizers) == length(optimizers) "Provide number of epochs as a vector with the same lenght of optimizers"
+        for i in 1:length(epochs)
+            # Construct a new simulation for each optimizer
+            simulation.parameters.hyper.optimizer = optimizers[i]
+            simulation.parameters.hyper.epochs = epochs[i] - 1
+            if i !== 1
+                θ_trained = sol.u
+                simulation.model.machine_learning.θ = θ_trained
+            end
+            sol = train_UDE!(simulation)
+        end
+    end
 
     # Setup final results
     simulation.stats.niter = length(simulation.stats.losses)
@@ -42,28 +62,38 @@ BFGS Training
 """
 function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer)
 
-    @info "Trainign with BFGS"
+    @info "Trainign with BFGS optimizer"
 
     # Create batches for inversion training
+    # @infiltrate
     simulation_train_loader = generate_batches(simulation)
     # simulation_batch_ids = train_loader.data[1]
 
     θ = simulation.model.machine_learning.θ
 
-    # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(_θ, (_simulation)) = loss_iceflow_transient(_θ, _simulation)
-
-    if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        Enzyme.API.strictAliasing!(false)
-        optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
-    else
-        # Custom grad API for optimization problem
-        loss_iceflow_grad!(dθ, θ, _simulation) = SIA2D_grad!(dθ, θ, _simulation)
-        optf = OptimizationFunction(loss_function, NoAD(), grad=loss_iceflow_grad!)
+    # Get the available workers
+    # Workers are always one minus the number of available cores
+    workers_list = workers()
+    if simulation.parameters.simulation.multiprocessing
+        @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers do not match"
     end
 
-    # TODO: Custom simulation batch id
-    optprob = OptimizationProblem(optf, θ, (simultion_batch_ids))
+    # Simplify API for optimization problem and include data loaded in argument for minibatch
+    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data))
+
+    if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
+        # Enzyme.API.strictAliasing!(false)
+        optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
+    else
+        @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
+
+        loss_function_grad!(_dθ, _θ, _simulation) = SIA2D_grad!(_dθ, _θ, only(_simulation))
+
+        optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
+    end
+
+    # optprob = OptimizationProblem(optf, θ, (simultion_batch_ids))
+    optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Plot callback
     if isnothing(simulation.parameters.UDE.target)
@@ -76,15 +106,15 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
         raise("Simulation target not defined.")
     end
     # Training diagnosis callback
-    cb_diagnosis(θ, l) = callback_diagnosis(θ, l, simulation_train_loader)
+    cb_diagnosis(θ, l) = callback_diagnosis(θ, l, only(simulation_train_loader.data))
+
     # Combined callback
     cb(θ, l) = CallbackOptimizationSet(θ, l; callbacks=(cb_plots, cb_diagnosis))
 
     println("Training iceflow UDE...")
 
     iceflow_trained = solve(optprob,
-                            # simulation.parameters.hyper.optimizer,
-                            LBFGS(),
+                            simulation.parameters.hyper.optimizer,
                             maxiters=simulation.parameters.hyper.epochs,
                             allow_f_increases=true,
                             callback=cb,
@@ -98,7 +128,7 @@ ADAM Training
 """
 function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <: Optimisers.AbstractRule}
 
-    @info "Training with ADAM"
+    @info "Training with ADAM optimizer"
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
 
@@ -110,12 +140,12 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     if simulation.parameters.simulation.multiprocessing
         @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers do not match"
     end
+
     # Simplify API for optimization problem and include data loaded in argument for minibatch
     # glacier_data_batch is a pair of the data sampled (e.g, glacier_data_batch = (id, glacier))
-    # _glacier_data_batch has a simulation! 
-
-
+    # _glacier_data_batch has a simulation!
     loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1])
+
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         # Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
@@ -127,7 +157,6 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
         optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
-    # optprob = OptimizationProblem(optf, θ, nothing)
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Plot callback

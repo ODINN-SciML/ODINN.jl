@@ -61,7 +61,7 @@ function callback_diagnosis(θ, l, simulation)
         else
             improvement = (l - simulation.stats.losses[end-step]) / simulation.stats.losses[end-step]
         end
-        printProgressLoss(length(simulation.stats.losses), simulation.parameters.hyper.epochs, l, improvement)
+        printProgressLoss(length(simulation.stats.losses), simulation.stats.niter, l, improvement)
     end
 
     return false
@@ -83,7 +83,7 @@ function printProgressLoss(iter, total_iters, loss, improvement)
     if !isnothing(improvement)
         print("     ")
         print("Improvement: ")
-        if improvement < 0
+        if improvement <= 0
             printstyled(@sprintf("%.2f %%", 100*improvement); color=:green)
         else
             printstyled(@sprintf("%.2f %%", 100*improvement); color=:red)

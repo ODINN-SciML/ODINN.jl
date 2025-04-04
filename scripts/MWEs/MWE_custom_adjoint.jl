@@ -26,21 +26,9 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = ["RGI60-11.03638"]
 # rgi_ids = ["RGI60-11.03638", "RGI60-07.01323"]
-rgi_ids = ["RGI60-11.03638", "RGI60-08.00213", "RGI60-01.02170", "RGI60-07.00274", "RGI60-07.01323"]
-# rgi_ids = ["RGI60-11.03638",
-#             # "RGI60-11.01450",
-#             "RGI60-08.00213",
-#             # "RGI60-04.04351",
-#             "RGI60-01.02170",
-#             "RGI60-02.05098",
-#             # "RGI60-01.01104",
-#             # "RGI60-01.09162",
-#             # "RGI60-01.00570", # This one does not have millan_v data
-#             # "RGI60-04.07051",
-#             "RGI60-07.00274",
-#             "RGI60-07.01323"]#,
-#             # "RGI60-01.17316"] # This one does not have millan_v data
-
+# rgi_ids = ["RGI60-11.03638", "RGI60-08.00213", "RGI60-01.02170", "RGI60-07.00274", "RGI60-07.01323"]
+rgi_ids = ["RGI60-11.03638", "RGI60-08.00213", "RGI60-01.02170", "RGI60-07.00274", "RGI60-07.01323", 
+           "RGI60-02.05098", "RGI60-04.07051", "RGI60-01.01104"]
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
@@ -56,8 +44,8 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=500,
-                                            optimizer=ODINN.ADAM(0.01)),
+                                            epochs=[50,50],
+                                            optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
                     physical = PhysicalParameters(minA = 8e-21,
                                                   maxA = 8e-17),
                     UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
@@ -66,7 +54,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                         optimization_method="AD+AD",
                                         target = "A"),
                     solver = Huginn.SolverParameters(step=δt,
-                                                     save_everystep=true, 
+                                                     save_everystep=true,
                                                      progress=true)
                     )
 
@@ -91,17 +79,8 @@ model.iceflow = SIA2Dmodel(params)
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)
 
-# We run the simulation with ADAM
+# We run the simulation with ADAM and then LBFGS
 run!(functional_inversion)
-# # We do a second run with BFGS
-# params.hyper.optimizer = ODINN.LBFGS() #ODINN.Optim.BFGS(; initial_stepnorm=0.01, linesearch=ODINN.LineSearches.BackTracking())
-# params.hyper.epochs = 100
-# # Pre-trained parameter
-# θ_trained = functional_inversion.stats.θ
-# model.machine_learning.θ = θ_trained
-# # Reconstruct functional inversion based on pretrained parameter
-# functional_inversion = FunctionalInversion(model, glaciers, params)
-# run!(functional_inversion)
 
 ### Figures
 
