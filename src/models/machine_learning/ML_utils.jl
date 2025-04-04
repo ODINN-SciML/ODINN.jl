@@ -182,16 +182,50 @@ Arguments:
 - `tstops`:: Vector of time points where the solver should stop.
 """
 function generate_ground_truth(
-    glacier::G,
-    fakeA::Function,
+    glaciers::Vector{G},
+    law::Symbol,
     params,
     model,
     tstops::Vector{F}
 ) where {G <: Sleipnir.AbstractGlacier, F <: AbstractFloat}
-    T = mean(glacier.climate.longterm_temps)
-    A = fakeA(T)
     # Generate a fake forward model for the simulation
-    generate_glacier_prediction!(glacier, params, model; A = A, tstops=tstops)
+    if law == :PatersonCuffey
+        A_poly = ODINN.A_law_PatersonCuffey()
+        fakeA(T) = A_poly(T)
+    else
+        @error "Unknown law of A: $law"
+    end
+
+    # Generate a fake A for the glaciers
+    generate_fake_A!(glaciers, fakeA)
+
+    # Generate a fake forward model for the simulation
+    generate_glacier_prediction!(glaciers, params, model, tstops)
+end
+
+function generate_fake_A!(glaciers::Vector{G}, fakeA::Function) where {G <: Sleipnir.AbstractGlacier}
+    # Generate a fake A for the glaciers 
+    for glacier in glaciers
+        T = glacier.climate.longterm_temps
+        glacier.A = fakeA(mean(T))
+    end
+end
+
+function store_thickness_data!(prediction::Prediction, tstops::Vector{F}) where {F <: AbstractFloat}
+
+    # Store the thickness data in the glacier
+    for i in 1:length(prediction.glaciers)
+        ts = prediction.results[i].t
+        Hs = prediction.results[i].H
+    
+        @assert ts ≈ tstops "Timestops of simulated PDE solution and UDE solution do not match."
+
+        if isnothing(prediction.glaciers[i].data)
+            prediction.glaciers[i].data = [Sleipnir.ThicknessData(ts, Hs)]
+        else
+            append!(prediction.glaciers[i].data, Sleipnir.ThicknessData(ts, Hs))
+        end
+    end
 end
 
 """
