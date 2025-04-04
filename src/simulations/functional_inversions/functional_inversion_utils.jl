@@ -17,7 +17,7 @@ function run!(simulation::FunctionalInversion)
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
         epochs = simulation.parameters.hyper.epochs
-        @assert length(optimizers) == length(optimizers) "Provide number of epochs as a vector with the same lenght of optimizers"
+        @assert length(optimizers) == length(optimizers) "Provide number of epochs as a vector with the same length of optimizers"
         for i in 1:length(epochs)
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
@@ -72,10 +72,10 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     θ = simulation.model.machine_learning.θ
 
     # Get the available workers
-    # Workers are always one minus the number of available cores
+    # Workers are always the number of allocated cores to Julia minus one
     workers_list = workers()
     if simulation.parameters.simulation.multiprocessing
-        @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers do not match"
+        @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers does not match"
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
@@ -135,10 +135,10 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     θ = simulation.model.machine_learning.θ
 
     # Get the available workers
-    # Workers are always one minus the number of available cores
+    # Workers are always the number of allocated cores to Julia minus one
     workers_list = workers()
     if simulation.parameters.simulation.multiprocessing
-        @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers do not match"
+        @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers does not match"
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
