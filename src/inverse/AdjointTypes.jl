@@ -1,7 +1,6 @@
 export AbstractAdjointMethod
 export ContinuousAdjoint, DiscreteAdjoint
 export DummyAdjoint
-export EnzymeAdjoint, ZygoteAdjoint
 
 """
     AbstractAdjointMethod
@@ -26,27 +25,49 @@ behavior in ODINN.
 end
 
 """
+    ContinuousAdjoint{
+        F <: AbstractFloat,
+        I <: Integer,
+        VJP <: AbstractVJPMethod
+        } <: AbstractAdjointMethod
+
 Continuous adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
-`ContinuousAdjoint{F <: AbstractFloat}`
-
 # Fields
+- `VJP_method::VJP`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
+    calculation.
+- `solver::Any`: The solver to be used for adjoint.
 - `reltol::F`: Relative tolerance to be used in the ODE solver of the adjoint.
 - `abstol::F`: Absolute tolerance to be used in the ODE solver of the adjoint.
+- `n_quadrature::I`: Number of nodes used in the Gauss quadrature for the numerical
+    integration of the loss function.
 """
-@kwdef struct ContinuousAdjoint{F <: AbstractFloat} <: AbstractAdjointMethod
-    reltol::F = 1e-6
-    abstol::F = 1e-6
+@kwdef struct ContinuousAdjoint{
+    F <: AbstractFloat,
+    I <: Integer,
+    VJP <: AbstractVJPMethod
+} <: AbstractAdjointMethod
+    VJP_method::VJP = DiscreteVJP()
+    solver::Any = RDPK3Sp35()
+    reltol::F = 1e-8
+    abstol::F = 1e-8
+    dtmax::F = 1/12
+    n_quadrature::I = 200
 end
 
 """
+    DiscreteAdjoint{VJP <: AbstractVJPMethod} <: AbstractAdjointMethod
+
 Discrete adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
-`DiscreteAdjoint`
+# Fields
+- `VJP_method`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
+    calculation.
 """
-@kwdef struct DiscreteAdjoint <: AbstractAdjointMethod
+@kwdef struct DiscreteAdjoint{VJP <: AbstractVJPMethod} <: AbstractAdjointMethod
+    VJP_method::VJP = DiscreteVJP()
 end
 
 """
@@ -62,20 +83,4 @@ gradient calculation.
 """
 @kwdef struct DummyAdjoint <: AbstractAdjointMethod
     grad::Function
-end
-
-"""
-Enzyme AD of SIA2D with manual implementation of the backward in the ODE scheme.
-
-`EnzymeAdjoint`
-"""
-@kwdef struct EnzymeAdjoint <: AbstractAdjointMethod
-end
-
-"""
-Zygote AD of SIA2D with manual implementation of the backward in the ODE scheme.
-
-`ZygoteAdjoint`
-"""
-@kwdef struct ZygoteAdjoint <: AbstractAdjointMethod
 end

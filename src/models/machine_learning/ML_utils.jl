@@ -1,30 +1,33 @@
 """
-    get_NN(θ_trained, ft)
+    get_NN(θ_trained, ft; lightNN=false)
 
 Generates a neural network.
 
 # Arguments
-- `ft`: Float type.
 - `θ_trained`: Pre-trained neural network parameters (optional).
-- `ft`: Float type used. 
+- `ft`: Float type used.
+- `lightNN`: Boolean that determines if a light architecture is returned or not.
 
 # Returns
 - `UA`: `Lux.Chain` neural network architecture.
 - `θ`: Neural network parameters.
 - `st`: Lux state.
 """
-function get_NN(θ_trained, ft)
-    UA = Lux.Chain( # Light network for debugging
-        Dense(1, 3, x -> softplus.(x)),
-        Dense(3, 1, sigmoid_A)
-    )
-    # UA = Lux.Chain(
-    #     Dense(1, 3, x -> softplus.(x)),
-    #     Dense(3, 10, x -> softplus.(x)),
-    #     Dense(10, 3, x -> softplus.(x)),
-    #     # Dense(3, 1, sigmoid)
-    #     Dense(3, 1, sigmoid_A)
-    # )
+function get_NN(θ_trained, ft; lightNN=false)
+    if lightNN
+        @warn "Using light mode of neural network"
+        UA = Lux.Chain( # Light network for debugging
+            Dense(1, 3, x -> softplus.(x)),
+            Dense(3, 1, sigmoid)
+        )
+    else
+        UA = Lux.Chain(
+            Dense(1, 3, x -> softplus.(x)),
+            Dense(3, 10, x -> softplus.(x)),
+            Dense(10, 3, x -> softplus.(x)),
+            Dense(3, 1, sigmoid)
+        )
+    end
     θ, st = Lux.setup(rng_seed(), UA)
     if !isnothing(θ_trained)
         θ = θ_trained
@@ -42,65 +45,38 @@ function get_NN(θ_trained, ft)
 end
 
 """
-    predict_A̅(U, temp)
+    predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
 
-Predicts the value of A with a neural network based on the long-term air temperature.
-"""
-function predict_A̅(U, temp)
-    return only(U(temp)) * 1e-18
-end
-
-# function predict_A̅(U, temp)
-#     # Scaled variables
-#     minT = -30.0f0
-#     maxT =   5.0f0 
-#     minA = 6.0f-20
-#     maxA = 8.0f-17
-#     minLogA = log10(minA)
-#     maxLogA = log10(maxA)
-#     temp_scaled = 10 .* (temp .- (minT+maxT)) ./ (maxT-minT)
-#     # Output of NN. This value will be O(1)
-#     nn_output_log_raw = U(temp_scaled)
-#     # Scale for sigmoid
-#     nn_output_log_scaled = minLogA .+ (maxLogA-minLogA) ./ (1.0 .+ exp.(-nn_output_log_raw))
-#     # nn_output_log_scaled = (minLogA + maxLogA)/2 .+ (maxLogA - minLogA) .* nn_output_log_raw
-#     nn_output_scaled = 10.0f0.^nn_output_log_scaled
-#     @assert minLogA .<= only(nn_output_log_scaled) .<= maxLogA
-#     return nn_output_scaled
-# end
-
-"""
-    sigmoid_A(x)
-
-Sigmoid activation function for the neural network output.
+Predicts the value of A with a neural network based on the long-term air temperature
+and on the bounds value to normalize the output of the neural network.
 
 # Arguments
-- `x`: Input value.
-
-# Returns
-- Sigmoid-transformed output value.
+- `U`: Neural network.
+- `temp`: Temperature to be fed as an input of the neural network.
+- `lims::Tuple{F, F}`: Bounds to use for the affine transformation of the neural
+    network output.
 """
-function sigmoid_A(x)
-    minA_out = 8.0e-3 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0
-    return minA_out + (maxA_out - minA_out) / (1.0 + exp(-x))
+function predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
+    return only(normalize_A(U(temp), lims))
 end
 
 """
-    sigmoid_A_inv(x)
+    normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
 
-Inverse sigmoid activation function for the neural network output.
+Normalize a variable by using an affine transformation defined by some lower and
+upper bounds (m, M). The returned value is m+(M-m)*x.
 
 # Arguments
 - `x`: Input value.
+- `lims::Tuple{F, F}`: Lower and upper bounds to use in the affine transformation.
 
 # Returns
-- Inverse sigmoid-transformed output value.
+- The input variable scaled by the affine transformation.
 """
-function sigmoid_A_inv(x)
-    minA_out = 8.0e-4 # /!\     # these depend on predict_A̅, so careful when changing them!
-    maxA_out = 8.0e2
-    return minA_out + (maxA_out - minA_out) / ( 1.0 + exp(-x) )
+function normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
+    minA_out = lims[1]
+    maxA_out = lims[2]
+    return minA_out .+ (maxA_out - minA_out) .* x
 end
 
 function save_plot(plot, path, filename)
@@ -315,6 +291,27 @@ function store_thickness_data!(prediction::Prediction, tstops::Vector{F}) where 
     end
 end
 
+function build_simulation_batch(simulation::FunctionalInversion, i::I, nbatches::I=1) where {I <: Integer}
+    iceflow = simulation.model.iceflow[i]
+    massbalance = simulation.model.mass_balance[i]
+    ml = simulation.model.machine_learning
+    model = Sleipnir.Model{typeof(iceflow), typeof(massbalance), typeof(ml)}([iceflow], [massbalance], ml)
+    ####
+    # iceflow = simulation.model.iceflow[(i-1)*nbatches+1:i*nbatches]
+    # massbalance = simulation.model.mass_balance[(i-1)*nbatches+1:i*nbatches]
+    # ml = simulation.model.machine_learning
+    # Sleipnir.Model{typeof(iceflow[1]), typeof(massbalance[1]), typeof(ml)}(iceflow, massbalance, ml)
+    ####
+    if length(simulation.results) < 1
+        # TODO: Pass empty results object: machine learning should not be here!
+        return FunctionalInversion{typeof(simulation.glaciers[i]), typeof(model), typeof(simulation.parameters)}(model, [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats)
+        # return FunctionalInversion{typeof(simulation.glaciers[i*nbatches]), typeof(model), typeof(simulation.parameters)}(model, simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, simulation.results, simulation.stats)
+    else
+        return FunctionalInversion{typeof(simulation.glaciers[i]), typeof(model), typeof(simulation.parameters)}(model, [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats)
+        # return FunctionalInversion{typeof(simulation.glaciers[i*nbatches]), typeof(model), typeof(simulation.parameters)}(model, simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, [simulation.results[(i-1)*nbatches+1:i*nbatches]], simulation.stats)
+    end
+end
+
 """
     generate_simulation_batches(simulation::FunctionalInversion)
 
@@ -340,14 +337,8 @@ function generate_simulation_batches(simulation::FunctionalInversion)
     @assert ninstances % nbatches == 0
     folds = Int(ninstances / nbatches)
     # Forward runs still don't have multiple results
-    if length(simulation.results) < 1
-        # TODO: Pass empty results object: machine learning should not be here!
-        return [FunctionalInversion(Sleipnir.Model([simulation.model.iceflow[i]], [simulation.model.mass_balance[i]], simulation.model.machine_learning), [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats) for i in 1:ninstances]
-        # return [FunctionalInversion(Sleipnir.Model(simulation.model.iceflow[(i-1)*nbatches+1:i*nbatches], simulation.model.mass_balance[(i-1)*nbatches+1:i*nbatches], simulation.model.machine_learning), simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, simulation.results, simulation.stats) for i in 1:folds]
-    else
-        return [FunctionalInversion(Sleipnir.Model([simulation.model.iceflow[i]], [simulation.model.mass_balance[i]], simulation.model.machine_learning), [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats) for i in 1:ninstances]
-        # return [FunctionalInversion(Sleipnir.Model(simulation.model.iceflow[(i-1)*nbatches+1:i*nbatches], simulation.model.mass_balance[(i-1)*nbatches+1:i*nbatches], simulation.model.machine_learning), simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, [simulation.results[(i-1)*nbatches+1:i*nbatches]], simulation.stats) for i in 1:folds]
-    end
+    return [build_simulation_batch(simulation, i, nbatches) for i in 1:ninstances]
+    # return [build_simulation_batch(simulation, i, nbatches) for i in 1:folds]
 end
 
 """
@@ -411,7 +402,7 @@ If an epoch is completed, reset the minibatches, update the history loss, and in
 - `l`: The current loss value or other relevant metric.
 
 # Returns
-- None. This function updates the state in place.
+- None. This function updates the state in-place.
 """
 function update_training_state!(simulation::S, l) where {S <: Simulation}
     # Update minibatch count and loss for the current epoch

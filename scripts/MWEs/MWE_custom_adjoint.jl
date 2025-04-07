@@ -29,7 +29,6 @@ rgi_ids = collect(keys(rgi_paths))
 #             "RGI60-07.01323",#],
 #             "RGI60-01.17316"] # This one does not have millan_v data
 
-
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
 
@@ -44,15 +43,17 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=100,
-                                            optimizer=ODINN.ADAM(0.003)),
-                                            # optimizer=ODINN.Descent(0.01)),
-                    UDE = UDEparameters(optim_autoAD=ODINN.NoAD(),
-                                        grad=DiscreteAdjoint(),
+                                            epochs=[50,50],
+                                            optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
+                    physical = PhysicalParameters(minA = 8e-21,
+                                                  maxA = 8e-17),
+                    UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
+                                        optim_autoAD=ODINN.NoAD(),
+                                        grad=ContinuousAdjoint(),
                                         optimization_method="AD+AD",
                                         target = "A"),
                     solver = Huginn.SolverParameters(step=δt,
-                                                     save_everystep=true, 
+                                                     save_everystep=true,
                                                      progress=true)
                     )
 
@@ -66,8 +67,8 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-# A_poly = ODINN.A_law_PatersonCuffey()
-# fakeA(T) = A_poly(T)
+A_poly = ODINN.A_law_PatersonCuffey()
+fakeA(T) = A_poly(T)
 
 # Overwrite constant A fake function for testing
 # fakeA(T) = 2.21e-18
@@ -80,17 +81,8 @@ model.iceflow = SIA2Dmodel(params)
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)
 
-# We run the simulation with ADAM
+# We run the simulation with ADAM and then LBFGS
 run!(functional_inversion)
-# # We do a second run with BFGS
-# params.hyper.optimizer = ODINN.LBFGS() #ODINN.Optim.BFGS(; initial_stepnorm=0.01, linesearch=ODINN.LineSearches.BackTracking())
-# params.hyper.epochs = 100
-# # Pre-trained parameter
-# θ_trained = functional_inversion.stats.θ
-# model.machine_learning.θ = θ_trained
-# # Reconstruct functional inversion based on pretrained parameter
-# functional_inversion = FunctionalInversion(model, glaciers, params)
-# run!(functional_inversion)
 
 ### Figures
 

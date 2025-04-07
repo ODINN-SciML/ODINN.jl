@@ -25,8 +25,6 @@ using Reexport
 using Statistics, LinearAlgebra, Random, Polynomials
 using EnzymeCore
 using Enzyme
-# Enzyme.API.runtimeActivity!(true) # This reduces performance but fixes AD issues
-Enzyme.API.strictAliasing!(false)
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
@@ -47,6 +45,8 @@ using ProgressMeter
 using Downloads
 using ImageFiltering
 using Printf
+using Interpolations
+using FastGaussQuadrature
 
 using Zygote
 
@@ -67,7 +67,10 @@ const global root_plots::String = joinpath(root_dir, "plots")
 # ##############################################
 
 include(joinpath(root_dir, "src/setup/config.jl"))
+# Losses
+include(joinpath(root_dir, "src/losses/Losses.jl"))
 # All parameters needed for the models
+include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
 include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
 include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
@@ -77,9 +80,9 @@ include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInve
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 # ML models
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
-# Inversion 
+# Inversion
 include(joinpath(root_dir, "src/inverse/SIA2D_adjoint.jl"))
+include(joinpath(root_dir, "src/inverse/AD_utils.jl"))
 include(joinpath(root_dir, "src/inverse/gradient.jl"))
 
 end # module
-

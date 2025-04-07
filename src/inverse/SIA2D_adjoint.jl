@@ -50,14 +50,23 @@ function VJP_λ_∂SIA∂H_continuous(
     # Update glacier surface altimetry
     S = B .+ H
 
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
+    ### Computation of effective diffusivity
     dSdx = Huginn.diff_x(S) ./ Δx
     dSdy = Huginn.diff_y(S) ./ Δy
     ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^(1/2)
     # This is used to compute the diffusivity:
     Γ = 2.0 * A[] * (ρ * g)^n[] / (n[]+2) # 1 / m^3 s
     D = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 1)
+
+    ### Computation of partial derivatives of diffusivity
+    ∂D∂H_dual = (n[] + 2) .* Γ .* Huginn.avg(H).^(n[] + 1) .* ∇S.^(n[] - 1)
+    ∂D∂H = Huginn.avg(∂D∂H_dual)
+
+    # Derivatives evaluated in dual grid
+    ∂D∂∇H_x = (n[] - 1) .* Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 3) .* Huginn.avg_y(dSdx)
+    ∂D∂∇H_y = (n[] - 1) .* Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 3) .* Huginn.avg_x(dSdy)
+
+    ### Computation of term ∇⋅(D⋅∇λ)
 
     # Compute flux components
     @views dλdx_edges = Huginn.diff_x(λ[:,2:end - 1]) ./ Δx
@@ -69,25 +78,29 @@ function VJP_λ_∂SIA∂H_continuous(
     Fxx = Huginn.diff_x(Fx) / Δx
     Fyy = Huginn.diff_y(Fy) / Δy
 
-    # Flux divergence
+    ### Flux divergence
     ∇D∇λ = .-(Fxx .+ Fyy)
 
-    ### Contribution of ∂D/∂H
-    ∂D∂H_dual = (n[] + 2) .* Γ .* Huginn.avg(H).^(n[] + 1) .* ∇S.^(n[] - 1)
-    ∂D∂H = Huginn.avg(∂D∂H_dual)
-    # Contibution of ∇⋅(|∇S|^(n-3) (∂xS + ∂yS))
-    ∂D∂H .+= (n[] - 1) .* Γ .* Huginn.inn(H).^(n[] + 2) .* Huginn.avg(∇S).^(n[] - 3) .* (Huginn.diff_x(dSdx)[:,2:end-1] ./ Δx .+ Huginn.diff_y(dSdy)[2:end-1,:] ./ Δy)
-
+    ### Computation of term ∂D∂H x ⟨∇S, ∇λ⟩
     ∇λ∇S_x_edges = dSdx .* Huginn.diff_x(λ) ./ Δx
     ∇λ∇S_y_edges = dSdy .* Huginn.diff_y(λ) ./ Δy
     ∇λ∇S_x = Huginn.avg_y(∇λ∇S_x_edges)
     ∇λ∇S_y = Huginn.avg_x(∇λ∇S_y_edges)
     ∇λ∇S = ∇λ∇S_x .+ ∇λ∇S_y
 
-    ∂D∂H_∇λ∇S = ∂D∂H .* Huginn.avg(∇λ∇S)
+    ∂D∂H_∇S_∇λ = ∂D∂H .* Huginn.avg(∇λ∇S)
 
+    ### Computation of term ∇⋅(∂D∂∇H x ⟨∇S, ∇λ⟩)
+    ∂D∂∇H_∇S_∇λ_x = ∇λ∇S .* ∂D∂∇H_x
+    ∂D∂∇H_∇S_∇λ_y = ∇λ∇S .* ∂D∂∇H_y
+
+    ∇_∂D∂∇H_∇S_∇λ_x = Huginn.diff_x(∂D∂∇H_∇S_∇λ_x) ./ Δx
+    ∇_∂D∂∇H_∇S_∇λ_y = Huginn.diff_y(∂D∂∇H_∇S_∇λ_y) ./ Δy
+    ∇_∂D∂∇H_∇S_∇λ = Huginn.avg_y(∇_∂D∂∇H_∇S_∇λ_x) .+ Huginn.avg_x(∇_∂D∂∇H_∇S_∇λ_y)
+
+    ### Final computation of VJP
     dλ = zero(λ)
-    Huginn.inn(dλ) .= ∇D∇λ .- ∂D∂H_∇λ∇S
+    Huginn.inn(dλ) .= .+ ∇D∇λ .- ∂D∂H_∇S_∇λ .+ ∇_∂D∂∇H_∇S_∇λ
     return dλ
 end
 
@@ -150,7 +163,11 @@ function VJP_λ_∂SIA∂θ_continuous(
     dSdy = Huginn.diff_y(S) ./ Δy
     ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^(1/2)
     Γ = 2.0 * (ρ * g)^n[] / (n[]+2)
+
+    ### Computation of partial derivatives of diffusivity
     ∂D∂A = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 1)
+    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
+    # ∂D∂θ = ∂D∂A .* ∇θ
 
     ∇λ∇S_x_edges = dSdx .* Huginn.diff_x(λ) ./ Δx
     ∇λ∇S_y_edges = dSdy .* Huginn.diff_y(λ) ./ Δy
@@ -158,30 +175,7 @@ function VJP_λ_∂SIA∂θ_continuous(
     ∇λ∇S_y = Huginn.avg_x(∇λ∇S_y_edges)
     ∇λ∇S = ∇λ∇S_x .+ ∇λ∇S_y
 
-    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
-    # @infiltrate
-    # if rand() < 0.03
-    #     δA = 1e-20
-    #     ϵ = δA / norm(∇θ)^2
-    #     A_2 = grad_apply_UDE_parametrization(θ .+ ϵ .* ∇θ, simulation, 1)
-    #     A_1 = grad_apply_UDE_parametrization(θ, simulation, 1)
-    #     @show δA
-    #     @show A_2 - A_1
-    #     @assert isapprox(δA, A_2 - A_1, rtol=1e-2)
-    # end
-
-    # Integrate final result
-    # if rand() < 0.05
-    #     if ((Δx * Δy) * sum(∂D∂A .* ∇λ∇S)) > 0.0
-    #         @info "A ------"
-    #     else
-    #         @info "A ++++++"
-    #     end
-    # end
-    # @infiltrate
-    return (Δx * Δy) * sum(∂D∂A .* ∇λ∇S) .* ∇θ
-    # This fails!!! A keeps increasing!
-    # return 1e19 .* ∇θ
+    return - sum(∂D∂A .* ∇λ∇S) .* ∇θ
 end
 
 # Repeated function
@@ -193,7 +187,9 @@ function grad_apply_UDE_parametrization(θ, simulation::SIM, batch_id::I) where 
 
     # We generate the ML parametrization based on the target
     if simulation.parameters.UDE.target == "A"
-        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])[1]
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
         # println("Value of A during internal gradient evaluation:")
         # @show A
         return A

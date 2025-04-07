@@ -1,5 +1,4 @@
 export NeuralNetwork
-export ParallelBatch
 
 include("ML_utils.jl")
 
@@ -22,25 +21,35 @@ function Model(;
     machine_learning::Union{MLM, Nothing},
     ) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
 
-    model = Sleipnir.Model(iceflow, mass_balance, machine_learning)
+    iceflowType = isa(iceflow, Vector) ? typeof(iceflow[1]) : typeof(iceflow)
+    massbalanceType = isa(mass_balance, Vector) ? typeof(mass_balance[1]) : typeof(mass_balance)
+    model = Sleipnir.Model{iceflowType, massbalanceType, typeof(machine_learning)}(iceflow, mass_balance, machine_learning)
 
     return model
 end
 
 """
-    NN{F <: AbstractFloat}(architecture::Flux.Chain, NN_f::Optimisers.Restructure, θ::Vector{F})
+    NeuralNetwork{
+        ChainType <: Lux.Chain,
+        ComponentVectorType <: ComponentVector,
+        NamedTupleType <: NamedTuple
+    } <: MLmodel
 
 Feed-forward neural network.
 
 # Fields
-- `architecture`: `Flux.Chain` neural network architecture
-- `NN_f`: Neural network restructuring
-- `θ`: Neural network parameters
+- `architecture::ChainType`: `Flux.Chain` neural network architecture
+- `θ::ComponentVectorType`: Neural network parameters
+- `st::NamedTupleType`: Neural network status
 """
-mutable struct NeuralNetwork{F <: AbstractFloat} <: MLmodel
-    architecture::Lux.Chain
-    θ::ComponentArray{F}
-    st::NamedTuple
+mutable struct NeuralNetwork{
+    ChainType <: Lux.Chain,
+    ComponentVectorType <: ComponentVector,
+    NamedTupleType <: NamedTuple
+} <: MLmodel
+    architecture::ChainType
+    θ::ComponentVectorType
+    st::NamedTupleType
 end
 
 """
@@ -54,20 +63,20 @@ Creates a new feed-forward neural network.
 - `architecture`: `Flux.Chain` neural network architecture (optional)
 - `θ`: Neural network parameters (optional)
 """
-function NeuralNetwork(params::Sleipnir.Parameters;
-            architecture::Union{Lux.Chain, Nothing} = nothing,
-            θ::Union{ComponentArray{F}, Nothing} = nothing) where {F <: AbstractFloat}
+function NeuralNetwork(params::P;
+            architecture::Union{ChainType, Nothing} = nothing,
+            θ::Union{ComponentArrayType, Nothing} = nothing) where {P <: Sleipnir.Parameters, ChainType <: Lux.Chain, ComponentArrayType <: ComponentArray}
 
     # Float type
     ft = Sleipnir.Float
+    lightNN = params.simulation.test_mode
 
     if isnothing(architecture)
-        # architecture, θ, NN_f = get_NN(θ)
-        architecture, θ, st = get_NN(θ, ft)
+        architecture, θ, st = get_NN(θ, ft; lightNN=lightNN)
     end
 
     # Build the simulation parameters based on input values
-    neural_net = NeuralNetwork{ft}(architecture, θ, st)
+    neural_net = NeuralNetwork{typeof(architecture), typeof(θ), typeof(st)}(architecture, θ, st)
 
     return neural_net
 end
