@@ -119,8 +119,8 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
         elseif nprocs() != procs && procs == 1
             @eval begin
             rmprocs(workers(), waitfor=0)
-            println("Number of cores: ", nprocs())
-            println("Number of workers: ", nworkers())
+            @info "Number of cores: $(nprocs())"
+            @info "Number of workers: $(nworkers())"
             end # @eval
         end
     end

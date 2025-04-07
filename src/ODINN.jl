@@ -46,6 +46,8 @@ using Downloads
 using GeoStats
 using ImageFiltering
 using Printf
+using Interpolations
+using FastGaussQuadrature
 
 using Zygote
 
@@ -69,6 +71,7 @@ include(joinpath(root_dir, "src/setup/config.jl"))
 # Losses
 include(joinpath(root_dir, "src/losses/Losses.jl"))
 # All parameters needed for the models
+include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
 include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
 include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
@@ -80,6 +83,7 @@ include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Inversion
 include(joinpath(root_dir, "src/inverse/SIA2D_adjoint.jl"))
+include(joinpath(root_dir, "src/inverse/AD_utils.jl"))
 include(joinpath(root_dir, "src/inverse/gradient.jl"))
 
 end # module

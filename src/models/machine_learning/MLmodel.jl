@@ -69,10 +69,10 @@ function NeuralNetwork(params::P;
 
     # Float type
     ft = Sleipnir.Float
+    lightNN = params.simulation.test_mode
 
     if isnothing(architecture)
-        # architecture, θ, NN_f = get_NN(θ)
-        architecture, θ, st = get_NN(θ, ft)
+        architecture, θ, st = get_NN(θ, ft; lightNN=lightNN)
     end
 
     # Build the simulation parameters based on input values
