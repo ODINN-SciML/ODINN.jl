@@ -45,7 +45,6 @@ import Pkg
 using Distributed
 using ProgressMeter
 using Downloads
-using GeoStats
 using ImageFiltering
 using Printf
 
@@ -59,9 +58,9 @@ cd(@__DIR__)
 const global root_dir::String = dirname(Base.current_project())
 const global root_plots::String = joinpath(root_dir, "plots")
 
-const SYSIMAGE_DIR = joinpath(homedir(), ".ODINN")
-const SYSIMAGE_PATH = joinpath(SYSIMAGE_DIR, "odinn_sysimage.so")
-ENV["JULIA_DEPOT_PATH"] = joinpath(homedir(), ".julia")  # Ensure shared cache
+# const SYSIMAGE_DIR = joinpath(homedir(), ".ODINN")
+# const SYSIMAGE_PATH = joinpath(SYSIMAGE_DIR, "odinn_sysimage.so")
+# ENV["JULIA_DEPOT_PATH"] = joinpath(homedir(), ".julia")  # Ensure shared cache
 
 # ##############################################
 # ############  ODINN LIBRARIES  ###############
