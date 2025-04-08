@@ -45,7 +45,7 @@ using ProgressMeter
 using Downloads
 using ImageFiltering
 using Printf
-using Interpolations
+using Interpolations, GeoStats
 using FastGaussQuadrature
 
 using Zygote

@@ -173,7 +173,7 @@ generate_ground_truth(glaciers, law, params, model, tstops)
 """
 function generate_ground_truth(
     glaciers::Vector{G},
-    law::Union{Symbol, Polynomial},
+    law::Union{Symbol, Polynomials.Polynomial},
     params::Sleipnir.Parameters,
     model::Sleipnir.Model,
     tstops::Vector{F}
@@ -228,7 +228,7 @@ Convert a polynomial into a rheology law function for the flow rate factor `A`.
 # Returns
 - A function `fakeA(T)` that computes the flow rate factor `A` for a given temperature `T` using the provided polynomial.
 """
-function get_rheology_law(law::Polynomial)
+function get_rheology_law(law::Polynomials.Polynomial)
     # Convert polynomial into function
     fakeA(T) = law(T)
     return fakeA(T)
