@@ -173,7 +173,7 @@ generate_ground_truth(glaciers, law, params, model, tstops)
 """
 function generate_ground_truth(
     glaciers::Vector{G},
-    law::Union{Symbol, Polynomials.Polynomial},
+    law::Union{Symbol, Function, Polynomials.Polynomial},
     params::Sleipnir.Parameters,
     model::Sleipnir.Model,
     tstops::Vector{F}
@@ -232,6 +232,26 @@ function get_rheology_law(law::Polynomials.Polynomial)
     # Convert polynomial into function
     fakeA(T) = law(T)
     return fakeA(T)
+end
+
+"""
+    get_rheology_law(law::Function)
+
+Return the provided rheology law function without modification. 
+This just uses multiple dispatch to handle cases where the rheology law is already a function.
+
+# Arguments
+- `law::Function`: A function representing the rheology law for the flow rate factor `A`.
+
+# Returns
+- The input function `law`, unchanged.
+
+# Description
+This function is a simple bypass that uses multiple dispatch to handle cases where the rheology law is already provided as a function. It directly returns the input function without any modifications.
+"""
+function get_rheology_law(law::Function)
+    # Just bypass using multiple dispatch
+    return law
 end
 
 """

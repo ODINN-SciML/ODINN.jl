@@ -53,7 +53,7 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
     # Overwrite constant A fake function for testing
     fakeA(T) = 2.21e-18
 
-    map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, params, model, tstops), glaciers)
+    ODINN.generate_ground_truth(glaciers, fakeA, params, model, tstops)
     # TODO: This function does shit on the model variable, for now we do a clean restart
     model.iceflow = SIA2Dmodel(params)
 
@@ -261,8 +261,8 @@ function test_grad_discreteAdjoint_Halfar()
     glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
     fakeA(T) = A
-    map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, parameters, model, tstops), glaciers)
-    # TODO: This function messes up with the model variable, for now we do a clean restart
+    ODINN.generate_ground_truth(glaciers, fakeA, params, model, tstops)
+
     model.iceflow = SIA2Dmodel(parameters)
 
     # We create an ODINN prediction

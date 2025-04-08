@@ -229,8 +229,8 @@ function generate_glacier_prediction!(glaciers::Vector{G}, params::Sleipnir.Para
 
     prediction = Huginn.Prediction(model, glaciers, params)
 
-    # Update model iceflow parameter 
-    prediction.model.iceflow.A = Ref(A)
+    # # Update model iceflow parameter 
+    # prediction.model.iceflow.A = Ref(A)
 
     Huginn.run!(prediction)
 
