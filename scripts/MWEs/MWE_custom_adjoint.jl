@@ -1,19 +1,7 @@
 using Pkg; Pkg.activate(".")
 
-using Distributed
-
 using Revise
-using Optimization
-# using EnzymeCore
-using Enzyme
-using Test
-using Statistics
 using ODINN
-using Polynomials
-using Plots
-using SciMLSensitivity
-
-Enzyme.API.strictAliasing!(false)
 
 rgi_paths = get_rgi_paths()
 
@@ -24,11 +12,22 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 
 ## Retrieving simulation data for the following glaciers
+rgi_ids = collect(keys(rgi_paths))
 # rgi_ids = ["RGI60-11.03638"]
-# rgi_ids = ["RGI60-11.03638", "RGI60-07.01323"]
-# rgi_ids = ["RGI60-11.03638", "RGI60-08.00213", "RGI60-01.02170", "RGI60-07.00274", "RGI60-07.01323"]
-rgi_ids = ["RGI60-11.03638", "RGI60-08.00213", "RGI60-01.02170", "RGI60-07.00274", "RGI60-07.01323", 
-           "RGI60-02.05098", "RGI60-04.07051", "RGI60-01.01104"]
+# rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+# rgi_ids = ["RGI60-11.03638",
+#             "RGI60-11.01450",
+#             "RGI60-08.00213",
+#             "RGI60-04.04351",
+#             "RGI60-01.02170",
+#             "RGI60-02.05098",
+#             "RGI60-01.01104",
+#             "RGI60-01.09162",
+#             "RGI60-01.00570", # This one does not have millan_v data
+#             "RGI60-04.07051",
+#             "RGI60-07.00274",
+#             "RGI60-07.01323",#],
+#             "RGI60-01.17316"] # This one does not have millan_v data
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
@@ -38,8 +37,8 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     velocities=true,
                                                     tspan=(2010.0, 2015.0),
                                                     step=δt,
-                                                    multiprocessing=false,
-                                                    workers=1,
+                                                    multiprocessing=true,
+                                                    workers=10,
                                                     light=false, # for now we do the simulation like this (a better name would be dense)
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
@@ -65,14 +64,17 @@ model = Model(iceflow = SIA2Dmodel(params),
 # We retrieve some glaciers for the simulation
 glaciers = initialize_glaciers(rgi_ids, params)
 
-# Time stanpshots for transient inversion
+# Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
 A_poly = ODINN.A_law_PatersonCuffey()
 fakeA(T) = A_poly(T)
 
+# Overwrite constant A fake function for testing
+# fakeA(T) = 2.21e-18
 
-map(glacier -> ODINN.generate_ground_truth(glacier, fakeA, params, model, tstops), glaciers)
+ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+
 # TODO: This function does shit on the model variable, for now we do a clean restart
 model.iceflow = SIA2Dmodel(params)
 

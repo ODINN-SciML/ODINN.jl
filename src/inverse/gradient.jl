@@ -211,8 +211,7 @@ end
 """
 Generate fake forward simulation
 """
-# function generate_glacier_prediction!(glacier::AbstractGlacier, params::Parameters; A::Float64, tstops::Vector{Float64})
-function generate_glacier_prediction!(glacier::AbstractGlacier, params::Sleipnir.Parameters, model::Sleipnir.Model; A::Float64, tstops::Vector{Float64})
+function generate_glacier_prediction!(glaciers::Vector{G}, params::Sleipnir.Parameters, model::Sleipnir.Model, tstops::Vector{Float64}) where {G <: Sleipnir.AbstractGlacier}
     # Generate timespan from simulation
 
     t₀, t₁ = params.simulation.tspan
@@ -226,33 +225,24 @@ function generate_glacier_prediction!(glacier::AbstractGlacier, params::Sleipnir
     # ts = t₀ .+ Δt .* collect(0:nSteps)
 
     # Update reference value of glacier 
-    glacier.A = A
+    # glacier.A = A
 
-    prediction = Huginn.Prediction(model, [glacier], params)
+    prediction = Huginn.Prediction(model, glaciers, params)
 
-    # Update model iceflow parameter 
-    prediction.model.iceflow.A = Ref(A)
+    # # Update model iceflow parameter 
+    # prediction.model.iceflow.A = Ref(A)
 
     Huginn.run!(prediction)
 
-    @info "Reference value of A used for synthetic data:"
-    @show prediction.model.iceflow.A
-    @show glacier.A
-
-    ts = only(prediction.results).t
-    Hs = only(prediction.results).H
-
-    @assert length(ts)==length(tstops) "The number of time steps of the simulated PDE solution and UDE solution do not match."
-    @assert ts ≈ tstops "Timestops of simulated PDE solution and UDE solution do not match."
+    # println("Reference value of A used for synthetic data:")
+    # @show prediction.model.iceflow.A
+    # @show glacier.A
 
     # Lets create a very simple static glacier
     # Hs = [glacier.H₀ for _ in 1:nSteps]
 
-    if isnothing(glacier.data)
-        glacier.data = [Sleipnir.ThicknessData(t=ts, H=Hs)]
-    else
-        push!(glacier.data, Sleipnir.ThicknessData(t=ts, H=Hs))
-    end
+    # Store the thickness data in the glacier
+    store_thickness_data!(prediction, tstops)
 end
 
 """

@@ -278,13 +278,6 @@ function loss_iceflow(θ, simulation::FunctionalInversion)
 end
 
 function predict_iceflow!(θ, simulation::FunctionalInversion)
-# function predict_iceflow!(θ, glaciers::Vector{G}, results::Vector{Results}, SIA2D_models::Vector{IFM}, params::Sleipnir.Parameters) where {G <: Glacier, IFM <: IceflowModel}
-    # Train PDE/UDE in parallel
-    # results = pmap((glacier, SIA2D_model) -> batch_iceflow_UDE(θ, glacier, SIA2D_model, params), glaciers, SIA2D_models)
-    # @infiltrate
-    # pmap!(simulation, batch_iceflow_UDE)
-    # simulation.results = parallel(, )
-    # simulation.results = pmap(batch_id -> batch_iceflow_UDE(θ, simulation, batch_id), batch_ids)
     simulations = ODINN.generate_simulation_batches(simulation)
     results = pmap(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
     simulation.results = ODINN.merge_batches(results)

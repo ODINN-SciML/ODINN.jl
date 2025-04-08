@@ -29,7 +29,6 @@ using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
 using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers, LineSearches
-using IterTools: ncycle
 using ComponentArrays
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet
@@ -37,18 +36,16 @@ using MLUtils: DataLoader
 using Base: @kwdef
 using Lux
 using Tullio
-using Infiltrator, Cthulhu
+using Infiltrator
 using Plots, PlotThemes
 Plots.theme(:wong2) # sets overall theme for Plots
 import Pkg
 using Distributed
 using ProgressMeter
 using Downloads
-using TimerOutputs
-using GeoStats
 using ImageFiltering
 using Printf
-using Interpolations
+using Interpolations, GeoStats
 using FastGaussQuadrature
 
 using Zygote
@@ -61,6 +58,9 @@ cd(@__DIR__)
 const global root_dir::String = dirname(Base.current_project())
 const global root_plots::String = joinpath(root_dir, "plots")
 
+# const SYSIMAGE_DIR = joinpath(homedir(), ".ODINN")
+# const SYSIMAGE_PATH = joinpath(SYSIMAGE_DIR, "odinn_sysimage.so")
+# ENV["JULIA_DEPOT_PATH"] = joinpath(homedir(), ".julia")  # Ensure shared cache
 
 # ##############################################
 # ############  ODINN LIBRARIES  ###############
