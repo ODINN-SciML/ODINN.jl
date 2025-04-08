@@ -60,7 +60,9 @@ simulation.model.iceflow[batch_idx].glacier_idx = glacier_idx
 
 for VJPMode in (ODINN.EnzymeVJP(), ODINN.DiscreteVJP(), ODINN.ContinuousVJP())
     println("## Benchmark of $(VJPMode)")
+    println("")
     println("<details>")
+    println("")
     println("### VJP wrt H")
     trial = @benchmark ODINN.VJP_λ_∂SIA∂H($VJPMode, $λ, $H, $θ, $simulation, $t, $batch_idx)
     display(trial)
@@ -70,4 +72,5 @@ for VJPMode in (ODINN.EnzymeVJP(), ODINN.DiscreteVJP(), ODINN.ContinuousVJP())
     display(trial)
     println("")
     println("</details>")
+    println("")
 end
