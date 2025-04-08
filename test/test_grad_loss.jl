@@ -1,6 +1,8 @@
 
 function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
 
+    println("> Testing adjoint $(adjointFlavor)")
+
     rgi_ids = ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
 

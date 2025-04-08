@@ -126,7 +126,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             t_nodes, weights = GaussQuadrature(simulation.parameters.simulation.tspan..., simulation.parameters.UDE.grad.n_quadrature)
 
             ### Define the reverse ODE problem
-            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP)
+            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 function f_adjoint_rev(dλ, λ, p, τ)
                     t = -τ
                     # λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H_itp(t), simulation, t; batch_id = i)[1]
@@ -142,7 +142,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             stop_condition(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
             function effect!(integrator)
                 t = - integrator.t
-                ∂ℓ∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H_itp(t), H_ref_itp(t); normalization=prod(N)*normalization)
+                ∂ℓ∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H_itp(t), H_ref_itp(t); normalization = prod(N) * normalization)
                 integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             cb_adjoint_loss = DiscreteCallback(stop_condition, effect!)
@@ -171,7 +171,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                             abstol=simulation.parameters.UDE.grad.abstol)
 
             ### Numerical integration using quadrature to compute gradient
-            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP)
+            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(-t_nodes[j])
                     _H = H_itp(t_nodes[j])
@@ -185,17 +185,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         else
             @error "Adjoint method $(simulation.parameters.UDE.grad) is not supported yet."
         end
-
-        ### Finite diff check of gradient
-        # @infiltrate
-        # ϵ = 1e-9
-        # loss_update = loss_iceflow_transient(θ .+ ϵ .* dLdθ, simulation)
-        # δl = loss_update - loss_val
-        # println("This ratio should be ≈ 1")
-        # @show (δl / norm(dLdθ)^2) / ϵ
-
-        # λ_∂f∂H_disc = Huginn.SIA2D_discrete_adjoint(λ[1], H[1], simulation, t₀; batch_id = i)[1]
-        # λ_∂f∂H_cont = VJP_λ_∂SIA∂H_continuous(λ[1], H[1], simulation, t₀; batch_id = i)
 
         # Return final evaluations of gradient
         push!(dLdθs_vector, dLdθ)
