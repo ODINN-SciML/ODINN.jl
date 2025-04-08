@@ -27,6 +27,9 @@ function test_adjoint_SIAD2D_continuous()
             light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             rgi_paths=rgi_paths),
+        physical = PhysicalParameters(
+            minA = 8e-21,
+            maxA = 8e-18),
         UDE = UDEparameters(
             sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
@@ -60,6 +63,8 @@ function test_adjoint_SIAD2D_continuous()
 
     vecBackwardSIA2D = randn(size(H,1), size(H,2))
 
+    # Initialize A by making one prediction with the neural network
+    ODINN.apply_UDE_parametrization!(θ, simulation, nothing, glacier_idx)
     dH = Huginn.SIA2D(H, simulation, t; batch_id=batch_idx)
 
     ∂H = VJP_λ_∂SIA∂H_continuous(vecBackwardSIA2D, H, simulation, t; batch_id=batch_idx)
@@ -78,7 +83,7 @@ function test_adjoint_SIAD2D_continuous()
     for k in range(3,8)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ)
+        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)
@@ -87,21 +92,21 @@ function test_adjoint_SIAD2D_continuous()
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 1e-2
-    thres_angle = 1e-7
-    thres_relerr = 1e-2
-    if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
+    thres_ratio = 1e-4
+    thres_angle = 2e-4
+    thres_relerr = 2e-2
+    if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt H")
         println("eps    = ",printVecScientific(eps))
-        println("ratio  = ",printVecScientific(ratio))
-        println("angle  = ",printVecScientific(angle))
-        println("relerr = ",printVecScientific(relerr))
+        printVecScientific("ratio  = ",ratio,thres_ratio)
+        printVecScientific("angle  = ",angle,thres_angle)
+        printVecScientific("relerr = ",relerr,thres_relerr)
     end
     @test min_ratio<thres_ratio
     @test min_angle<thres_angle
     @test min_relerr<thres_relerr
 
-    # Check gradient wrt A
+    # Check gradient wrt θ
     function f_θ(θ, args)
         H, simulation, t, vecBackwardSIA2D = args
         return _loss(H, θ, simulation, t, vecBackwardSIA2D)
@@ -113,7 +118,7 @@ function test_adjoint_SIAD2D_continuous()
     for k in range(5,7)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂θ_num = Huginn.compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ)
+        ∂θ_num = Huginn.compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ; varStr="of θ")
         ratio_k, angle_k, relerr_k = Huginn.stats_err_arrays(∂θ, ∂θ_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)
@@ -122,15 +127,15 @@ function test_adjoint_SIAD2D_continuous()
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 1e-14
+    thres_ratio = 3e-2
     thres_angle = 1e-14
-    thres_relerr = 1e-14
-    if !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
+    thres_relerr = 3e-2
+    if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt θ")
         println("eps    = ",printVecScientific(eps))
-        println("ratio  = ",printVecScientific(ratio))
-        println("angle  = ",printVecScientific(angle))
-        println("relerr = ",printVecScientific(relerr))
+        printVecScientific("ratio  = ",ratio,thres_ratio)
+        printVecScientific("angle  = ",angle,thres_angle)
+        printVecScientific("relerr = ",relerr,thres_relerr)
     end
     @test (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr)
 end

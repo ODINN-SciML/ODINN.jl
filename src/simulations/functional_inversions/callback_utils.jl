@@ -54,12 +54,44 @@ function callback_diagnosis(θ, l, simulation)
     # update_training_state!(simulation, l)
 
     push!(simulation.stats.losses, l)
-    if length(simulation.stats.losses) % 1 == 0
-        @printf "Iteration: [%4d / %4d]\t Loss: %.20f\t Improvement: %.10f %%\n" length(simulation.stats.losses) simulation.parameters.hyper.epochs l (l/simulation.stats.losses[begin])
+    step = 1
+    if length(simulation.stats.losses) % step == 0
+        if length(simulation.stats.losses) == 1
+            improvement = nothing
+        else
+            improvement = (l - simulation.stats.losses[end-step]) / simulation.stats.losses[end-step]
+        end
+        printProgressLoss(length(simulation.stats.losses), simulation.stats.niter, l, improvement)
     end
 
     return false
 end
+
+"""
+    printProgressLoss(iter, total_iters, loss, improvement)
+
+Print function to track training.
+"""
+function printProgressLoss(iter, total_iters, loss, improvement)
+    print("Iteration: [")
+    print(@sprintf("%5i", iter))
+    print(" / ")
+    print(@sprintf("%5i", total_iters))
+    print("]     ")
+    print("Loss:")
+    print(@sprintf("%9.5e", loss))
+    if !isnothing(improvement)
+        print("     ")
+        print("Improvement: ")
+        if improvement <= 0
+            printstyled(@sprintf("%.2f %%", 100*improvement); color=:green)
+        else
+            printstyled(@sprintf("%.2f %%", 100*improvement); color=:red)
+        end
+    end
+    println("")
+end
+
 
 """
     CallbackOptimizationSet(θ, l; callbacks)

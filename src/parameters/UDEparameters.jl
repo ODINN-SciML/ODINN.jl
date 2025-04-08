@@ -19,7 +19,7 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
 
 """
     UDEparameters(;
-        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
+        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP()),
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
         empirical_loss_function::AbstractLoss = L2Sum(),
@@ -36,7 +36,7 @@ Keyword arguments
     - `scale_loss`: Determines if the loss function should be scaled or not.
 """
 function UDEparameters(;
-            sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=EnzymeVJP()),
+            sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP()),
             optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
             grad::ADJ = SciMLSensitivityAdjoint(),
             optimization_method::String = "AD+AD",
