@@ -263,7 +263,7 @@ function test_grad_discreteAdjoint_Halfar()
     glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
     fakeA(T) = A
-    ODINN.generate_ground_truth(glaciers, fakeA, params, model, tstops)
+    ODINN.generate_ground_truth(glaciers, fakeA, parameters, model, tstops)
 
     model.iceflow = SIA2Dmodel(parameters)
 
