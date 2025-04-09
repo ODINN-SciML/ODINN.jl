@@ -12,11 +12,12 @@ An object representing a functional inversion simulation (i.e. the inversion of 
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
 - `results::Vector{Results}`: A vector to store the results of the simulation.
 """
-mutable struct FunctionalInversion  <: Simulation 
-    model::Sleipnir.Model
-    glaciers::Vector{Sleipnir.AbstractGlacier}
-    parameters::Sleipnir.Parameters
+mutable struct FunctionalInversion{G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters} <: Simulation
+    model::M
+    glaciers::Vector{G}
+    parameters::P
     results::Vector{Results}
+    stats::TrainingStats
 end
 
 """
@@ -37,20 +38,25 @@ Constructor for FunctionalInversion struct with glacier model information, glaci
 - `FunctionalInversion`: A new instance of the FunctionalInversion struct.
 """
 function FunctionalInversion(
-    model::Sleipnir.Model,
+    model::M,
     glaciers::Vector{G},
-    parameters::Sleipnir.Parameters
-    ) where {G <: Sleipnir.AbstractGlacier}
+    parameters::P
+    ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 
-    # Generate multiple instances of the models for Reverse Diff compatibility
-    model.iceflow = [deepcopy(model.iceflow) for _ in 1:length(glaciers)]
-    model.mass_balance = [deepcopy(model.mass_balance) for _ in 1:length(glaciers)]
+    # Generate multiple instances of the models for differentiation compatibility
+    if !(model.iceflow isa Vector) || ((model.iceflow isa Vector) && (length(model.iceflow) != length(glaciers)))
+        model.iceflow = [deepcopy(model.iceflow) for _ in 1:length(glaciers)]
+    end
+    if !(model.mass_balance isa Vector) || ((model.mass_balance isa Vector) && (length(model.mass_balance) != length(glaciers)))
+        model.mass_balance = [deepcopy(model.mass_balance) for _ in 1:length(glaciers)]
+    end
 
     # Build the results struct based on input values
     functional_inversion = FunctionalInversion(model,
                             glaciers,
                             parameters,
-                            Vector{Results}([]))
+                            Vector{Results}([]),
+                            TrainingStats())
 
     return functional_inversion
 end
@@ -60,3 +66,4 @@ end
 ###############################################
 
 include("functional_inversion_utils.jl")
+include("callback_utils.jl")

@@ -29,6 +29,7 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     ####### Retrieve parameters #######
     model = simulation.model
     params = simulation.parameters
+    glacier_idx = Sleipnir.Int(glacier_idx)
     glacier = simulation.glaciers[glacier_idx]
     
     glacier_id = isnothing(glacier.rgi_id) ? "unnamed" : glacier.rgi_id
@@ -111,7 +112,7 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     lower_bound = [0.0085] #2.7,0.0, 0.0]   
     upper_bound = [800.0] #3.3, 1.0, 1.0] 
     
-    optfun = OptimizationFunction(fn, AutoEnzyme()) #cons=cons)
+    optfun = OptimizationFunction(fn, simulation.parameters.UDE.optim_autoAD)
     optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound,ub = upper_bound,) #lcons = [0.0], ucons = [0.0])
     sol = solve(optprob, BFGS(), x_tol=1.0e-1, f_tol = 1e1)
 
@@ -162,10 +163,10 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     inversion_metrics = InversionResults(glacier.rgi_id,optimized_A, optimized_n, optimized_C, 
                                         H_pred, H_obs, H_diff, V_pred, V_obs, V_diff, 
                                         MSE_V, #change
-                                        simulation.glaciers[glacier_idx].Δx,              
+                                        simulation.glaciers[glacier_idx].Δx,
                                         simulation.glaciers[glacier_idx].Δy,
-                                        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlon),
-                                        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlat))
+                                        simulation.glaciers[glacier_idx].cenlon,
+                                        simulation.glaciers[glacier_idx].cenlat)
 
 return inversion_metrics
 end
@@ -181,22 +182,26 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     println("Processing glacier: ", glacier_id)
 
     # === Glacier Initialization ===
-    Huginn.initialize_iceflow_model(model.iceflow, glacier_idx, glacier, params)
+    Huginn.initialize_iceflow_model(model.iceflow, Sleipnir.Int(glacier_idx), glacier, params)
     simulation.model.iceflow.A[] = 7.57382e-17 # Temperate glaciers value
     
     # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
+        # Unless they are explicitely shared, the argument names of this function must
+        # be different from those of the function in which we are defining objfun
+        # Otherwise this can result in AD issues
+
         # Apply parameter transformations for optimization
         simulation.model.iceflow.C[] = x[1]
 
         # Extract and predict H values based on V observations
-        H_obs = realsol[1][1:end-1, 1:end-1]
-        V_obs = realsol[2]
-        H_pred = Huginn.H_from_V(V_obs, simulation)
+        Hobs = realsol[1][1:end-1, 1:end-1]
+        Vobs = realsol[2]
+        Hpred = Huginn.H_from_V(Vobs, simulation)
 
         # Calculate and return the weighted mean squared error
-        mask_H = H_obs .!= 0
-        ofv_H = weighted_mse(H_obs[mask_H], H_pred[mask_H], 1.0)
+        mask_H = Hobs .!= 0
+        ofv_H = weighted_mse(Hobs[mask_H], Hpred[mask_H], 1.0)
         return ofv_H
     end
 
@@ -204,7 +209,8 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     initial_conditions = params.inversion.initial_conditions
     lower_bound = params.inversion.lower_bound
     upper_bound = params.inversion.upper_bound
-    optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), AutoEnzyme())
+    Enzyme.API.strictAliasing!(false)
+    optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), simulation.parameters.UDE.optim_autoAD)
 
 
     # === Region-based Optimization and Prediction ===
@@ -264,14 +270,14 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         glacier.rgi_id,
         simulation.model.iceflow.A[],
         simulation.model.iceflow.n[],
-        C_values,
-        H_pred, H_obs, H_diff,
-        V_pred, V_obs, V_diff,
-        MSE,
+        Sleipnir.Float.(C_values),
+        Sleipnir.Float.(H_pred), H_obs, Sleipnir.Float.(H_diff),
+        Sleipnir.Float.(V_pred), V_obs, Sleipnir.Float.(V_diff),
+        Sleipnir.Float(MSE),
         simulation.glaciers[glacier_idx].Δx,
         simulation.glaciers[glacier_idx].Δy,
-        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlon),
-        Sleipnir.safe_getproperty(simulation.glaciers[glacier_idx].gdir, :cenlat)
+        simulation.glaciers[glacier_idx].cenlon,
+        simulation.glaciers[glacier_idx].cenlat,
     )
 
     return inversion_metrics
@@ -358,7 +364,7 @@ function H_from_V(V::Matrix{<:Real}, C::Matrix{<:Real}, simulation::SIM) where {
     params::Sleipnir.Parameters = simulation.parameters
     
     iceflow_model = simulation.model.iceflow
-    glacier::Sleipnir.Glacier2D = simulation.glaciers[iceflow_model.glacier_idx[]]
+    glacier = simulation.glaciers[iceflow_model.glacier_idx[]]
     B = glacier.B
     Δx = glacier.Δx
     Δy = glacier.Δy

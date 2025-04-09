@@ -1,4 +1,4 @@
-function ude_solve_test(atol; MB=false, fast=true)
+function ude_solve_test(; MB=false, fast=true)
 
     rgi_paths = get_rgi_paths()
 
@@ -26,13 +26,16 @@ function ude_solve_test(atol; MB=false, fast=true)
                         hyper = Hyperparameters(batch_size=4,
                                                 epochs=4,
                                                 optimizer=ODINN.ADAM(0.01)),
-                        UDE = UDEparameters(target = "A")
+                        UDE = UDEparameters(
+                            optim_autoAD = Optimization.AutoEnzyme(; mode=set_runtime_activity(EnzymeCore.Reverse)),
+                            target = "A"
+                        )
                         )
 
     ## Retrieving simulation data for the following glaciers
     ## Fast version includes less glacier to reduce the amount of downloaded files and computation time on GitHub CI
     if fast
-        rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]#, "RGI60-08.00213", "RGI60-04.04351"]
+        rgi_ids = ["RGI60-11.03638"]#, "RGI60-11.01450"]#, "RGI60-08.00213", "RGI60-04.04351"]
     else
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
         "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",
@@ -47,8 +50,8 @@ function ude_solve_test(atol; MB=false, fast=true)
     # end
 
     model = Model(iceflow = SIA2Dmodel(params),
-                  mass_balance = mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-                  machine_learning = NN(params))
+                  mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+                  machine_learning = NeuralNetwork(params))
 
     # We retrieve some glaciers for the simulation
     glaciers = initialize_glaciers(rgi_ids, params)
