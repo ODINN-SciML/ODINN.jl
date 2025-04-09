@@ -23,26 +23,32 @@ using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
 using Statistics, LinearAlgebra, Random, Polynomials
+using EnzymeCore
+using Enzyme
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
-using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers
-using IterTools: ncycle
-using Zygote
+using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers, LineSearches
+using ComponentArrays
 using ChainRules: @ignore_derivatives
+using SciMLBase: NoAD, CallbackSet
+using MLUtils: DataLoader
 using Base: @kwdef
-using Flux
+using Lux
 using Tullio
-using Infiltrator, Cthulhu
+using Infiltrator
 using Plots, PlotThemes
 Plots.theme(:wong2) # sets overall theme for Plots
 import Pkg
 using Distributed
 using ProgressMeter
 using Downloads
-using TimerOutputs
-using GeoStats
 using ImageFiltering
+using Printf
+using Interpolations, GeoStats
+using FastGaussQuadrature
+
+using Zygote
 
 # ##############################################
 # ############    PARAMETERS     ###############
@@ -52,20 +58,31 @@ cd(@__DIR__)
 const global root_dir::String = dirname(Base.current_project())
 const global root_plots::String = joinpath(root_dir, "plots")
 
+# const SYSIMAGE_DIR = joinpath(homedir(), ".ODINN")
+# const SYSIMAGE_PATH = joinpath(SYSIMAGE_DIR, "odinn_sysimage.so")
+# ENV["JULIA_DEPOT_PATH"] = joinpath(homedir(), ".julia")  # Ensure shared cache
 
 # ##############################################
 # ############  ODINN LIBRARIES  ###############
 # ##############################################
 
 include(joinpath(root_dir, "src/setup/config.jl"))
+# Losses
+include(joinpath(root_dir, "src/losses/Losses.jl"))
 # All parameters needed for the models
+include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
+include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
 include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
-# ML models
-include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Simulations
+include(joinpath(root_dir, "src/simulations/training_stats/TrainingStats.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
+# ML models
+include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
+# Inversion
+include(joinpath(root_dir, "src/inverse/SIA2D_adjoint.jl"))
+include(joinpath(root_dir, "src/inverse/AD_utils.jl"))
+include(joinpath(root_dir, "src/inverse/gradient.jl"))
 
 end # module
-
