@@ -1,6 +1,20 @@
 export Hyperparameters
 
-  mutable struct Hyperparameters{F <: AbstractFloat, I <: Int} <: AbstractParameters
+"""
+    mutable struct Hyperparameters{F <: AbstractFloat, I <: Int} <: AbstractParameters
+
+A mutable struct that holds hyperparameters for training a machine learning model.
+
+# Keyword arguments
+- `current_epoch::I`: The current epoch number.
+- `current_minibatch::I`: The current minibatch number.
+- `loss_history::Vector{F}`: A vector storing the history of loss values.
+- `optimizer::Union{Optim.FirstOrderOptimizer, Flux.Optimise.AbstractOptimiser, Optimisers.AbstractRule}`: The optimizer used for training.
+- `loss_epoch::F`: The loss value for the current epoch.
+- `epochs::I`: The total number of epochs for training.
+- `batch_size::I`: The size of each minibatch.
+"""
+mutable struct Hyperparameters{F <: AbstractFloat, I <: Int} <: AbstractParameters
     current_epoch::I
     current_minibatch::I
     loss_history::Vector{F}
@@ -10,24 +24,23 @@ export Hyperparameters
     batch_size::I
 end
 
+
 """
-    Hyperparameters(;
-        current_epoch::Int64 = nothing,
-        current_minibatch::Int64 = nothing,
-        loss_history::Vector{Float64} = Vector{Float64}(),
-        optimizer::Optim.FirstOrderOptimizer = BFGS(initial_stepnorm=0.001),
-        epochs::Int64 = 50,
-        batch_size::Int64 = 15
-        )
-Initialize the hyperparameters of a machine learning model (`Machine`).
-Keyword arguments
-=================
-    - `current_epoch`: Current epoch in training
-    - `current_minibatch`: Current minibatch in training
-    - `loss_history`: `Vector` storing the loss for each epoch during training
-    - `optimizer`: Optimizer to be used for training. Currently supports both `Optim.jl` and `Flux.jl` optimisers.
-    - `epochs`: Number of epochs for the training
-    - `batch_size`: Batch size for the training
+    Hyperparameters(; current_epoch::Int64 = 1, current_minibatch::Int64 = 1, loss_history::Vector{Float64} = Vector{Float64}(), optimizer::Union{Optim.FirstOrderOptimizer, Flux.Optimise.AbstractOptimiser, Optimisers.AbstractRule} = BFGS(initial_stepnorm=0.001), loss_epoch::Float64 = 0.0, epochs::Int64 = 50, batch_size::Int64 = 15)
+
+Constructs a `Hyperparameters` object with the specified parameters.
+
+# Arguments
+- `current_epoch::Int64`: The current epoch number. Defaults to 1.
+- `current_minibatch::Int64`: The current minibatch number. Defaults to 1.
+- `loss_history::Vector{Float64}`: A vector to store the history of loss values. Defaults to an empty vector.
+- `optimizer::Union{Optim.FirstOrderOptimizer, Flux.Optimise.AbstractOptimiser, Optimisers.AbstractRule}`: The optimizer to be used. Defaults to `BFGS(initial_stepnorm=0.001)`.
+- `loss_epoch::Float64`: The loss value for the current epoch. Defaults to 0.0.
+- `epochs::Int64`: The total number of epochs. Defaults to 50.
+- `batch_size::Int64`: The size of each minibatch. Defaults to 15.
+
+# Returns
+- A `Hyperparameters` object initialized with the provided values.
 """
 function Hyperparameters(;
             current_epoch::Int64 = 1,

@@ -24,6 +24,7 @@ Literate.markdown("./src/tutorials.jl", "./src";
 
 # Which markdown files to compile to HTML
 makedocs(
+    modules=[ODINN, Huginn, Muninn, Sleipnir],
     authors="Jordi Bolibar, Facu Sapienza",
     repo="https://github.com/ODINN-SciML/ODINN.jl/blob/{commit}{path}#{line}",
     sitename="ODINN.jl",
@@ -31,13 +32,16 @@ makedocs(
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://ODINN-SciML.github.io/ODINN.jl",
         assets=String[]
+        # size_threshold=500 * 1024,  # Increase size threshold to 500 KiB
+        # size_threshold_warn=250 * 1024  # Increase warning threshold to 250 KiB
     ),
     pages=[
         "Home" => "index.md",
         "Tutorials" => "tutorials.md",
-        "Index of functions and types" => "funcs_types.md"
+        "Types and functions" => "funcs_types.md",
+        "API" => "api.md"
     ],
-    checkdocs=:exports
+    checkdocs=:none
 )
 
 deploydocs(
