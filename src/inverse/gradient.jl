@@ -12,7 +12,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     # l = loss_iceflow_transient(θ, simulation)
     #l = loss_iceflow_transient(θ, glaciers, results, SIA2D_models, simulation.params)
 
-    @assert !simulation.parameters.simulation.light "Forward solution needs to be stored in dense mode, no light, for gradient computation."
+    @assert simulation.parameters.solver.save_everystep "Forward solution needs to be stored in dense mode (ie save_everystep should be set to true), for gradient computation."
 
     # glacier_results_ids = map(batch_id -> Sleipnir.get_result_id_from_rgi(batch_id, simulation), batch_ids)
     # TODO: move out this from here and make the re-arangement of the results outside
