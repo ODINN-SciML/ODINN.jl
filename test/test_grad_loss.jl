@@ -190,7 +190,7 @@ function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, physicalParams,
     return nothing
 end
 
-function test_grad_discreteAdjoint_Halfar()
+function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
     Random.seed!(1234)
 
     lossType = L2SumWithinGlacier()
@@ -225,7 +225,7 @@ function test_grad_discreteAdjoint_Halfar()
             maxA = 8e-18),
         UDE = UDEparameters(
             optim_autoAD=ODINN.NoAD(),
-            grad=ContinuousAdjoint(VJP_method=DiscreteVJP()),
+            grad=adjointFlavor,
             optimization_method="AD+AD",
             empirical_loss_function=lossType,
             target = "A"
@@ -306,13 +306,15 @@ function test_grad_discreteAdjoint_Halfar()
     ratio, angle, relerr = stats_err_arrays(dθ, dθ_halfar)
 
     # TODO: fix this test
-    thres_ratio = 5e-1
-    thres_angle = 1e-15
-    thres_relerr = 5e-1
+    thres_ratio = thres[1]
+    thres_angle = thres[2]
+    thres_relerr = thres[3]
     if printDebug | !( (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr) )
         printVecScientific("ratio  = ",[ratio],thres_ratio)
         printVecScientific("angle  = ",[angle],thres_angle)
         printVecScientific("relerr = ",[relerr],thres_relerr)
     end
-    @test (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr)
+    @test abs(ratio)<thres_ratio
+    @test abs(angle)<thres_angle
+    @test abs(relerr)<thres_relerr
 end

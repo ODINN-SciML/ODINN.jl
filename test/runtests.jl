@@ -60,7 +60,9 @@ ENV["GKSwstype"]="nul"
 
 @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
 
-@testset "Manual implementation of the backward with discrete adjoint vs Halfar solution with Enzyme" test_grad_discreteAdjoint_Halfar()
+@testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method=DiscreteVJP()); thres=[5e-1, 1e-15, 5e-1])
+
+@testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method=ContinuousVJP()); thres=[5e-1, 1e-15, 7e-1])
 
 @testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 
