@@ -65,7 +65,6 @@ for sensealg in sensealgs
                                                             tspan=(2010.0, 2015.0),
                                                             multiprocessing=false,
                                                             workers=1,
-                                                            light=false, # for now we do the simulation like this (a better name would be dense)
                                                             test_mode=true,
                                                             rgi_paths=rgi_paths),
                             hyper = Hyperparameters(batch_size=4,

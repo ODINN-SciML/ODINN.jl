@@ -25,7 +25,6 @@ params = Parameters(
         step=δt,
         multiprocessing=false,
         workers=1,
-        light=false, # for now we do the simulation like this (a better name would be dense)
         test_mode=true,
         rgi_paths=rgi_paths),
     UDE = UDEparameters(
