@@ -193,7 +193,7 @@ end
 function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
     Random.seed!(1234)
 
-    lossType = L2SumWithinGlacier()
+    lossType = L2SumWithinGlacier(distance=15)
     A = 8e-19
     t₀ = 5.0
     t₁ = 30.0
