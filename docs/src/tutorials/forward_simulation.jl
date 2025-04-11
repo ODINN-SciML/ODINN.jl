@@ -1,6 +1,7 @@
 # ## Forward simulation tutorial
 
-using Revise
+## This tutorial provides a simple example on how to perform a forward simulation using ODINN.jl.
+
 using ODINN
 
 ## Define the working directory

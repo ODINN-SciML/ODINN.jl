@@ -211,7 +211,7 @@ function get_rheology_law(law::Symbol)
     if law == :PatersonCuffey
         A_poly = A_law_PatersonCuffey()
         fakeA(T) = A_poly(T)
-        return fakeA(T)
+        return fakeA
     else
         @error "Unknown law of A: $law"
     end
