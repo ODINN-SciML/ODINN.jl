@@ -1,4 +1,5 @@
-using Pkg; Pkg.activate(".")
+import Pkg
+Pkg.activate(dirname(Base.current_project()))
 
 using Revise
 using ODINN
@@ -39,7 +40,6 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     step=δt,
                                                     multiprocessing=true,
                                                     workers=10,
-                                                    light=false, # for now we do the simulation like this (a better name would be dense)
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
@@ -47,7 +47,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                             optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
                     physical = PhysicalParameters(minA = 8e-21,
                                                   maxA = 8e-17),
-                    UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
+                    UDE = UDEparameters(sensealg=ODINN.SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
                                         optim_autoAD=ODINN.NoAD(),
                                         grad=ContinuousAdjoint(),
                                         optimization_method="AD+AD",
