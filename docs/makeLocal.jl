@@ -25,7 +25,7 @@ Literate.markdown("./src/tutorials.jl", "./src";
 # Which markdown files to compile to HTML
 makedocs(
     modules=[ODINN, Huginn, Muninn, Sleipnir],
-    authors="Jordi Bolibar, Facu Sapienza",
+    authors="Jordi Bolibar, Facu Sapienza, Alban Gossard",
     repo="https://github.com/ODINN-SciML/ODINN.jl/blob/{commit}{path}#{line}",
     sitename="ODINN.jl",
     format=Documenter.HTML(
