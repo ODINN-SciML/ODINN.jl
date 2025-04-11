@@ -67,8 +67,8 @@ function test_adjoint_SIAD2D_continuous()
     ODINN.apply_UDE_parametrization!(θ, simulation, nothing, glacier_idx)
     dH = Huginn.SIA2D(H, simulation, t; batch_id=batch_idx)
 
-    ∂H = VJP_λ_∂SIA∂H_continuous(vecBackwardSIA2D, H, simulation, t; batch_id=batch_idx)
-    ∂θ = VJP_λ_∂SIA∂θ_continuous(θ, vecBackwardSIA2D, H, simulation, t; batch_id=batch_idx)
+    ∂H = ODINN.VJP_λ_∂SIA∂H_continuous(vecBackwardSIA2D, H, simulation, t; batch_id=batch_idx)
+    ∂θ = ODINN.VJP_λ_∂SIA∂θ_continuous(θ, vecBackwardSIA2D, H, simulation, t; batch_id=batch_idx)
 
     # Check gradient wrt H
     function f_H(H, args)

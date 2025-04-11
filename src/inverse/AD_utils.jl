@@ -1,6 +1,6 @@
 
 function VJP_λ_∂SIA∂H(VJPMode::DiscreteVJP, λ, H, θ, simulation, t, batch_id)
-    λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H, simulation, t; batch_id = batch_id)[1]
+    λ_∂f∂H = VJP_λ_∂SIA_discrete(λ, H, θ, simulation, t; batch_id = batch_id)[1]
     return λ_∂f∂H, nothing
 end
 
@@ -30,9 +30,7 @@ function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation, t, batch_i
 end
 
 function VJP_λ_∂SIA∂θ(VJPMode::DiscreteVJP, λ, H, θ, dH_H, dH_λ, simulation, t, batch_id)
-    λ_∂f∂A = Huginn.SIA2D_discrete_adjoint(λ, H, simulation, t; batch_id = batch_id)[2]
-    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, batch_id), θ)
-    λ_∂f∂θ = λ_∂f∂A*∇θ
+    λ_∂f∂θ = VJP_λ_∂SIA_discrete(λ, H, θ, simulation, t; batch_id = batch_id)[2]
     return λ_∂f∂θ
 end
 

@@ -58,6 +58,7 @@ function params_constructor_specified(save_refs::Bool = false)
         jldsave(joinpath(Sleipnir.root_dir, "test/data/params/params.jld2"); params)
     end
 
+    @test true
 
 end
 

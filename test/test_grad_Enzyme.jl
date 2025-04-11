@@ -96,9 +96,7 @@ function test_grad_Enzyme_SIAD2D()
         Const(glacier_idx)
     )
 
-    ∂H, ∂A = Huginn.SIA2D_discrete_adjoint(vecBackwardSIA2D, H, simulation, t; batch_id=batch_idx)
-    ∇θ, = Zygote.gradient(_θ -> ODINN.grad_apply_UDE_parametrization(_θ, simulation, glacier_idx), θ)
-    ∂θ = ∂A*∇θ
+    ∂H, ∂θ = ODINN.VJP_λ_∂SIA_discrete(vecBackwardSIA2D, H, θ, simulation, t; batch_id=batch_idx)
 
     ratio_H, angle_H, relerr_H = stats_err_arrays(∂H, ∂H_enzyme)
     thres_ratio = 1e-10

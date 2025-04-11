@@ -1,5 +1,7 @@
 export UDEparameters
 
+include("Target_utils.jl")
+
 """
 A mutable struct that holds parameters for a UDE (Universal Differential Equation).
 
@@ -12,7 +14,7 @@ A mutable struct that holds parameters for a UDE (Universal Differential Equatio
 - `scale_loss::Bool`: A boolean indicating whether to scale the loss.
 - `target::String`: The target variable for the optimization.
 """
-mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
+mutable struct UDEparameters{ADJ<:AbstractAdjointMethod, TAR<:AbstractTarget} <: AbstractParameters
     sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
     optim_autoAD::AbstractADType
     grad::Union{ADJ, Nothing}
@@ -20,14 +22,14 @@ mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
     loss_type::String
     empirical_loss_function::AbstractLoss
     scale_loss::Bool
-    target::Union{String, Nothing}
+    target::Union{TAR, Nothing}
 end
 
 Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
     a.optim_autoAD == b.optim_autoAD && a.grad == b.grad &&
     a.optimization_method == b.optimization_method && a.loss_type == b.loss_type &&
     a.empirical_loss_function == b.empirical_loss_function && a.scale_loss == b.scale_loss &&
-    a.target == b.target
+    a.target.name == b.target.name
 
 
 """
@@ -64,15 +66,19 @@ function UDEparameters(;
             loss_type::String = "V",
             empirical_loss_function::AbstractLoss = L2Sum(),
             scale_loss::Bool = true,
-            target::Union{String, Nothing} = "D"
+            target::Union{String, Nothing} = "A"
             ) where {ADJ <: AbstractAdjointMethod}
     # Verify that the optimization method is correct
     @assert ((optimization_method == "AD+AD") || (optimization_method == "AD+Diff")) "Wrong optimization method! Needs to be either `AD+AD` or `AD+Diff`"
     @assert ((loss_type == "V") || (loss_type == "H")) "Wrong loss type! Needs to be either `V` or `H`"
 
+    target_object = SIA2D_target(name = target)
+
     # Build the solver parameters based on input values
-    UDE_parameters = UDEparameters{typeof(grad)}(sensealg, optim_autoAD, grad, optimization_method,
-                                    loss_type, empirical_loss_function, scale_loss, target)
+    UDE_parameters = UDEparameters{typeof(grad),typeof(target_object)}(
+        sensealg, optim_autoAD, grad, optimization_method,
+        loss_type, empirical_loss_function, scale_loss, target_object
+    )
 
     return UDE_parameters
 end

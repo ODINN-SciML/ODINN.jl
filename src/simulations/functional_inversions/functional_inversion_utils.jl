@@ -106,15 +106,17 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Plot callback
-    if isnothing(simulation.parameters.UDE.target)
-        cb_plots = (θ, l) -> false
-    elseif simulation.parameters.UDE.target == "A"
-        cb_plots = (θ, l) -> false
-        # This other option returns weird error right now, commenting for now
-        # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
-    else
-        raise("Simulation target not defined.")
-    end
+    cb_plots = (θ, l) -> false
+    # TODO: Do we need this following code?
+    # if isnothing(simulation.parameters.UDE.target)
+    #     cb_plots = (θ, l) -> false
+    # elseif simulation.parameters.UDE.target == "A"
+    #     cb_plots = (θ, l) -> false
+    #     # This other option returns weird error right now, commenting for now
+    #     # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
+    # else
+    #     @error "Simulation target not defined."
+    # end
     # Training diagnosis callback
     cb_diagnosis(θ, l) = callback_diagnosis(θ, l, only(simulation_train_loader.data))
 
@@ -170,15 +172,17 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Plot callback
-    if isnothing(simulation.parameters.UDE.target)
-        cb_plots = (θ, l) -> false
-    elseif simulation.parameters.UDE.target == "A"
-        cb_plots = (θ, l) -> false
-        # This other option returns weird error right now, commenting for now
-        # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
-    else
-        raise("Simulation target not defined.")
-    end
+    cb_plots = (θ, l) -> false
+    # TODO: Do we need this following code?
+    # if isnothing(simulation.parameters.UDE.target)
+    #     cb_plots = (θ, l) -> false
+    # elseif simulation.parameters.UDE.target == "A"
+    #     cb_plots = (θ, l) -> false
+    #     # This other option returns weird error right now, commenting for now
+    #     # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
+    # else
+    #     @error "Simulation target not defined."
+    # end
     # Training diagnosis callback
     cb_diagnosis(θ, l) = callback_diagnosis(θ, l, simulation)
     # Combined callback
@@ -398,7 +402,7 @@ function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, 
     # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
+    if simulation.parameters.UDE.target.name == "A"
         # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
@@ -413,7 +417,7 @@ function apply_UDE_parametrization_enzyme(θ, simulation::FunctionalInversion, s
     # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
+    if simulation.parameters.UDE.target.name == "A"
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         return predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
@@ -427,7 +431,7 @@ function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integra
     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
+    if simulation.parameters.UDE.target.name == "A"
         T_mean = mean(simulation.glaciers[batch_id].climate.longterm_temps)
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
@@ -446,7 +450,7 @@ function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) wh
     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
+    if simulation.parameters.UDE.target.name == "A"
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         A = predict_A̅(smodel, [T], (min_NN, max_NN))[1]
@@ -461,7 +465,7 @@ function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id
     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target == "A"
+    if simulation.parameters.UDE.target.name == "A"
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
