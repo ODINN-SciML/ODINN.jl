@@ -129,7 +129,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 function f_adjoint_rev(dλ, λ, p, τ)
                     t = -τ
-                    # λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H_itp(t), simulation, t; batch_id = i)[1]
                     λ_∂f∂H, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ, H_itp(t), θ, simulation, t, i)
                     dλ .= λ_∂f∂H
                 end
@@ -182,6 +181,12 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 @error "VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet."
             end
 
+        elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
+            if isnothing(simulation.parameters.UDE.grad.grad_function)
+                dLdθ .+= maximum(abs.(θ)) .* rand(Float64, size(θ))
+            else
+                dLdθ .+ simulation.parameters.UDE.grad.grad_function(θ)
+            end
         else
             @error "Adjoint method $(simulation.parameters.UDE.grad) is not supported yet."
         end

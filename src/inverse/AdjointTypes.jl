@@ -82,5 +82,5 @@ gradient calculation.
     argument `du` with the gradient values.
 """
 @kwdef struct DummyAdjoint <: AbstractAdjointMethod
-    grad::Function
+    grad_function::Union{Function, Nothing} = nothing
 end

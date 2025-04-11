@@ -37,8 +37,9 @@ ENV["GKSwstype"]="nul"
 
 @testset "Run all tests" begin
 
-# @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB=false)
-# @testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB=true)
+@testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB=false)
+
+# @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB=true)
 
 # @testset "UDE SIA2D training with MB" ude_solve_test(; MB=true)
 
@@ -54,7 +55,7 @@ ENV["GKSwstype"]="nul"
 
 @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=DiscreteVJP()); thres=[2e-4, 1e-8, 1e-3])
 
-# @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=ContinuousVJP()); thres=[2e-4, 1e-8, 1e-3])
+@testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=ContinuousVJP()); thres=[2e-4, 1e-8, 1e-3])
 
 @testset "Manual implementation of the continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=ODINN.EnzymeVJP()); thres=[2e-4, 1e-8, 1e-3])
 
