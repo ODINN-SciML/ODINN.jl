@@ -112,6 +112,8 @@ function VJP_λ_∂SIA_discrete(
 
     # Retrieve parameters
     params = simulation.parameters
+    ml_model = simulation.model.machine_learning
+
     A = SIA2D_model.A
     n = SIA2D_model.n
     B = glacier.B
@@ -135,12 +137,19 @@ function VJP_λ_∂SIA_discrete(
     dSdy = Huginn.diff_y(S)/Δy
     ∇Sx = Huginn.avg_y(dSdx)
     ∇Sy = Huginn.avg_x(dSdy)
-    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^((n[] - 1)/2)
 
+    # Compute slope
+    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+
+    # Compute average ice thickness
     H̄ = Huginn.avg(H)
-    Γ = 2.0 * A[] * (ρ * g)^n[] / (n[]+2) # 1 / m^3 s
-    # @assert Γ == 2.0 * A[] * (ρ * g)^n[] / (n[]+2)
-    D = Γ .* H̄.^(n[] + 2) .* ∇S
+
+    # Compute diffusivity based on target objective
+    D = target.D(
+        H = H̄, ∇S = ∇S, θ = θ,
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
 
     # Compute flux components
     @views dSdx_edges = Huginn.diff_x(S[:,2:end - 1]) / Δx
@@ -165,16 +174,16 @@ function VJP_λ_∂SIA_discrete(
     ### First term
 
     # Equals ∂D/∂H
-    # α = Γ .* (n[]+2) .* H̄.^(n[]+1) .* ∇S
     α = target.∂D∂H(
         H = H̄, ∇S = ∇S, θ = θ,
-        model = SIA2D_model, glacier = glacier, params = params
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
     )
     # Equals ∂D/∂(∇H)
-    # β = Γ .* (n[]-1) .* H̄.^(n[]+2) .* (∇Sx.^2 .+ ∇Sy.^2).^((n[] - 3)/2)
     β = target.∂D∂∇H(
         H = H̄, ∇S = ∇S, θ = θ,
-        model = SIA2D_model, glacier = glacier, params = params
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
     )
 
     βx = β .* ∇Sx
@@ -201,24 +210,15 @@ function VJP_λ_∂SIA_discrete(
     ∂H .= ∂H.*(H.>0)
 
     # Gradient wrt θ
-    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, batch_id), θ)
     ∂D∂θ = target.∂D∂θ(
-        H = H̄, ∇S = ∇S, θ = θ, ∇θ = ∇θ,
-        model = SIA2D_model, glacier = glacier, params = params
+        H = H̄, ∇S = ∇S, θ = θ,
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
     )
     # Evaluate numerical integral for loss
     @tullio ∂θ_v[k] := ∂D∂θ[i, j, k] * D_adjoint[i, j]
     # Construct component vector
     ∂θ = Vector2ComponentVector(∂θ_v, θ)
-
-    # D_adjoint = ∇ ⋅ (∇S ⋅ ∇λ)
-    # fac = 2.0 * (ρ * g)^n[] / (n[]+2)
-    # # Why this does not compute as with βx and βy?
-    # ∂A_spatial = fac .* Huginn.avg(H).^(n[] + 2) .* ∇S .* D_adjoint
-    # ∂A = sum(∂A_spatial)
-    # ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, batch_id), θ)
-    # ∂θ = ∂A * ∇θ
-    # ∂θ = target.∂D∂θ(avg(H), ∇S, params, ∇θ)
 
     return ∂H, ∂θ
 end
@@ -266,6 +266,8 @@ function VJP_λ_∂SIA∂H_continuous(
     end
 
     params = simulation.parameters
+    ml_model = simulation.model.machine_learning
+
     # Retrieve parameters
     B = glacier.B
     Δx = glacier.Δx
@@ -373,11 +375,12 @@ function VJP_λ_∂SIA∂θ_continuous(
     end
 
     params = simulation.parameters
+    ml_model = simulation.model.machine_learning
+
     # Retrieve parameters
     B = glacier.B
     Δx = glacier.Δx
     Δy = glacier.Δy
-    # A = SIA2D_model.A
     n = SIA2D_model.n
     ρ = params.physical.ρ
     g = params.physical.g
@@ -385,25 +388,35 @@ function VJP_λ_∂SIA∂θ_continuous(
     # Update glacier surface altimetry
     S = B .+ H
 
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
-    dSdx = Huginn.diff_x(S) ./ Δx
-    dSdy = Huginn.diff_y(S) ./ Δy
-    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^(1/2)
-    Γ = 2.0 * (ρ * g)^n[] / (n[]+2)
+    # Evaluation of ∇ ⋅ (∂D∂θ ∇S) is done exactly as in the forward map
+    @views dSdx = Huginn.diff_x(S) ./ Δx
+    @views dSdy = Huginn.diff_y(S) ./ Δy
+    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^((n[] - 1)/2)
+
+    @views dSdx_edges = Huginn.diff_x(S[:,2:end - 1]) ./ Δx
+    @views dSdy_edges = Huginn.diff_y(S[2:end - 1,:]) ./ Δy
+
+    η₀ = params.physical.η₀
+    dSdx_edges .= @views @. min(dSdx_edges,  η₀ * H[2:end, 2:end-1] / Δx)
+    dSdx_edges .= @views @. max(dSdx_edges, -η₀ * H[1:end-1, 2:end-1] / Δx)
+    dSdy_edges .= @views @. min(dSdy_edges,  η₀ * H[2:end-1, 2:end] / Δy)
+    dSdy_edges .= @views @. max(dSdy_edges, -η₀ * H[2:end-1, 1:end-1] / Δy)
 
     ### Computation of partial derivatives of diffusivity
-    ∂D∂A = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 1)
-    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
-    # ∂D∂θ = ∂D∂A .* ∇θ
+    Γ = 2.0 * (ρ * g)^n[] / (n[]+2)
+    ∂D∂A = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S
+    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, batch_id), θ)
 
-    ∇λ∇S_x_edges = dSdx .* Huginn.diff_x(λ) ./ Δx
-    ∇λ∇S_y_edges = dSdy .* Huginn.diff_y(λ) ./ Δy
-    ∇λ∇S_x = Huginn.avg_y(∇λ∇S_x_edges)
-    ∇λ∇S_y = Huginn.avg_x(∇λ∇S_y_edges)
-    ∇λ∇S = ∇λ∇S_x .+ ∇λ∇S_y
+    # Compute flux components
+    Fx = Huginn.avg_y(∂D∂A) .* dSdx_edges
+    Fy = Huginn.avg_x(∂D∂A) .* dSdy_edges
+    Fxx = Huginn.diff_x(Fx) / Δx
+    Fyy = Huginn.diff_y(Fy) / Δy
 
-    return - sum(∂D∂A .* ∇λ∇S) .* ∇θ
+    ∂D∂A_∇S = zero(H)
+    Huginn.inn(∂D∂A_∇S) .= Fxx .+ Fyy
+
+    return sum(∂D∂A_∇S .* λ) .* ∇θ
 end
 
 # Repeated function
@@ -423,3 +436,4 @@ function grad_apply_UDE_parametrization(θ, simulation::SIM, batch_id::I) where 
         return A
     end
 end
+
