@@ -165,10 +165,8 @@ function VJP_λ_∂SIA∂θ_continuous(
     @views dSdy_edges = Huginn.diff_y(S[2:end - 1,:]) ./ Δy
 
     η₀ = params.physical.η₀
-    dSdx_edges .= @views @. min(dSdx_edges,  η₀ * H[2:end, 2:end-1] / Δx)
-    dSdx_edges .= @views @. max(dSdx_edges, -η₀ * H[1:end-1, 2:end-1] / Δx)
-    dSdy_edges .= @views @. min(dSdy_edges,  η₀ * H[2:end-1, 2:end] / Δy)
-    dSdy_edges .= @views @. max(dSdy_edges, -η₀ * H[2:end-1, 1:end-1] / Δy)
+    dSdx_edges = Huginn.clamp_borders_dx(dSdx_edges, H, η₀, Δx)
+    dSdy_edges = Huginn.clamp_borders_dy(dSdy_edges, H, η₀, Δy)
 
     ### Computation of partial derivatives of diffusivity
     Γ = 2.0 * (ρ * g)^n[] / (n[]+2)
