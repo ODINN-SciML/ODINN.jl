@@ -110,7 +110,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     # TODO: Do we need this following code?
     # if isnothing(simulation.parameters.UDE.target)
     #     cb_plots = (θ, l) -> false
-    # elseif simulation.parameters.UDE.target == "A"
+    # elseif simulation.parameters.UDE.target == :A
     #     cb_plots = (θ, l) -> false
     #     # This other option returns weird error right now, commenting for now
     #     # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
@@ -176,7 +176,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     # TODO: Do we need this following code?
     # if isnothing(simulation.parameters.UDE.target)
     #     cb_plots = (θ, l) -> false
-    # elseif simulation.parameters.UDE.target == "A"
+    # elseif simulation.parameters.UDE.target == :A
     #     cb_plots = (θ, l) -> false
     #     # This other option returns weird error right now, commenting for now
     #     # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
@@ -329,7 +329,8 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
             end
         end
         # Apply parametrization
-        apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
+        # TODO: Do we need this UDE_parametrization here?
+        # apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
     end
 
     cb_MB = DiscreteCallback(stop_condition, action!)
@@ -366,8 +367,7 @@ function simulate_iceflow_UDE!(
     params = simulation.parameters
 
     # TODO: make this more general
-    # @infiltrate
-    apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
+    # apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
     # TODO: check everywhere else this function is needed
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
@@ -395,6 +395,57 @@ function simulate_iceflow_UDE!(
     return iceflow_sol
 end
 
+"""
+Wrapper to pass a parametrization to the SIA2D
+"""
+function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
+
+    if simulation.model.machine_learning.target.name == :A
+        diffusivity_provided = false
+        apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
+    elseif simulation.model.machine_learning.target.name == :D
+        glacier = simulation.glaciers[batch_id]
+
+        ### Compute some stuff we need in order to compute diffusivity
+        Δx = glacier.Δx
+        Δy = glacier.Δy
+        B = glacier.B
+
+        # TODO: Make simple code to put ∇S inside dual grid
+        S = B .+ H
+        # All grid variables computed in a staggered grid
+        # Compute surface gradients on edges
+        S = B .+ H
+        dSdx = Huginn.diff_x(S) / Δx
+        dSdy = Huginn.diff_y(S) / Δy
+        ∇Sx = Huginn.avg_y(dSdx)
+        ∇Sy = Huginn.avg_x(dSdy)
+        # Compute slope
+        ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+        # Compute average ice thickness
+        H̄ = Huginn.avg(H)
+
+        # Compute diffusivity based on learning target in dual grid
+        D = simulation.model.machine_learning.target.D(
+            H = H̄, ∇S = ∇S, θ = θ,
+            ice_model = simulation.model.iceflow[batch_id],
+            ml_model = simulation.model.machine_learning,
+            glacier = glacier,
+            params = simulation.parameters
+        )
+        # Update value of D in iceflow model used inside SIA
+        diffusivity_provided = true
+        simulation.model.iceflow[1].D = D
+    else
+        @error "Target UDE parametrization not provided"
+    end
+    return Huginn.SIA2D(H, simulation, t; batch_id = batch_id, diffusivity_provided = diffusivity_provided)
+end
+
+"""
+Functional inversion functions
+"""
+
 function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
     # We load the ML model with the parameters
     smodel.ps = θ.θ
@@ -402,11 +453,13 @@ function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, 
     # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target.name == "A"
+    if simulation.parameters.UDE.target.name == :A
         # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))
+    else
+        @error "Simulation target not specified"
     end
 end
 
@@ -417,10 +470,12 @@ function apply_UDE_parametrization_enzyme(θ, simulation::FunctionalInversion, s
     # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target.name == "A"
+    if simulation.model.machine_learning.target.name == :A
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         return predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
+    else
+        @error "Simulation target not specified"
     end
 end
 
@@ -431,15 +486,22 @@ function apply_UDE_parametrization!(θ, simulation::FunctionalInversion, integra
     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target.name == "A"
+    if simulation.model.machine_learning.target.name == :A
         T_mean = mean(simulation.glaciers[batch_id].climate.longterm_temps)
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         A = predict_A̅(smodel, [T_mean], (min_NN, max_NN))[1]
         simulation.model.iceflow[batch_id].A[] = A
         # @info "Value of A used in UDE simulation:"
-    # elseif simulation.parameters.UDE.target == "D"
-    #     parametrization = U()
+    elseif simulation.model.machine_learning.target.name == :D
+        min_NN = simulation.parameters.physical.minA
+        max_NN = simulation.parameters.physical.maxA
+        # Predict value of A based on Temp and H
+        T_mean = mean(simulation.glaciers[batch_id].climate.longterm_temps)
+        A_space = predict_D(smodel, T_mean, H, (min_NN, max_NN))
+        return A_space
+    else
+        @error "Simulation target ='$(simulation.parameters.UDE.target.name)' not specified"
     end
 end
 
@@ -450,11 +512,20 @@ function apply_UDE_parametrization(θ, simulation::FunctionalInversion, T::F) wh
     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target.name == "A"
+    if simulation.model.machine_learning.target.name == :A
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         A = predict_A̅(smodel, [T], (min_NN, max_NN))[1]
         return A
+    elseif simulation.model.machine_learning.target.name == :D
+        min_NN = params.physical.minA
+        max_NN = params.physical.maxA
+        # Predict value of A based on Temp and H
+        T_mean = mean(glacier.climate.longterm_temps)
+        A_space = predict_D(smodel, T_mean, H, (min_NN, max_NN))
+        return A_space
+    else
+        @error "Simulation target ='$(simulation.parameters.UDE.target.name)' not specified"
     end
 end
 
@@ -465,15 +536,12 @@ function apply_UDE_parametrization(θ, simulation::FunctionalInversion, batch_id
     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target.name == "A"
+    if simulation.model.machine_learning.target.name == :A
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
         return A
+    else
+        @error "Simulation target not specified"
     end
-end
-
-# Wrapper to pass a parametrization to the SIA2D
-function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
-    return Huginn.SIA2D(H, simulation, t; batch_id = batch_id)
 end

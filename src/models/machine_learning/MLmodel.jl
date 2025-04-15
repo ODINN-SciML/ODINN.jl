@@ -1,6 +1,7 @@
 export NeuralNetwork
 
 include("ML_utils.jl")
+include("Target_utils.jl")
 
 # Abstract type as a parent type for Machine Learning models
 abstract type MLmodel <: AbstractModel end
@@ -47,11 +48,13 @@ Feed-forward neural network.
 mutable struct NeuralNetwork{
     ChainType <: Lux.Chain,
     ComponentVectorType <: ComponentVector,
-    NamedTupleType <: NamedTuple
+    NamedTupleType <: NamedTuple,
+    TAR <: AbstractTarget
 } <: MLmodel
     architecture::ChainType
     θ::ComponentVectorType
     st::NamedTupleType
+    target::TAR
 end
 
 """
@@ -65,20 +68,56 @@ Creates a new feed-forward neural network.
 - `architecture`: `Flux.Chain` neural network architecture (optional)
 - `θ`: Neural network parameters (optional)
 """
-function NeuralNetwork(params::P;
-            architecture::Union{ChainType, Nothing} = nothing,
-            θ::Union{ComponentArrayType, Nothing} = nothing) where {P <: Sleipnir.Parameters, ChainType <: Lux.Chain, ComponentArrayType <: ComponentArray}
+function NeuralNetwork(
+    params::P;
+    architecture::Union{ChainType, Nothing} = nothing,
+    θ::Union{ComponentArrayType, Nothing} = nothing,
+    st::Union{NamedTupleType, Nothing} = nothing,
+) where {
+    P<:Sleipnir.Parameters, ChainType<:Lux.Chain,
+    ComponentArrayType<:ComponentArray, NamedTupleType<:NamedTuple
+}
 
     # Float type
     ft = Sleipnir.Float
     lightNN = params.simulation.test_mode
 
-    if isnothing(architecture)
-        architecture, θ, st = get_NN(θ, ft; lightNN=lightNN)
+    _nn_is_provided = [isnothing(architecture), isnothing(θ), isnothing(st)]
+    if all(_nn_is_provided)
+        if params.UDE.target == :A
+            architecture, θ, st = get_NN(θ, ft; lightNN=lightNN)
+        elseif params.UDE.target == :D
+            # TODO: I shoudl store NN elements in Target
+            architecture = Lux.Chain(
+                Dense(2, 3, x -> softplus.(x)),
+                Dense(3, 1, sigmoid)
+            )
+            θ, st = Lux.setup(ODINN.rng_seed(), architecture)
+            θ = ODINN.ComponentArray(θ=θ)
+            if Sleipnir.Float == Float64
+                architecture = f64(architecture)
+                θ = f64(θ)
+                st = f64(st)
+            end
+        else
+            # Contruct default NN
+            @warn "Constructing default Neural Network"
+            architecture, θ, st = get_NN(θ, ft; lightNN=lightNN)
+        end
+    elseif any(_nn_is_provided) && !all(_nn_is_provided)
+        @warn "To specify the neural network please provide all (architecture, θ, st), not just a subset of them."
     end
 
+    # Build target based on parameters
+    target_object = SIA2D_target(name = params.UDE.target)
+
     # Build the simulation parameters based on input values
-    neural_net = NeuralNetwork{typeof(architecture), typeof(θ), typeof(st)}(architecture, θ, st)
+    # TODO: I don't think target should be inside NN, but rather having the neural net elements
+    # as part of a regressor type.
+    neural_net = NeuralNetwork{typeof(architecture), typeof(θ), typeof(st), typeof(target_object)}(
+        architecture, θ, st,
+        target_object
+    )
 
     return neural_net
 end

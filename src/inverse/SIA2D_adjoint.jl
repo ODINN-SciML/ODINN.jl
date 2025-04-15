@@ -124,7 +124,8 @@ function VJP_λ_∂SIA_discrete(
     g = simulation.parameters.physical.g
 
     # Retrieve target
-    target = params.UDE.target
+    # target = params.UDE.target
+    target = ml_model.target
 
     # First, enforce values to be positive
     map!(x -> ifelse(x>0.0,x,0.0), H, H)
@@ -427,7 +428,7 @@ function grad_apply_UDE_parametrization(θ, simulation::SIM, batch_id::I) where 
     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target.name == "A"
+    if simulation.parameters.UDE.target.name == :A
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA
         A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
