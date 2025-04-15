@@ -149,7 +149,6 @@ function VJP_λ_∂SIA∂θ_continuous(
     B = glacier.B
     Δx = glacier.Δx
     Δy = glacier.Δy
-    # A = SIA2D_model.A
     n = SIA2D_model.n
     ρ = params.physical.ρ
     g = params.physical.g
@@ -157,25 +156,33 @@ function VJP_λ_∂SIA∂θ_continuous(
     # Update glacier surface altimetry
     S = B .+ H
 
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
-    dSdx = Huginn.diff_x(S) ./ Δx
-    dSdy = Huginn.diff_y(S) ./ Δy
-    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^(1/2)
-    Γ = 2.0 * (ρ * g)^n[] / (n[]+2)
+    # Evaluation of ∇ ⋅ (∂D∂θ ∇S) is done exactly as in the forward map
+    @views dSdx = Huginn.diff_x(S) ./ Δx
+    @views dSdy = Huginn.diff_y(S) ./ Δy
+    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^((n[] - 1)/2)
+
+    @views dSdx_edges = Huginn.diff_x(S[:,2:end - 1]) ./ Δx
+    @views dSdy_edges = Huginn.diff_y(S[2:end - 1,:]) ./ Δy
+
+    η₀ = params.physical.η₀
+    dSdx_edges = Huginn.clamp_borders_dx(dSdx_edges, H, η₀, Δx)
+    dSdy_edges = Huginn.clamp_borders_dy(dSdy_edges, H, η₀, Δy)
 
     ### Computation of partial derivatives of diffusivity
-    ∂D∂A = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 1)
+    Γ = 2.0 * (ρ * g)^n[] / (n[]+2)
+    ∂D∂A = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S
     ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
-    # ∂D∂θ = ∂D∂A .* ∇θ
 
-    ∇λ∇S_x_edges = dSdx .* Huginn.diff_x(λ) ./ Δx
-    ∇λ∇S_y_edges = dSdy .* Huginn.diff_y(λ) ./ Δy
-    ∇λ∇S_x = Huginn.avg_y(∇λ∇S_x_edges)
-    ∇λ∇S_y = Huginn.avg_x(∇λ∇S_y_edges)
-    ∇λ∇S = ∇λ∇S_x .+ ∇λ∇S_y
+    # Compute flux components
+    Fx = Huginn.avg_y(∂D∂A) .* dSdx_edges
+    Fy = Huginn.avg_x(∂D∂A) .* dSdy_edges
+    Fxx = Huginn.diff_x(Fx) / Δx
+    Fyy = Huginn.diff_y(Fy) / Δy
 
-    return - sum(∂D∂A .* ∇λ∇S) .* ∇θ
+    ∂D∂A_∇S = zero(H)
+    Huginn.inn(∂D∂A_∇S) .= Fxx .+ Fyy
+
+    return sum(∂D∂A_∇S .* λ) .* ∇θ
 end
 
 # Repeated function
