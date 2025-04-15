@@ -54,7 +54,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
 		    hyper = Hyperparameters(batch_size=4,
 					    epochs=10,
 					    optimizer=ODINN.ADAM(0.01)),
-		    UDE = UDEparameters(target = "A")
+		    UDE = UDEparameters(target = :A)
 		   )
 
 # We define which glacier RGI IDs we want to work with

@@ -28,7 +28,7 @@ function ude_solve_test(; MB=false, fast=true)
                                                 optimizer=ODINN.ADAM(0.01)),
                         UDE = UDEparameters(
                             optim_autoAD = Optimization.AutoEnzyme(; mode=set_runtime_activity(EnzymeCore.Reverse)),
-                            target = "A"
+                            target = :A
                         )
                         )
 

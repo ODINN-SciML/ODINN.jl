@@ -33,7 +33,7 @@ params = Parameters(
         optim_autoAD=ODINN.NoAD(),
         grad=DiscreteAdjoint(VJP_method=ODINN.EnzymeVJP()),
         optimization_method="AD+AD",
-        target = "A"),
+        target = :A),
     solver = Huginn.SolverParameters(
         step=δt,
         save_everystep=true,

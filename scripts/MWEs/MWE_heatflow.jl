@@ -289,5 +289,5 @@ hybrid_train_NN!(loss_NN, UA, T, p, opt, losses)
 
 all_times = LinRange(0, t₁, 50)
 # println("UA_trained(all_times')': ",  UA_trained(all_times')')
-plot(all_times, predict_A(UA_trained, all_times')', title="Simulated A values by the NN", yaxis="A", xaxis="Time", label="NN")
+plot(all_times, predict_A(UA_trained, all_times')', title="Simulated A values by the NN", yaxis=:A, xaxis="Time", label="NN")
 plot!(fakeA, 0, t₁, label="fake")

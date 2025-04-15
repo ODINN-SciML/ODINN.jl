@@ -35,7 +35,7 @@ function test_adjoint_SIAD2D_continuous()
             optim_autoAD=ODINN.NoAD(),
             grad=ContinuousAdjoint(),
             optimization_method="AD+AD",
-            target = "A"),
+            target = :A),
         solver = Huginn.SolverParameters(
             step=δt,
             save_everystep=true,

@@ -23,7 +23,7 @@ function callback_plots_A(θ, l, simulation)
     Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
     plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
                         xlabel="Long-term air temperature (°C)", yticks=yticks,
-                        ylabel="A", ylims=(0.0, simulation.parameters.physical.maxA), lw = 3, c=:dodgerblue4,
+                        ylabel=:A, ylims=(0.0, simulation.parameters.physical.maxA), lw = 3, c=:dodgerblue4,
                         legend=:topleft)
     if !isdir(joinpath(training_path,"png")) || !isdir(joinpath(training_path,"pdf"))
         mkpath(joinpath(training_path,"png"))

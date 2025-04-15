@@ -99,7 +99,7 @@ function run()
     #######################################################################################################
 
     # Train iceflow UDE in parallel
-    # Choose between "D" for diffusivity and "A" for Glen's coefficient
+    # Choose between :D for diffusivity and :A for Glen's coefficient
     if ODINN.retrain[]
         println("Retraining from previous NN weights...")
         trained_weights = load(joinpath(ODINN.root_dir, "data/trained_inv_weights.jld2"))
@@ -118,7 +118,7 @@ function run()
                                                         gdirs_climate_batches=gdirs_climate_batches, 
                                                         gdir_refs=gdir_refs, 
                                                         θ_trained=θ_trained, 
-                                                        target="A")           
+                                                        target=:A)           
         θ_trained = rheology_trained.minimizer
 
         # Save trained NN weights
@@ -137,7 +137,7 @@ function run()
                                                         gdirs_climate=gdirs_climate,
                                                         gdirs_climate_batches=gdirs_climate_batches, 
                                                         gdir_refs=gdir_refs, 
-                                                        target="A")  
+                                                        target=:A)  
         θ_trained = rheology_trained.minimizer
 
         # Save trained NN weights

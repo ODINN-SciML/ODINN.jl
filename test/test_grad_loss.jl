@@ -1,5 +1,9 @@
 
-function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
+function test_grad_finite_diff(
+    adjointFlavor::ADJ;
+    thres = [0., 0., 0.],
+    target = :A,
+) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing adjoint $(adjointFlavor)")
 
@@ -34,7 +38,7 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
             optim_autoAD=ODINN.NoAD(),
             grad=adjointFlavor,
             optimization_method="AD+AD",
-            target = "A"),
+            target = target),
         solver = Huginn.SolverParameters(
             step=δt,
             save_everystep=true,
@@ -44,7 +48,8 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
     model = Model(
         iceflow = SIA2Dmodel(params),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        machine_learning = NeuralNetwork(params))
+        machine_learning = NeuralNetwork(params)
+    )
 
     # We retrieve some glaciers for the simulation
     glaciers = initialize_glaciers(rgi_ids, params)
@@ -228,7 +233,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
             grad=adjointFlavor,
             optimization_method="AD+AD",
             empirical_loss_function=lossType,
-            target = "A"
+            target = :A
         ),
         solver=SolverParameters(
             reltol=1e-12,
