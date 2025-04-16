@@ -401,7 +401,12 @@ Wrapper to pass a parametrization to the SIA2D
 function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
 
     if simulation.model.machine_learning.target.name == :A
-        diffusivity_provided = false
+        if isnothing(batch_id)
+            simulation.model.iceflow.D = nothing
+        else
+            simulation.model.iceflow[batch_id].D = nothing # We pick the right iceflow model for this glacier
+        end
+        # simulation.model.iceflow = false
         apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
     elseif simulation.model.machine_learning.target.name == :D
         glacier = simulation.glaciers[batch_id]
@@ -434,12 +439,17 @@ function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {
             params = simulation.parameters
         )
         # Update value of D in iceflow model used inside SIA
-        diffusivity_provided = true
-        simulation.model.iceflow[1].D = D
+        # diffusivity_provided = true
+        # simulation.model.iceflow[1].D = D
+        if isnothing(batch_id)
+            simulation.model.iceflow.D = D
+        else
+            simulation.model.iceflow[batch_id].D = D # We pick the right iceflow model for this glacier
+        end
     else
         @error "Target UDE parametrization not provided"
     end
-    return Huginn.SIA2D(H, simulation, t; batch_id = batch_id, diffusivity_provided = diffusivity_provided)
+    return Huginn.SIA2D(H, simulation, t; batch_id = batch_id) #, diffusivity_provided = diffusivity_provided)
 end
 
 """
@@ -453,7 +463,7 @@ function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, 
     # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
     # We generate the ML parametrization based on the target
-    if simulation.parameters.UDE.target.name == :A
+    if simulation.model.machine_learning.target.name == :A
         # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
         min_NN = simulation.parameters.physical.minA
         max_NN = simulation.parameters.physical.maxA

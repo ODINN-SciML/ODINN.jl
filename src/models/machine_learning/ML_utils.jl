@@ -13,37 +13,49 @@ Generates a neural network.
 - `θ`: Neural network parameters.
 - `st`: Lux state.
 """
-function get_NN(θ_trained, ft; lightNN=false)
+function get_default_NN(θ_trained, ft; lightNN = false)
+    architecture = build_default_NN(; lightNN = lightNN)
+    return set_NN(architecture; θ_trained = θ_trained, ft = ft)
+end
+
+function build_default_NN(; n_input = 1, lightNN = false)
     if lightNN
         @warn "Using light mode of neural network"
-        UA = Lux.Chain( # Light network for debugging
-            Dense(1, 3, x -> softplus.(x)),
+        architecture = Lux.Chain( # Light network for debugging
+            Dense(n_input, 3, x -> softplus.(x)),
             Dense(3, 1, sigmoid)
         )
     else
-        UA = Lux.Chain(
-            Dense(1, 3, x -> softplus.(x)),
+        architecture = Lux.Chain(
+            Dense(n_input, 3, x -> softplus.(x)),
             Dense(3, 10, x -> softplus.(x)),
             Dense(10, 3, x -> softplus.(x)),
             Dense(3, 1, sigmoid)
         )
     end
-    θ, st = Lux.setup(rng_seed(), UA)
+    return architecture
+end
+
+function set_NN(architecture; θ_trained = nothing, ft = nothing)
+    # Set neural network using Lux
+    θ, st = Lux.setup(rng_seed(), architecture)
+
+    # Set pre-trained weights if provided
     if !isnothing(θ_trained)
         θ = θ_trained
     end
 
-    # TODO: To re-write with the new type stability fix 
+    # TODO: To re-write with the new type stability fix
     if ft == Float64
-        UA = f64(UA)
+        architecture = f64(architecture)
         θ = f64(θ)
         st = f64(st)
     end
 
+    # Build parameter as component array
     θ = ComponentArray(θ=θ)
-    return UA, θ, st
+    return architecture, θ, st
 end
-
 """
     predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
 

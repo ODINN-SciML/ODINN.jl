@@ -85,24 +85,13 @@ function NeuralNetwork(
     _nn_is_provided = [isnothing(architecture), isnothing(θ), isnothing(st)]
     if all(_nn_is_provided)
         if params.UDE.target == :A
-            architecture, θ, st = get_NN(θ, ft; lightNN=lightNN)
+            architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN)
         elseif params.UDE.target == :D
-            # TODO: I shoudl store NN elements in Target
-            architecture = Lux.Chain(
-                Dense(2, 3, x -> softplus.(x)),
-                Dense(3, 1, sigmoid)
-            )
-            θ, st = Lux.setup(ODINN.rng_seed(), architecture)
-            θ = ODINN.ComponentArray(θ=θ)
-            if Sleipnir.Float == Float64
-                architecture = f64(architecture)
-                θ = f64(θ)
-                st = f64(st)
-            end
+            architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
+            architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
         else
-            # Contruct default NN
             @warn "Constructing default Neural Network"
-            architecture, θ, st = get_NN(θ, ft; lightNN=lightNN)
+            architecture, θ, st = get_default_NN(θ, ft; lightNN=lightNN)
         end
     elseif any(_nn_is_provided) && !all(_nn_is_provided)
         @warn "To specify the neural network please provide all (architecture, θ, st), not just a subset of them."
