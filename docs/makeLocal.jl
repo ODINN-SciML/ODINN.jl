@@ -20,8 +20,8 @@ DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 
 # List of tutorial files
 tutorial_files = [
-    "src/tutorials/forward_simulation.jl",
-    "src/tutorials/functional_inversion.jl"
+    "src/tutorials/forward_simulation.jl"
+    # "src/tutorials/functional_inversion.jl"
 ]
 
 # Generate independent Markdown files for each tutorial
