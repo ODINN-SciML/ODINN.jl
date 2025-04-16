@@ -44,6 +44,11 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     dθ .= sum(dθs)
 end
 
+
+function run_SIA2D_grad_batch!(simulation::FunctionalInversion)
+    SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
+end
+
 """
 Inverse by glacier
 """
