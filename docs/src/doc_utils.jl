@@ -1,4 +1,4 @@
-function replace_includes(str::String)
+function replace_includes(str)
 
     included = ["forward_simulation.jl", "functional_inversion.jl"] # TODO: add new tutorials as they come
 
