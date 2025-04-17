@@ -19,7 +19,6 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
             step=δt,
             multiprocessing=false,
             workers=1,
-            light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             rgi_paths=rgi_paths),
         hyper = Hyperparameters(
@@ -216,7 +215,6 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
             multiprocessing=false,
             use_MB=false,
             use_iceflow=true,
-            light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             working_dir=Huginn.root_dir
         ),
@@ -276,7 +274,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     ∂A_enzyme = Enzyme.make_zero(A_θ)
     dl_enzyme = [1.]
     l_enzyme = Enzyme.make_zero(dl_enzyme)
-    H_ref = only(simulation.glaciers[1].data).H
+    H_ref = simulation.glaciers[1].thicknessData.H
     Enzyme.autodiff(
         Reverse, _loss_halfar!, Const,
         Duplicated(l_enzyme, dl_enzyme),

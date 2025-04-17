@@ -211,7 +211,7 @@ function get_rheology_law(law::Symbol)
     if law == :PatersonCuffey
         A_poly = A_law_PatersonCuffey()
         fakeA(T) = A_poly(T)
-        return fakeA(T)
+        return fakeA
     else
         @error "Unknown law of A: $law"
     end
@@ -300,14 +300,10 @@ function store_thickness_data!(prediction::Prediction, tstops::Vector{F}) where 
     for i in 1:length(prediction.glaciers)
         ts = prediction.results[i].t
         Hs = prediction.results[i].H
-    
+
         @assert ts ≈ tstops "Timestops of simulated PDE solution and UDE solution do not match."
 
-        if isnothing(prediction.glaciers[i].data)
-            prediction.glaciers[i].data = [Sleipnir.ThicknessData(ts, Hs)]
-        else
-            append!(prediction.glaciers[i].data, Sleipnir.ThicknessData(ts, Hs))
-        end
+        prediction.glaciers[i].thicknessData = Sleipnir.ThicknessData(ts, Hs)
     end
 end
 
