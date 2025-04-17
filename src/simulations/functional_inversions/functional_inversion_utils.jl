@@ -207,7 +207,7 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
 
         # Reference cames from data
         # Complete this with feeded data on glacier object
-        H_ref = only(simulation.glaciers[i].data).H
+        H_ref = simulation.glaciers[i].thicknessData.H
         # Prediction comes from simulation
         # batch_results_id = Sleipnir.get_result_id_from_rgi(batch_id, simulation)
         t = simulation.results[i].t

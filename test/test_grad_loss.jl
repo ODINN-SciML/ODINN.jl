@@ -274,7 +274,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     ∂A_enzyme = Enzyme.make_zero(A_θ)
     dl_enzyme = [1.]
     l_enzyme = Enzyme.make_zero(dl_enzyme)
-    H_ref = only(simulation.glaciers[1].data).H
+    H_ref = simulation.glaciers[1].thicknessData.H
     Enzyme.autodiff(
         Reverse, _loss_halfar!, Const,
         Duplicated(l_enzyme, dl_enzyme),
