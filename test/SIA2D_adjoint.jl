@@ -1,7 +1,10 @@
 
 function test_adjoint_SIAD2D_continuous()
+
     Random.seed!(1234)
+
     function _loss(H, θ, simulation, t, vecBackwardSIA2D)
+        apply_parametrization = simulation.model.machine_learning.target.apply_parametrization
         ODINN.apply_UDE_parametrization!(θ, simulation, nothing, glacier_idx)
         dH = Huginn.SIA2D(H, simulation, t; batch_id=glacier_idx)
         return sum(dH.*vecBackwardSIA2D)

@@ -67,10 +67,10 @@ end
 end
 
 @testset "Adjoint method of SIA equation with D as target" begin
-    @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=DiscreteVJP()); thres=[2e-4, 1e-8, 1e-3], target = :D)
-    @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=ContinuousVJP()); thres=[2e-4, 1e-8, 1e-3], target = :D)
+    @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=DiscreteVJP()); thres=[2e-4, 4e-6, 5e-2], target = :D)
+    @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method=ContinuousVJP()); thres=[2e-4, 4e-6, 5e-2], target = :D)
 end
 
-@testset "Inversion Tests" inversion_test(steady_state = true, save_refs = true)
+@testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
 
 end

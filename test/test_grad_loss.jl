@@ -77,7 +77,7 @@ function test_grad_finite_diff(
         return loss_function(x, simulation)
     end
 
-    dθ=zero(θ)
+    dθ = zero(θ)
     loss_iceflow_grad!(dθ, θ, simulation)
 
     ratio = []
@@ -245,7 +245,11 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
 
     # Bed (it has to be flat for the Halfar solution)
     B = zeros((nx,ny))
-    model = Model(iceflow = SIA2Dmodel(parameters), mass_balance = nothing, machine_learning = NeuralNetwork(parameters))
+    model = Model(
+        iceflow = SIA2Dmodel(parameters),
+        mass_balance = nothing,
+        machine_learning = NeuralNetwork(parameters)
+    )
 
     θ = model.machine_learning.θ
     modelNN = model.machine_learning.architecture
@@ -254,7 +258,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     min_NN = parameters.physical.minA
     max_NN = parameters.physical.maxA
     A_θ = ODINN.predict_A̅(smodel, [T], (min_NN, max_NN))[1]
-    println("A_θ=",A_θ)
+    println("A_θ = ",A_θ)
 
     # Initial condition of the glacier
     R₀ = [sqrt((Δx * (i - nx/2))^2 + (Δy * (j - ny/2))^2) for i in 1:nx, j in 1:ny]
@@ -297,12 +301,16 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     )
 
     # _loss_halfar!(l_enzyme, R₀, h₀, r₀, A_θ, n, tstops, H_ref, physicalParams, lossType)
-    println("l_enzyme=",l_enzyme)
-    println("∂A_enzyme=",∂A_enzyme)
+    println("l_enzyme=", l_enzyme)
+    println("∂A_enzyme=", ∂A_enzyme)
 
-    # TODO: Replace this grad_apply_UDE_parametrization with the new API
-    ∇θ, = Zygote.gradient(_θ -> ODINN.grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
-    # println("∇θ in test=",∇θ)
+    # Retrieve apply parametrization from inversion
+    apply_parametrization = model.machine_learning.target.apply_parametrization
+    ∇θ, = Zygote.gradient(_θ -> apply_parametrization(;
+        H = nothing, ∇S = nothing, θ = _θ,
+        ice_model = only(model.iceflow), ml_model = model.machine_learning,
+        glacier = only(glaciers), params = parameters),
+        θ)
     dθ_halfar = ∂A_enzyme[1] * ∇θ
 
     # Compute gradient with manual implementation of the backward + discrete adjoint of SIA2D
@@ -316,11 +324,11 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     thres_angle = thres[2]
     thres_relerr = thres[3]
     if printDebug | !( (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr) )
-        printVecScientific("ratio  = ",[ratio],thres_ratio)
-        printVecScientific("angle  = ",[angle],thres_angle)
-        printVecScientific("relerr = ",[relerr],thres_relerr)
+        printVecScientific("ratio  = ", [ratio], thres_ratio)
+        printVecScientific("angle  = ", [angle], thres_angle)
+        printVecScientific("relerr = ", [relerr], thres_relerr)
     end
-    @test abs(ratio)<thres_ratio
-    @test abs(angle)<thres_angle
-    @test abs(relerr)<thres_relerr
+    @test abs(ratio) < thres_ratio
+    @test abs(angle) < thres_angle
+    @test abs(relerr) < thres_relerr
 end

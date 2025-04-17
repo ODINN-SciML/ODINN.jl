@@ -56,40 +56,6 @@ function set_NN(architecture; θ_trained = nothing, ft = nothing)
     θ = ComponentArray(θ=θ)
     return architecture, θ, st
 end
-"""
-    predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
-
-Predicts the value of A with a neural network based on the long-term air temperature
-and on the bounds value to normalize the output of the neural network.
-
-# Arguments
-- `U`: Neural network.
-- `temp`: Temperature to be fed as an input of the neural network.
-- `lims::Tuple{F, F}`: Bounds to use for the affine transformation of the neural
-    network output.
-"""
-function predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    return only(normalize_A(U(temp), lims))
-end
-
-"""
-    normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-
-Normalize a variable by using an affine transformation defined by some lower and
-upper bounds (m, M). The returned value is m+(M-m)*x.
-
-# Arguments
-- `x`: Input value.
-- `lims::Tuple{F, F}`: Lower and upper bounds to use in the affine transformation.
-
-# Returns
-- The input variable scaled by the affine transformation.
-"""
-function normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    minA_out = lims[1]
-    maxA_out = lims[2]
-    return minA_out .+ (maxA_out - minA_out) .* x
-end
 
 function save_plot(plot, path, filename)
     Plots.savefig(plot,joinpath(path,"png","$filename-$(current_epoch[]).png"))
