@@ -20,54 +20,33 @@ DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 
 # List of tutorial files
 tutorial_files = [
-    "src/tutorials/forward_simulation.jl",
-    "src/tutorials/functional_inversion.jl"
+    "./src/forward_simulation.jl",
+    "./src/functional_inversion.jl"
 ]
 
 # Generate independent Markdown files for each tutorial
 for tutorial_file in tutorial_files
     tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
-    Literate.markdown(tutorial_file, "./src/tutorials"; name = tutorial_name)
+    Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
 end
-
-# Merge tutorials into a single Markdown file
-open("./src/tutorials.md", "w") do io
-    println(io, "# Tutorials\n")
-    for tutorial_file in tutorial_files
-        # Extract the file name without extension
-        tutorial_name = splitext(basename(tutorial_file))[1]
-        
-        # Read the content of the generated Markdown file and append it
-        tutorial_md_file = joinpath("./src/tutorials", tutorial_name * ".md")
-        if isfile(tutorial_md_file)
-            tutorial_content = read(tutorial_md_file, String)
-            println(io, tutorial_content)
-        else
-            println(io, "Error: Could not find tutorial file $tutorial_md_file")
-        end
-    end
-end
-
-# # Convert tutorial/examples to markdown
-# Literate.markdown("./src/tutorials.jl", "./src";
-#                   name = "tutorials", preprocess = replace_includes)
 
 # Which markdown files to compile to HTML
 makedocs(
     modules=[ODINN, Huginn, Muninn, Sleipnir],
     authors="Jordi Bolibar, Facu Sapienza, Alban Gossard",
-    repo="https://github.com/ODINN-SciML/ODINN.jl/blob/{commit}{path}#{line}",
+    repo=Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
     sitename="ODINN.jl",
-    format=Documenter.HTML(
-        prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://ODINN-SciML.github.io/ODINN.jl",
-        assets=String[]
-        # size_threshold=500 * 1024,  # Increase size threshold to 500 KiB
-        # size_threshold_warn=250 * 1024  # Increase warning threshold to 250 KiB
+    format = Documenter.HTML(prettyurls=get(ENV, "CI", nothing)=="true",
+                             ansicolor=true, collapselevel=1,
+                             size_threshold=1000 * 1024,  # Increase size threshold to 500 KiB
+                            size_threshold_warn=500 * 1024  # Increase warning threshold to 250 KiB),      # in bytes
     ),
     pages=[
         "Home" => "index.md",
-        "Tutorials" => "tutorials.md",
+        "Tutorials" => [
+            "Forward simulation" => "forward_simulation.md",
+            "Functional inversion" => "functional_inversion.md"
+        ],
         "Types and functions" => "funcs_types.md",
         "API" => "api.md"
     ],
