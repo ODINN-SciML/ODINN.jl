@@ -33,7 +33,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=[5,5],
+                                            epochs=[20,30],
                                             optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
                     physical = PhysicalParameters(minA = 8e-21,
                                                   maxA = 8e-17),
