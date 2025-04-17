@@ -67,8 +67,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         H = result.H
 
         # Reference data
-        t_ref = only(simulation.glaciers[i].data).t
-        H_ref = only(simulation.glaciers[i].data).H
+        t_ref = simulation.glaciers[i].thicknessData.t
+        H_ref = simulation.glaciers[i].thicknessData.H
 
         @assert t ≈ t_ref "Reference times of simulation and reference data do not coincide."
         @assert length(H) == length(H_ref)
