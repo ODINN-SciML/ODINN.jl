@@ -49,25 +49,17 @@ function VJP_λ_∂SIA_discrete(
         glacier = simulation.glaciers[batch_id]
     end
 
-    # Retrieve parameters
+    # Retrieve models and parameters
     params = simulation.parameters
     ml_model = simulation.model.machine_learning
+    target = ml_model.target
 
-    A = SIA2D_model.A
-    n = SIA2D_model.n
     B = glacier.B
     Δx = glacier.Δx
     Δy = glacier.Δy
-    Γ = SIA2D_model.Γ
-    ρ = simulation.parameters.physical.ρ
-    g = simulation.parameters.physical.g
-
-    # Retrieve target
-    # target = params.UDE.target
-    target = ml_model.target
 
     # First, enforce values to be positive
-    map!(x -> ifelse(x>0.0,x,0.0), H, H)
+    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
     # Update glacier surface altimetry
     S = B .+ H
 
@@ -78,7 +70,7 @@ function VJP_λ_∂SIA_discrete(
     ∇Sx = Huginn.avg_y(dSdx)
     ∇Sy = Huginn.avg_x(dSdy)
 
-    # Compute slope
+    # Compute surface slope
     ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
 
     # Compute average ice thickness
@@ -192,6 +184,7 @@ Returns:
 function VJP_λ_∂SIA∂H_continuous(
     λ::Matrix{R},
     H::Matrix{R},
+    θ,
     simulation::SIM,
     t::R;
     batch_id::Union{Nothing, I} = nothing
@@ -205,36 +198,59 @@ function VJP_λ_∂SIA∂H_continuous(
         glacier = simulation.glaciers[batch_id]
     end
 
+    # Retrieve models and parameters
     params = simulation.parameters
     ml_model = simulation.model.machine_learning
+    target = ml_model.target
 
     # Retrieve parameters
     B = glacier.B
     Δx = glacier.Δx
     Δy = glacier.Δy
-    A = SIA2D_model.A
-    n = SIA2D_model.n
-    ρ = params.physical.ρ
-    g = params.physical.g
 
+    # First, enforce values to be positive
+    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
     # Update glacier surface altimetry
     S = B .+ H
 
     ### Computation of effective diffusivity
     dSdx = Huginn.diff_x(S) ./ Δx
     dSdy = Huginn.diff_y(S) ./ Δy
-    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^(1/2)
-    # This is used to compute the diffusivity:
-    Γ = 2.0 * A[] * (ρ * g)^n[] / (n[]+2) # 1 / m^3 s
-    D = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 1)
+    ∇Sx = Huginn.avg_y(dSdx)
+    ∇Sy = Huginn.avg_x(dSdy)
+
+    # Compute surface slope
+    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+
+    # Compute average ice thickness
+    H̄ = Huginn.avg(H)
+
+    # Compute diffusivity based on target objective
+    D = target.D(
+        H = H̄, ∇S = ∇S, θ = θ,
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+
+    # TODO: Clip dSdx and dSdx for conservation of mass condition
 
     ### Computation of partial derivatives of diffusivity
-    ∂D∂H_dual = (n[] + 2) .* Γ .* Huginn.avg(H).^(n[] + 1) .* ∇S.^(n[] - 1)
+    ∂D∂H_dual = target.∂D∂H(
+        H = H̄, ∇S = ∇S, θ = θ,
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
     ∂D∂H = Huginn.avg(∂D∂H_dual)
 
+    β = target.∂D∂∇H(
+        H = H̄, ∇S = ∇S, θ = θ,
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+
     # Derivatives evaluated in dual grid
-    ∂D∂∇H_x = (n[] - 1) .* Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 3) .* Huginn.avg_y(dSdx)
-    ∂D∂∇H_y = (n[] - 1) .* Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S.^(n[] - 3) .* Huginn.avg_x(dSdy)
+    ∂D∂∇H_x = β .* ∇Sx
+    ∂D∂∇H_y = β .* ∇Sy
 
     ### Computation of term ∇⋅(D⋅∇λ)
 
@@ -298,9 +314,9 @@ Returns:
 - `dλ::Matrix{R}`: Jacobian vector product, also called input gradient in reverse-mode AD.
 """
 function VJP_λ_∂SIA∂θ_continuous(
-    θ,
     λ::Matrix{R},
     H::Matrix{R},
+    θ,
     simulation::SIM,
     t::R;
     batch_id::Union{Nothing, I} = nothing
@@ -314,66 +330,86 @@ function VJP_λ_∂SIA∂θ_continuous(
         glacier = simulation.glaciers[batch_id]
     end
 
+    # Retrieve models and parameters
     params = simulation.parameters
     ml_model = simulation.model.machine_learning
+    target = ml_model.target
 
     # Retrieve parameters
     B = glacier.B
     Δx = glacier.Δx
     Δy = glacier.Δy
-    n = SIA2D_model.n
-    ρ = params.physical.ρ
-    g = params.physical.g
 
+    # First, enforce values to be positive
+    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
     # Update glacier surface altimetry
     S = B .+ H
 
-    # Evaluation of ∇ ⋅ (∂D∂θ ∇S) is done exactly as in the forward map
-    @views dSdx = Huginn.diff_x(S) ./ Δx
-    @views dSdy = Huginn.diff_y(S) ./ Δy
-    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^((n[] - 1)/2)
+    ### Computation of effective diffusivity
+    dSdx = Huginn.diff_x(S) ./ Δx
+    dSdy = Huginn.diff_y(S) ./ Δy
+    ∇Sx = Huginn.avg_y(dSdx)
+    ∇Sy = Huginn.avg_x(dSdy)
 
     @views dSdx_edges = Huginn.diff_x(S[:,2:end - 1]) ./ Δx
     @views dSdy_edges = Huginn.diff_y(S[2:end - 1,:]) ./ Δy
 
-    η₀ = params.physical.η₀
-    dSdx_edges .= @views @. min(dSdx_edges,  η₀ * H[2:end, 2:end-1] / Δx)
-    dSdx_edges .= @views @. max(dSdx_edges, -η₀ * H[1:end-1, 2:end-1] / Δx)
-    dSdy_edges .= @views @. min(dSdy_edges,  η₀ * H[2:end-1, 2:end] / Δy)
-    dSdy_edges .= @views @. max(dSdy_edges, -η₀ * H[2:end-1, 1:end-1] / Δy)
+    # Compute surface slope
+    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
 
-    ### Computation of partial derivatives of diffusivity
-    Γ = 2.0 * (ρ * g)^n[] / (n[]+2)
-    ∂D∂A = Γ .* Huginn.avg(H).^(n[] + 2) .* ∇S
-    ∇θ, = Zygote.gradient(_θ -> grad_apply_UDE_parametrization(_θ, simulation, batch_id), θ)
+    # Compute average ice thickness
+    H̄ = Huginn.avg(H)
+
+    # Compute diffusivity based on target objective
+    D = target.D(
+        H = H̄, ∇S = ∇S, θ = θ,
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+
+    # Gradient wrt θ
+    ∂D∂θ = target.∂D∂θ(
+        H = H̄, ∇S = ∇S, θ = θ,
+        ice_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+
+    # Compute the flux
+    η₀ = params.physical.η₀
+    dSdx_edges = clamp_borders_dx(dSdx_edges, H, η₀, Δx)
+    dSdy_edges = clamp_borders_dy(dSdy_edges, H, η₀, Δy)
 
     # Compute flux components
-    Fx = Huginn.avg_y(∂D∂A) .* dSdx_edges
-    Fy = Huginn.avg_x(∂D∂A) .* dSdy_edges
-    Fxx = Huginn.diff_x(Fx) / Δx
-    Fyy = Huginn.diff_y(Fy) / Δy
+    @tullio Fx[i, j, k] := (∂D∂θ[i, j, k] + ∂D∂θ[i, j + 1, k]) / 2 * dSdx_edges[i, j]
+    @tullio Fy[i, j, k] := (∂D∂θ[i, j, k] + ∂D∂θ[i + 1, j, k]) / 2 * dSdy_edges[i, j]
 
-    ∂D∂A_∇S = zero(H)
-    Huginn.inn(∂D∂A_∇S) .= Fxx .+ Fyy
+    @tullio Fxx[i, j, k] := (Fx[i + 1, j, k] - Fx[i, j, k]) / Δx
+    @tullio Fyy[i, j, k] := (Fy[i, j + 1, k] - Fy[i, j, k]) / Δy
 
-    return sum(∂D∂A_∇S .* λ) .* ∇θ
+    # Combine fluxes and pad contours
+    @tullio ∇_∂D∂θ_∇S[i, j, k] := Fxx[pad(i-1,1,1), pad(j-1,1,1), k] + Fyy[pad(i-1,1,1), pad(j-1,1,1), k]
+
+    # Evaluate numerical integral for loss
+    @tullio ∂θ_v[k] := ∇_∂D∂θ_∇S[i, j, k] * λ[i, j]
+
+    return ∂θ_v
 end
 
 # Repeated function
-function grad_apply_UDE_parametrization(θ, simulation::SIM, batch_id::I) where {I <: Integer, SIM <: Simulation}
-    # We load the ML model with the parameters
-    model = simulation.model.machine_learning.architecture
-    st = simulation.model.machine_learning.st
-    smodel = StatefulLuxLayer{true}(model, θ.θ, st)
+# function grad_apply_UDE_parametrization(θ, simulation::SIM, batch_id::I) where {I <: Integer, SIM <: Simulation}
+#     # We load the ML model with the parameters
+#     model = simulation.model.machine_learning.architecture
+#     st = simulation.model.machine_learning.st
+#     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
 
-    # We generate the ML parametrization based on the target
-    if simulation.model.machine_learning.target.name == :A
-        min_NN = simulation.parameters.physical.minA
-        max_NN = simulation.parameters.physical.maxA
-        A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
-        # println("Value of A during internal gradient evaluation:")
-        # @show A
-        return A
-    end
-end
+#     # We generate the ML parametrization based on the target
+#     if simulation.model.machine_learning.target.name == :A
+#         min_NN = simulation.parameters.physical.minA
+#         max_NN = simulation.parameters.physical.maxA
+#         A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
+#         # println("Value of A during internal gradient evaluation:")
+#         # @show A
+#         return A
+#     end
+# end
 

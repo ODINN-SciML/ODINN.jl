@@ -5,7 +5,7 @@ function VJP_λ_∂SIA∂H(VJPMode::DiscreteVJP, λ, H, θ, simulation, t, batch
 end
 
 function VJP_λ_∂SIA∂H(VJPMode::ContinuousVJP, λ, H, θ, simulation, t, batch_id)
-    λ_∂f∂H = VJP_λ_∂SIA∂H_continuous(λ, H, simulation, t; batch_id = batch_id)
+    λ_∂f∂H = VJP_λ_∂SIA∂H_continuous(λ, H, θ, simulation, t; batch_id = batch_id)
     return λ_∂f∂H, nothing
 end
 
@@ -35,7 +35,7 @@ function VJP_λ_∂SIA∂θ(VJPMode::DiscreteVJP, λ, H, θ, dH_H, dH_λ, simula
 end
 
 function VJP_λ_∂SIA∂θ(VJPMode::ContinuousVJP, λ, H, θ, dH_H, dH_λ, simulation, t, batch_id)
-    λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(θ, λ, H, simulation, t; batch_id = batch_id)
+    λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(λ, H, θ, simulation, t; batch_id = batch_id)
     return λ_∂f∂θ
 end
 

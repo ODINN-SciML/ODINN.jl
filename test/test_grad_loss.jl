@@ -300,9 +300,10 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     println("l_enzyme=",l_enzyme)
     println("∂A_enzyme=",∂A_enzyme)
 
+    # TODO: Replace this grad_apply_UDE_parametrization with the new API
     ∇θ, = Zygote.gradient(_θ -> ODINN.grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
     # println("∇θ in test=",∇θ)
-    dθ_halfar = ∂A_enzyme[1]*∇θ
+    dθ_halfar = ∂A_enzyme[1] * ∇θ
 
     # Compute gradient with manual implementation of the backward + discrete adjoint of SIA2D
     dθ = zero(θ)

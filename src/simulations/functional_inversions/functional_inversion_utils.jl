@@ -400,15 +400,20 @@ Wrapper to pass a parametrization to the SIA2D
 """
 function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
 
-    if simulation.model.machine_learning.target.name == :A
+    target_name = simulation.model.machine_learning.target.name
+
+    if target_name == :A
         if isnothing(batch_id)
             simulation.model.iceflow.D = nothing
         else
             simulation.model.iceflow[batch_id].D = nothing # We pick the right iceflow model for this glacier
         end
         # simulation.model.iceflow = false
+        # TODO: Call apply_UDE_parametrization inside Target
         apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
-    elseif simulation.model.machine_learning.target.name == :D
+
+    elseif target_name == :D
+
         glacier = simulation.glaciers[batch_id]
 
         ### Compute some stuff we need in order to compute diffusivity
