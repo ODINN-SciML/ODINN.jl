@@ -4,7 +4,7 @@ function replace_includes(str)
 
     # Here the path loads the files from their proper directory,
     # which may not be the directory of the `examples.jl` file!
-    path = "src/tutorials/"
+    path = "src/"
 
     for ex in included
         content = read(path*ex, String)
