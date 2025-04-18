@@ -27,7 +27,7 @@ tutorial_files = [
 # Generate independent Markdown files for each tutorial
 for tutorial_file in tutorial_files
     tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
-    Literate.markdown(tutorial_file, "./src"; name = tutorial_name, preprocess = replace_includes)
+    Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
 end
 
 # Which markdown files to compile to HTML
