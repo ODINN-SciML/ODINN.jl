@@ -33,7 +33,7 @@ rgi_ids = collect(keys(rgi_paths))
 δt = 1/12
 
 params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
-                                                    use_MB=false,
+                                                    use_MB=true,
                                                     velocities=true,
                                                     tspan=(2010.0, 2015.0),
                                                     step=δt,
@@ -47,8 +47,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                             optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
                     physical = PhysicalParameters(minA = 8e-21,
                                                   maxA = 8e-17),
-                    UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
-                                        optim_autoAD=ODINN.NoAD(),
+                    UDE = UDEparameters(optim_autoAD=ODINN.NoAD(),
                                         grad=ContinuousAdjoint(),
                                         optimization_method="AD+AD",
                                         target = "A"),

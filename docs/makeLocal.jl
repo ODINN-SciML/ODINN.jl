@@ -18,26 +18,35 @@ include("src/doc_utils.jl")
 
 DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 
-# Convert tutorial/examples to markdown
-Literate.markdown("./src/tutorials.jl", "./src";
-                  name = "tutorials", preprocess = replace_includes)
+# List of tutorial files
+tutorial_files = [
+    "./src/forward_simulation.jl",
+    "./src/functional_inversion.jl"
+]
+
+# Generate independent Markdown files for each tutorial
+for tutorial_file in tutorial_files
+    tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
+    Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
+end
 
 # Which markdown files to compile to HTML
 makedocs(
     modules=[ODINN, Huginn, Muninn, Sleipnir],
-    authors="Jordi Bolibar, Facu Sapienza",
-    repo="https://github.com/ODINN-SciML/ODINN.jl/blob/{commit}{path}#{line}",
+    authors="Jordi Bolibar, Facu Sapienza, Alban Gossard",
+    repo=Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
     sitename="ODINN.jl",
-    format=Documenter.HTML(
-        prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://ODINN-SciML.github.io/ODINN.jl",
-        assets=String[]
-        # size_threshold=500 * 1024,  # Increase size threshold to 500 KiB
-        # size_threshold_warn=250 * 1024  # Increase warning threshold to 250 KiB
+    format = Documenter.HTML(prettyurls=get(ENV, "CI", nothing)=="true",
+                             ansicolor=true, collapselevel=1,
+                             size_threshold=1000 * 1024,  # Increase size threshold to 500 KiB
+                            size_threshold_warn=500 * 1024  # Increase warning threshold to 250 KiB),      # in bytes
     ),
     pages=[
         "Home" => "index.md",
-        "Tutorials" => "tutorials.md",
+        "Tutorials" => [
+            "Forward simulation" => "forward_simulation.md",
+            "Functional inversion" => "functional_inversion.md"
+        ],
         "Types and functions" => "funcs_types.md",
         "API" => "api.md"
     ],

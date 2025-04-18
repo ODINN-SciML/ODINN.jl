@@ -126,7 +126,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             t_nodes, weights = GaussQuadrature(simulation.parameters.simulation.tspan..., simulation.parameters.UDE.grad.n_quadrature)
 
             ### Define the reverse ODE problem
-            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
+            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP)
                 function f_adjoint_rev(dλ, λ, p, τ)
                     t = -τ
                     # λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H_itp(t), simulation, t; batch_id = i)[1]
@@ -171,7 +171,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                             abstol=simulation.parameters.UDE.grad.abstol)
 
             ### Numerical integration using quadrature to compute gradient
-            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
+            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP)
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(-t_nodes[j])
                     _H = H_itp(t_nodes[j])
