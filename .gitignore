@@ -11,6 +11,12 @@ plots/MB/
 plots/training/
 data/
 
+# Generated documentation
+docs/build/
+docs/src/forward_simulation.md
+docs/src/functional_inversion.md
+docs/data/results/
+
 # Core dump files
 *.core
 

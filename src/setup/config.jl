@@ -110,6 +110,8 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                     @info "[ODINN] $(nworkers()) workers precompiling... Please wait."
                     redirect_stdout(devnull)
                     redirect_stderr(devnull)
+                    using Dates
+                    @everywhere using Revise
                     @everywhere using ODINN
                 finally
                     redirect_stdout(old_stdout)

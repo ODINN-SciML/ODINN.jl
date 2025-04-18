@@ -124,8 +124,8 @@ We soon plan to add compatibility with neural networks coming from the [MassBala
 Machine learning models are used in the context of Universal Differential Equations (UDEs, *Rackauckas et al., 2020*) to parametrize or learn specific parts of differential equations. Machine Learning models are manage by `ODINN.jl`. As per the other types of models, all machine learning models need to be a subtype of the abstract type `MLmodel`. The default solution here is to use a neural network:
 
 ```@docs
-ODINN.NN
-ODINN.NN(params::Sleipnir.Parameters)
+ODINN.NeuralNetwork
+ODINN.NeuralNetwork(params::Sleipnir.Parameters)
 ```
 
 ## Simulations

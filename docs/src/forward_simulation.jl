@@ -1,6 +1,7 @@
 # ## Forward simulation tutorial
 
-using Revise
+## This tutorial provides a simple example on how to perform a forward simulation using ODINN.jl.
+
 using ODINN
 
 ## Define the working directory
@@ -20,8 +21,8 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
-		multiprocessing = false,
-        #workers = 5,
+		multiprocessing = true,
+        workers = 5,
 		rgi_paths = rgi_paths
     )
 )

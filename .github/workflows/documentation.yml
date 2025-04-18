@@ -14,7 +14,7 @@ jobs:
       contents: write
       pull-requests: read
       statuses: write
-    runs-on: ubuntu-latest
+    runs-on: macos-13 # multiprocessing in the documentation is only working on MacOS
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
