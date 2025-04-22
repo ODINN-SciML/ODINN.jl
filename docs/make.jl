@@ -11,6 +11,8 @@ Pkg.activate(".")
 Pkg.develop(PackageSpec(path=".."))
 Pkg.instantiate()
 
+ENV["ODINN_OVERWRITE_MULTI"] = true
+
 using Revise
 using Documenter, Literate
 using ODINN
@@ -36,10 +38,12 @@ makedocs(
     authors="Jordi Bolibar, Facu Sapienza, Alban Gossard",
     repo=Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
     sitename="ODINN.jl",
-    format = Documenter.HTML(prettyurls=get(ENV, "CI", nothing)=="true",
-                             ansicolor=true, collapselevel=1,
-                             size_threshold=1000 * 1024,  # Increase size threshold to 500 KiB
-                            size_threshold_warn=500 * 1024  # Increase warning threshold to 250 KiB),      # in bytes
+    format = Documenter.HTML(
+        prettyurls=get(ENV, "CI", nothing)=="true",
+        ansicolor=true, collapselevel=1,
+        size_threshold=2000 * 1024,  # Increase size threshold to 500 KiB
+        size_threshold_warn=1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
+        example_size_threshold=1000 * 1024
     ),
     pages=[
         "Home" => "index.md",
