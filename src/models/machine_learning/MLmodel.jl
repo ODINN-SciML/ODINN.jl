@@ -1,7 +1,5 @@
 export NeuralNetwork
 
-include("ML_utils.jl")
-include("Target_utils.jl")
 
 # Abstract type as a parent type for Machine Learning models
 abstract type MLmodel <: AbstractModel end

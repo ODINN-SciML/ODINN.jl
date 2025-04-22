@@ -36,7 +36,7 @@ include("test_grad_loss.jl")
 include("test_grad_Enzyme.jl")
 
 # Activate to avoid GKS backend Plot issues in the JupyterHub
-ENV["GKSwstype"]="nul"
+ENV["GKSwstype"] = "nul"
 
 @testset "Run all tests" begin
 

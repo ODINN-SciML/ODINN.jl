@@ -1,164 +1,3 @@
-export AbstractTarget, AbstractSIA2DTarget
-export SIA2D_target
-export ComponentVector2Vector, Vector2ComponentVector
-export predict_A̅
-
-abstract type AbstractTarget end
-abstract type AbstractSIA2DTarget <: AbstractTarget end
-
-struct SIA2D_target <: AbstractSIA2DTarget
-    name::Symbol
-    D::Function
-    ∂D∂H::Function
-    ∂D∂∇H::Function
-    ∂D∂θ::Function
-    apply_parametrization::Function
-    apply_parametrization!::Function
-end
-
-function SIA2D_target(;
-    name::Symbol = :A,
-)
-    if name == :foo
-        build_target_foo()
-    elseif name == :A
-        build_target_A()
-    elseif name == :D
-        build_target_D()
-    else
-        @error "Target method named $(name) not implemented."
-    end
-end
-
-### Dummy target for testing
-
-function build_target_foo()
-    return SIA2D_target(
-        :foo,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> nothing
-    )
-end
-
-### Targrt to inverse creep coefficient A as a function of other quantities
-
-function build_target_A()
-    return SIA2D_target(
-        :A,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> D_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂H_target_A(; H, ∇S, ice_model, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂∇H_target_A(; H, ∇S, ice_model, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂θ_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_A!(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    )
-end
-
-function Γ(model, params; include_A::Bool = true)
-    n = model.n
-    ρ = params.physical.ρ
-    g = params.physical.g
-    if include_A
-        A = model.A
-        return 2.0 * A[] * (ρ * g)^n[] / (n[]+2)
-    else
-        return 2.0 * (ρ * g)^n[] / (n[]+2)
-    end
-end
-
-function D_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    n = ice_model.n
-    Γ_no_A = Γ(ice_model, params; include_A = false)
-    A = apply_parametrization_target_A(;
-        H = H, ∇S = ∇S, θ = θ,
-        ice_model = ice_model, ml_model = ml_model, glacier = glacier, params = params
-    )
-    return A .* Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
-end
-
-function ∂D∂H_target_A(; H, ∇S, ice_model, params)
-    return Γ(ice_model, params) .* (ice_model.n[] + 2) .* H.^(ice_model.n[] + 1) .* ∇S.^(ice_model.n[] - 1)
-end
-
-function ∂D∂∇H_target_A(; H, ∇S, ice_model, params)
-    return Γ(ice_model, params) .* (ice_model.n[] - 1) .* H.^(ice_model.n[] + 2) .* ∇S.^(ice_model.n[] - 3)
-end
-
-function ∂D∂θ_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    n = ice_model.n
-    Γ_no_A = Γ(ice_model, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
-
-    # Unfortunatelly, we need to vectorize ∇θ to do the inner product
-    ∇θ, = Zygote.gradient(_θ -> apply_parametrization_target_A(;
-        H = H, ∇S = ∇S, θ = _θ,
-        ice_model = ice_model, ml_model = ml_model, glacier = glacier, params = params),
-        θ)
-    ∇θ_cv = ComponentVector2Vector(∇θ)
-
-    # Create a tensor with both elements
-    return cartesian_tensor(∂A_spatial, ∇θ_cv)
-end
-
-function apply_parametrization_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-# function apply_parametrization_target_A(H, ∇S, θ, ice_model, ml_model, params, glacier) where {I <: Integer, SIM <: Simulation}
-    # We load the ML model with the parameters
-    nn_model = ml_model.architecture
-    st = ml_model.st
-    smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
-    min_NN = params.physical.minA
-    max_NN = params.physical.maxA
-    A = predict_A̅(smodel, [mean(glacier.climate.longterm_temps)], (min_NN, max_NN))[1]
-    return A
-end
-
-function apply_parametrization_target_A!(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    A = apply_parametrization_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    ice_model.A[] = A
-    ice_model.D = nothing
-    ice_model.D_is_provided = false
-    return nothing
-end
-
-"""
-    predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
-
-Predicts the value of A with a neural network based on the long-term air temperature
-and on the bounds value to normalize the output of the neural network.
-
-# Arguments
-- `U`: Neural network.
-- `temp`: Temperature to be fed as an input of the neural network.
-- `lims::Tuple{F, F}`: Bounds to use for the affine transformation of the neural
-    network output.
-"""
-function predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    return only(normalize_A(U(temp), lims))
-end
-
-"""
-    normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-
-Normalize a variable by using an affine transformation defined by some lower and
-upper bounds (m, M). The returned value is m+(M-m)*x.
-
-# Arguments
-- `x`: Input value.
-- `lims::Tuple{F, F}`: Lower and upper bounds to use in the affine transformation.
-
-# Returns
-- The input variable scaled by the affine transformation.
-"""
-function normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    minA_out = lims[1]
-    maxA_out = lims[2]
-    return minA_out .+ (maxA_out - minA_out) .* x
-end
-
 ### Target to invert D as a function of H and Temp
 
 """
@@ -170,13 +9,15 @@ Inversion of the form
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * exp( NeuralNet(T, H; θ))
     log D = log D_physics + NN
 """
-function build_target_D()
+function build_target_D(;
+    interpolation::Bool = true
+)
     return SIA2D_target(
         :D,
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
+        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, ice_model, ml_model, glacier, params),
     )
@@ -186,7 +27,6 @@ end
 function D_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
     return apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
 end
-
 
 function ∂D∂H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
     n = ice_model.n
@@ -217,7 +57,7 @@ function ∂D∂∇H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, param
     return Γ(ice_model, params; include_A = false) .* A .* (ice_model.n[] - 1) .* H.^(ice_model.n[] + 2) .* ∇S.^(ice_model.n[] - 3)
 end
 
-function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation)
     n = ice_model.n
     Γ_no_A = Γ(ice_model, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
@@ -228,15 +68,17 @@ function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
 
     # TODO: move this to be some parameter
     # mode = "full"
-    mode = "interp"
+    # mode = "interp"
+    # if mode == "full"
 
-    if mode == "full"
+    if !interpolation
         # Computes derivative at each pixel. Slower but more precise.
         for i in axes(H, 1), j in axes(H, 2)
             ∇θ_point, = Zygote.gradient(_θ -> predict_A_target_D(_θ, temp, H[i,j]; ml_model = ml_model, params = params), θ)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * ComponentVector2Vector(∇θ_point)
         end
-    elseif mode == "interp"
+    else
+    # elseif mode == "interp"
         # Interpolation of the gradient as function of values of H.
         # Introduces interpolation errors but it is faster and probably sufficient depending
         # the decired level of precision for the gradients.
@@ -260,10 +102,10 @@ function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
 
         # Compute spatial distributed gradient
         for i in axes(H, 1), j in axes(H, 2)
-            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H[i,j])
+            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H[i, j])
         end
-    else
-        @error "Method to spatially compute gradient with respect to H not specified."
+    # else
+    #     @error "Method to spatially compute gradient with respect to H not specified."
     end
 
     return ∂D∂θ
@@ -338,6 +180,7 @@ function predict_A_target_D(
     min_NN = params.physical.minA
     max_NN = params.physical.maxA
 
+    # Neural network prediction
     A_pred = only(
         normalize_A(
             smodel([
@@ -353,7 +196,8 @@ function predict_A_target_D(
     return A_pred
 end
 
-# Normalization functions to ensure the scales of input are comparable to each other
+### Normalization functions to ensure the scales of input are comparable to each other
+
 function normalize_T(T; lims)
     return (T .- lims[1]) ./ (lims[2] - lims[1]) .- 0.5
 end
