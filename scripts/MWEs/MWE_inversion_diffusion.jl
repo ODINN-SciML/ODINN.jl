@@ -4,6 +4,7 @@ using Revise
 using ODINN
 using SciMLSensitivity
 using Lux, ComponentArrays
+using Statistics
 
 rgi_paths = get_rgi_paths()
 
@@ -31,8 +32,8 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=[50,50],
-                                            optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
+                                            epochs=[8, 20],
+                                            optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS()]),
                     physical = PhysicalParameters(minA = 8e-21,
                                                   maxA = 8e-17),
                     UDE = UDEparameters(sensealg=SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
@@ -48,6 +49,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
 # TODO: We construct the NN by hand for now
 architecture = Lux.Chain(
     Dense(2, 3, x -> softplus.(x)),
+    Dense(3, 3, x -> softplus.(x)),
     Dense(3, 1, sigmoid)
 )
 θ, st = Lux.setup(ODINN.rng_seed(), architecture)
@@ -76,9 +78,21 @@ tstops = collect(2010:δt:2015)
 
 A_poly = ODINN.A_law_PatersonCuffey()
 fakeA(T) = A_poly(T)
+# fakeA(T) = 2.21e-18
 
 # We generate a fake law with A and no direct dependency on H
 ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+
+Temps = Float64[]
+As_fake = Float64[]
+
+for glacier in glaciers
+    T = mean(glacier.climate.longterm_temps)
+    A = fakeA(T)
+    println("Value of A used to generate fake data: $(A)")
+    push!(Temps, T)
+    push!(As_fake, A)
+end
 
 # TODO: This function does shit on the model variable, for now we do a clean restart
 model.iceflow = SIA2Dmodel(params)
@@ -94,28 +108,29 @@ run!(functional_inversion)
 losses = functional_inversion.stats.losses
 
 Temps_smooth = collect(-23.0:1.0:0.0)
-As_pred = Float64[]
+H_smooth = collect(0.0:10.0:300.0)
 
-for T in Temps_smooth
-    A_pred = ODINN.apply_UDE_parametrization(functional_inversion.stats.θ, functional_inversion, T)
-    push!(As_pred, A_pred)
+As_pred = zeros(length(Temps_smooth), length(H_smooth))
+
+for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
+    # A_pred = ODINN.predict_A_target_D(architecture, T, [100.0, 200.0])
+    temp = Temps_smooth[i]
+    H = H_smooth[j]
+    A_pred = ODINN.predict_A_target_D(
+        functional_inversion.stats.θ, temp, H;
+        ml_model = functional_inversion.model.machine_learning,
+        params = functional_inversion.parameters)
+    As_pred[i, j] = A_pred
 end
 
-Temps = Float64[]
-As_fake = Float64[]
 
-for glacier in glaciers
-    T = mean(glacier.climate.longterm_temps)
-    A = fakeA(T)
-    push!(Temps, T)
-    push!(As_fake, A)
-end
 
-Plots.scatter(Temps, As_fake, label="True A", c=:lightsteelblue2)
-plot_epoch = Plots.plot!(Temps_smooth, As_pred, label="Predicted A", 
-                    xlabel="Long-term air temperature (°C)", yticks=[0.0, 1e-17, 1e-18, params.physical.maxA],
-                    ylabel=:A, ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
-                    legend=:topleft)
+
+# Plots.scatter(Temps, As_fake, label="True A", c=:lightsteelblue2)
+# plot_epoch = Plots.plot!(Temps_smooth, As_pred, label="Predicted A", 
+#                     xlabel="Long-term air temperature (°C)", yticks=[0.0, 1e-17, 1e-18, params.physical.maxA],
+#                     ylabel=:A, ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
+#                     legend=:topleft)
 
 
 # @test As_pred ≈ As_fake rtol=0.1

@@ -73,7 +73,6 @@ end
 function D_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params)
     n = ice_model.n
     Γ_no_A = Γ(ice_model, params; include_A = false)
-    # A = grad_apply_UDE_parametrization(H, ∇S, θ, ice_model, ml_model, params, glacier)
     A = apply_parametrization_target_A(;
         H = H, ∇S = ∇S, θ = θ,
         ice_model = ice_model, ml_model = ml_model, glacier = glacier, params = params
@@ -121,6 +120,7 @@ function apply_parametrization_target_A!(; H, ∇S, θ, ice_model, ml_model, gla
     A = apply_parametrization_target_A(; H, ∇S, θ, ice_model, ml_model, glacier, params)
     ice_model.A[] = A
     ice_model.D = nothing
+    ice_model.D_is_provided = false
     return nothing
 end
 
@@ -222,30 +222,18 @@ function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
     Γ_no_A = Γ(ice_model, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
 
-    nn_model = ml_model.architecture
-    st = ml_model.st
-    # smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
-    min_NN = params.physical.minA
-    max_NN = params.physical.maxA
-    lims = (min_NN, max_NN)
     temp = mean(glacier.climate.longterm_temps)
 
     ∂D∂θ = zeros(size(H)..., only(size(θ)))
 
     # TODO: move this to be some parameter
-    mode = "full"
-    # mode = "interp"
+    # mode = "full"
+    mode = "interp"
 
     if mode == "full"
         # Computes derivative at each pixel. Slower but more precise.
         for i in axes(H, 1), j in axes(H, 2)
-            ∇θ_point, = Zygote.gradient(_θ -> only(normalize_A(StatefulLuxLayer{true}(
-                nn_model,
-                _θ.θ,
-                st)([
-                    normalize_T(temp; lims = (-25.0, 0.0))
-                    normalize_H(H[i, j]; lims = (0.0, 500.0))
-                ]), lims)) , θ)
+            ∇θ_point, = Zygote.gradient(_θ -> predict_A_target_D(_θ, temp, H[i,j]; ml_model = ml_model, params = params), θ)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * ComponentVector2Vector(∇θ_point)
         end
     elseif mode == "interp"
@@ -255,21 +243,16 @@ function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
         n_interp_half = 75
         # We construct an interpolator with quantiles and equal-spaced points
         H_interp_unif = LinRange(0.0, maximum(H), n_interp_half) |> collect
-        H_interp_quantiles = quantile!(H, LinRange(0.0, 1.0, n_interp_half))
-        H_interp = sort(vcat[H_interp_unif, H_interp_quantiles])
+        H_interp_quantiles = quantile!(H[H .> 0.0], LinRange(0.0, 1.0, n_interp_half))
+        H_interp = vcat(H_interp_unif, H_interp_quantiles)
+        H_interp = unique(H_interp)
+        H_interp = sort(H_interp)
 
         # Compute exact gradient in certain values of H
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            # ∇θ_point, = Zygote.gradient(_θ -> only(normalize_A(StatefulLuxLayer{true}(nn_model, _θ.θ, st)([temp, h]), lims)) , θ)
-            ∇θ_point, = Zygote.gradient(_θ -> only(normalize_A(StatefulLuxLayer{true}(
-                nn_model,
-                _θ.θ,
-                st)([
-                    normalize_T(temp; lims = (-25.0, 0.0))
-                    normalize_H(h; lims = (0.0, 500.0))
-                ]), lims)) , θ)
+            ∇θ_point, = Zygote.gradient(_θ -> predict_A_target_D(_θ, temp, h; ml_model = ml_model, params = params), θ)
             push!(grads, ComponentVector2Vector(∇θ_point))
         end
         # Create interpolation for gradient
@@ -315,33 +298,59 @@ end
 
 function apply_parametrization_target_D!(; H, ∇S, θ, ice_model, ml_model, glacier, params)
     D = apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+    ice_model.D_is_provided = true
     ice_model.D = D
     return nothing
 end
 
 function _apply_parametrization_A_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+    T_mean = mean(glacier.climate.longterm_temps)
+    A_space = predict_A_target_D(
+        θ, T_mean, H;
+        ml_model = ml_model, params = params
+    )
+    return A_space
+end
+
+function predict_A_target_D(
+    θ,
+    temp::F,
+    H::Matrix{F};
+    ml_model,
+    params
+) where {F <: AbstractFloat}
+    return map(h -> predict_A_target_D(θ, temp, h; ml_model = ml_model, params = params), H)
+end
+
+function predict_A_target_D(
+    θ,
+    temp::F,
+    h::F;
+    ml_model,
+    params
+) where {F <: AbstractFloat}
+
     # We load the ML model with the parameters
     nn_model = ml_model.architecture
     st = ml_model.st
     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
+
     min_NN = params.physical.minA
     max_NN = params.physical.maxA
-    # Predict value of A based on Temp and H
-    T_mean = mean(glacier.climate.longterm_temps)
-    A_space = predict_A_target_D(smodel, T_mean, H, (min_NN, max_NN))
-    return A_space
-end
 
-function predict_A_target_D(U, temp::F, H::Matrix{F}, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    return map(h -> only(
+    A_pred = only(
         normalize_A(
-            U([
+            smodel([
                 normalize_T(temp; lims = (-25.0, 0.0)),
                 normalize_H(h; lims = (0.0, 500.0))
             ]),
-            lims)
-        ),
-        H)
+            (min_NN, max_NN))
+        )
+
+    if rand() < 0.00000002
+        println("Value of A used inside Target: $(A_pred).")
+    end
+    return A_pred
 end
 
 # Normalization functions to ensure the scales of input are comparable to each other

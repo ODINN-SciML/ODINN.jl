@@ -201,6 +201,8 @@ end
 
 """
 Define SIA2D forward map for the adjoint mode
+
+This is currently just use for Enzyme
 """
 function SIA2D_adjoint!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
     # make prediction with neural network

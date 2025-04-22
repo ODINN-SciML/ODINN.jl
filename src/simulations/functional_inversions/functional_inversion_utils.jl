@@ -75,7 +75,6 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     @info "Trainign with BFGS optimizer"
 
     # Create batches for inversion training
-    # @infiltrate
     simulation_train_loader = generate_batches(simulation)
     # simulation_batch_ids = train_loader.data[1]
 
@@ -85,7 +84,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     # Workers are always the number of allocated cores to Julia minus one
     workers_list = workers()
     if simulation.parameters.simulation.multiprocessing
-        @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers does not match"
+        @assert length(workers_list) == (simulation.parameters.simulation.workers - 1) "Number of workers does not match"
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
@@ -127,10 +126,10 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
 
     iceflow_trained = solve(optprob,
                             simulation.parameters.hyper.optimizer,
-                            maxiters=simulation.parameters.hyper.epochs,
-                            allow_f_increases=true,
-                            callback=cb,
-                            progress=false)
+                            maxiters = simulation.parameters.hyper.epochs,
+                            allow_f_increases = true,
+                            callback = cb,
+                            progress = false)
 
     return iceflow_trained
 end
@@ -141,6 +140,7 @@ ADAM Training
 function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <: Optimisers.AbstractRule}
 
     @info "Training with ADAM optimizer"
+
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
 
@@ -150,7 +150,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     # Workers are always the number of allocated cores to Julia minus one
     workers_list = workers()
     if simulation.parameters.simulation.multiprocessing
-        @assert length(workers_list) == (simulation.parameters.simulation.workers-1) "Number of workers does not match"
+        @assert length(workers_list) == (simulation.parameters.simulation.workers - 1) "Number of workers does not match"
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
@@ -192,9 +192,9 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
 
     iceflow_trained = solve(optprob,
                             simulation.parameters.hyper.optimizer,
-                            maxiters=simulation.parameters.hyper.epochs,
-                            callback=cb,
-                            progress=false)
+                            maxiters = simulation.parameters.hyper.epochs,
+                            callback = cb,
+                            progress = false)
 
     return iceflow_trained
 end
@@ -233,63 +233,65 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
 
 end
 
-function loss_iceflow(θ, simulation::FunctionalInversion)
+# TODO: This function is not longer use in the new version of the code with transient
+# inversions. We may want just to remove it.
+# function loss_iceflow(θ, simulation::FunctionalInversion)
 
-    # simulation.model.machine_learning.θ = θ # update model parameters
-    predict_iceflow!(θ, simulation)
+#     # simulation.model.machine_learning.θ = θ # update model parameters
+#     predict_iceflow!(θ, simulation)
 
-    loss = simulation.parameters.UDE.empirical_loss_function
+#     loss = simulation.parameters.UDE.empirical_loss_function
 
-    # Compute loss function for the full batch
-    let l_V = 0.0, l_H =  0.0
-    for result in simulation.results
-        # Get ice thickness from the reference dataset
-        H_ref = result.H_glathida
-        # isnothing(H_ref) ? continue : nothing
-        # Get ice velocities for the reference dataset
-        Vx_ref = result.Vx_ref
-        Vy_ref = result.Vy_ref
-        # Get ice thickness from the UDE predictions
-        H = result.H
-        # Get ice velocities prediction from the UDE
-        Vx_pred = result.Vx
-        Vy_pred = result.Vy
+#     # Compute loss function for the full batch
+#     let l_V = 0.0, l_H =  0.0
+#     for result in simulation.results
+#         # Get ice thickness from the reference dataset
+#         H_ref = result.H_glathida
+#         # isnothing(H_ref) ? continue : nothing
+#         # Get ice velocities for the reference dataset
+#         Vx_ref = result.Vx_ref
+#         Vy_ref = result.Vy_ref
+#         # Get ice thickness from the UDE predictions
+#         H = result.H
+#         # Get ice velocities prediction from the UDE
+#         Vx_pred = result.Vx
+#         Vy_pred = result.Vy
 
-        if simulation.parameters.UDE.scale_loss
-            # Ice thickness
-            if !isnothing(H_ref)
-                normHref = mean(H_ref.^2)^0.5
-                l_H_loc = loss(H, H_ref)
-                l_H += normHref^(-1) * l_H_loc
-            end
-            # Ice surface velocities
-            normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
-            # l_V_loc = loss(Vx_pred, inn1(Vx_ref)) + loss(Vy_pred, inn1(Vy_ref))
-            l_V_loc = loss(Vx_pred, Vx_ref) + loss(Vy_pred, Vy_ref)
-            l_V += normVref^(-1) * l_V_loc
-        else
-            # Ice thickness
-            if !isnothing(H_ref)
-                l_H += loss(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0])
-            end
-            # Ice surface velocities
-            l_V += loss(V_pred[V_ref .!= 0.0], V_ref[V_ref.!= 0.0])
-        end
-    end # for
+#         if simulation.parameters.UDE.scale_loss
+#             # Ice thickness
+#             if !isnothing(H_ref)
+#                 normHref = mean(H_ref.^2)^0.5
+#                 l_H_loc = loss(H, H_ref)
+#                 l_H += normHref^(-1) * l_H_loc
+#             end
+#             # Ice surface velocities
+#             normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
+#             # l_V_loc = loss(Vx_pred, inn1(Vx_ref)) + loss(Vy_pred, inn1(Vy_ref))
+#             l_V_loc = loss(Vx_pred, Vx_ref) + loss(Vy_pred, Vy_ref)
+#             l_V += normVref^(-1) * l_V_loc
+#         else
+#             # Ice thickness
+#             if !isnothing(H_ref)
+#                 l_H += loss(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0])
+#             end
+#             # Ice surface velocities
+#             l_V += loss(V_pred[V_ref .!= 0.0], V_ref[V_ref.!= 0.0])
+#         end
+#     end # for
 
-    loss_type = simulation.parameters.UDE.loss_type
-    @assert (loss_type == "H" || loss_type == "V" || loss_type == "HV") "Invalid `loss_type`. Needs to be 'H', 'V' or 'HV'"
-    if loss_type == "H"
-        l_tot = l_H/length(simulation.results)
-    elseif loss_type == "V"
-        l_tot = l_V/length(simulation.results)
-    elseif loss_type == "HV"
-        l_tot = (l_V + l_H)/length(simulation.results)
-    end
+#     loss_type = simulation.parameters.UDE.loss_type
+#     @assert (loss_type == "H" || loss_type == "V" || loss_type == "HV") "Invalid `loss_type`. Needs to be 'H', 'V' or 'HV'"
+#     if loss_type == "H"
+#         l_tot = l_H/length(simulation.results)
+#     elseif loss_type == "V"
+#         l_tot = l_V/length(simulation.results)
+#     elseif loss_type == "HV"
+#         l_tot = (l_V + l_H)/length(simulation.results)
+#     end
 
-    return l_tot
-    end # let
-end
+#     return l_tot
+#     end # let
+# end
 
 function predict_iceflow!(θ, simulation::FunctionalInversion)
     simulations = ODINN.generate_simulation_batches(simulation)
@@ -413,59 +415,7 @@ function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {
         glacier = glacier, params = simulation.parameters
     )
 
-    # if target_name == :A
-    #     if isnothing(batch_id)
-    #         simulation.model.iceflow.D = nothing
-    #     else
-    #         simulation.model.iceflow[batch_id].D = nothing # We pick the right iceflow model for this glacier
-    #     end
-    #     # simulation.model.iceflow = false
-    #     # TODO: Call apply_UDE_parametrization inside Target
-    #     apply_UDE_parametrization!(θ, simulation, nothing, batch_id) # Apply the parametrization otherwise the physical values are wrong between the beginning of the simulation and the first callback
-
-    # elseif target_name == :D
-
-    #     glacier = simulation.glaciers[batch_id]
-
-    #     ### Compute some stuff we need in order to compute diffusivity
-    #     Δx = glacier.Δx
-    #     Δy = glacier.Δy
-    #     B = glacier.B
-
-    #     # TODO: Make simple code to put ∇S inside dual grid
-    #     S = B .+ H
-    #     # All grid variables computed in a staggered grid
-    #     # Compute surface gradients on edges
-    #     S = B .+ H
-    #     dSdx = Huginn.diff_x(S) / Δx
-    #     dSdy = Huginn.diff_y(S) / Δy
-    #     ∇Sx = Huginn.avg_y(dSdx)
-    #     ∇Sy = Huginn.avg_x(dSdy)
-    #     # Compute slope
-    #     ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
-    #     # Compute average ice thickness
-    #     H̄ = Huginn.avg(H)
-
-    #     # Compute diffusivity based on learning target in dual grid
-    #     D = simulation.model.machine_learning.target.D(
-    #         H = H̄, ∇S = ∇S, θ = θ,
-    #         ice_model = simulation.model.iceflow[batch_id],
-    #         ml_model = simulation.model.machine_learning,
-    #         glacier = glacier,
-    #         params = simulation.parameters
-    #     )
-    #     # Update value of D in iceflow model used inside SIA
-    #     # diffusivity_provided = true
-    #     # simulation.model.iceflow[1].D = D
-    #     if isnothing(batch_id)
-    #         simulation.model.iceflow.D = D
-    #     else
-    #         simulation.model.iceflow[batch_id].D = D # We pick the right iceflow model for this glacier
-    #     end
-    # else
-    #     @error "Target UDE parametrization not provided"
-    # end
-    return Huginn.SIA2D(H, simulation, t; batch_id = batch_id) #, diffusivity_provided = diffusivity_provided)
+    return Huginn.SIA2D(H, simulation, t; batch_id = batch_id)
 end
 
 """
