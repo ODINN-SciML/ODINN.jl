@@ -53,18 +53,10 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
-      - name: Build Julia packages in Ubuntu
+      - name: Build Julia packages
         uses: julia-actions/julia-buildpkg@v1
-        if: matrix.os == 'ubuntu-latest'
-      - name: Build Julia packages in MacOS
-        uses: julia-actions/julia-buildpkg@v1
-        if: matrix.os == 'macos-latest'
-      - name: Run tests in Ubuntu
+      - name: Run tests
         uses: julia-actions/julia-runtest@v1
-        if: matrix.os == 'ubuntu-latest'
-      - name: Run tests in MacOS
-        uses: julia-actions/julia-runtest@v1
-        if: matrix.os == 'macos-latest'
       # - name: Performance benchmark
       #   id: generate-comment
       #   run: |
