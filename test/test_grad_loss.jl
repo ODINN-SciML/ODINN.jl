@@ -7,6 +7,10 @@ function test_grad_finite_diff(
 
     println("> Testing adjoint $(adjointFlavor)")
 
+    thres_ratio = thres[1]
+    thres_angle = thres[2]
+    thres_relerr = thres[3]
+
     rgi_ids = ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
 
@@ -80,11 +84,29 @@ function test_grad_finite_diff(
     dθ = zero(θ)
     loss_iceflow_grad!(dθ, θ, simulation)
 
+    ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
+
+    # Compute derivative with 7th order centered difference method
+    dθ_FD, = FiniteDifferences.grad(
+        central_fdm(7, 1),
+        _θ -> loss_function(_θ, (simulation)),
+        θ
+    )
+    ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
+    @test ratio_FD < thres_ratio
+    @test angle_FD < thres_angle
+    @test relerr_FD < thres_relerr
+    printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
+    printVecScientific("angle  = ", [angle_FD], thres_angle)
+    printVecScientific("relerr = ", [relerr_FD], thres_relerr)
+
+    ### Manual finite differences with different choices of stepsize
+
     ratio = []
     angle = []
     relerr = []
     eps = []
-    for k in range(3,8)
+    for k in range(3, 8)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
         dθ_num = compute_numerical_gradient(θ, (simulation), f, ϵ; varStr="of θ")
@@ -96,19 +118,16 @@ function test_grad_finite_diff(
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = thres[1]
-    thres_angle = thres[2]
-    thres_relerr = thres[3]
-    if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
+
+    if printDebug | !( (min_ratio < thres_ratio) & (min_angle < thres_angle) & (min_relerr < thres_relerr) )
         println("eps    = ",printVecScientific(eps))
         printVecScientific("ratio  = ",ratio,thres_ratio)
         printVecScientific("angle  = ",angle,thres_angle)
         printVecScientific("relerr = ",relerr,thres_relerr)
     end
-    @test min_ratio<thres_ratio
-    @test min_angle<thres_angle
-    @test min_relerr<thres_relerr
-
+    @test min_ratio < thres_ratio
+    @test min_angle < thres_angle
+    @test min_relerr < thres_relerr
 end
 
 function test_grad_loss_term()
@@ -141,11 +160,11 @@ function test_grad_loss_term()
     ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
     thres = 1e-14
     if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
-        printVecScientific("ratio  = ",[ratio],thres)
-        printVecScientific("angle  = ",[angle],thres)
-        printVecScientific("relerr = ",[relerr],thres)
+        printVecScientific("ratio  = ", [ratio], thres)
+        printVecScientific("angle  = ", [angle], thres)
+        printVecScientific("relerr = ", [relerr], thres)
     end
-    @test (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres)
+    @test (abs(ratio) < thres) & (abs(angle) < thres) & (abs(relerr) < thres)
 
 
     lossType = L2SumWithinGlacier(distance=2)

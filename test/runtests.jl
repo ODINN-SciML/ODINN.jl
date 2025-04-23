@@ -24,6 +24,7 @@ using Zygote
 using ProgressMeter
 using Printf
 using Lux
+using FiniteDifferences
 
 include("test_utils.jl")
 include("params_construction.jl")
