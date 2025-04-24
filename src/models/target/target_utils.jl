@@ -2,20 +2,16 @@
 
 function build_target_foo()
     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-    fDH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-    fDHH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-    fDθ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> nothing
 
-    return SIA2D_target{typeof(fD), typeof(fDH), typeof(fDHH), typeof(fDθ), typeof(fP), typeof(fP!)}(
-        :foo,
-        fD, 
-        fDH, 
-        fDHH, 
-        fDθ, 
-        fP, 
-        fP!
+    return SIA2D_target{
+        typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
+        }(
+        :foo, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
     )
 end
 

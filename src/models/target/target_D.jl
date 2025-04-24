@@ -12,21 +12,16 @@ function build_target_D(;
     n_interp_half::Int = 75
 )
     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    fDH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    fDHH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    fDθ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
+    f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
-
-    return SIA2D_target{typeof(fD), typeof(fDH), typeof(fDHH), typeof(fDθ), typeof(fP), typeof(fP!)}(
-        :D,
-        fD,
-        fDH,
-        fDHH,
-        fDθ,
-        fP,
-        fP!       
+    return SIA2D_target{
+        typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
+        }(
+        :D, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
     )
 end
 

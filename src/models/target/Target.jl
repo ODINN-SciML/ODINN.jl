@@ -25,12 +25,12 @@ the type of the function and will not be able to compile the code.
 - `apply_parametrization::Function`: A function to apply a parametrization to the model.
 - `apply_parametrization!::Function`: An in-place version of `apply_parametrization`.
 """
-struct SIA2D_target{FD, FDH, FDHH, FDθ, FP, FP!} <: AbstractSIA2DTarget
+struct SIA2D_target{FD, F∂D∂H, F∂D∂∇H, F∂D∂θ, FP, FP!} <: AbstractSIA2DTarget
     name::Symbol
     D::FD
-    ∂D∂H::FDH
-    ∂D∂∇H::FDHH
-    ∂D∂θ::FDθ
+    ∂D∂H::F∂D∂H
+    ∂D∂∇H::F∂D∂∇H
+    ∂D∂θ::F∂D∂θ
     apply_parametrization::FP
     apply_parametrization!::FP!
 end

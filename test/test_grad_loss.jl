@@ -96,9 +96,9 @@ function test_grad_finite_diff(
             θ
         )
         ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
-        @test ratio_FD < thres_ratio
-        @test angle_FD < thres_angle
-        @test relerr_FD < thres_relerr
+        @test abs(ratio_FD) < thres_ratio
+        @test abs(angle_FD) < thres_angle
+        @test abs(relerr_FD) < thres_relerr
         printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
         printVecScientific("angle  = ", [angle_FD], thres_angle)
         printVecScientific("relerr = ", [relerr_FD], thres_relerr)

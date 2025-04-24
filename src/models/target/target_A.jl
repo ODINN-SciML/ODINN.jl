@@ -2,20 +2,16 @@
 
 function build_target_A()
     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> D_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    fDH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_A(; H, ∇S, iceflow_model, params)
-    fDHH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_A(; H, ∇S, iceflow_model, params)
-    fDθ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_A(; H, ∇S, iceflow_model, params)
+    f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_A(; H, ∇S, iceflow_model, params)
+    f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    
-    return SIA2D_target{typeof(fD), typeof(fDH), typeof(fDHH), typeof(fDθ), typeof(fP), typeof(fP!)}(
-        :A,
-        fD,
-        fDH,
-        fDHH,
-        fDθ,
-        fP,
-        fP!
+
+    return SIA2D_target{
+        typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
+        }(
+        :A, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
     )
 end
 
