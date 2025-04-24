@@ -106,19 +106,8 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
 
     # Plot callback
     cb_plots = (θ, l) -> false
-    # TODO: Do we need this following code?
-    # if isnothing(simulation.parameters.UDE.target)
-    #     cb_plots = (θ, l) -> false
-    # elseif simulation.parameters.UDE.target == :A
-    #     cb_plots = (θ, l) -> false
-    #     # This other option returns weird error right now, commenting for now
-    #     # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
-    # else
-    #     @error "Simulation target not defined."
-    # end
     # Training diagnosis callback
     cb_diagnosis(θ, l) = callback_diagnosis(θ, l, only(simulation_train_loader.data))
-
     # Combined callback
     cb(θ, l) = CallbackOptimizationSet(θ, l; callbacks=(cb_plots, cb_diagnosis))
 
@@ -173,16 +162,6 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
 
     # Plot callback
     cb_plots = (θ, l) -> false
-    # TODO: Do we need this following code?
-    # if isnothing(simulation.parameters.UDE.target)
-    #     cb_plots = (θ, l) -> false
-    # elseif simulation.parameters.UDE.target == :A
-    #     cb_plots = (θ, l) -> false
-    #     # This other option returns weird error right now, commenting for now
-    #     # cb_plots(θ, l) = callback_plots_A(θ, l, simulation) # TODO: make this more customizable
-    # else
-    #     @error "Simulation target not defined."
-    # end
     # Training diagnosis callback
     cb_diagnosis(θ, l) = callback_diagnosis(θ, l, simulation)
     # Combined callback
@@ -419,38 +398,56 @@ function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {
 end
 
 """
+currently just use for Enzyme
+"""
+# function SIA2D_UDE!(dH::Matrix{R}, H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
+function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
+
+    # TODO: add assert statement that this is just when VJP is Enzyme
+
+    # if isnothing(batch_id)
+    #     ice_model = simulation.model.iceflow
+    #     glacier = simulation.glaciers
+    # else
+    #     ice_model = simulation.model.iceflow[batch_id]
+    #     glacier = simulation.glaciers[batch_id]
+    # end
+
+    # We load the ML model with the parameters
+    smodel.ps = _θ.θ
+    smodel.st = simulation.model.machine_learning.st
+
+    # apply_parametrization! = simulation.model.machine_learning.target.apply_parametrization!
+    simulation.model.machine_learning.target.apply_parametrization!(;
+        H = _H, ∇S = nothing, θ = _θ,
+        ice_model = simulation.model.iceflow[batch_id],
+        ml_model = simulation.model.machine_learning,
+        glacier = simulation.glaciers[batch_id],
+        params = simulation.parameters
+    )
+
+    Huginn.SIA2D!(_dH, _H, simulation, t; batch_id = batch_id)
+
+    return nothing
+end
+
+"""
 Functional inversion functions
 """
 
-function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
-    # We load the ML model with the parameters
-    smodel.ps = θ.θ
-    smodel.st = simulation.model.machine_learning.st
-    # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
+# function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
+#     # We load the ML model with the parameters
+#     smodel.ps = θ.θ
+#     smodel.st = simulation.model.machine_learning.st
+#     # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
-    # We generate the ML parametrization based on the target
-    if simulation.model.machine_learning.target.name == :A
-        # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
-        min_NN = simulation.parameters.physical.minA
-        max_NN = simulation.parameters.physical.maxA
-        simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))
-    else
-        @error "Simulation target not specified"
-    end
-end
-
-function apply_UDE_parametrization_enzyme(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
-    # We load the ML model with the parameters
-    smodel.ps = θ.θ
-    smodel.st = simulation.model.machine_learning.st
-    # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
-
-    # We generate the ML parametrization based on the target
-    if simulation.model.machine_learning.target.name == :A
-        min_NN = simulation.parameters.physical.minA
-        max_NN = simulation.parameters.physical.maxA
-        return predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
-    else
-        @error "Simulation target not specified"
-    end
-end
+#     # We generate the ML parametrization based on the target
+#     if simulation.model.machine_learning.target.name == :A
+#         # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
+#         min_NN = simulation.parameters.physical.minA
+#         max_NN = simulation.parameters.physical.maxA
+#         simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))
+#     else
+#         @error "Simulation target not specified"
+#     end
+# end
