@@ -11,6 +11,11 @@ abstract type AbstractSIA2DTarget <: AbstractTarget end
 
 Implementation of Target objective for learning elements of the SIA equation.
 
+/!\\ Since this struct declares several functions, which have an abstract type, it is important
+to create constructor functions which explicitly declare the type of the function
+that is passed to the constructor. Otherwise, the compiler will not be able to infer
+the type of the function and will not be able to compile the code. 
+
 # Fields
 - `name::Symbol`: A symbolic identifier for the target model.
 - `D::Function`: A function `D(H, ∇H, θ)` defining the SIA diffusivity.
@@ -20,14 +25,14 @@ Implementation of Target objective for learning elements of the SIA equation.
 - `apply_parametrization::Function`: A function to apply a parametrization to the model.
 - `apply_parametrization!::Function`: An in-place version of `apply_parametrization`.
 """
-struct SIA2D_target <: AbstractSIA2DTarget
+struct SIA2D_target{FD, FDH, FDHH, FDθ, FP, FP!} <: AbstractSIA2DTarget
     name::Symbol
-    D::Function
-    ∂D∂H::Function
-    ∂D∂∇H::Function
-    ∂D∂θ::Function
-    apply_parametrization::Function
-    apply_parametrization!::Function
+    D::FD
+    ∂D∂H::FDH
+    ∂D∂∇H::FDHH
+    ∂D∂θ::FDθ
+    apply_parametrization::FP
+    apply_parametrization!::FP!
 end
 
 """

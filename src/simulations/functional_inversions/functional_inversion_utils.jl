@@ -380,17 +380,17 @@ Wrapper to pass a parametrization to the SIA2D
 function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
 
     if isnothing(batch_id)
-        ice_model = simulation.model.iceflow
+        iceflow_model = simulation.model.iceflow
         glacier = simulation.glaciers
     else
-        ice_model = simulation.model.iceflow[batch_id]
+        iceflow_model = simulation.model.iceflow[batch_id]
         glacier = simulation.glaciers[batch_id]
     end
 
     apply_parametrization! = simulation.model.machine_learning.target.apply_parametrization!
     apply_parametrization!(;
         H = H, ∇S = nothing, θ = θ,
-        ice_model = ice_model, ml_model = simulation.model.machine_learning,
+        iceflow_model = iceflow_model, ml_model = simulation.model.machine_learning,
         glacier = glacier, params = simulation.parameters
     )
 
@@ -406,10 +406,10 @@ function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalIn
     # TODO: add assert statement that this is just when VJP is Enzyme
 
     # if isnothing(batch_id)
-    #     ice_model = simulation.model.iceflow
+    #     iceflow_model = simulation.model.iceflow
     #     glacier = simulation.glaciers
     # else
-    #     ice_model = simulation.model.iceflow[batch_id]
+    #     iceflow_model = simulation.model.iceflow[batch_id]
     #     glacier = simulation.glaciers[batch_id]
     # end
 
@@ -420,7 +420,7 @@ function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalIn
     # apply_parametrization! = simulation.model.machine_learning.target.apply_parametrization!
     simulation.model.machine_learning.target.apply_parametrization!(;
         H = _H, ∇S = nothing, θ = _θ,
-        ice_model = simulation.model.iceflow[batch_id],
+        iceflow_model = simulation.model.iceflow[batch_id],
         ml_model = simulation.model.machine_learning,
         glacier = simulation.glaciers[batch_id],
         params = simulation.parameters

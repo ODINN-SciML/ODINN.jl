@@ -11,27 +11,35 @@ function build_target_D(;
     interpolation::Bool = true,
     n_interp_half::Int = 75
 )
-    return SIA2D_target(
+    fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    fDH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    fDHH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    fDθ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
+    fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+
+
+    return SIA2D_target{typeof(fD), typeof(fDH), typeof(fDHH), typeof(fDθ), typeof(fP), typeof(fP!)}(
         :D,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation, n_interp_half),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, ice_model, ml_model, glacier, params),
+        fD,
+        fDH,
+        fDHH,
+        fDθ,
+        fP,
+        fP!       
     )
 end
 
 # For this simple case, the target coincides with D, but not always.
-function D_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    return apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+function D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    return apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 end
 
-function ∂D∂H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+function ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
-    n = ice_model.n
-    Γ_no_A = Γ(ice_model, params; include_A = false)
-    A = _apply_parametrization_A_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+    n = iceflow_model.n
+    Γ_no_A = Γ(iceflow_model, params; include_A = false)
+    A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     ∂D∂H_no_NN = (n[] + 2) .* A .* Γ_no_A .* H.^(n[] + 1) .* ∇S.^(n[] - 1)
 
     # Derivative of the output of the NN with respect to input layer
@@ -41,26 +49,26 @@ function ∂D∂H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
     ∂D∂H_NN = (
         D_target_D(;
             H = H + δH, ∇S = ∇S, θ = θ,
-            ice_model = ice_model, ml_model = ml_model, glacier = glacier, params = params
+            iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
         )
         .-
         D_target_D(;
             H = H, ∇S = ∇S, θ = θ,
-            ice_model = ice_model, ml_model = ml_model, glacier = glacier, params = params
+            iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
         )
     ) ./ δH
     return ∂D∂H_no_NN + ∂D∂H_NN
 end
 
-function ∂D∂∇H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    A = _apply_parametrization_A_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    return Γ(ice_model, params; include_A = false) .* A .* (ice_model.n[] - 1) .* H.^(ice_model.n[] + 2) .* ∇S.^(ice_model.n[] - 3)
+function ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    return Γ(iceflow_model, params; include_A = false) .* A .* (iceflow_model.n[] - 1) .* H.^(iceflow_model.n[] + 2) .* ∇S.^(iceflow_model.n[] - 3)
 end
 
-function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation, n_interp_half)
+function ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
 
-    n = ice_model.n
-    Γ_no_A = Γ(ice_model, params; include_A = false)
+    n = iceflow_model.n
+    Γ_no_A = Γ(iceflow_model, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
 
     temp = mean(glacier.climate.longterm_temps)
@@ -105,10 +113,10 @@ function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params,
     return ∂D∂θ
 end
 
-function apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+function apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
-    n = ice_model.n
-    Γ_no_A = Γ(ice_model, params; include_A = false)
+    n = iceflow_model.n
+    Γ_no_A = Γ(iceflow_model, params; include_A = false)
 
     # Compute ∇S in case is not provided.
     # In this case, the matrix H will have a larger size, so we overwrite it.
@@ -126,20 +134,20 @@ function apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glac
     end
 
     # # Predict value of A based on Temp and H
-    A = _apply_parametrization_A_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+    A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
     # Diffusivity is always evaluated in dual grid.
     return A .* Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
 end
 
-function apply_parametrization_target_D!(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    D = apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
-    ice_model.D_is_provided = true
-    ice_model.D = D
+function apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    D = apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    iceflow_model.D_is_provided = true
+    iceflow_model.D = D
     return nothing
 end
 
-function _apply_parametrization_A_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+function _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     T_mean = mean(glacier.climate.longterm_temps)
     A_space = predict_A_target_D(
         θ, T_mean, H;

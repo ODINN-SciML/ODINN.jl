@@ -1,14 +1,21 @@
 ### Dummy target for testing
 
 function build_target_foo()
-    return SIA2D_target(
+    fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    fDH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    fDHH = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    fDθ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
+    fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> nothing
+
+    return SIA2D_target{typeof(fD), typeof(fDH), typeof(fDHH), typeof(fDθ), typeof(fP), typeof(fP!)}(
         :foo,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> 1.0,
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> nothing
+        fD, 
+        fDH, 
+        fDHH, 
+        fDθ, 
+        fP, 
+        fP!
     )
 end
 
