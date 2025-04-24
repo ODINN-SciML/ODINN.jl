@@ -96,9 +96,9 @@ function test_grad_finite_diff(
             θ
         )
         ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
-        @test ratio_FD < thres_ratio
-        @test angle_FD < thres_angle
-        @test relerr_FD < thres_relerr
+        @test abs(ratio_FD) < thres_ratio
+        @test abs(angle_FD) < thres_angle
+        @test abs(relerr_FD) < thres_relerr
         printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
         printVecScientific("angle  = ", [angle_FD], thres_angle)
         printVecScientific("relerr = ", [relerr_FD], thres_relerr)
@@ -337,7 +337,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     apply_parametrization = model.machine_learning.target.apply_parametrization
     ∇θ, = Zygote.gradient(_θ -> apply_parametrization(;
         H = nothing, ∇S = nothing, θ = _θ,
-        ice_model = only(model.iceflow), ml_model = model.machine_learning,
+        iceflow_model = only(model.iceflow), ml_model = model.machine_learning,
         glacier = only(glaciers), params = parameters),
         θ)
     dθ_halfar = ∂A_enzyme[1] * ∇θ

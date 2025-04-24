@@ -79,7 +79,7 @@ function VJP_λ_∂SIA_discrete(
     # Compute diffusivity based on target objective
     D = target.D(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
 
@@ -108,13 +108,13 @@ function VJP_λ_∂SIA_discrete(
     # Equals ∂D/∂H
     α = target.∂D∂H(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
     # Equals ∂D/∂(∇H)
     β = target.∂D∂∇H(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
 
@@ -144,7 +144,7 @@ function VJP_λ_∂SIA_discrete(
     # Gradient wrt θ
     ∂D∂θ = target.∂D∂θ(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
     # Evaluate numerical integral for loss
@@ -228,7 +228,7 @@ function VJP_λ_∂SIA∂H_continuous(
     # Compute diffusivity based on target objective
     D = target.D(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
 
@@ -237,14 +237,14 @@ function VJP_λ_∂SIA∂H_continuous(
     ### Computation of partial derivatives of diffusivity
     ∂D∂H_dual = target.∂D∂H(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
     ∂D∂H = Huginn.avg(∂D∂H_dual)
 
     β = target.∂D∂∇H(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
 
@@ -363,14 +363,14 @@ function VJP_λ_∂SIA∂θ_continuous(
     # Compute diffusivity based on target objective
     D = target.D(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
 
     # Gradient wrt θ
     ∂D∂θ = target.∂D∂θ(
         H = H̄, ∇S = ∇S, θ = θ,
-        ice_model = SIA2D_model, ml_model = ml_model,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
 
