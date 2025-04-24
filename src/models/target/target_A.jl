@@ -91,24 +91,5 @@ and on the bounds value to normalize the output of the neural network.
     network output.
 """
 function predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    return only(normalize_A(U(temp), lims))
-end
-
-"""
-    normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-
-Normalize a variable by using an affine transformation defined by some lower and
-upper bounds (m, M). The returned value is m+(M-m)*x.
-
-# Arguments
-- `x`: Input value.
-- `lims::Tuple{F, F}`: Lower and upper bounds to use in the affine transformation.
-
-# Returns
-- The input variable scaled by the affine transformation.
-"""
-function normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    minA_out = lims[1]
-    maxA_out = lims[2]
-    return minA_out .+ (maxA_out - minA_out) .* x
+    return only(scale(U(temp), lims))
 end

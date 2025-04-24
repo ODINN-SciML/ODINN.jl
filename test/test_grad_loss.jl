@@ -3,6 +3,8 @@ function test_grad_finite_diff(
     adjointFlavor::ADJ;
     thres = [0., 0., 0.],
     target = :A,
+    finite_difference_method = :FiniteDifferences,
+    finite_difference_order = 5
 ) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing adjoint $(adjointFlavor)")
@@ -84,50 +86,58 @@ function test_grad_finite_diff(
     dθ = zero(θ)
     loss_iceflow_grad!(dθ, θ, simulation)
 
-    ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
+    if finite_difference_method == :FiniteDifferences
 
-    # Compute derivative with 7th order centered difference method
-    dθ_FD, = FiniteDifferences.grad(
-        central_fdm(7, 1),
-        _θ -> loss_function(_θ, (simulation)),
-        θ
-    )
-    ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
-    @test ratio_FD < thres_ratio
-    @test angle_FD < thres_angle
-    @test relerr_FD < thres_relerr
-    printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
-    printVecScientific("angle  = ", [angle_FD], thres_angle)
-    printVecScientific("relerr = ", [relerr_FD], thres_relerr)
+        ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
 
-    ### Manual finite differences with different choices of stepsize
+        dθ_FD, = FiniteDifferences.grad(
+            central_fdm(finite_difference_order, 1),
+            _θ -> loss_function(_θ, (simulation)),
+            θ
+        )
+        ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
+        @test ratio_FD < thres_ratio
+        @test angle_FD < thres_angle
+        @test relerr_FD < thres_relerr
+        printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
+        printVecScientific("angle  = ", [angle_FD], thres_angle)
+        printVecScientific("relerr = ", [relerr_FD], thres_relerr)
 
-    ratio = []
-    angle = []
-    relerr = []
-    eps = []
-    for k in range(3, 8)
-        ϵ = 10.0^(-k)
-        push!(eps, ϵ)
-        dθ_num = compute_numerical_gradient(θ, (simulation), f, ϵ; varStr="of θ")
-        ratio_k, angle_k, relerr_k = stats_err_arrays(dθ, dθ_num)
-        push!(ratio, ratio_k)
-        push!(angle, angle_k)
-        push!(relerr, relerr_k)
+    elseif finite_difference_method == :Manual
+
+        ### Manual finite differences with different choices of stepsize
+
+        ratio = []
+        angle = []
+        relerr = []
+        eps = []
+        for k in range(3, 8)
+            ϵ = 10.0^(-k)
+            push!(eps, ϵ)
+            dθ_num = compute_numerical_gradient(θ, (simulation), f, ϵ; varStr="of θ")
+            ratio_k, angle_k, relerr_k = stats_err_arrays(dθ, dθ_num)
+            push!(ratio, ratio_k)
+            push!(angle, angle_k)
+            push!(relerr, relerr_k)
+        end
+        min_ratio = minimum(abs.(ratio))
+        min_angle = minimum(abs.(angle))
+        min_relerr = minimum(abs.(relerr))
+
+        if printDebug | !( (min_ratio < thres_ratio) & (min_angle < thres_angle) & (min_relerr < thres_relerr) )
+            println("eps    = ",printVecScientific(eps))
+            printVecScientific("ratio  = ", ratio, thres_ratio)
+            printVecScientific("angle  = ", angle, thres_angle)
+            printVecScientific("relerr = ", relerr, thres_relerr)
+        end
+        @test min_ratio < thres_ratio
+        @test min_angle < thres_angle
+        @test min_relerr < thres_relerr
+
+    else
+        throw("Finite difference method not implemented.")
     end
-    min_ratio = minimum(abs.(ratio))
-    min_angle = minimum(abs.(angle))
-    min_relerr = minimum(abs.(relerr))
 
-    if printDebug | !( (min_ratio < thres_ratio) & (min_angle < thres_angle) & (min_relerr < thres_relerr) )
-        println("eps    = ",printVecScientific(eps))
-        printVecScientific("ratio  = ",ratio,thres_ratio)
-        printVecScientific("angle  = ",angle,thres_angle)
-        printVecScientific("relerr = ",relerr,thres_relerr)
-    end
-    @test min_ratio < thres_ratio
-    @test min_angle < thres_angle
-    @test min_relerr < thres_relerr
 end
 
 function test_grad_loss_term()

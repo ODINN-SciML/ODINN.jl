@@ -91,5 +91,8 @@ function printVecScientific(baseVarName, v, thres=nothing)
         end
         print(" ")
     end
+    if !isnothing(thres)
+        print("< $(thres)")
+    end
     println("")
 end

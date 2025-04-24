@@ -6,18 +6,17 @@
 Inversion of the form
 
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H; θ)
-    D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * exp( NeuralNet(T, H; θ))
-    log D = log D_physics + NN
 """
 function build_target_D(;
-    interpolation::Bool = true
+    interpolation::Bool = true,
+    n_interp_half::Int = 75
 )
     return SIA2D_target(
         :D,
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
-        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation),
+        (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation, n_interp_half),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params),
         (; H, ∇S, θ, ice_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, ice_model, ml_model, glacier, params),
     )
@@ -29,6 +28,7 @@ function D_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
 end
 
 function ∂D∂H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
+
     n = ice_model.n
     Γ_no_A = Γ(ice_model, params; include_A = false)
     A = _apply_parametrization_A_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params)
@@ -57,7 +57,8 @@ function ∂D∂∇H_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, param
     return Γ(ice_model, params; include_A = false) .* A .* (ice_model.n[] - 1) .* H.^(ice_model.n[] + 2) .* ∇S.^(ice_model.n[] - 3)
 end
 
-function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation)
+function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params, interpolation, n_interp_half)
+
     n = ice_model.n
     Γ_no_A = Γ(ice_model, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
@@ -66,11 +67,6 @@ function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params,
 
     ∂D∂θ = zeros(size(H)..., only(size(θ)))
 
-    # TODO: move this to be some parameter
-    # mode = "full"
-    # mode = "interp"
-    # if mode == "full"
-
     if !interpolation
         # Computes derivative at each pixel. Slower but more precise.
         for i in axes(H, 1), j in axes(H, 2)
@@ -78,11 +74,9 @@ function ∂D∂θ_target_D(; H, ∇S, θ, ice_model, ml_model, glacier, params,
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * ComponentVector2Vector(∇θ_point)
         end
     else
-    # elseif mode == "interp"
         # Interpolation of the gradient as function of values of H.
         # Introduces interpolation errors but it is faster and probably sufficient depending
         # the decired level of precision for the gradients.
-        n_interp_half = 75
         # We construct an interpolator with quantiles and equal-spaced points
         H_interp_unif = LinRange(0.0, maximum(H), n_interp_half) |> collect
         H_interp_quantiles = quantile!(H[H .> 0.0], LinRange(0.0, 1.0, n_interp_half))
@@ -182,10 +176,10 @@ function predict_A_target_D(
 
     # Neural network prediction
     A_pred = only(
-        normalize_A(
+        scale(
             smodel([
-                normalize_T(temp; lims = (-25.0, 0.0)),
-                normalize_H(h; lims = (0.0, 500.0))
+                normalize(temp; lims = (-25.0, 0.0)),
+                normalize(h; lims = (0.0, 500.0))
             ]),
             (min_NN, max_NN))
         )
@@ -194,36 +188,4 @@ function predict_A_target_D(
         println("Value of A used inside Target: $(A_pred).")
     end
     return A_pred
-end
-
-### Normalization functions to ensure the scales of input are comparable to each other
-
-function normalize_T(T; lims)
-    return (T .- lims[1]) ./ (lims[2] - lims[1]) .- 0.5
-end
-
-function normalize_H(H; lims)
-    return (H .- lims[1]) ./ (lims[2] - lims[1]) .- 0.5
-end
-
-### General Utils
-
-function cartesian_tensor(A, v)
-    B = zeros(size(A)..., only(size(v)))
-    for i in axes(A, 1), j in axes(A, 2), k in axes(v,1)
-        B[i, j, k] = A[i, j] * v[k]
-    end
-    return B
-end
-
-function Vector2ComponentVector(v::Vector, cv_template::ComponentVector)
-    cv = zero(cv_template)
-    for i in 1:length(v)
-        cv[i] = v[i]
-    end
-    return cv
-end
-
-function ComponentVector2Vector(cv::ComponentVector)
-    return collect(cv)
 end
