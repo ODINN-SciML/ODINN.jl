@@ -226,7 +226,7 @@ end
 function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
     Random.seed!(1234)
 
-    lossType = L2SumWithinGlacier()
+    lossType = L2SumWithinGlacier(distance=15)
     A = 8e-19
     t₀ = 5.0
     t₁ = 30.0
@@ -312,7 +312,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     ∂A_enzyme = Enzyme.make_zero(A_θ)
     dl_enzyme = [1.]
     l_enzyme = Enzyme.make_zero(dl_enzyme)
-    H_ref = only(simulation.glaciers[1].data).H
+    H_ref = simulation.glaciers[1].thicknessData.H
     Enzyme.autodiff(
         Reverse, _loss_halfar!, Const,
         Duplicated(l_enzyme, dl_enzyme),
