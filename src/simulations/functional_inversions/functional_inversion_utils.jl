@@ -207,7 +207,7 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
 
         # Reference cames from data
         # Complete this with feeded data on glacier object
-        H_ref = only(simulation.glaciers[i].data).H
+        H_ref = simulation.glaciers[i].thicknessData.H
         # Prediction comes from simulation
         # batch_results_id = Sleipnir.get_result_id_from_rgi(batch_id, simulation)
         t = simulation.results[i].t
@@ -335,7 +335,7 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
     iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb_MB, batch_id; du = du)
 
     # Update simulation results
-    result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=simulation.parameters.simulation.light, batch_id = batch_id)
+    result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=!simulation.parameters.solver.save_everystep, batch_id = batch_id, processVelocity=Huginn.V_from_H)
     return result
 
 end
