@@ -24,6 +24,8 @@ function build_default_NN(; n_input = 1, lightNN = false)
         architecture = Lux.Chain( # Light network for debugging
             Dense(n_input, 3, x -> softplus.(x)),
             Dense(3, 1, sigmoid)
+            # Dense(n_input, 3, x -> sigmoid.(x); init_weight = Lux.glorot_normal),
+            # Dense(3, 1, sigmoid; init_weight = Lux.glorot_normal)
         )
     else
         architecture = Lux.Chain(

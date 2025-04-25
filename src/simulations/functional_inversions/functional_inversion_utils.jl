@@ -313,7 +313,7 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
     iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb_MB, batch_id; du = du)
 
     # Update simulation results
-    result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=simulation.parameters.simulation.light, batch_id = batch_id)
+    result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; batch_id = batch_id)
     return result
 
 end
@@ -379,8 +379,9 @@ function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {
         glacier = simulation.glaciers[batch_id]
     end
 
-    apply_parametrization! = simulation.model.machine_learning.target.apply_parametrization!
-    apply_parametrization!(;
+    # apply_parametrization! = simulation.model.machine_learning.target.apply_parametrization!
+    apply_parametrization!(
+        simulation.model.machine_learning.target;
         H = H, ∇S = nothing, θ = θ,
         iceflow_model = iceflow_model, ml_model = simulation.model.machine_learning,
         glacier = glacier, params = simulation.parameters
@@ -392,7 +393,6 @@ end
 """
 currently just use for Enzyme
 """
-# function SIA2D_UDE!(dH::Matrix{R}, H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
 function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
 
     # TODO: add assert statement that this is just when VJP is Enzyme
@@ -409,8 +409,8 @@ function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalIn
     smodel.ps = _θ.θ
     smodel.st = simulation.model.machine_learning.st
 
-    # apply_parametrization! = simulation.model.machine_learning.target.apply_parametrization!
-    simulation.model.machine_learning.target.apply_parametrization!(;
+    apply_parametrization!(
+        simulation.model.machine_learning.target;
         H = _H, ∇S = nothing, θ = _θ,
         iceflow_model = simulation.model.iceflow[batch_id],
         ml_model = simulation.model.machine_learning,

@@ -1,19 +1,101 @@
+export SIA2D_A_target
+
 ### Targrt to inverse creep coefficient A as a function of other quantities
 
-function build_target_A()
-    fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> D_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_A(; H, ∇S, iceflow_model, params)
-    f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_A(; H, ∇S, iceflow_model, params)
-    f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+# function build_target_A()
+#     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> Diffusivity(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+#     f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_A(; H, ∇S, iceflow_model, params)
+#     f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_A(; H, ∇S, iceflow_model, params)
+#     f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+#     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+#     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
-    return SIA2D_target{
-        typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
-        }(
-        :A, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
-    )
+#     return SIA2D_target{
+#         typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
+#         }(
+#         :A, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
+#     )
+# end
+
+@kwdef struct SIA2D_A_target <: AbstractSIA2DTarget
 end
+
+### Target functions
+
+function Diffusivity(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    n = iceflow_model.n
+    Γ_no_A = Γ(iceflow_model, params; include_A = false)
+    A = apply_parametrization(
+        target;
+        H = H, ∇S = ∇S, θ = θ,
+        iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
+    )
+    return A .* Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
+end
+
+function ∂Diffusivity∂H(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    return Γ(iceflow_model, params) .* (iceflow_model.n[] + 2) .* H.^(iceflow_model.n[] + 1) .* ∇S.^(iceflow_model.n[] - 1)
+end
+
+function ∂Diffusivity∂∇H(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    return Γ(iceflow_model, params) .* (iceflow_model.n[] - 1) .* H.^(iceflow_model.n[] + 2) .* ∇S.^(iceflow_model.n[] - 3)
+end
+
+function ∂Diffusivity∂θ(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    n = iceflow_model.n
+    Γ_no_A = Γ(iceflow_model, params; include_A = false)
+    ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
+
+    # Unfortunatelly, we need to vectorize ∇θ to do the inner product
+    ∇θ, = Zygote.gradient(_θ -> apply_parametrization(
+        target;
+        H = H, ∇S = ∇S, θ = _θ,
+        iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params),
+        θ)
+    ∇θ_cv = ComponentVector2Vector(∇θ)
+
+    # Create a tensor with both elements
+    return cartesian_tensor(∂A_spatial, ∇θ_cv)
+end
+
+function apply_parametrization(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    # We load the ML model with the parameters
+    nn_model = ml_model.architecture
+    st = ml_model.st
+    smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
+    min_NN = params.physical.minA
+    max_NN = params.physical.maxA
+    A = predict_A̅(smodel, [mean(glacier.climate.longterm_temps)], (min_NN, max_NN))[1]
+    return A
+end
+
+function apply_parametrization!(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    A = apply_parametrization(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    iceflow_model.A[] = A
+    iceflow_model.D = nothing
+    iceflow_model.D_is_provided = false
+    return nothing
+end
+
+### Auxiliary functions
 
 function Γ(model, params; include_A::Bool = true)
     n = model.n
@@ -25,60 +107,6 @@ function Γ(model, params; include_A::Bool = true)
     else
         return 2.0 * (ρ * g)^n[] / (n[]+2)
     end
-end
-
-function D_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    n = iceflow_model.n
-    Γ_no_A = Γ(iceflow_model, params; include_A = false)
-    A = apply_parametrization_target_A(;
-        H = H, ∇S = ∇S, θ = θ,
-        iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
-    )
-    return A .* Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
-end
-
-function ∂D∂H_target_A(; H, ∇S, iceflow_model, params)
-    return Γ(iceflow_model, params) .* (iceflow_model.n[] + 2) .* H.^(iceflow_model.n[] + 1) .* ∇S.^(iceflow_model.n[] - 1)
-end
-
-function ∂D∂∇H_target_A(; H, ∇S, iceflow_model, params)
-    return Γ(iceflow_model, params) .* (iceflow_model.n[] - 1) .* H.^(iceflow_model.n[] + 2) .* ∇S.^(iceflow_model.n[] - 3)
-end
-
-function ∂D∂θ_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    n = iceflow_model.n
-    Γ_no_A = Γ(iceflow_model, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
-
-    # Unfortunatelly, we need to vectorize ∇θ to do the inner product
-    ∇θ, = Zygote.gradient(_θ -> apply_parametrization_target_A(;
-        H = H, ∇S = ∇S, θ = _θ,
-        iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params),
-        θ)
-    ∇θ_cv = ComponentVector2Vector(∇θ)
-
-    # Create a tensor with both elements
-    return cartesian_tensor(∂A_spatial, ∇θ_cv)
-end
-
-function apply_parametrization_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-# function apply_parametrization_target_A(H, ∇S, θ, iceflow_model, ml_model, params, glacier) where {I <: Integer, SIM <: Simulation}
-    # We load the ML model with the parameters
-    nn_model = ml_model.architecture
-    st = ml_model.st
-    smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
-    min_NN = params.physical.minA
-    max_NN = params.physical.maxA
-    A = predict_A̅(smodel, [mean(glacier.climate.longterm_temps)], (min_NN, max_NN))[1]
-    return A
-end
-
-function apply_parametrization_target_A!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    A = apply_parametrization_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    iceflow_model.A[] = A
-    iceflow_model.D = nothing
-    iceflow_model.D_is_provided = false
-    return nothing
 end
 
 """
@@ -93,6 +121,8 @@ and on the bounds value to normalize the output of the neural network.
 - `lims::Tuple{F, F}`: Bounds to use for the affine transformation of the neural
     network output.
 """
-function predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
+function predict_A̅(
+    U, temp, lims::Tuple{F, F}
+    ) where {F <: AbstractFloat}
     return only(scale(U(temp), lims))
 end

@@ -71,9 +71,13 @@ function NeuralNetwork(
     architecture::Union{ChainType, Nothing} = nothing,
     θ::Union{ComponentArrayType, Nothing} = nothing,
     st::Union{NamedTupleType, Nothing} = nothing,
+    target::Union{TAR, Nothing} = nothing,
 ) where {
-    P<:Sleipnir.Parameters, ChainType<:Lux.Chain,
-    ComponentArrayType<:ComponentArray, NamedTupleType<:NamedTuple
+    P<:Sleipnir.Parameters,
+    ChainType<:Lux.Chain,
+    ComponentArrayType<:ComponentArray,
+    NamedTupleType<:NamedTuple,
+    TAR<:AbstractTarget
 }
 
     # Float type
@@ -89,21 +93,27 @@ function NeuralNetwork(
             architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
         else
             @warn "Constructing default Neural Network"
-            architecture, θ, st = get_default_NN(θ, ft; lightNN=lightNN)
+            architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN)
         end
     elseif any(_nn_is_provided) && !all(_nn_is_provided)
         @warn "To specify the neural network please provide all (architecture, θ, st), not just a subset of them."
     end
 
     # Build target based on parameters
-    target_object = SIA2D_target(name = params.UDE.target)
-
+    if isnothing(target)
+        if params.UDE.target == :A
+            target = SIA2D_A_target()
+        elseif params.UDE.target == :D
+            target = SIA2D_D_target()
+        else
+            @warn "Target object has not been provided during simulation."
+        end
+    end
     # Build the simulation parameters based on input values
     # TODO: I don't think target should be inside NN, but rather having the neural net elements
     # as part of a regressor type.
-    neural_net = NeuralNetwork{typeof(architecture), typeof(θ), typeof(st), typeof(target_object)}(
-        architecture, θ, st,
-        target_object
+    neural_net = NeuralNetwork{typeof(architecture), typeof(θ), typeof(st), typeof(target)}(
+        architecture, θ, st, target
     )
 
     return neural_net

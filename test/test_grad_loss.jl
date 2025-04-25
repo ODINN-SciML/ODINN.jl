@@ -29,7 +29,6 @@ function test_grad_finite_diff(
             step=δt,
             multiprocessing=false,
             workers=1,
-            light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             rgi_paths=rgi_paths),
         hyper = Hyperparameters(
@@ -250,7 +249,6 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
             multiprocessing=false,
             use_MB=false,
             use_iceflow=true,
-            light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             working_dir=Huginn.root_dir
         ),
@@ -334,8 +332,8 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     println("∂A_enzyme=", ∂A_enzyme)
 
     # Retrieve apply parametrization from inversion
-    apply_parametrization = model.machine_learning.target.apply_parametrization
-    ∇θ, = Zygote.gradient(_θ -> apply_parametrization(;
+    ∇θ, = Zygote.gradient(_θ -> apply_parametrization(
+        model.machine_learning.target;
         H = nothing, ∇S = nothing, θ = _θ,
         iceflow_model = only(model.iceflow), ml_model = model.machine_learning,
         glacier = only(glaciers), params = parameters),

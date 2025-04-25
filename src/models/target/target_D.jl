@@ -1,5 +1,5 @@
 ### Target to invert D as a function of H and Temp
-
+export SIA2D_D_target
 """
     build_target_D()
 
@@ -7,32 +7,46 @@ Inversion of the form
 
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
 """
-function build_target_D(;
-    interpolation::Bool = true,
-    n_interp_half::Int = 75
-)
-    fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
-    fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+# function build_target_D(;
+#     interpolation::Bool = true,
+#     n_interp_half::Int = 75
+# )
+#     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+#     f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+#     f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+#     f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
+#     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+#     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
-    return SIA2D_target{
-        typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
-        }(
-        :D, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
-    )
+#     return SIA2D_target{
+#         typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
+#         }(
+#         :D, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
+#     )
+# end
+
+@kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
+    interpolation::Bool = true
+    n_interp_half::Int = 75
 end
 
 # For this simple case, the target coincides with D, but not always.
 # TODO: D should be cap to its maximum physical value. This can be done with one extra
 # function and one extra differentiation.
-function D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    return apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+function Diffusivity(
+    target::SIA2D_D_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    return apply_parametrization_target_D(
+        target;
+        H, ∇S, θ, iceflow_model, ml_model, glacier, params
+        )
 end
 
-function ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+function ∂Diffusivity∂H(
+    target::SIA2D_D_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
 
     n = iceflow_model.n
     n_H = 2.0
@@ -59,7 +73,10 @@ function ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, para
     return ∂D∂H_no_NN + ∂D∂H_NN
 end
 
-function ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+function ∂Diffusivity∂∇H(
+    target::SIA2D_D_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
 
     n_H = 2.0
 
@@ -83,7 +100,14 @@ function ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, p
     return ∂D∂∇S_no_NN
 end
 
-function ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
+function ∂Diffusivity∂θ(
+    target::SIA2D_D_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+
+    # Extract relevant parameters specific from the target
+    interpolation = target.interpolation
+    n_interp_half = target.n_interp_half
 
     n = iceflow_model.n
     n_H = 2.0
@@ -133,7 +157,10 @@ function ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, par
     return ∂D∂θ
 end
 
-function apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+function apply_parametrization(
+    target::SIA2D_D_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
 
     n = iceflow_model.n
     n_H = 2.0
@@ -162,12 +189,20 @@ function apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, 
     return A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n[] - 1)
 end
 
-function apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    D = apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+function apply_parametrization!(
+    target::SIA2D_D_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    D = apply_parametrization_target_D(
+        target;
+        H, ∇S, θ, iceflow_model, ml_model, glacier, params
+        )
     iceflow_model.D_is_provided = true
     iceflow_model.D = D
     return nothing
 end
+
+### Auxiliary functions
 
 function _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     T_mean = mean(glacier.climate.longterm_temps)

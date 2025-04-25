@@ -1,7 +1,8 @@
 export AbstractTarget, AbstractSIA2DTarget
 export SIA2D_target
-export ComponentVector2Vector, Vector2ComponentVector
-export predict_A̅
+
+export Diffusivity, ∂Diffusivity∂H, ∂Diffusivity∂∇H, ∂Diffusivity∂θ
+export apply_parametrization, apply_parametrization!
 
 abstract type AbstractTarget end
 abstract type AbstractSIA2DTarget <: AbstractTarget end
@@ -25,15 +26,15 @@ the type of the function and will not be able to compile the code.
 - `apply_parametrization::Function`: A function to apply a parametrization to the model.
 - `apply_parametrization!::Function`: An in-place version of `apply_parametrization`.
 """
-struct SIA2D_target{FD, F∂D∂H, F∂D∂∇H, F∂D∂θ, FP, FP!} <: AbstractSIA2DTarget
-    name::Symbol
-    D::FD
-    ∂D∂H::F∂D∂H
-    ∂D∂∇H::F∂D∂∇H
-    ∂D∂θ::F∂D∂θ
-    apply_parametrization::FP
-    apply_parametrization!::FP!
-end
+# struct SIA2D_target{FD, F∂D∂H, F∂D∂∇H, F∂D∂θ, FP, FP!} <: AbstractSIA2DTarget
+#     name::Symbol
+#     D::FD
+#     ∂D∂H::F∂D∂H
+#     ∂D∂∇H::F∂D∂∇H
+#     ∂D∂θ::F∂D∂θ
+#     apply_parametrization::FP
+#     apply_parametrization!::FP!
+# end
 
 """
     function SIA2D_target(;
@@ -45,21 +46,21 @@ constructed automatically by just providing the keyword `name` for the inversion
 
 # Arguments
 - `name::Symbol`: Identifying name for the model inversion.
-"""
-function SIA2D_target(;
-    name::Symbol = :A,
-    interpolation::Bool = true
-)
-    if name == :foo
-        build_target_foo()
-    elseif name == :A
-        build_target_A()
-    elseif name == :D
-        build_target_D(; interpolation = interpolation)
-    else
-        @error "Target method named $(name) not implemented."
-    end
-end
+# """
+# function SIA2D_target(;
+#     name::Symbol = :A,
+#     interpolation::Bool = true
+# )
+#     if name == :foo
+#         build_target_foo()
+#     elseif name == :A
+#         build_target_A()
+#     elseif name == :D
+#         build_target_D(; interpolation = interpolation)
+#     else
+#         @error "Target method named $(name) not implemented."
+#     end
+# end
 
 ### Add specific target objectives
 include("target_utils.jl")

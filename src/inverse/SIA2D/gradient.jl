@@ -12,7 +12,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     # l = loss_iceflow_transient(θ, simulation)
     #l = loss_iceflow_transient(θ, glaciers, results, SIA2D_models, simulation.params)
 
-    @assert !simulation.parameters.simulation.light "Forward solution needs to be stored in dense mode, no light, for gradient computation."
+    # @assert !simulation.parameters.simulation.light "Forward solution needs to be stored in dense mode, no light, for gradient computation."
 
     # glacier_results_ids = map(batch_id -> Sleipnir.get_result_id_from_rgi(batch_id, simulation), batch_ids)
     # TODO: move out this from here and make the re-arangement of the results outside
@@ -162,15 +162,15 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
             # Solve reverse adjoint PDE with dense output
             sol_rev = solve(adjoint_PDE_rev,
-                            callback=cb_adjoint_loss,
+                            callback = cb_adjoint_loss,
                             # saveat=t_nodes_rev, # dont use this!
-                            dense=true,
-                            save_everystep=true,
-                            tstops=t_ref_inv,
+                            dense = true,
+                            save_everystep = true,
+                            tstops = t_ref_inv,
                             simulation.parameters.UDE.grad.solver,
-                            dtmax=simulation.parameters.UDE.grad.dtmax,
-                            reltol=simulation.parameters.UDE.grad.reltol,
-                            abstol=simulation.parameters.UDE.grad.abstol)
+                            dtmax = simulation.parameters.UDE.grad.dtmax,
+                            reltol = simulation.parameters.UDE.grad.reltol,
+                            abstol = simulation.parameters.UDE.grad.abstol)
 
             ### Numerical integration using quadrature to compute gradient
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)

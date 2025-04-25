@@ -1,7 +1,15 @@
 
-function test_adjoint_SIAD2D_continuous()
+function test_adjoint_SIA2D(
+    adjointFlavor::ADJ;
+    thres = [3e-2, 1e-14, 3e-2],
+    target = :A
+) where {ADJ<:AbstractAdjointMethod}
 
     Random.seed!(1234)
+
+    thres_ratio = thres[1]
+    thres_angle = thres[2]
+    thres_relerr = thres[3]
 
     function _loss(H, θ, simulation, t, vecBackwardSIA2D)
         apply_parametrization = simulation.model.machine_learning.target.apply_parametrization
@@ -27,7 +35,6 @@ function test_adjoint_SIAD2D_continuous()
             step=δt,
             multiprocessing=false,
             workers=1,
-            light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             rgi_paths=rgi_paths),
         physical = PhysicalParameters(
@@ -36,9 +43,9 @@ function test_adjoint_SIAD2D_continuous()
         UDE = UDEparameters(
             sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
-            grad=ContinuousAdjoint(),
+            grad=adjointFlavor,
             optimization_method="AD+AD",
-            target = :A),
+            target = target),
         solver = Huginn.SolverParameters(
             step=δt,
             save_everystep=true,
@@ -130,9 +137,6 @@ function test_adjoint_SIAD2D_continuous()
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 3e-2
-    thres_angle = 1e-14
-    thres_relerr = 3e-2
     if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt θ")
         println("eps    = ",printVecScientific(eps))

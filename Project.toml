@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
 authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard"]
-version = "1.0.0"
+version = "0.3.0"
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
@@ -56,7 +56,7 @@ ChainRules = "1.50"
 Downloads = "1"
 GR = "0.71, 0.72, 0.73"
 GeoStats = "0.73.4"
-Huginn = "0.9.1"
+Huginn = "0.9.4"
 IJulia = "1.2"
 Infiltrator = "1.2"
 Interpolations = "0.15.1"

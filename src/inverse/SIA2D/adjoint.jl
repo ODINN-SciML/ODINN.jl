@@ -77,7 +77,8 @@ function VJP_λ_∂SIA_discrete(
     H̄ = Huginn.avg(H)
 
     # Compute diffusivity based on target objective
-    D = target.D(
+    D = Diffusivity(
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
@@ -106,13 +107,15 @@ function VJP_λ_∂SIA_discrete(
     ### First term
 
     # Equals ∂D/∂H
-    α = target.∂D∂H(
+    α = ∂Diffusivity∂H(
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
     # Equals ∂D/∂(∇H)
-    β = target.∂D∂∇H(
+    β = ∂Diffusivity∂∇H(
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
@@ -142,7 +145,8 @@ function VJP_λ_∂SIA_discrete(
     ∂H .= ∂H.*(H.>0)
 
     # Gradient wrt θ
-    ∂D∂θ = target.∂D∂θ(
+    ∂D∂θ = ∂Diffusivity∂θ(
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
@@ -226,7 +230,8 @@ function VJP_λ_∂SIA∂H_continuous(
     H̄ = Huginn.avg(H)
 
     # Compute diffusivity based on target objective
-    D = target.D(
+    D = Diffusivity(
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
@@ -235,14 +240,16 @@ function VJP_λ_∂SIA∂H_continuous(
     # TODO: Clip dSdx and dSdx for conservation of mass condition
 
     ### Computation of partial derivatives of diffusivity
-    ∂D∂H_dual = target.∂D∂H(
+    ∂D∂H_dual = ∂Diffusivity∂H(
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
     ∂D∂H = Huginn.avg(∂D∂H_dual)
 
-    β = target.∂D∂∇H(
+    β = ∂Diffusivity∂∇H(
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
@@ -361,14 +368,16 @@ function VJP_λ_∂SIA∂θ_continuous(
     H̄ = Huginn.avg(H)
 
     # Compute diffusivity based on target objective
-    D = target.D(
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
-        glacier = glacier, params = params
-    )
+    # D = Diffusivity(
+    #     target;
+    #     H = H̄, ∇S = ∇S, θ = θ,
+    #     iceflow_model = SIA2D_model, ml_model = ml_model,
+    #     glacier = glacier, params = params
+    # )
 
     # Gradient wrt θ
-    ∂D∂θ = target.∂D∂θ(
+    ∂D∂θ = ∂Diffusivity∂θ(
+        targte;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
@@ -394,22 +403,3 @@ function VJP_λ_∂SIA∂θ_continuous(
 
     return ∂θ_v
 end
-
-# Repeated function
-# function grad_apply_UDE_parametrization(θ, simulation::SIM, batch_id::I) where {I <: Integer, SIM <: Simulation}
-#     # We load the ML model with the parameters
-#     model = simulation.model.machine_learning.architecture
-#     st = simulation.model.machine_learning.st
-#     smodel = StatefulLuxLayer{true}(model, θ.θ, st)
-
-#     # We generate the ML parametrization based on the target
-#     if simulation.model.machine_learning.target.name == :A
-#         min_NN = simulation.parameters.physical.minA
-#         max_NN = simulation.parameters.physical.maxA
-#         A = predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))[1]
-#         # println("Value of A during internal gradient evaluation:")
-#         # @show A
-#         return A
-#     end
-# end
-
