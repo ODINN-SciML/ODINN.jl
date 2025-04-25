@@ -29,7 +29,6 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                     step=δt,
                                                     multiprocessing=true,
                                                     workers=7,
-                                                    light=false, 
                                                     test_mode=false,
                                                     rgi_paths=rgi_paths),
                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
@@ -116,7 +115,6 @@ run!(functional_inversion)
 #                                                     step=δt,
 #                                                     multiprocessing=true,
 #                                                     workers=7,
-#                                                     light=false, 
 #                                                     test_mode=false,
 #                                                     rgi_paths=rgi_paths),
 #                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
