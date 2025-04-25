@@ -119,7 +119,10 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Construct continuous interpolator for solution of forward PDE
             # TODO: For now we do linear, but of course we can use something more sophisticated (although I don't think will make a huge difference for ice)
             # TODO: For an uniform grid, we don't need the Gridded, and actually this is more efficient based on docs
-            H_itp = interpolate((t,), H, Gridded(Linear()))
+            # We construct H_itp with t_ref rather than t since t_ref can have small
+            # numerical errors that make the interpolator to evaluate outside the interval
+            # Notice this should not be an issue since t ≈ t_ref
+            H_itp = interpolate((t_ref,), H, Gridded(Linear()))
             H_ref_itp = interpolate((t_ref,), H_ref, Gridded(Linear()))
 
             # Nodes and weights for numerical quadrature

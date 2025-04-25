@@ -104,12 +104,8 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     # optprob = OptimizationProblem(optf, θ, (simultion_batch_ids))
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
-    # Plot callback
-    cb_plots = (θ, l) -> false
     # Training diagnosis callback
-    cb_diagnosis(θ, l) = callback_diagnosis(θ, l, only(simulation_train_loader.data))
-    # Combined callback
-    cb(θ, l) = CallbackOptimizationSet(θ, l; callbacks=(cb_plots, cb_diagnosis))
+    cb(θ, l) = callback_diagnosis(θ, l, simulation)
 
     println("Training iceflow UDE...")
 
@@ -160,12 +156,8 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
 
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
-    # Plot callback
-    cb_plots = (θ, l) -> false
     # Training diagnosis callback
-    cb_diagnosis(θ, l) = callback_diagnosis(θ, l, simulation)
-    # Combined callback
-    cb(θ, l) = CallbackOptimizationSet(θ, l; callbacks=(cb_plots, cb_diagnosis))
+    cb(θ, l) = callback_diagnosis(θ, l, simulation)
 
     println("Training iceflow UDE...")
 

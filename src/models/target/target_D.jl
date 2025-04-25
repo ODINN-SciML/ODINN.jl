@@ -5,7 +5,7 @@
 
 Inversion of the form
 
-    D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H; θ)
+    D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
 """
 function build_target_D(;
     interpolation::Bool = true,
@@ -26,6 +26,8 @@ function build_target_D(;
 end
 
 # For this simple case, the target coincides with D, but not always.
+# TODO: D should be cap to its maximum physical value. This can be done with one extra
+# function and one extra differentiation.
 function D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     return apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 end
@@ -33,9 +35,11 @@ end
 function ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
     n = iceflow_model.n
+    n_H = 2.0
+
     Γ_no_A = Γ(iceflow_model, params; include_A = false)
     A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    ∂D∂H_no_NN = (n[] + 2) .* A .* Γ_no_A .* H.^(n[] + 1) .* ∇S.^(n[] - 1)
+    ∂D∂H_no_NN = (n_H + 2) .* A .* Γ_no_A .* H.^(n_H + 1) .* ∇S.^(n[] - 1)
 
     # Derivative of the output of the NN with respect to input layer
     # TODO: Change this to be done with AD or have this as an extra parameter.
@@ -56,15 +60,36 @@ function ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, para
 end
 
 function ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+
+    n_H = 2.0
+
     A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    return Γ(iceflow_model, params; include_A = false) .* A .* (iceflow_model.n[] - 1) .* H.^(iceflow_model.n[] + 2) .* ∇S.^(iceflow_model.n[] - 3)
+    ∂D∂∇S_no_NN = Γ(iceflow_model, params; include_A = false) .* A .* (iceflow_model.n[] - 1) .* H.^(n_H + 2) .* ∇S.^(iceflow_model.n[] - 3)
+
+    # For now we ignore the derivative in surface slope
+    # δ∇H = 1e-4 .* ones(size(∇S))
+    # ∂D∂∇H_NN = (
+    #     D_target_D(;
+    #         H = H, ∇S = ∇S + δ∇H, θ = θ,
+    #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
+    #     )
+    #     .-
+    #     D_target_D(;
+    #         H = H, ∇S = ∇S, θ = θ,
+    #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
+    #     )
+    # ) ./ δ∇H
+
+    return ∂D∂∇S_no_NN
 end
 
 function ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
 
     n = iceflow_model.n
+    n_H = 2.0
+
     Γ_no_A = Γ(iceflow_model, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
+    ∂A_spatial = Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n[] - 1)
 
     temp = mean(glacier.climate.longterm_temps)
 
@@ -111,6 +136,8 @@ end
 function apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
     n = iceflow_model.n
+    n_H = 2.0
+
     Γ_no_A = Γ(iceflow_model, params; include_A = false)
 
     # Compute ∇S in case is not provided.
@@ -132,7 +159,7 @@ function apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, 
     A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
     # Diffusivity is always evaluated in dual grid.
-    return A .* Γ_no_A .* H.^(n[] + 2) .* ∇S.^(n[] - 1)
+    return A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n[] - 1)
 end
 
 function apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
@@ -174,8 +201,8 @@ function predict_A_target_D(
     st = ml_model.st
     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
 
-    min_NN = params.physical.minA
-    max_NN = params.physical.maxA
+    min_NN = params.physical.minA * 0.0    # Minumum value of A * H^1
+    max_NN = params.physical.maxA * 300.0  # Maximum value of A * H^1
 
     # Neural network prediction
     A_pred = only(
@@ -188,7 +215,7 @@ function predict_A_target_D(
         )
 
     if rand() < 0.00000002
-        println("Value of A used inside Target: $(A_pred).")
+        println("Value of NN output used inside Target: $(A_pred).")
     end
     return A_pred
 end

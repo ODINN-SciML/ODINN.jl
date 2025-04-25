@@ -72,6 +72,17 @@ function normalize(
     end
 end
 
+"""
+Normalization of D to cap at a maximum physical value
+"""
+function cap_D(D; maxD = 1.0)
+    return maxD .* tanh(D ./ maxD)
+end
+
+function ∂cap_D(D; maxD = 1.0)
+    return sech.(D ./ maxD)^2
+end
+
 ### General Utils
 
 function cartesian_tensor(A, v)
