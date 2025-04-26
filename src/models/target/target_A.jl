@@ -1,21 +1,17 @@
 export SIA2D_A_target
 
-### Targrt to inverse creep coefficient A as a function of other quantities
+"""
+    function SIA2D_target(;
+       name::Symbol = :A,
+    )
 
-# function build_target_A()
-#     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> Diffusivity(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-#     f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_A(; H, ∇S, iceflow_model, params)
-#     f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_A(; H, ∇S, iceflow_model, params)
-#     f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-#     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-#     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_A!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+Target to inverse creep coefficient A as a function of other quantities
+Constructor of the SIA target. All the relevant functions defined inside Target are
+constructed automatically by just providing the keyword `name` for the inversion.
 
-#     return SIA2D_target{
-#         typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
-#         }(
-#         :A, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
-#     )
-# end
+# Arguments
+- `name::Symbol`: Identifying name for the model inversion.
+"""
 
 @kwdef struct SIA2D_A_target <: AbstractSIA2DTarget
 end

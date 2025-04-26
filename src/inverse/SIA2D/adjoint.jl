@@ -377,7 +377,7 @@ function VJP_λ_∂SIA∂θ_continuous(
 
     # Gradient wrt θ
     ∂D∂θ = ∂Diffusivity∂θ(
-        targte;
+        target;
         H = H̄, ∇S = ∇S, θ = θ,
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params

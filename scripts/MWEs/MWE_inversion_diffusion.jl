@@ -30,13 +30,12 @@ params = Parameters(
         step = δt,
         multiprocessing = false,
         workers = 1,
-        light = false, # for now we do the simulation like this (a better name would be dense)
         test_mode = false,
         rgi_paths = rgi_paths
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [2s, 20],
+        epochs = [2, 20],
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
@@ -57,7 +56,14 @@ params = Parameters(
         )
     )
 
-# TODO: We construct the NN by hand for now
+"""
+The ground data was generated with n = 3.
+In this inversion, we are interested if the network can learn a different Glen law that
+the one it was prescribed.
+We will prescribed then the ML model with n = 2:
+
+We do this by providing a modifying the target object used in the NN
+"""
 architecture = Lux.Chain(
     Dense(2, 3, x -> softplus.(x)),
     Dense(3, 3, x -> softplus.(x)),
@@ -77,7 +83,14 @@ model = Model(
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
     machine_learning = NeuralNetwork(
         params;
-        architecture = architecture, θ = θ, st = st
+        architecture = architecture,
+        θ = θ,
+        st = st,
+        target = SIA2D_D_target(
+            n_H = 2.0,
+            min_NN = 0.0,
+            max_NN = params.physical.maxA * 500.0
+        )
     )
 )
 
@@ -106,10 +119,8 @@ end
 
 # TODO: This function does shit on the model variable, for now we do a clean restart
 
-# The ground data was generated with n = 3.
-# In this inversion, we are interested if the network can learn a different Glen law that
-# the one it was prescribed.
-# We will prescribed then the ML model with n = 2:
+
+
 
 model.iceflow = SIA2Dmodel(params)
 
@@ -134,8 +145,9 @@ for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
     # A_pred = ODINN.predict_A_target_D(architecture, T, [100.0, 200.0])
     temp = Temps_smooth[i]
     H = H_smooth[j]
-    A_pred = ODINN.predict_A_target_D(
-        functional_inversion.stats.θ, temp, H;
+    A_pred = ODINN.predict_A(
+        functional_inversion.model.machine_learning.target;
+        functional_inversion.stats.θ, temp, H,
         ml_model = functional_inversion.model.machine_learning,
         params = functional_inversion.parameters)
     AtimesH_pred[i, j] = A_pred

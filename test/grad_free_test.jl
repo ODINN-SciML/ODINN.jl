@@ -18,7 +18,6 @@ function grad_free_test(;use_MB::Bool=false)
             step=δt,
             multiprocessing=false,
             workers=1,
-            light=false, # for now we do the simulation like this (a better name would be dense)
             test_mode=true,
             rgi_paths=rgi_paths),
         hyper = Hyperparameters(

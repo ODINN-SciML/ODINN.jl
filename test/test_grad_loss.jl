@@ -66,7 +66,7 @@ function test_grad_finite_diff(
     fakeA(T) = 2.21e-18
 
     ODINN.generate_ground_truth(glaciers, fakeA, params, model, tstops)
-    # TODO: This function does shit on the model variable, for now we do a clean restart
+    # TODO: For now we do a clean restart
     model.iceflow = SIA2Dmodel(params)
 
     # We create an ODINN prediction
@@ -95,12 +95,12 @@ function test_grad_finite_diff(
             θ
         )
         ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
-        @test abs(ratio_FD) < thres_ratio
-        @test abs(angle_FD) < thres_angle
-        @test abs(relerr_FD) < thres_relerr
         printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
         printVecScientific("angle  = ", [angle_FD], thres_angle)
         printVecScientific("relerr = ", [relerr_FD], thres_relerr)
+        @test abs(ratio_FD) < thres_ratio
+        @test abs(angle_FD) < thres_angle
+        @test abs(relerr_FD) < thres_relerr
 
     elseif finite_difference_method == :Manual
 

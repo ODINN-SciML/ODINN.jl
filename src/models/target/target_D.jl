@@ -1,33 +1,21 @@
-### Target to invert D as a function of H and Temp
 export SIA2D_D_target
+
 """
     build_target_D()
 
 Inversion of the form
+Target to invert D as a function of H and Temp
 
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
 """
-# function build_target_D(;
-#     interpolation::Bool = true,
-#     n_interp_half::Int = 75
-# )
-#     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> D_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-#     f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-#     f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂∇H_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-#     f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> ∂D∂θ_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params, interpolation, n_interp_half)
-#     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-#     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> apply_parametrization_target_D!(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-
-#     return SIA2D_target{
-#         typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
-#         }(
-#         :D, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
-#     )
-# end
 
 @kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
-    interpolation::Bool = true
+    interpolation::Symbol = :Linear
     n_interp_half::Int = 75
+    n_H::Union{Float64, Nothing} = nothing
+    n_∇S::Union{Float64, Nothing} = nothing
+    min_NN::Union{Float64, Nothing} = nothing
+    max_NN::Union{Float64, Nothing} = nothing
 end
 
 # For this simple case, the target coincides with D, but not always.
@@ -37,7 +25,7 @@ function Diffusivity(
     target::SIA2D_D_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
-    return apply_parametrization_target_D(
+    return apply_parametrization(
         target;
         H, ∇S, θ, iceflow_model, ml_model, glacier, params
         )
@@ -48,28 +36,34 @@ function ∂Diffusivity∂H(
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
+    # Allow different n for power in inversion of diffusivity
+    # TODO: n is also inside Γ, so probably we want to grab this one too
     n = iceflow_model.n
-    n_H = 2.0
+    n_H = isnothing(target.n_H) ? n[] : target.n_H
+    n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
 
     Γ_no_A = Γ(iceflow_model, params; include_A = false)
-    A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    ∂D∂H_no_NN = (n_H + 2) .* A .* Γ_no_A .* H.^(n_H + 1) .* ∇S.^(n[] - 1)
+    A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    ∂D∂H_no_NN = (n_H + 2) .* A .* Γ_no_A .* H.^(n_H + 1) .* ∇S.^(n_∇S - 1)
 
     # Derivative of the output of the NN with respect to input layer
     # TODO: Change this to be done with AD or have this as an extra parameter.
     # This is done already in SphereUDE.jl with Lux
     δH = 1e-4 .* ones(size(H))
     ∂D∂H_NN = (
-        D_target_D(;
+        Diffusivity(
+            target;
             H = H + δH, ∇S = ∇S, θ = θ,
             iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
         )
         .-
-        D_target_D(;
+        Diffusivity(
+            target;
             H = H, ∇S = ∇S, θ = θ,
             iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
         )
     ) ./ δH
+
     return ∂D∂H_no_NN + ∂D∂H_NN
 end
 
@@ -78,20 +72,24 @@ function ∂Diffusivity∂∇H(
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
-    n_H = 2.0
+    n = iceflow_model.n
+    n_H = isnothing(target.n_H) ? n[] : target.n_H
+    n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
 
-    A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    ∂D∂∇S_no_NN = Γ(iceflow_model, params; include_A = false) .* A .* (iceflow_model.n[] - 1) .* H.^(n_H + 2) .* ∇S.^(iceflow_model.n[] - 3)
+    A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    ∂D∂∇S_no_NN = Γ(iceflow_model, params; include_A = false) .* A .* (n_∇S - 1) .* H.^(n_H + 2) .* ∇S.^(n_∇S - 3)
 
     # For now we ignore the derivative in surface slope
     # δ∇H = 1e-4 .* ones(size(∇S))
     # ∂D∂∇H_NN = (
-    #     D_target_D(;
+    #     Diffusivity(
+            # target;
     #         H = H, ∇S = ∇S + δ∇H, θ = θ,
     #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
     #     )
     #     .-
-    #     D_target_D(;
+    #     Diffusivity(
+            # target;
     #         H = H, ∇S = ∇S, θ = θ,
     #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
     #     )
@@ -110,26 +108,36 @@ function ∂Diffusivity∂θ(
     n_interp_half = target.n_interp_half
 
     n = iceflow_model.n
-    n_H = 2.0
+    n_H = isnothing(target.n_H) ? n[] : target.n_H
+    n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
 
     Γ_no_A = Γ(iceflow_model, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n[] - 1)
+    ∂A_spatial = Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n_∇S - 1)
 
     temp = mean(glacier.climate.longterm_temps)
 
     ∂D∂θ = zeros(size(H)..., only(size(θ)))
 
-    if !interpolation
-        # Computes derivative at each pixel. Slower but more precise.
+    if interpolation == :None
+        """
+        Computes derivative at each pixel using the exact numerical value of H at each 
+        point in the glacier. Slower but more precise.
+        """
         for i in axes(H, 1), j in axes(H, 2)
-            ∇θ_point, = Zygote.gradient(_θ -> predict_A_target_D(_θ, temp, H[i,j]; ml_model = ml_model, params = params), θ)
+            ∇θ_point, = Zygote.gradient(_θ -> predict_A(
+                target,
+                _θ, temp, H[i,j];
+                ml_model = ml_model, params = params
+                ), θ)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * ComponentVector2Vector(∇θ_point)
         end
-    else
-        # Interpolation of the gradient as function of values of H.
-        # Introduces interpolation errors but it is faster and probably sufficient depending
-        # the decired level of precision for the gradients.
-        # We construct an interpolator with quantiles and equal-spaced points
+    elseif interpolation == :Linear
+        """
+        Interpolation of the gradient as function of values of H.
+        Introduces interpolation errors but it is faster and probably sufficient depending
+        the decired level of precision for the gradients.
+        We construct an interpolator with quantiles and equal-spaced points.
+        """
         H_interp_unif = LinRange(0.0, maximum(H), n_interp_half) |> collect
         H_interp_quantiles = quantile!(H[H .> 0.0], LinRange(0.0, 1.0, n_interp_half))
         H_interp = vcat(H_interp_unif, H_interp_quantiles)
@@ -140,7 +148,11 @@ function ∂Diffusivity∂θ(
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            ∇θ_point, = Zygote.gradient(_θ -> predict_A_target_D(_θ, temp, h; ml_model = ml_model, params = params), θ)
+            ∇θ_point, = Zygote.gradient(_θ -> predict_A(
+                target,
+                _θ, temp, h;
+                ml_model = ml_model, params = params
+                ), θ)
             push!(grads, ComponentVector2Vector(∇θ_point))
         end
         # Create interpolation for gradient
@@ -150,8 +162,8 @@ function ∂Diffusivity∂θ(
         for i in axes(H, 1), j in axes(H, 2)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H[i, j])
         end
-    # else
-    #     @error "Method to spatially compute gradient with respect to H not specified."
+    else
+        @error "Method to spatially compute gradient with respect to H not specified."
     end
 
     return ∂D∂θ
@@ -163,7 +175,8 @@ function apply_parametrization(
     )
 
     n = iceflow_model.n
-    n_H = 2.0
+    n_H = isnothing(target.n_H) ? n[] : target.n_H
+    n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
 
     Γ_no_A = Γ(iceflow_model, params; include_A = false)
 
@@ -183,17 +196,17 @@ function apply_parametrization(
     end
 
     # # Predict value of A based on Temp and H
-    A = _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
     # Diffusivity is always evaluated in dual grid.
-    return A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n[] - 1)
+    return A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n_∇S - 1)
 end
 
 function apply_parametrization!(
     target::SIA2D_D_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
-    D = apply_parametrization_target_D(
+    D = apply_parametrization(
         target;
         H, ∇S, θ, iceflow_model, ml_model, glacier, params
         )
@@ -204,26 +217,36 @@ end
 
 ### Auxiliary functions
 
-function _apply_parametrization_A_target_D(; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+function apply_parametrization_A(
+    target::SIA2D_D_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
     T_mean = mean(glacier.climate.longterm_temps)
-    A_space = predict_A_target_D(
+    A_space = predict_A(
+        target,
         θ, T_mean, H;
         ml_model = ml_model, params = params
     )
     return A_space
 end
 
-function predict_A_target_D(
+function predict_A(
+    target::SIA2D_D_target,
     θ,
     temp::F,
     H::Matrix{F};
     ml_model,
     params
 ) where {F <: AbstractFloat}
-    return map(h -> predict_A_target_D(θ, temp, h; ml_model = ml_model, params = params), H)
+    return map(h -> predict_A(
+        target,
+        θ, temp, h;
+        ml_model = ml_model, params = params
+        ), H)
 end
 
-function predict_A_target_D(
+function predict_A(
+    target::SIA2D_D_target,
     θ,
     temp::F,
     h::F;
@@ -236,8 +259,10 @@ function predict_A_target_D(
     st = ml_model.st
     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
 
-    min_NN = params.physical.minA * 0.0    # Minumum value of A * H^1
-    max_NN = params.physical.maxA * 300.0  # Maximum value of A * H^1
+    # min_NN = params.physical.minA #* 0.0    # Minumum value of A * H^1
+    # max_NN = params.physical.maxA #* 300.0  # Maximum value of A * H^1
+    min_NN = isnothing(target.min_NN) ? params.physical.minA : target.min_NN
+    max_NN = isnothing(target.max_NN) ? params.physical.maxA : target.max_NN
 
     # Neural network prediction
     A_pred = only(
@@ -249,8 +274,8 @@ function predict_A_target_D(
             (min_NN, max_NN))
         )
 
-    if rand() < 0.00000002
-        println("Value of NN output used inside Target: $(A_pred).")
-    end
+    # if rand() < 0.00000002
+    #     println("Value of NN output used inside Target: $(A_pred).")
+    # end
     return A_pred
 end
