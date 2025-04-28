@@ -58,8 +58,8 @@ end
 
 @testset "Adjoint method of SIA equation with A as target" begin
     @testset "Consistency between discrete VJP and Enzyme VJP" test_grad_Enzyme_SIAD2D() # This test must be run first, otherwise Enzyme compilation fails because it was used before
-    @testset "Continuous adjoint with discrete VJP of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); target = :A)
-    @testset "Continuous adjoint with continuous VJP of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
+    @testset "Discrete VJP of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); target = :A)
+    @testset "Continuous VJP of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
     @testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-8, 1e-2])
     @testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-8, 3e-2])
     @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-4, 1e-8, 1e-3])
