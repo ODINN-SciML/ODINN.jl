@@ -53,6 +53,7 @@ scheme.
     reltol::F = 1e-8
     abstol::F = 1e-8
     dtmax::F = 1/12
+    interpolation::Symbol = :Linear
     n_quadrature::I = 200
 end
 
