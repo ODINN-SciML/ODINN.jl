@@ -1,4 +1,4 @@
-export SIA2D_D_target
+export SIA2D_D_hybrid_target
 
 """
     build_target_D()
@@ -9,20 +9,22 @@ Target to invert D as a function of H and Temp
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
 """
 
-@kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
+@kwdef struct SIA2D_D_hybrid_target <: AbstractSIA2DTarget
     interpolation::Symbol = :Linear
     n_interp_half::Int = 75
     n_H::Union{Float64, Nothing} = nothing
     n_∇S::Union{Float64, Nothing} = nothing
     min_NN::Union{Float64, Nothing} = nothing
     max_NN::Union{Float64, Nothing} = nothing
+    prescale::Union{Function, Nothing} = nothing
+    postscale::Union{Function, Nothing} = nothing
 end
 
 # For this simple case, the target coincides with D, but not always.
 # TODO: D should be cap to its maximum physical value. This can be done with one extra
 # function and one extra differentiation.
 function Diffusivity(
-    target::SIA2D_D_target;
+    target::SIA2D_D_hybrid_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
     return apply_parametrization(
@@ -32,7 +34,7 @@ function Diffusivity(
 end
 
 function ∂Diffusivity∂H(
-    target::SIA2D_D_target;
+    target::SIA2D_D_hybrid_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
@@ -68,7 +70,7 @@ function ∂Diffusivity∂H(
 end
 
 function ∂Diffusivity∂∇H(
-    target::SIA2D_D_target;
+    target::SIA2D_D_hybrid_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
@@ -99,7 +101,7 @@ function ∂Diffusivity∂∇H(
 end
 
 function ∂Diffusivity∂θ(
-    target::SIA2D_D_target;
+    target::SIA2D_D_hybrid_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
@@ -170,7 +172,7 @@ function ∂Diffusivity∂θ(
 end
 
 function apply_parametrization(
-    target::SIA2D_D_target;
+    target::SIA2D_D_hybrid_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
@@ -197,13 +199,20 @@ function apply_parametrization(
 
     # # Predict value of A based on Temp and H
     A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    D = A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n_∇S - 1)
 
+    # Compute velocity 
+    # @infiltrate
+    # V = D .* ∇S ./ H
+    # V_max = maximum(V[(.!isnan.(V)) .&  (H .> 20.0)])
+    # V_max = maximum(A .* Γ_no_A .* H.^(n_H + 1) .* ∇S.^n_∇S)
+    # TODO: add warning for large values of D
     # Diffusivity is always evaluated in dual grid.
-    return A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n_∇S - 1)
+    return D
 end
 
 function apply_parametrization!(
-    target::SIA2D_D_target;
+    target::SIA2D_D_hybrid_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
     D = apply_parametrization(
@@ -218,7 +227,7 @@ end
 ### Auxiliary functions
 
 function apply_parametrization_A(
-    target::SIA2D_D_target;
+    target::SIA2D_D_hybrid_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
     T_mean = mean(glacier.climate.longterm_temps)
@@ -231,7 +240,7 @@ function apply_parametrization_A(
 end
 
 function predict_A(
-    target::SIA2D_D_target,
+    target::SIA2D_D_hybrid_target,
     θ,
     temp::F,
     H::Matrix{F};
@@ -246,7 +255,7 @@ function predict_A(
 end
 
 function predict_A(
-    target::SIA2D_D_target,
+    target::SIA2D_D_hybrid_target,
     θ,
     temp::F,
     h::F;
@@ -259,23 +268,37 @@ function predict_A(
     st = ml_model.st
     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
 
-    # min_NN = params.physical.minA #* 0.0    # Minumum value of A * H^1
-    # max_NN = params.physical.maxA #* 300.0  # Maximum value of A * H^1
+    # Pre and post scalling functions of the model
+    prescale = isnothing(target.prescale) ? _ml_model_prescale : target.prescale
+    postscale = isnothing(target.postscale) ? _ml_model_postscale : target.postscale
+
+    A_pred = only(
+        postscale(
+            target,
+            smodel(prescale(target, [temp, h], params)),
+            params
+        )
+    )
+    return A_pred
+end
+
+function _ml_model_prescale(
+    target::SIA2D_D_hybrid_target,
+    X::Vector,
+    params
+)
+    return [
+        normalize(X[1]; lims = (-25.0, 0.0)),
+        normalize(X[2]; lims = (0.0, 500.0))
+        ]
+end
+
+function _ml_model_postscale(
+    target::SIA2D_D_hybrid_target,
+    Y::Vector,
+    params
+)
     min_NN = isnothing(target.min_NN) ? params.physical.minA : target.min_NN
     max_NN = isnothing(target.max_NN) ? params.physical.maxA : target.max_NN
-
-    # Neural network prediction
-    A_pred = only(
-        scale(
-            smodel([
-                normalize(temp; lims = (-25.0, 0.0)),
-                normalize(h; lims = (0.0, 500.0))
-            ]),
-            (min_NN, max_NN))
-        )
-
-    # if rand() < 0.00000002
-    #     println("Value of NN output used inside Target: $(A_pred).")
-    # end
-    return A_pred
+    return scale(Y, (min_NN, max_NN))
 end

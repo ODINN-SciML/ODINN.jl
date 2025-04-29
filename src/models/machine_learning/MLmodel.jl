@@ -88,7 +88,11 @@ function NeuralNetwork(
     if all(_nn_is_provided)
         if params.UDE.target == :A
             architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN)
+        elseif params.UDE.target == :D_hybrid
+            architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
+            architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
         elseif params.UDE.target == :D
+            @warn "Inversion for :D has not been setup yet."
             architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
             architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
         else
@@ -103,6 +107,8 @@ function NeuralNetwork(
     if isnothing(target)
         if params.UDE.target == :A
             target = SIA2D_A_target()
+        elseif params.UDE.target == :D_hybrid
+            target = SIA2D_D_hybrid_target()
         elseif params.UDE.target == :D
             target = SIA2D_D_target()
         else

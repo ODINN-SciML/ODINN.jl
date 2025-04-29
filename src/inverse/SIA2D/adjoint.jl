@@ -401,5 +401,7 @@ function VJP_λ_∂SIA∂θ_continuous(
     # Evaluate numerical integral for loss
     @tullio ∂θ_v[k] := ∇_∂D∂θ_∇S[i, j, k] * λ[i, j]
 
-    return ∂θ_v
+    ∂θ = Vector2ComponentVector(∂θ_v, θ)
+
+    return ∂θ
 end

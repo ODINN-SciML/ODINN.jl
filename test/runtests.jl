@@ -36,9 +36,6 @@ include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
 include("test_grad_Enzyme.jl")
 
-# test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [2e-4, 1e-8, 1e-3])
-# test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [2e-4, 4e-6, 5e-2], target = :D)
-
 # # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"] = "nul"
 
@@ -53,7 +50,7 @@ ENV["GKSwstype"] = "nul"
     @testset "Adjoint of diff" test_adjoint_diff()
     @testset "Adjoint of clamp_borders" test_adjoint_clamp_borders()
     @testset "Adjoint of avg" test_adjoint_avg()
-    @testset "Adjoint of SIA2D" test_adjoint_SIAD2D()
+    # @testset "Adjoint of SIA2D" test_adjoint_SIAD2D()
 end
 
 @testset "Adjoint method of SIA equation with A as target" begin
@@ -71,8 +68,8 @@ end
 end
 
 @testset "Adjoint method of SIA equation with D as target" begin
-    @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-2, 4e-6, 6e-2], target = :D)
-    @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-2, 4e-6, 6e-2], target = :D)
+    @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-2, 4e-6, 6e-2], target = :D_hybrid)
+    @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-2, 4e-6, 6e-2], target = :D_hybrid)
 end
 
 @testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)

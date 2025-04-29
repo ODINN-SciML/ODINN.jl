@@ -1,3 +1,20 @@
+"""
+The goal of this inversion is to recover the power law dependency of the diffusivity in
+the SIA equation as a function of H.
+
+We are going go generate a glacier flow equation following the next SIA diffusivity:
+
+D(H, ∇S) = 2A / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1}
+
+and we are going to target this diffusivity with the function
+
+D(H, ∇S, θ) = 2 / (n + 2) * H^2 |∇S|^{n-1} * NN(Temp, ρgH)
+
+The neural network should learn the function NN(Temp, ρgH) ≈ (ρgH)^n
+
+with n the Glen exponent.
+"""
+
 using Pkg; Pkg.activate(".")
 
 using Revise
@@ -17,7 +34,7 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
-rgi_ids = ["RGI60-11.03638"]
+rgi_ids = ["RGI60-11.03646"]
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
@@ -64,6 +81,8 @@ the one it was prescribed.
 We will prescribed then the ML model with n = 2:
 
 We do this by providing a modifying the target object used in the NN
+
+Inputs: Temp, H
 """
 architecture = Lux.Chain(
     Dense(2, 3, x -> softplus.(x)),
@@ -79,6 +98,24 @@ if Sleipnir.Float == Float64
     st = f64(st)
 end
 
+# The neural network shoudl return something between 0 and A * H^{max n power}
+H_max = 500.0
+n_max = 3.0
+max_NN = params.physical.maxA * H_max^n_max
+
+function custom_prescale(target::SIA2D_D_hybrid_target, X::Vector, nothing)
+    return [
+        ODINN.normalize(X[1]; lims = (-25.0, 0.0)),
+        ODINN.normalize(X[2]; lims = (0.0, 500.0))
+        ]
+end
+
+function custom_postscale(target::SIA2D_D_hybrid_target, Y::Vector, nothing)
+    # Y is the resturn of the neural network, which is a sigmoid function ∈ [0,1]
+    return max_NN .* exp.((Y .- 1.0) ./ Y)
+end
+
+# We define the prescale and postscale of quantities.
 model = Model(
     iceflow = SIA2Dmodel(params),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
@@ -88,9 +125,11 @@ model = Model(
         θ = θ,
         st = st,
         target = SIA2D_D_hybrid_target(
-            n_H = 2.5,
-            min_NN = 0.0,
-            max_NN = params.physical.maxA * 500.0^0.5
+            n_H = 0.5,
+            prescale = custom_prescale,
+            postscale = custom_postscale
+            # min_NN = 0.0,
+            # max_NN = params.physical.maxA * 500.0^0.5
         )
     )
 )
