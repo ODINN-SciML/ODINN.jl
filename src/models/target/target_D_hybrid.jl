@@ -9,15 +9,35 @@ Target to invert D as a function of H and Temp
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
 """
 
-@kwdef struct SIA2D_D_hybrid_target <: AbstractSIA2DTarget
+@kwdef struct SIA2D_D_hybrid_target{Fin, Fout} <: AbstractSIA2DTarget
     interpolation::Symbol = :Linear
     n_interp_half::Int = 75
     n_H::Union{Float64, Nothing} = nothing
     n_∇S::Union{Float64, Nothing} = nothing
     min_NN::Union{Float64, Nothing} = nothing
     max_NN::Union{Float64, Nothing} = nothing
-    prescale::Union{Function, Nothing} = nothing
-    postscale::Union{Function, Nothing} = nothing
+    prescale::Union{Fin, Nothing} = nothing
+    postscale::Union{Fout, Nothing} = nothing
+end
+
+function SIA2D_D_hybrid_target(;
+    interpolation::Symbol = :Linear,
+    n_interp_half::Int = 75,
+    n_H::Union{Float64, Nothing} = nothing,
+    n_∇S::Union{Float64, Nothing} = nothing,
+    min_NN::Union{Float64, Nothing} = nothing,
+    max_NN::Union{Float64, Nothing} = nothing,
+    prescale::Union{Fin, Nothing} = nothing,
+    postscale::Union{Fout, Nothing} = nothing
+) where {Fin <: Function, Fout <: Function}
+
+    fin = typeof(prescale)
+    fout = typeof(postscale)
+
+    return SIA2D_D_hybrid_target{fin, fout}(
+        interpolation, n_interp_half, n_H, n_∇S, min_NN, max_NN,
+        prescale, postscale
+    )
 end
 
 # For this simple case, the target coincides with D, but not always.

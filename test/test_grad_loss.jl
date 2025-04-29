@@ -4,7 +4,7 @@ function test_grad_finite_diff(
     thres = [0., 0., 0.],
     target = :A,
     finite_difference_method = :FiniteDifferences,
-    finite_difference_order = 5
+    finite_difference_order = 3
 ) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing adjoint $(adjointFlavor)")
