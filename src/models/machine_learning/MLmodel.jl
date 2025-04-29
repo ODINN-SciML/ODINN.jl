@@ -84,8 +84,7 @@ function NeuralNetwork(
     ft = Sleipnir.Float
     lightNN = params.simulation.test_mode
 
-    _nn_is_provided = [isnothing(architecture), isnothing(θ), isnothing(st)]
-    if all(_nn_is_provided)
+    if isnothing(architecture) & isnothing(θ) & isnothing(st)
         if params.UDE.target == :A
             architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN)
         elseif params.UDE.target == :D_hybrid
@@ -99,8 +98,13 @@ function NeuralNetwork(
             @warn "Constructing default Neural Network"
             architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN)
         end
-    elseif any(_nn_is_provided) && !all(_nn_is_provided)
-        @warn "To specify the neural network please provide all (architecture, θ, st), not just a subset of them."
+    elseif !isnothing(architecture) & isnothing(θ) & isnothing(st)
+        architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
+    elseif !isnothing(architecture) & !isnothing(θ) & !isnothing(st)
+        # Architecture and setup already provided
+        nothing
+    else
+        @warn "To specify the neural network please provide architecture, (architecture, θ, st), or none of them to create default NN."
     end
 
     # Build target based on parameters

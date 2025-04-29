@@ -215,21 +215,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
 end
 
-# """
-# Define SIA2D forward map for the adjoint mode
-
-# This is currently just use for Enzyme
-# """
-# function SIA2D_adjoint!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
-#     # make prediction with neural network
-#     apply_UDE_parametrization_enzyme!(_θ, simulation, smodel, batch_id)
-
-#     # dH is computed as follows
-#     Huginn.SIA2D!(_dH, _H, simulation, t; batch_id=batch_id)
-
-#     return nothing
-# end
-
 
 """
 Generate fake forward simulation

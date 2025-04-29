@@ -34,7 +34,8 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
-rgi_ids = ["RGI60-11.03646"]
+# rgi_ids = ["RGI60-11.03646"]
+rgi_ids = ["RGI60-08.00203"]
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
@@ -53,7 +54,7 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [10, 30],
+        epochs = [40, 20],
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
@@ -74,6 +75,11 @@ params = Parameters(
         )
     )
 
+# We retrieve some glaciers for the simulation
+glaciers = initialize_glaciers(rgi_ids, params)
+
+H_max = 1.3 * maximum(only(glaciers).H₀)
+
 """
 The ground data was generated with n = 3.
 In this inversion, we are interested if the network can learn a different Glen law that
@@ -89,24 +95,19 @@ architecture = Lux.Chain(
     Dense(3, 3, x -> softplus.(x)),
     Dense(3, 1, sigmoid)
 )
-θ, st = Lux.setup(ODINN.rng_seed(), architecture)
-θ = ODINN.ComponentArray(θ=θ)
-
-if Sleipnir.Float == Float64
-    architecture = f64(architecture)
-    θ = f64(θ)
-    st = f64(st)
-end
 
 # The neural network shoudl return something between 0 and A * H^{max n power}
-H_max = 500.0
-n_max = 3.0
+min_NN = 0.0
+n_max = 2.8
 max_NN = params.physical.maxA * H_max^n_max
+
+min_temp, max_temp = - 25.0, 0.0
+min_H, max_H = 0.0, H_max
 
 function custom_prescale(target::SIA2D_D_hybrid_target, X::Vector, nothing)
     return [
-        ODINN.normalize(X[1]; lims = (-25.0, 0.0)),
-        ODINN.normalize(X[2]; lims = (0.0, 500.0))
+        ODINN.normalize(X[1]; lims = (min_temp, max_temp)),
+        ODINN.normalize(X[2]; lims = (min_H, max_H))
         ]
 end
 
@@ -115,6 +116,9 @@ function custom_postscale(target::SIA2D_D_hybrid_target, Y::Vector, nothing)
     return max_NN .* exp.((Y .- 1.0) ./ Y)
 end
 
+# TODO: Pretrain neural neural network
+
+
 # We define the prescale and postscale of quantities.
 model = Model(
     iceflow = SIA2Dmodel(params),
@@ -122,20 +126,13 @@ model = Model(
     machine_learning = NeuralNetwork(
         params;
         architecture = architecture,
-        θ = θ,
-        st = st,
         target = SIA2D_D_hybrid_target(
             n_H = 0.5,
             prescale = custom_prescale,
             postscale = custom_postscale
-            # min_NN = 0.0,
-            # max_NN = params.physical.maxA * 500.0^0.5
         )
     )
 )
-
-# We retrieve some glaciers for the simulation
-glaciers = initialize_glaciers(rgi_ids, params)
 
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
@@ -159,9 +156,6 @@ end
 
 # TODO: This function does shit on the model variable, for now we do a clean restart
 
-
-
-
 model.iceflow = SIA2Dmodel(params)
 
 # We create an ODINN prediction
@@ -177,7 +171,7 @@ losses = functional_inversion.stats.losses
 # Temps_smooth = collect(-23.0:1.0:0.0)
 T₀ = mean(glaciers[1].climate.longterm_temps)
 Temps_smooth = [T₀]
-H_smooth = collect(0.0:10.0:300.0)
+H_smooth = collect(0.0:1.0:max_H)
 
 AtimesH_pred = zeros(length(Temps_smooth), length(H_smooth))
 
@@ -194,14 +188,14 @@ for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
 end
 
 A₀ = fakeA(T₀)
-H_pred = AtimesH_pred[1, :] ./ A₀
+H_pred = AtimesH_pred[1, :] #./ A₀
 
-Plots.scatter(H_smooth, H_pred, label="Pred H", c=:lightsteelblue2)
-plot_H = Plots.plot!(H_smooth, H_smooth.^0.5, label="Ground True Value")
-                    # xlabel="Long-term air temperature (°C)", yticks=[0.0, 1e-17, 1e-18, params.physical.maxA],
-                    # ylabel=:A, ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
-                    # legend=:topleft)
-Plots.savefig(plot_H, "MWE_inversion_diffusion_result_H_2.pdf")
+plot = Plots.scatter(H_smooth, H_pred, label="Neural network prediction", c=:lightsteelblue2)
+Plots.plot!(H_smooth, A₀ .* H_smooth.^2.0, label="Ground True Value",
+                    xlabel="Ice thickness H [m]",
+                    ylabel="Predicted output (= A(T) x H^2)", lw = 3, c=:dodgerblue4,
+                    legend=:topleft)
+Plots.savefig(plot, "MWE_inversion_diffusion_result_H_2.pdf")
 
 # T₀ = mean(glaciers[1].climate.longterm_temps)
 
