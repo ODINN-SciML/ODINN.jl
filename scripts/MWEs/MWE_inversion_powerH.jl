@@ -116,13 +116,10 @@ function custom_postscale(target::SIA2D_D_hybrid_target, Y::Vector, nothing)
     return max_NN .* exp.((Y .- 1.0) ./ Y)
 end
 
-# TODO: Pretrain neural neural network
-
-
 # We define the prescale and postscale of quantities.
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
     machine_learning = NeuralNetwork(
         params;
         architecture = architecture,

@@ -72,6 +72,9 @@ end
     @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D_hybrid)
 end
 
-@testset "Inversion Tests" inversion_test(steady_state = true, save_refs = false)
+@testset "Inversion test" begin
+    @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, steady_state = true, save_refs = false)
+    @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, steady_state = true, save_refs = false)
+end
 
 end
