@@ -99,7 +99,7 @@ function run()
     #######################################################################################################
 
     # Train iceflow UDE in parallel
-    # Choose between :D for diffusivity and :A for Glen's coefficient
+    # Choose between :D_hybrid for diffusivity and :A for Glen's coefficient
     if ODINN.retrain[]
         println("Retraining from previous NN weights...")
         trained_weights = load(joinpath(ODINN.root_dir, "data/trained_inv_weights.jld2"))

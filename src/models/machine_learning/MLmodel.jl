@@ -91,7 +91,6 @@ function NeuralNetwork(
             architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
             architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
         elseif params.UDE.target == :D
-            @warn "Inversion for :D has not been setup yet."
             architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
             architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
         else

@@ -1,3 +1,21 @@
+"""
+The goal of this inversion is to recover the power law dependency of the diffusivity in
+the SIA equation as a function of H.
+
+We are going go generate a glacier flow equation following the next SIA diffusivity:
+
+D(H, ∇S) = 2A / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1}
+
+and we are going to target this diffusivity with the function
+
+D(H, ∇S, θ) = H * NN(Temp, H, ∇S)
+
+The neural network should learn the function NN(Temp, H, ∇S) ≈  2A / (n + 2) * (ρg)^n H^{n+1} |∇S|^{n-1}
+which corresponds to the time integrated ice surface velocity.
+
+with n the Glen exponent.
+"""
+
 using Pkg; Pkg.activate(".")
 
 using Revise
@@ -17,7 +35,8 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
-rgi_ids = ["RGI60-11.03638"]
+# rgi_ids = ["RGI60-11.03646"]
+rgi_ids = ["RGI60-08.00203"]
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
@@ -36,7 +55,7 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [10, 30],
+        epochs = [40, 20],
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
@@ -48,7 +67,7 @@ params = Parameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
-        target = :D_hybrid
+        target = :D_pure
         ),
     solver = Huginn.SolverParameters(
         step = δt,
@@ -57,6 +76,9 @@ params = Parameters(
         )
     )
 
+# We retrieve some glaciers for the simulation
+glaciers = initialize_glaciers(rgi_ids, params)
+
 """
 The ground data was generated with n = 3.
 In this inversion, we are interested if the network can learn a different Glen law that
@@ -64,39 +86,56 @@ the one it was prescribed.
 We will prescribed then the ML model with n = 2:
 
 We do this by providing a modifying the target object used in the NN
+
+Inputs: Temp, H
 """
 architecture = Lux.Chain(
     Dense(2, 3, x -> softplus.(x)),
     Dense(3, 3, x -> softplus.(x)),
     Dense(3, 1, sigmoid)
 )
-θ, st = Lux.setup(ODINN.rng_seed(), architecture)
-θ = ODINN.ComponentArray(θ=θ)
 
-if Sleipnir.Float == Float64
-    architecture = f64(architecture)
-    θ = f64(θ)
-    st = f64(st)
+# The neural network shoudl return something between 0 and A * H^{max n power}
+min_NN = 0.0
+n_max = 2.8
+
+# min_temp, max_temp = - 25.0, 0.0
+min_H, max_H = 0.0, 200.0
+min_∇S, max_∇S = 0.0, 0.2
+
+# This should be the maximum value we expect from the neural network.
+# Since this corresponds to velocity diveded H, we can do simply
+max_V = 2.0 # m / yr
+max_NN = max_V
+# max_NN = params.physical.maxA * H_max^n_max
+
+function custom_prescale(target::SIA2D_D_target, X::Vector, nothing)
+    return [
+        ODINN.normalize(X[1]; lims = (min_H, max_H)),
+        ODINN.normalize(X[2]; lims = (min_∇S, max_∇S))
+        ]
 end
 
+function custom_postscale(target::SIA2D_D_target, Y::Vector, nothing)
+    # Y is the resturn of the neural network, which is a sigmoid function ∈ [0,1]
+    return max_NN .* exp.((Y .- 1.0) ./ Y)
+end
+
+# We define the prescale and postscale of quantities.
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
     machine_learning = NeuralNetwork(
         params;
         architecture = architecture,
-        θ = θ,
-        st = st,
-        target = SIA2D_D_hybrid_target(
-            n_H = 2.5,
-            min_NN = 0.0,
-            max_NN = params.physical.maxA * 500.0^0.5
+        target = SIA2D_D_target(
+            interpolation = :None,
+            n_interp_half = 20,
+            prescale = custom_prescale,
+            postscale = custom_postscale
         )
     )
 )
-
-# We retrieve some glaciers for the simulation
-glaciers = initialize_glaciers(rgi_ids, params)
 
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
@@ -120,9 +159,6 @@ end
 
 # TODO: This function does shit on the model variable, for now we do a clean restart
 
-
-
-
 model.iceflow = SIA2Dmodel(params)
 
 # We create an ODINN prediction
@@ -138,7 +174,7 @@ losses = functional_inversion.stats.losses
 # Temps_smooth = collect(-23.0:1.0:0.0)
 T₀ = mean(glaciers[1].climate.longterm_temps)
 Temps_smooth = [T₀]
-H_smooth = collect(0.0:10.0:300.0)
+H_smooth = collect(0.0:1.0:max_H)
 
 AtimesH_pred = zeros(length(Temps_smooth), length(H_smooth))
 
@@ -155,14 +191,14 @@ for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
 end
 
 A₀ = fakeA(T₀)
-H_pred = AtimesH_pred[1, :] ./ A₀
+H_pred = AtimesH_pred[1, :] #./ A₀
 
-Plots.scatter(H_smooth, H_pred, label="Pred H", c=:lightsteelblue2)
-plot_H = Plots.plot!(H_smooth, H_smooth.^0.5, label="Ground True Value")
-                    # xlabel="Long-term air temperature (°C)", yticks=[0.0, 1e-17, 1e-18, params.physical.maxA],
-                    # ylabel=:A, ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
-                    # legend=:topleft)
-Plots.savefig(plot_H, "MWE_inversion_diffusion_result_H_2.pdf")
+plot = Plots.scatter(H_smooth, H_pred, label="Neural network prediction", c=:lightsteelblue2)
+Plots.plot!(H_smooth, A₀ .* H_smooth.^2.0, label="Ground True Value",
+                    xlabel="Ice thickness H [m]",
+                    ylabel="Predicted output (= A(T) x H^2)", lw = 3, c=:dodgerblue4,
+                    legend=:topleft)
+Plots.savefig(plot, "MWE_inversion_diffusion_result_H_2.pdf")
 
 # T₀ = mean(glaciers[1].climate.longterm_temps)
 

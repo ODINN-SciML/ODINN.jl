@@ -1,34 +1,72 @@
 export SIA2D_D_target
 
 """
-    build_target_D()
+    SIA2D_D_target
 
-Inversion of the form
-Target to invert D as a function of H and Temp
+Inversion of general diffusivity as a function of physical parameters.
 
-    D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
+D(H, ∇S, θ) = H * NN(H, ∇S; θ)
+
+So now we are learning the velocoty field given by D * ∇S.
 """
-
-@kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
-    interpolation::Symbol = :Linear
-    n_interp_half::Int = 75
-    n_H::Union{Float64, Nothing} = nothing
-    n_∇S::Union{Float64, Nothing} = nothing
-    min_NN::Union{Float64, Nothing} = nothing
-    max_NN::Union{Float64, Nothing} = nothing
+@kwdef struct SIA2D_D_target{Fin, Fout} <: AbstractSIA2DTarget
+    interpolation::Symbol = :None
+    n_interp_half::Int = 20
+    prescale::Union{Fin, Nothing} = nothing
+    postscale::Union{Fout, Nothing} = nothing
 end
+
+function SIA2D_D_target(;
+    interpolation::Symbol = :None,
+    n_interp_half::Int = 20,
+    prescale::Union{Fin, Nothing} = nothing,
+    postscale::Union{Fout, Nothing} = nothing
+) where {Fin <: Function, Fout <: Function}
+
+    fin = typeof(prescale)
+    fout = typeof(postscale)
+
+    return SIA2D_D_target{fin, fout}(
+        interpolation, n_interp_half,
+        prescale, postscale
+    )
+end
+
 
 # For this simple case, the target coincides with D, but not always.
 # TODO: D should be cap to its maximum physical value. This can be done with one extra
 # function and one extra differentiation.
+# The diffusivity here returns something such that H D ∇S = H U
 function Diffusivity(
     target::SIA2D_D_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
-    return apply_parametrization(
+    U = predict_U_matrix(
         target;
-        H, ∇S, θ, iceflow_model, ml_model, glacier, params
+        H = H, ∇S = ∇S, θ = θ,
+        iceflow_model = iceflow_model, ml_model = ml_model,
+        glacier = glacier, params = params
         )
+    if size(U) == size(H)
+        return H .* U
+    elseif (size(U) .+ 1) == size(H)
+        return Huginn.avg(H) .* U
+    else
+        @error "Not matching dimensions between U (∇S) and H."
+    end
+end
+
+function Diffusivity_scalar(
+    target::SIA2D_D_target;
+    h, ∇s, θ, iceflow_model, ml_model, glacier, params
+    )
+    u = predict_U_scalar(
+        target;
+        h = h, ∇s = ∇s, θ = θ,
+        iceflow_model = iceflow_model, ml_model = ml_model,
+        glacier = glacier, params = params
+        )
+    return h * u
 end
 
 function ∂Diffusivity∂H(
@@ -36,19 +74,16 @@ function ∂Diffusivity∂H(
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
-    # Allow different n for power in inversion of diffusivity
-    # TODO: n is also inside Γ, so probably we want to grab this one too
-    n = iceflow_model.n
-    n_H = isnothing(target.n_H) ? n[] : target.n_H
-    n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
-
-    Γ_no_A = Γ(iceflow_model, params; include_A = false)
-    A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    ∂D∂H_no_NN = (n_H + 2) .* A .* Γ_no_A .* H.^(n_H + 1) .* ∇S.^(n_∇S - 1)
+    ### Compute value of neural network
+    ∂D∂H_no_NN = predict_U_matrix(
+        target;
+        H = H, ∇S = ∇S, θ = θ,
+        iceflow_model = iceflow_model, ml_model = ml_model,
+        glacier = glacier, params = params
+        )
+    ∂D∂H_no_NN .= (H .> 0.0) .* ∂D∂H_no_NN
 
     # Derivative of the output of the NN with respect to input layer
-    # TODO: Change this to be done with AD or have this as an extra parameter.
-    # This is done already in SphereUDE.jl with Lux
     δH = 1e-4 .* ones(size(H))
     ∂D∂H_NN = (
         Diffusivity(
@@ -72,30 +107,23 @@ function ∂Diffusivity∂∇H(
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
 
-    n = iceflow_model.n
-    n_H = isnothing(target.n_H) ? n[] : target.n_H
-    n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
-
-    A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    ∂D∂∇S_no_NN = Γ(iceflow_model, params; include_A = false) .* A .* (n_∇S - 1) .* H.^(n_H + 2) .* ∇S.^(n_∇S - 3)
-
     # For now we ignore the derivative in surface slope
-    # δ∇H = 1e-4 .* ones(size(∇S))
-    # ∂D∂∇H_NN = (
-    #     Diffusivity(
-            # target;
-    #         H = H, ∇S = ∇S + δ∇H, θ = θ,
-    #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
-    #     )
-    #     .-
-    #     Diffusivity(
-            # target;
-    #         H = H, ∇S = ∇S, θ = θ,
-    #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
-    #     )
-    # ) ./ δ∇H
+    δ∇H = 1e-6 .* ones(size(∇S))
+    ∂D∂∇S = (
+        Diffusivity(
+            target;
+            H = H, ∇S = ∇S + δ∇H, θ = θ,
+            iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
+        )
+        .-
+        Diffusivity(
+            target;
+            H = H, ∇S = ∇S, θ = θ,
+            iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
+        )
+    ) ./ δ∇H
 
-    return ∂D∂∇S_no_NN
+    return ∂D∂∇S
 end
 
 function ∂Diffusivity∂θ(
@@ -107,16 +135,11 @@ function ∂Diffusivity∂θ(
     interpolation = target.interpolation
     n_interp_half = target.n_interp_half
 
-    n = iceflow_model.n
-    n_H = isnothing(target.n_H) ? n[] : target.n_H
-    n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
-
-    Γ_no_A = Γ(iceflow_model, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n_∇S - 1)
-
-    temp = mean(glacier.climate.longterm_temps)
+    # ∂spatial = ones(size(H)...)
+    ∂spatial = map(h -> h > 0.0 ? 1.0 : 0.0, H)
 
     ∂D∂θ = zeros(size(H)..., only(size(θ)))
+    @assert size(H) == size(∇S)
 
     if interpolation == :None
         """
@@ -124,13 +147,18 @@ function ∂Diffusivity∂θ(
         point in the glacier. Slower but more precise.
         """
         for i in axes(H, 1), j in axes(H, 2)
-            ∇θ_point, = Zygote.gradient(_θ -> predict_A(
-                target,
-                _θ, temp, H[i,j];
-                ml_model = ml_model, params = params
+            if H[i, j] == 0.0
+                continue
+            end
+            ∇θ_point, = Zygote.gradient(_θ -> Diffusivity_scalar(
+                target;
+                h = H[i, j], ∇s = ∇S[i, j], θ = _θ,
+                iceflow_model = iceflow_model, ml_model = ml_model,
+                glacier = glacier, params = params
                 ), θ)
-            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * ComponentVector2Vector(∇θ_point)
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * ComponentVector2Vector(∇θ_point)
         end
+
     elseif interpolation == :Linear
         """
         Interpolation of the gradient as function of values of H.
@@ -138,29 +166,34 @@ function ∂Diffusivity∂θ(
         the decired level of precision for the gradients.
         We construct an interpolator with quantiles and equal-spaced points.
         """
-        H_interp_unif = LinRange(0.0, maximum(H), n_interp_half) |> collect
-        H_interp_quantiles = quantile!(H[H .> 0.0], LinRange(0.0, 1.0, n_interp_half))
-        H_interp = vcat(H_interp_unif, H_interp_quantiles)
-        H_interp = unique(H_interp)
-        H_interp = sort(H_interp)
 
-        # Compute exact gradient in certain values of H
-        grads = []
+        # Interpolation for H
+        H_interp = create_interpolation(H; n_interp_half = n_interp_half)
+        # Interpolation for ∇S
+        ∇S_interp = create_interpolation(∇S; n_interp_half = n_interp_half)
+
+        if sum(H .> 0.0) < 2.0 * length(H_interp) * length(∇S_interp)
+            @warn "The total number of AD evaluations using interpolations is comparable to the total number of AD operations required to compute the derivative purely with AD with no interpolation. Recomendation is to switch to interpolation = :None"
+        end
+
+        # Compute exact gradient in certain values of H and ∇S
+        grads = [zeros(only(size(θ))) for i = 1:length(H_interp), j = 1:length(∇S_interp)]
+
         # TODO: Check if all these gradints cannot be computed at once withing Lux
-        for h in H_interp
-            ∇θ_point, = Zygote.gradient(_θ -> predict_A(
-                target,
-                _θ, temp, h;
-                ml_model = ml_model, params = params
+        for (i, h) in enumerate(H_interp), (j, ∇s) in enumerate(∇S_interp)
+            ∇θ_point, = Zygote.gradient(_θ -> Diffusivity_scalar(
+                target;
+                h = h, ∇s = ∇s, θ = _θ,
+                iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
                 ), θ)
-            push!(grads, ComponentVector2Vector(∇θ_point))
+            grads[i, j] .= ComponentVector2Vector(∇θ_point)
         end
         # Create interpolation for gradient
-        grad_itp = interpolate((H_interp,), grads, Gridded(Linear()))
+        grad_itp = interpolate((H_interp, ∇S_interp), grads, Gridded(Linear()))
 
         # Compute spatial distributed gradient
         for i in axes(H, 1), j in axes(H, 2)
-            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H[i, j])
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H[i, j], ∇S[i, j])
         end
     else
         @error "Method to spatially compute gradient with respect to H not specified."
@@ -169,108 +202,107 @@ function ∂Diffusivity∂θ(
     return ∂D∂θ
 end
 
-function apply_parametrization(
+"""
+This returns the results without H, which corresponds to U
+"""
+
+function predict_U_matrix(
     target::SIA2D_D_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
-    )
+    H::Matrix{F}, ∇S::Union{Nothing, Matrix{F}}, θ,
+    iceflow_model, ml_model, glacier, params
+) where {F <: AbstractFloat}
+
+    if isnothing(∇S)
+        # TODO: Move all this code to function
+        S = glacier.B .+ H
+        dSdx = Huginn.diff_x(S) / glacier.Δx
+        dSdy = Huginn.diff_y(S) / glacier.Δy
+        ∇Sx = Huginn.avg_y(dSdx)
+        ∇Sy = Huginn.avg_x(dSdy)
+        # Compute slope in dual grid
+        ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+        # Compute H in dual grid
+        H = Huginn.avg(H)
+    end
+
+    @assert size(H) == size(∇S)
+    res = zero(H)
+
+    for i in axes(res, 1), j in axes(res, 2)
+         res[i, j] = predict_U_scalar(
+            target;
+            h = H[i, j], ∇s = ∇S[i, j], θ = θ,
+            iceflow_model = iceflow_model, ml_model = ml_model,
+            glacier = glacier, params = params
+        )
+    end
+    return res
+end
+
+"""
+
+"""
+function predict_U_scalar(
+    target::SIA2D_D_target;
+    h::F, ∇s::F, θ,
+    iceflow_model, ml_model, glacier, params
+) where {F <: AbstractFloat}
 
     nn_model = ml_model.architecture
     st = ml_model.st
     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
 
-    # min_NN = params.physical.minA #* 0.0    # Minumum value of A * H^1
-    # max_NN = params.physical.maxA #* 300.0  # Maximum value of A * H^1
-    min_NN = isnothing(target.min_NN) ? params.physical.minA : target.min_NN
-    max_NN = isnothing(target.max_NN) ? params.physical.maxA : target.max_NN
+    # Pre and post scalling functions of the model
+    prescale = isnothing(target.prescale) ? _ml_model_prescale : target.prescale
+    postscale = isnothing(target.postscale) ? _ml_model_postscale : target.postscale
 
-    # Neural network prediction
-    D_pred = only(
-        scale(
-            smodel([
-                normalize(temp; lims = (-25.0, 0.0)),
-                normalize(h; lims = (0.0, 500.0))
-            ]),
-            (min_NN, max_NN))
+    U_pred = only(
+        postscale(
+            target,
+            smodel(prescale(target, [h, ∇s], params)),
+            params
         )
-
-    # Diffusivity is always evaluated in dual grid.
-    return D_pred
+    )
+    return U_pred
 end
 
+"""
+
+"""
 function apply_parametrization!(
     target::SIA2D_D_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
     )
-    D = apply_parametrization(
+    D = Diffusivity(
         target;
-        H, ∇S, θ, iceflow_model, ml_model, glacier, params
+        H = H, ∇S = ∇S, θ = θ,
+        iceflow_model = iceflow_model, ml_model = ml_model,
+        glacier = glacier, params = params
         )
     iceflow_model.D_is_provided = true
     iceflow_model.D = D
     return nothing
 end
 
-### Auxiliary functions
 
-# function apply_parametrization_A(
-#     target::SIA2D_D_target;
-#     H, ∇S, θ, iceflow_model, ml_model, glacier, params
-#     )
-#     T_mean = mean(glacier.climate.longterm_temps)
-#     A_space = predict_A(
-#         target,
-#         θ, T_mean, H;
-#         ml_model = ml_model, params = params
-#     )
-#     return A_space
-# end
+function _ml_model_prescale(
+    target::SIA2D_D_target,
+    X::Vector,
+    params
+)
+    return [
+        normalize(X[1]; lims = (0.0, 300.0)),
+        normalize(X[2]; lims = (0.0, 0.5))
+        ]
+end
 
-# function predict_A(
-#     target::SIA2D_D_target,
-#     θ,
-#     temp::F,
-#     H::Matrix{F};
-#     ml_model,
-#     params
-# ) where {F <: AbstractFloat}
-#     return map(h -> predict_A(
-#         target,
-#         θ, temp, h;
-#         ml_model = ml_model, params = params
-#         ), H)
-# end
-
-# function predict_A(
-#     target::SIA2D_D_target,
-#     θ,
-#     temp::F,
-#     h::F;
-#     ml_model,
-#     params
-# ) where {F <: AbstractFloat}
-
-#     # We load the ML model with the parameters
-#     nn_model = ml_model.architecture
-#     st = ml_model.st
-#     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
-
-#     # min_NN = params.physical.minA #* 0.0    # Minumum value of A * H^1
-#     # max_NN = params.physical.maxA #* 300.0  # Maximum value of A * H^1
-#     min_NN = isnothing(target.min_NN) ? params.physical.minA : target.min_NN
-#     max_NN = isnothing(target.max_NN) ? params.physical.maxA : target.max_NN
-
-#     # Neural network prediction
-#     A_pred = only(
-#         scale(
-#             smodel([
-#                 normalize(temp; lims = (-25.0, 0.0)),
-#                 normalize(h; lims = (0.0, 500.0))
-#             ]),
-#             (min_NN, max_NN))
-#         )
-
-#     # if rand() < 0.00000002
-#     #     println("Value of NN output used inside Target: $(A_pred).")
-#     # end
-#     return A_pred
-# end
+function _ml_model_postscale(
+    target::SIA2D_D_target,
+    Y::Vector,
+    params
+)
+    # max_NN = isnothing(target.max_NN) ? params.physical.maxA : target.max_NN
+    # This shouuld correspond to maximum of Umax * dSdx
+    max_NN = 50.0
+    return max_NN .* exp.((Y .- 1.0) ./ Y)
+end

@@ -67,9 +67,14 @@ end
     @testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-1, 1e-15, 7e-1])
 end
 
-@testset "Adjoint method of SIA equation with D as target" begin
+@testset "Adjoint method of SIA equation with hybrid D as target" begin
     @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D_hybrid)
     @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D_hybrid)
+end
+
+@testset "Adjoint method of SIA equation with pure D as target" begin
+    @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D)
+    @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D)
 end
 
 @testset "Inversion test" begin
