@@ -55,7 +55,7 @@ function inversion_test(;
         end
 
         # Perform the comparison test between ss and ss_ref
-        @test ss[1].H_pred ≈ ss_ref[1].H_pred rtol = 1e-4
+        @test ss[1].H_pred ≈ ss_ref[1].H_pred rtol = 1e-8
 
     end
 
