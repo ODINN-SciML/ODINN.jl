@@ -1,25 +1,30 @@
 export SIA2D_D_hybrid_target
 
 """
-    build_target_D()
+    SIA2D_D_hybrid_target{Fin, Fout} <: AbstractSIA2DTarget
 
-Inversion of the form
-Target to invert D as a function of H and Temp
+Struct to define inversion where elements of the diffusivity D in the SIA equations are
+replaced by a generic regressor. For this example, we consider the inversion of the form
 
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
 """
 
 @kwdef struct SIA2D_D_hybrid_target{Fin, Fout} <: AbstractSIA2DTarget
-    interpolation::Symbol = :Linear
-    n_interp_half::Int = 75
-    n_H::Union{Float64, Nothing} = nothing
-    n_∇S::Union{Float64, Nothing} = nothing
-    min_NN::Union{Float64, Nothing} = nothing
-    max_NN::Union{Float64, Nothing} = nothing
-    prescale::Union{Fin, Nothing} = nothing
-    postscale::Union{Fout, Nothing} = nothing
+    interpolation::Symbol
+    n_interp_half::Int
+    n_H::Union{Float64, Nothing}
+    n_∇S::Union{Float64, Nothing}
+    min_NN::Union{Float64, Nothing}
+    max_NN::Union{Float64, Nothing}
+    prescale::Union{Fin, Nothing}
+    postscale::Union{Fout, Nothing}
 end
 
+"""
+    build_target_D()
+
+Constructor for SIA2D_D_hybrid_target
+"""
 function SIA2D_D_hybrid_target(;
     interpolation::Symbol = :Linear,
     n_interp_half::Int = 75,
@@ -317,33 +322,4 @@ function _ml_model_postscale(
     min_NN = isnothing(target.min_NN) ? params.physical.minA : target.min_NN
     max_NN = isnothing(target.max_NN) ? params.physical.maxA : target.max_NN
     return scale(Y, (min_NN, max_NN))
-end
-
-### Pretrain candidate
-
-function Diffusivity_pretrain(
-    target::SIA2D_D_hybrid_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
-    )
-
-    A₀ = 1e-17
-    Γ_no_A = Γ(iceflow_model, params; include_A = false)
-
-    # Compute ∇S in case is not provided.
-    # In this case, the matrix H will have a larger size, so we overwrite it.
-    if isnothing(∇S)
-        # TODO: Move all this code to function
-        S = glacier.B .+ H
-        dSdx = Huginn.diff_x(S) / glacier.Δx
-        dSdy = Huginn.diff_y(S) / glacier.Δy
-        ∇Sx = Huginn.avg_y(dSdx)
-        ∇Sy = Huginn.avg_x(dSdy)
-        # Compute slope in dual grid
-        ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
-        # Compute H in dual grid
-        H = Huginn.avg(H)
-    end
-
-    # # Predict value of A based on Temp and H
-    return A₀ .* Γ_no_A .* H.^4.9 .* ∇S.^2.1
 end

@@ -1,21 +1,57 @@
 export SIA2D_D_target
 
 """
-    SIA2D_D_target
+    SIA2D_D_target(; interpolation=:None, n_interp_half=20,
+                     prescale=nothing, postscale=nothing)
 
 Inversion of general diffusivity as a function of physical parameters.
 
 D(H, ∇S, θ) = H * NN(H, ∇S; θ)
 
-So now we are learning the velocoty field given by D * ∇S.
+So now we are learning the velocoty field given by D * ∇S. This inversion is similar to
+learnign the velocity field assuming that this is parallel to the gradient in surface ∇S.
+
+# Arguments
+- `interpolation::Symbol = :None`: Specifies the interpolation method. Options include `:Linear`, `:None`.
+- `n_interp_half::Int = 20`: Half-width of the interpolation stencil. Determines resolution of interpolation.
+- `prescale::Union{Fin, Nothing} = nothing`: Optional prescaling function or factor applied before parametrization. Must be of type `Fin` or `nothing`.
+- `postscale::Union{Fout, Nothing} = nothing`: Optional postscaling function or factor applied after parametrization. Must be of type `Fout` or `nothing`.
+
+# Type Parameters
+- `Fin`: Type of the prescale function or operator.
+- `Fout`: Type of the postscale function or operator.
+
+# Supertype
+- `AbstractSIA2DTarget`: Inherits from the abstract target type for 2D SIA modeling.
+
+# Returns
+- An instance of `SIA2D_D_target` configured with optional scaling and interpolation parameters.
 """
 @kwdef struct SIA2D_D_target{Fin, Fout} <: AbstractSIA2DTarget
-    interpolation::Symbol = :None
-    n_interp_half::Int = 20
-    prescale::Union{Fin, Nothing} = nothing
-    postscale::Union{Fout, Nothing} = nothing
+    interpolation::Symbol
+    n_interp_half::Int
+    prescale::Union{Fin, Nothing}
+    postscale::Union{Fout, Nothing}
 end
 
+"""
+    SIA2D_D_target(; interpolation=:None, n_interp_half=20, 
+                     prescale=nothing, postscale=nothing)
+
+Construct a `SIA2D_D_target` instance with specified interpolation and optional prescale/postscale transformations.
+
+This constructor infers the type parameters `Fin` and `Fout` from the provided `prescale` and `postscale` functions
+(or `nothing`), allowing for flexible creation of diagnostic targets for use in 2D SIA models.
+
+# Arguments
+- `interpolation::Symbol = :None`: Specifies the interpolation method. Options include `:Linear`, `:None`.
+- `n_interp_half::Int = 20`: Half-width of the interpolation stencil. Determines resolution of interpolation.
+- `prescale::Union{Fin, Nothing} = nothing`: Optional prescaling function or factor applied before parametrization. Must be of type `Fin` or `nothing`.
+- `postscale::Union{Fout, Nothing} = nothing`: Optional postscaling function or factor applied after parametrization. Must be of type `Fout` or `nothing`.
+
+# Returns
+- A `SIA2D_D_target{Fin, Fout}` instance, where `Fin` and `Fout` are the types of the provided `prescale` and `postscale` functions, respectively.
+"""
 function SIA2D_D_target(;
     interpolation::Symbol = :None,
     n_interp_half::Int = 20,
@@ -32,11 +68,38 @@ function SIA2D_D_target(;
     )
 end
 
+"""
+    Diffusivity(target::SIA2D_D_target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
 
-# For this simple case, the target coincides with D, but not always.
-# TODO: D should be cap to its maximum physical value. This can be done with one extra
-# function and one extra differentiation.
-# The diffusivity here returns something such that H D ∇S = H U
+Compute the effective diffusivity field for a 2D shallow ice model using the diagnostic `target` and 
+a predicted velocity matrix `U`.
+
+This function uses a learned or specified model to estimate the velocity matrix `U`, then
+calculates the diffusivity as either `H .* U` (if dimensions match) or the averaged `H` times `U`
+if dimensions differ by one grid cell (staggered grid). Errors if dimensions are incompatible.
+
+# Arguments
+- `target::SIA2D_D_target`: Diagnostic target object defining interpolation and scaling rules.
+
+# Keyword Arguments
+- `H`: Ice thickness.
+- `∇S`: Ice surface slope.
+- `θ`: Parameters of the model.
+- `iceflow_model`: Iceflow model used for simulation.
+- `ml_model`: Machine learning model used for simulation.
+- `glacier`: Glacier data.
+- `params`: Model parameters.
+
+# Returns
+- A matrix of diffusivity values with the same shape as `H` or staggered by one cell, depending on `U`.
+
+# Throws
+- An error if the dimensions of `U` and `H` are not compatible for diffusivity calculation.
+
+# Notes
+Uses `predict_U_matrix` internally to obtain velocity-like terms. Supports both grid-matched 
+and staggered configurations by averaging `H` where necessary.
+"""
 function Diffusivity(
     target::SIA2D_D_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
@@ -56,6 +119,11 @@ function Diffusivity(
     end
 end
 
+"""
+    Diffusivity_scalar(target::SIA2D_D_target; h, ∇s, θ, iceflow_model, ml_model, glacier, params)
+
+Scalar version if Diffusivity().
+"""
 function Diffusivity_scalar(
     target::SIA2D_D_target;
     h, ∇s, θ, iceflow_model, ml_model, glacier, params
