@@ -9,8 +9,6 @@
 
 <img src="https://github.com/ODINN-SciML/ODINN.jl/blob/main/plots/ODINN_sticker_original.png?raw=true" width="250">
 
-### ⚠️ New publication available! ⚠️
-
 For a detailed description of the model and the application of Universal Differential Equations to glacier ice flow modelling, take a look at [our recent publication at Geoscientific Model Development](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html). 
 
 ## About ODINN.jl
@@ -47,15 +45,22 @@ using ODINN
 rgi_paths = get_rgi_paths()
 
 # We create the necessary parameters
-params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
-									tspan=(2010.0, 2015.0),
-									workers=5,
-									rgi_paths=rgi_paths),
-		    hyper = Hyperparameters(batch_size=4,
-					    epochs=10,
-					    optimizer=ODINN.ADAM(0.01)),
-		    UDE = UDEparameters(target = :A)
-		   )
+params = Parameters(
+	simulation = SimulationParameters(
+		working_dir=working_dir,
+		tspan=(2010.0, 2015.0),
+		workers=5,
+		rgi_paths=rgi_paths
+		),
+	hyper = Hyperparameters(
+		batch_size=4,
+		epochs=10,
+		optimizer=ODINN.ADAM(0.01)
+		),
+	UDE = UDEparameters(
+		target = :A
+		)
+	)
 
 # We define which glacier RGI IDs we want to work with
 rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351"]
