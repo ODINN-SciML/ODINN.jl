@@ -39,7 +39,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                     UDE = UDEparameters(optim_autoAD=ODINN.NoAD(),
                                         grad=ContinuousAdjoint(),
                                         optimization_method="AD+AD",
-                                        target = "A"),
+                                        target = :A),
                     solver = Huginn.SolverParameters(step=δt,
                                                      save_everystep=true,
                                                      progress=true)
