@@ -9,40 +9,15 @@ replaced by a generic regressor. For this example, we consider the inversion of 
     D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
 """
 
-@kwdef struct SIA2D_D_hybrid_target{Fin, Fout} <: AbstractSIA2DTarget
-    interpolation::Symbol
-    n_interp_half::Int
-    n_H::Union{Float64, Nothing}
-    n_∇S::Union{Float64, Nothing}
-    min_NN::Union{Float64, Nothing}
-    max_NN::Union{Float64, Nothing}
-    prescale::Union{Fin, Nothing}
-    postscale::Union{Fout, Nothing}
-end
-
-"""
-    build_target_D()
-
-Constructor for SIA2D_D_hybrid_target
-"""
-function SIA2D_D_hybrid_target(;
-    interpolation::Symbol = :Linear,
-    n_interp_half::Int = 75,
-    n_H::Union{Float64, Nothing} = nothing,
-    n_∇S::Union{Float64, Nothing} = nothing,
-    min_NN::Union{Float64, Nothing} = nothing,
-    max_NN::Union{Float64, Nothing} = nothing,
-    prescale::Union{Fin, Nothing} = nothing,
-    postscale::Union{Fout, Nothing} = nothing
-) where {Fin <: Function, Fout <: Function}
-
-    fin = typeof(prescale)
-    fout = typeof(postscale)
-
-    return SIA2D_D_hybrid_target{fin, fout}(
-        interpolation, n_interp_half, n_H, n_∇S, min_NN, max_NN,
-        prescale, postscale
-    )
+@kwdef struct SIA2D_D_hybrid_target <: AbstractSIA2DTarget
+    interpolation::Symbol = :Linear
+    n_interp_half::Int = 75
+    n_H::Union{Float64, Nothing} = nothing
+    n_∇S::Union{Float64, Nothing} = nothing
+    min_NN::Union{Float64, Nothing} = nothing
+    max_NN::Union{Float64, Nothing} = nothing
+    prescale_provided::Bool = false
+    postscale_provided::Bool = false
 end
 
 # For this simple case, the target coincides with D, but not always.
@@ -105,22 +80,6 @@ function ∂Diffusivity∂∇H(
 
     A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     ∂D∂∇S_no_NN = Γ(iceflow_model, params; include_A = false) .* A .* (n_∇S - 1) .* H.^(n_H + 2) .* ∇S.^(n_∇S - 3)
-
-    # For now we ignore the derivative in surface slope
-    # δ∇H = 1e-4 .* ones(size(∇S))
-    # ∂D∂∇H_NN = (
-    #     Diffusivity(
-            # target;
-    #         H = H, ∇S = ∇S + δ∇H, θ = θ,
-    #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
-    #     )
-    #     .-
-    #     Diffusivity(
-            # target;
-    #         H = H, ∇S = ∇S, θ = θ,
-    #         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
-    #     )
-    # ) ./ δ∇H
 
     return ∂D∂∇S_no_NN
 end
@@ -222,13 +181,6 @@ function apply_parametrization(
     A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
     D = A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n_∇S - 1)
 
-    # Compute velocity 
-    # @infiltrate
-    # V = D .* ∇S ./ H
-    # V_max = maximum(V[(.!isnan.(V)) .&  (H .> 20.0)])
-    # V_max = maximum(A .* Γ_no_A .* H.^(n_H + 1) .* ∇S.^n_∇S)
-    # TODO: add warning for large values of D
-    # Diffusivity is always evaluated in dual grid.
     return D
 end
 
@@ -290,14 +242,12 @@ function predict_A(
     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
 
     # Pre and post scalling functions of the model
-    prescale = isnothing(target.prescale) ? _ml_model_prescale : target.prescale
-    postscale = isnothing(target.postscale) ? _ml_model_postscale : target.postscale
+    prescale = target.prescale_provided ? identity : X -> _ml_model_prescale(target, X, params)
+    postscale = target.postscale_provided ? identity : Y -> _ml_model_postscale(target, Y, params)
 
     A_pred = only(
         postscale(
-            target,
-            smodel(prescale(target, [temp, h], params)),
-            params
+            smodel(prescale([temp, h])),
         )
     )
     return A_pred
@@ -319,7 +269,6 @@ function _ml_model_postscale(
     Y::Vector,
     params
 )
-    min_NN = isnothing(target.min_NN) ? params.physical.minA : target.min_NN
     max_NN = isnothing(target.max_NN) ? params.physical.maxA : target.max_NN
-    return scale(Y, (min_NN, max_NN))
+    return max_NN .* exp.((Y .- 1.0) ./ Y)
 end

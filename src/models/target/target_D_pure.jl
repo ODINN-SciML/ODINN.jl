@@ -27,45 +27,11 @@ learnign the velocity field assuming that this is parallel to the gradient in su
 # Returns
 - An instance of `SIA2D_D_target` configured with optional scaling and interpolation parameters.
 """
-@kwdef struct SIA2D_D_target{Fin, Fout} <: AbstractSIA2DTarget
-    interpolation::Symbol
-    n_interp_half::Int
-    prescale::Union{Fin, Nothing}
-    postscale::Union{Fout, Nothing}
-end
-
-"""
-    SIA2D_D_target(; interpolation=:None, n_interp_half=20, 
-                     prescale=nothing, postscale=nothing)
-
-Construct a `SIA2D_D_target` instance with specified interpolation and optional prescale/postscale transformations.
-
-This constructor infers the type parameters `Fin` and `Fout` from the provided `prescale` and `postscale` functions
-(or `nothing`), allowing for flexible creation of diagnostic targets for use in 2D SIA models.
-
-# Arguments
-- `interpolation::Symbol = :None`: Specifies the interpolation method. Options include `:Linear`, `:None`.
-- `n_interp_half::Int = 20`: Half-width of the interpolation stencil. Determines resolution of interpolation.
-- `prescale::Union{Fin, Nothing} = nothing`: Optional prescaling function or factor applied before parametrization. Must be of type `Fin` or `nothing`.
-- `postscale::Union{Fout, Nothing} = nothing`: Optional postscaling function or factor applied after parametrization. Must be of type `Fout` or `nothing`.
-
-# Returns
-- A `SIA2D_D_target{Fin, Fout}` instance, where `Fin` and `Fout` are the types of the provided `prescale` and `postscale` functions, respectively.
-"""
-function SIA2D_D_target(;
-    interpolation::Symbol = :None,
-    n_interp_half::Int = 20,
-    prescale::Union{Fin, Nothing} = nothing,
-    postscale::Union{Fout, Nothing} = nothing
-) where {Fin <: Function, Fout <: Function}
-
-    fin = typeof(prescale)
-    fout = typeof(postscale)
-
-    return SIA2D_D_target{fin, fout}(
-        interpolation, n_interp_half,
-        prescale, postscale
-    )
+@kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
+    interpolation::Symbol = :None
+    n_interp_half::Int = 20
+    prescale_provided::Bool = false
+    postscale_provided::Bool = false
 end
 
 """
@@ -149,7 +115,8 @@ function ∂Diffusivity∂H(
         iceflow_model = iceflow_model, ml_model = ml_model,
         glacier = glacier, params = params
         )
-    ∂D∂H_no_NN .= (H .> 0.0) .* ∂D∂H_no_NN
+    ∂H∂H = map(h -> h > 0.0 ? 1.0 : 0.0, H)
+    ∂D∂H_no_NN .= ∂H∂H .* ∂D∂H_no_NN
 
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H))
@@ -321,16 +288,15 @@ function predict_U_scalar(
     smodel = StatefulLuxLayer{true}(nn_model, θ.θ, st)
 
     # Pre and post scalling functions of the model
-    prescale = isnothing(target.prescale) ? _ml_model_prescale : target.prescale
-    postscale = isnothing(target.postscale) ? _ml_model_postscale : target.postscale
+    prescale = target.prescale_provided ? identity : X -> _ml_model_prescale(target, X, params)
+    postscale = target.postscale_provided ? identity : Y -> _ml_model_postscale(target, Y, params)
 
     U_pred = only(
         postscale(
-            target,
-            smodel(prescale(target, [h, ∇s], params)),
-            params
+            smodel(prescale([h, ∇s]))
         )
     )
+
     return U_pred
 end
 

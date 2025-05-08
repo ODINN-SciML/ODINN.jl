@@ -40,6 +40,8 @@ rgi_ids = ["RGI60-08.00203"]
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
+# Time snapshots for transient inversion
+tstops = collect(2010:δt:2015)
 
 params = Parameters(
     simulation = SimulationParameters(
@@ -55,8 +57,8 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [40, 20],
-        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+        epochs = [10, 50],
+        optimizer = [ODINN.ADAM(0.002), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
         minA = 8e-21,
@@ -80,46 +82,22 @@ params = Parameters(
 glaciers = initialize_glaciers(rgi_ids, params)
 
 """
-The ground data was generated with n = 3.
-In this inversion, we are interested if the network can learn a different Glen law that
-the one it was prescribed.
-We will prescribed then the ML model with n = 2:
-
-We do this by providing a modifying the target object used in the NN
-
-Inputs: Temp, H
+We can define the architecture of the model directly, passing the prescale and postcale
+directly to Lux using a WrappedFunction layer.
 """
 architecture = Lux.Chain(
-    Dense(2, 3, x -> softplus.(x)),
-    Dense(3, 3, x -> softplus.(x)),
-    Dense(3, 1, sigmoid)
+    WrappedFunction(
+        x -> [
+            ODINN.normalize(x[1]; lims = (0.0, 200.0)),
+            ODINN.normalize(x[2]; lims = (0.0, 1.0))
+            ]
+        ),
+    Dense(2, 5, x -> softplus.(x)),
+    Dense(5, 8, x -> softplus.(x)),
+    Dense(8, 3, x -> softplus.(x)),
+    Dense(3, 1, sigmoid),
+    WrappedFunction(y -> 10.0 .* exp.((y .- 1.0) ./ y))
 )
-
-# The neural network shoudl return something between 0 and A * H^{max n power}
-min_NN = 0.0
-n_max = 2.8
-
-# min_temp, max_temp = - 25.0, 0.0
-min_H, max_H = 0.0, 200.0
-min_∇S, max_∇S = 0.0, 0.2
-
-# This should be the maximum value we expect from the neural network.
-# Since this corresponds to velocity diveded H, we can do simply
-max_V = 2.0 # m / yr
-max_NN = max_V
-# max_NN = params.physical.maxA * H_max^n_max
-
-function custom_prescale(target::SIA2D_D_target, X::Vector, nothing)
-    return [
-        ODINN.normalize(X[1]; lims = (min_H, max_H)),
-        ODINN.normalize(X[2]; lims = (min_∇S, max_∇S))
-        ]
-end
-
-function custom_postscale(target::SIA2D_D_target, Y::Vector, nothing)
-    # Y is the resturn of the neural network, which is a sigmoid function ∈ [0,1]
-    return max_NN .* exp.((Y .- 1.0) ./ Y)
-end
 
 # We define the prescale and postscale of quantities.
 model = Model(
@@ -131,14 +109,11 @@ model = Model(
         target = SIA2D_D_target(
             interpolation = :None,
             n_interp_half = 20,
-            prescale = custom_prescale,
-            postscale = custom_postscale
+            prescale_provided = true,
+            postscale_provided = true
         )
     )
 )
-
-# Time snapshots for transient inversion
-tstops = collect(2010:δt:2015)
 
 A_poly = ODINN.A_law_PatersonCuffey()
 fakeA(T) = A_poly(T)

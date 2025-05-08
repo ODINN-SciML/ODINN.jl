@@ -104,18 +104,6 @@ max_NN = params.physical.maxA * H_max^n_max
 min_temp, max_temp = - 25.0, 0.0
 min_H, max_H = 0.0, H_max
 
-function custom_prescale(target::SIA2D_D_hybrid_target, X::Vector, nothing)
-    return [
-        ODINN.normalize(X[1]; lims = (min_temp, max_temp)),
-        ODINN.normalize(X[2]; lims = (min_H, max_H))
-        ]
-end
-
-function custom_postscale(target::SIA2D_D_hybrid_target, Y::Vector, nothing)
-    # Y is the resturn of the neural network, which is a sigmoid function ∈ [0,1]
-    return max_NN .* exp.((Y .- 1.0) ./ Y)
-end
-
 # We define the prescale and postscale of quantities.
 model = Model(
     iceflow = SIA2Dmodel(params),
@@ -125,8 +113,7 @@ model = Model(
         architecture = architecture,
         target = SIA2D_D_hybrid_target(
             n_H = 0.5,
-            prescale = custom_prescale,
-            postscale = custom_postscale
+            max_NN = max_NN
         )
     )
 )
