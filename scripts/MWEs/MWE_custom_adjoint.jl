@@ -50,7 +50,7 @@ params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                     UDE = UDEparameters(optim_autoAD=ODINN.NoAD(),
                                         grad=ContinuousAdjoint(),
                                         optimization_method="AD+AD",
-                                        target = "A"),
+                                        target = :A),
                     solver = Huginn.SolverParameters(step=δt,
                                                      save_everystep=true,
                                                      progress=true)
@@ -108,7 +108,7 @@ end
 Plots.scatter(Temps, As_fake, label="True A", c=:lightsteelblue2)
 plot_epoch = Plots.plot!(Temps_smooth, As_pred, label="Predicted A", 
                     xlabel="Long-term air temperature (°C)", yticks=[0.0, 1e-17, 1e-18, params.physical.maxA],
-                    ylabel="A", ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
+                    ylabel=:A, ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
                     legend=:topleft)
 
 

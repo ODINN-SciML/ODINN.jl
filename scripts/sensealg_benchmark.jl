@@ -75,7 +75,7 @@ for sensealg in sensealgs
                                                 grad=dummy_grad, 
                                                 # grad=nothing, 
                                                 optimization_method="AD+AD",
-                                                target = "A")
+                                                target = :A)
                             )
 
         ## Retrieving simulation data for the following glaciers

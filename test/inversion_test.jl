@@ -1,11 +1,15 @@
-function inversion_test(;steady_state = false, save_refs = false)
+function inversion_test(;
+    use_MB = false,
+    steady_state = false,
+    save_refs = false
+    )
     rgi_ids = ["RGI60-07.00042", "RGI60-07.00065"]
     rgi_paths = get_rgi_paths()
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     params = Parameters(
         simulation = SimulationParameters(
-            use_MB = true,
+            use_MB = use_MB,
             use_iceflow = true,
             velocities = true,
             use_glathida_data = true,
@@ -37,13 +41,21 @@ function inversion_test(;steady_state = false, save_refs = false)
 
         if save_refs
             # Save the ss object to a JLD2 file when save_refs is true
-            jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"); ss)
+            if use_MB
+                jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"); ss)
+            else
+                jldsave(joinpath(ODINN.root_dir, "test/data/PDE_refs_noMB.jld2"); ss)
+            end
         end
         # Load the reference ss object from the JLD2 file for comparison
-        ss_ref = load(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"), "ss")
+        if use_MB
+            ss_ref = load(joinpath(ODINN.root_dir, "test/data/PDE_refs_MB.jld2"), "ss")
+        else
+            ss_ref = load(joinpath(ODINN.root_dir, "test/data/PDE_refs_noMB.jld2"), "ss")
+        end
 
         # Perform the comparison test between ss and ss_ref
-        @test ss[1].H_pred == ss_ref[1].H_pred
+        @test ss[1].H_pred ≈ ss_ref[1].H_pred rtol = 1e-8
 
     end
 

@@ -116,11 +116,21 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
 
             # Adjoint setup
-            # Construct continuous interpolator for solution of forward PDE
-            # TODO: For now we do linear, but of course we can use something more sophisticated (although I don't think will make a huge difference for ice)
-            # TODO: For an uniform grid, we don't need the Gridded, and actually this is more efficient based on docs
-            H_itp = interpolate((t,), H, Gridded(Linear()))
-            H_ref_itp = interpolate((t_ref,), H_ref, Gridded(Linear()))
+
+            """
+            Construct continuous interpolator for solution of forward PDE
+            TODO: For now we do linear, but of course we can use something more sophisticated (although I don't think will make a huge difference for ice)
+            TODO: For an uniform grid, we don't need the Gridded, and actually this is more efficient based on docs
+            We construct H_itp with t_ref rather than t since t_ref can have small
+            numerical errors that make the interpolator to evaluate outside the interval
+            Notice this should not be an issue since t ≈ t_ref
+            """
+            if simulation.parameters.UDE.grad.interpolation == :Linear
+                H_itp = interpolate((t_ref,), H, Gridded(Linear()))
+                H_ref_itp = interpolate((t_ref,), H_ref, Gridded(Linear()))
+            else
+                @error "Interpolation method for continuous adjoint not defined."
+            end
 
             # Nodes and weights for numerical quadrature
             t_nodes, weights = GaussQuadrature(simulation.parameters.simulation.tspan..., simulation.parameters.UDE.grad.n_quadrature)
@@ -129,7 +139,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 function f_adjoint_rev(dλ, λ, p, τ)
                     t = -τ
-                    # λ_∂f∂H = Huginn.SIA2D_discrete_adjoint(λ, H_itp(t), simulation, t; batch_id = i)[1]
                     λ_∂f∂H, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ, H_itp(t), θ, simulation, t, i)
                     dλ .= λ_∂f∂H
                 end
@@ -156,19 +165,25 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # λ₁ .-= only(backward_loss(simulation.parameters.UDE.empirical_loss_function, [H_itp(t_final)], [H_ref_itp(t_final)]; normalization=prod(N)*normalization))
             end
             # Define ODE Problem with time in reverse
-            adjoint_PDE_rev = ODEProblem(f_adjoint_rev, λ₁, .-reverse(simulation.parameters.simulation.tspan))
+            adjoint_PDE_rev = ODEProblem(
+                f_adjoint_rev,
+                λ₁,
+                .-reverse(simulation.parameters.simulation.tspan)
+                )
 
             # Solve reverse adjoint PDE with dense output
-            sol_rev = solve(adjoint_PDE_rev,
-                            callback=cb_adjoint_loss,
-                            # saveat=t_nodes_rev, # dont use this!
-                            dense=true,
-                            save_everystep=true,
-                            tstops=t_ref_inv,
-                            simulation.parameters.UDE.grad.solver,
-                            dtmax=simulation.parameters.UDE.grad.dtmax,
-                            reltol=simulation.parameters.UDE.grad.reltol,
-                            abstol=simulation.parameters.UDE.grad.abstol)
+            sol_rev = solve(
+                adjoint_PDE_rev,
+                callback = cb_adjoint_loss,
+                # saveat=t_nodes_rev, # dont use this!
+                dense = true,
+                save_everystep = true,
+                tstops = t_ref_inv,
+                simulation.parameters.UDE.grad.solver,
+                dtmax = simulation.parameters.UDE.grad.dtmax,
+                reltol = simulation.parameters.UDE.grad.reltol,
+                abstol = simulation.parameters.UDE.grad.abstol
+                )
 
             ### Numerical integration using quadrature to compute gradient
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
@@ -182,6 +197,12 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 @error "VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet."
             end
 
+        elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
+            if isnothing(simulation.parameters.UDE.grad.grad_function)
+                dLdθ .+= maximum(abs.(θ)) .* rand(Float64, size(θ))
+            else
+                dLdθ .+ simulation.parameters.UDE.grad.grad_function(θ)
+            end
         else
             @error "Adjoint method $(simulation.parameters.UDE.grad) is not supported yet."
         end
@@ -192,19 +213,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     return loss_val, dLdθs_vector
 
-end
-
-"""
-Define SIA2D forward map for the adjoint mode
-"""
-function SIA2D_adjoint!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
-    # make prediction with neural network
-    apply_UDE_parametrization_enzyme!(_θ, simulation, smodel, batch_id)
-
-    # dH is computed as follows
-    Huginn.SIA2D!(_dH, _H, simulation, t; batch_id=batch_id)
-
-    return nothing
 end
 
 

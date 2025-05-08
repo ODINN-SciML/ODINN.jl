@@ -1,7 +1,17 @@
 
-function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
+function test_grad_finite_diff(
+    adjointFlavor::ADJ;
+    thres = [0., 0., 0.],
+    target = :A,
+    finite_difference_method = :FiniteDifferences,
+    finite_difference_order = 3
+) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing adjoint $(adjointFlavor)")
+
+    thres_ratio = thres[1]
+    thres_angle = thres[2]
+    thres_relerr = thres[3]
 
     rgi_ids = ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
@@ -33,7 +43,7 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
             optim_autoAD=ODINN.NoAD(),
             grad=adjointFlavor,
             optimization_method="AD+AD",
-            target = "A"),
+            target = target),
         solver = Huginn.SolverParameters(
             step=δt,
             save_everystep=true,
@@ -43,7 +53,8 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
     model = Model(
         iceflow = SIA2Dmodel(params),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        machine_learning = NeuralNetwork(params))
+        machine_learning = NeuralNetwork(params)
+    )
 
     # We retrieve some glaciers for the simulation
     glaciers = initialize_glaciers(rgi_ids, params)
@@ -55,7 +66,7 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
     fakeA(T) = 2.21e-18
 
     ODINN.generate_ground_truth(glaciers, fakeA, params, model, tstops)
-    # TODO: This function does shit on the model variable, for now we do a clean restart
+    # TODO: For now we do a clean restart
     model.iceflow = SIA2Dmodel(params)
 
     # We create an ODINN prediction
@@ -71,37 +82,60 @@ function test_grad_finite_diff(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {AD
         return loss_function(x, simulation)
     end
 
-    dθ=zero(θ)
+    dθ = zero(θ)
     loss_iceflow_grad!(dθ, θ, simulation)
 
-    ratio = []
-    angle = []
-    relerr = []
-    eps = []
-    for k in range(3,8)
-        ϵ = 10.0^(-k)
-        push!(eps, ϵ)
-        dθ_num = compute_numerical_gradient(θ, (simulation), f, ϵ; varStr="of θ")
-        ratio_k, angle_k, relerr_k = stats_err_arrays(dθ, dθ_num)
-        push!(ratio, ratio_k)
-        push!(angle, angle_k)
-        push!(relerr, relerr_k)
+    if finite_difference_method == :FiniteDifferences
+
+        ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
+
+        dθ_FD, = FiniteDifferences.grad(
+            central_fdm(finite_difference_order, 1),
+            _θ -> loss_function(_θ, (simulation)),
+            θ
+        )
+        ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
+        printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
+        printVecScientific("angle  = ", [angle_FD], thres_angle)
+        printVecScientific("relerr = ", [relerr_FD], thres_relerr)
+        @test abs(ratio_FD) < thres_ratio
+        @test abs(angle_FD) < thres_angle
+        @test abs(relerr_FD) < thres_relerr
+
+    elseif finite_difference_method == :Manual
+
+        ### Manual finite differences with different choices of stepsize
+
+        ratio = []
+        angle = []
+        relerr = []
+        eps = []
+        for k in range(3, 8)
+            ϵ = 10.0^(-k)
+            push!(eps, ϵ)
+            dθ_num = compute_numerical_gradient(θ, (simulation), f, ϵ; varStr="of θ")
+            ratio_k, angle_k, relerr_k = stats_err_arrays(dθ, dθ_num)
+            push!(ratio, ratio_k)
+            push!(angle, angle_k)
+            push!(relerr, relerr_k)
+        end
+        min_ratio = minimum(abs.(ratio))
+        min_angle = minimum(abs.(angle))
+        min_relerr = minimum(abs.(relerr))
+
+        if printDebug | !( (min_ratio < thres_ratio) & (min_angle < thres_angle) & (min_relerr < thres_relerr) )
+            println("eps    = ",printVecScientific(eps))
+            printVecScientific("ratio  = ", ratio, thres_ratio)
+            printVecScientific("angle  = ", angle, thres_angle)
+            printVecScientific("relerr = ", relerr, thres_relerr)
+        end
+        @test min_ratio < thres_ratio
+        @test min_angle < thres_angle
+        @test min_relerr < thres_relerr
+
+    else
+        throw("Finite difference method not implemented.")
     end
-    min_ratio = minimum(abs.(ratio))
-    min_angle = minimum(abs.(angle))
-    min_relerr = minimum(abs.(relerr))
-    thres_ratio = thres[1]
-    thres_angle = thres[2]
-    thres_relerr = thres[3]
-    if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
-        println("eps    = ",printVecScientific(eps))
-        printVecScientific("ratio  = ",ratio,thres_ratio)
-        printVecScientific("angle  = ",angle,thres_angle)
-        printVecScientific("relerr = ",relerr,thres_relerr)
-    end
-    @test min_ratio<thres_ratio
-    @test min_angle<thres_angle
-    @test min_relerr<thres_relerr
 
 end
 
@@ -135,11 +169,11 @@ function test_grad_loss_term()
     ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
     thres = 1e-14
     if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
-        printVecScientific("ratio  = ",[ratio],thres)
-        printVecScientific("angle  = ",[angle],thres)
-        printVecScientific("relerr = ",[relerr],thres)
+        printVecScientific("ratio  = ", [ratio], thres)
+        printVecScientific("angle  = ", [angle], thres)
+        printVecScientific("relerr = ", [relerr], thres)
     end
-    @test (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres)
+    @test (abs(ratio) < thres) & (abs(angle) < thres) & (abs(relerr) < thres)
 
 
     lossType = L2SumWithinGlacier(distance=2)
@@ -226,7 +260,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
             grad=adjointFlavor,
             optimization_method="AD+AD",
             empirical_loss_function=lossType,
-            target = "A"
+            target = :A
         ),
         solver=SolverParameters(
             reltol=1e-12,
@@ -238,7 +272,11 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
 
     # Bed (it has to be flat for the Halfar solution)
     B = zeros((nx,ny))
-    model = Model(iceflow = SIA2Dmodel(parameters), mass_balance = nothing, machine_learning = NeuralNetwork(parameters))
+    model = Model(
+        iceflow = SIA2Dmodel(parameters),
+        mass_balance = nothing,
+        machine_learning = NeuralNetwork(parameters)
+    )
 
     θ = model.machine_learning.θ
     modelNN = model.machine_learning.architecture
@@ -247,7 +285,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     min_NN = parameters.physical.minA
     max_NN = parameters.physical.maxA
     A_θ = ODINN.predict_A̅(smodel, [T], (min_NN, max_NN))[1]
-    println("A_θ=",A_θ)
+    println("A_θ = ",A_θ)
 
     # Initial condition of the glacier
     R₀ = [sqrt((Δx * (i - nx/2))^2 + (Δy * (j - ny/2))^2) for i in 1:nx, j in 1:ny]
@@ -290,12 +328,17 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     )
 
     # _loss_halfar!(l_enzyme, R₀, h₀, r₀, A_θ, n, tstops, H_ref, physicalParams, lossType)
-    println("l_enzyme=",l_enzyme)
-    println("∂A_enzyme=",∂A_enzyme)
+    println("l_enzyme=", l_enzyme)
+    println("∂A_enzyme=", ∂A_enzyme)
 
-    ∇θ, = Zygote.gradient(_θ -> ODINN.grad_apply_UDE_parametrization(_θ, simulation, 1), θ)
-    # println("∇θ in test=",∇θ)
-    dθ_halfar = ∂A_enzyme[1]*∇θ
+    # Retrieve apply parametrization from inversion
+    ∇θ, = Zygote.gradient(_θ -> apply_parametrization(
+        model.machine_learning.target;
+        H = nothing, ∇S = nothing, θ = _θ,
+        iceflow_model = only(model.iceflow), ml_model = model.machine_learning,
+        glacier = only(glaciers), params = parameters),
+        θ)
+    dθ_halfar = ∂A_enzyme[1] * ∇θ
 
     # Compute gradient with manual implementation of the backward + discrete adjoint of SIA2D
     dθ = zero(θ)
@@ -308,11 +351,11 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     thres_angle = thres[2]
     thres_relerr = thres[3]
     if printDebug | !( (abs(ratio)<thres_ratio) & (abs(angle)<thres_angle) & (abs(relerr)<thres_relerr) )
-        printVecScientific("ratio  = ",[ratio],thres_ratio)
-        printVecScientific("angle  = ",[angle],thres_angle)
-        printVecScientific("relerr = ",[relerr],thres_relerr)
+        printVecScientific("ratio  = ", [ratio], thres_ratio)
+        printVecScientific("angle  = ", [angle], thres_angle)
+        printVecScientific("relerr = ", [relerr], thres_relerr)
     end
-    @test abs(ratio)<thres_ratio
-    @test abs(angle)<thres_angle
-    @test abs(relerr)<thres_relerr
+    @test abs(ratio) < thres_ratio
+    @test abs(angle) < thres_angle
+    @test abs(relerr) < thres_relerr
 end

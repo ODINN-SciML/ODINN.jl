@@ -13,70 +13,50 @@ Generates a neural network.
 - `θ`: Neural network parameters.
 - `st`: Lux state.
 """
-function get_NN(θ_trained, ft; lightNN=false)
+function get_default_NN(θ_trained, ft; lightNN = false)
+    architecture = build_default_NN(; lightNN = lightNN)
+    return set_NN(architecture; θ_trained = θ_trained, ft = ft)
+end
+
+function build_default_NN(; n_input = 1, lightNN = false)
     if lightNN
         @warn "Using light mode of neural network"
-        UA = Lux.Chain( # Light network for debugging
-            Dense(1, 3, x -> softplus.(x)),
+        architecture = Lux.Chain( # Light network for debugging
+            Dense(n_input, 3, x -> softplus.(x)),
             Dense(3, 1, sigmoid)
+            # Dense(n_input, 3, x -> sigmoid.(x); init_weight = Lux.glorot_normal),
+            # Dense(3, 1, sigmoid; init_weight = Lux.glorot_normal)
         )
     else
-        UA = Lux.Chain(
-            Dense(1, 3, x -> softplus.(x)),
+        architecture = Lux.Chain(
+            Dense(n_input, 3, x -> softplus.(x)),
             Dense(3, 10, x -> softplus.(x)),
             Dense(10, 3, x -> softplus.(x)),
             Dense(3, 1, sigmoid)
         )
     end
-    θ, st = Lux.setup(rng_seed(), UA)
+    return architecture
+end
+
+function set_NN(architecture; θ_trained = nothing, ft = nothing)
+    # Set neural network using Lux
+    θ, st = Lux.setup(rng_seed(), architecture)
+
+    # Set pre-trained weights if provided
     if !isnothing(θ_trained)
         θ = θ_trained
     end
 
-    # TODO: To re-write with the new type stability fix 
+    # TODO: To re-write with the new type stability fix
     if ft == Float64
-        UA = f64(UA)
+        architecture = f64(architecture)
         θ = f64(θ)
         st = f64(st)
     end
 
+    # Build parameter as component array
     θ = ComponentArray(θ=θ)
-    return UA, θ, st
-end
-
-"""
-    predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
-
-Predicts the value of A with a neural network based on the long-term air temperature
-and on the bounds value to normalize the output of the neural network.
-
-# Arguments
-- `U`: Neural network.
-- `temp`: Temperature to be fed as an input of the neural network.
-- `lims::Tuple{F, F}`: Bounds to use for the affine transformation of the neural
-    network output.
-"""
-function predict_A̅(U, temp, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    return only(normalize_A(U(temp), lims))
-end
-
-"""
-    normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-
-Normalize a variable by using an affine transformation defined by some lower and
-upper bounds (m, M). The returned value is m+(M-m)*x.
-
-# Arguments
-- `x`: Input value.
-- `lims::Tuple{F, F}`: Lower and upper bounds to use in the affine transformation.
-
-# Returns
-- The input variable scaled by the affine transformation.
-"""
-function normalize_A(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
-    minA_out = lims[1]
-    maxA_out = lims[2]
-    return minA_out .+ (maxA_out - minA_out) .* x
+    return architecture, θ, st
 end
 
 function save_plot(plot, path, filename)

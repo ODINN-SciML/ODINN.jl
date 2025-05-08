@@ -94,10 +94,6 @@ function train_iceflow_UDE(H₀, UA, θ, H_refs, temp_series)
     context = (B, H, current_year, temp_series)
     loss(θ) = loss_iceflow(θ, context, UA, H_refs) # closure
 
-    # Debugging
-    # println("Gradients: ", gradient(loss, θ))
-    # @infiltrate
-
     println("Training iceflow UDE...")
     iceflow_trained = DiffEqFlux.sciml_train(loss, θ, RMSProp(η), cb=callback, maxiters = epochs)
 
@@ -131,10 +127,6 @@ function loss_iceflow(θ, context, UA, H_refs)
     #     A_ref = A_fake(mean(temp_series[5]))
     #     println("Predicted A: ", A_pred)
     #     println("True A: ", A_ref)
-    # end
-
-    # Zygote.ignore() do 
-    #     @infiltrate
     # end
 
     # H = H_preds.u[end]
