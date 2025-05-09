@@ -54,7 +54,7 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [40, 20],
+        epochs = [100, 20],
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
@@ -98,7 +98,7 @@ architecture = Lux.Chain(
 
 # The neural network shoudl return something between 0 and A * H^{max n power}
 min_NN = 0.0
-n_max = 2.8
+n_max = 2.3
 max_NN = params.physical.maxA * H_max^n_max
 
 min_temp, max_temp = - 25.0, 0.0
@@ -112,7 +112,7 @@ model = Model(
         params;
         architecture = architecture,
         target = SIA2D_D_hybrid_target(
-            n_H = 0.5,
+            n_H = 1.0,
             max_NN = max_NN
         )
     )
