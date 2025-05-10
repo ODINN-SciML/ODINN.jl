@@ -282,7 +282,7 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
     # batch_id = Sleipnir.Int(batch_id)
     glacier = simulation.glaciers[batch_id]
 
-    if !isnothing(iceflow_model.S)
+    if size(iceflow_model.S) != (0, 0)
         @assert size(iceflow_model.S) == (glacier.nx, glacier.ny) "Glacier and model simulation are non sync: $(size(iceflow_model.S)) != ($(glacier.nx), $(glacier.ny))"
     else
         # TODO: change API of inicitalize glacier
