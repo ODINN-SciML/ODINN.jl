@@ -32,7 +32,7 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     glacier_idx = Sleipnir.Int(glacier_idx)
     glacier = simulation.glaciers[glacier_idx]
     
-    glacier_id = isnothing(glacier.rgi_id) ? "unnamed" : glacier.rgi_id
+    glacier_id = glacier.rgi_id == "" ? "unnamed" : glacier.rgi_id
     println("Processing glacier: ", glacier_id)
     
     ####### Glacier Initialization #######
@@ -178,7 +178,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     model = simulation.model
     params = simulation.parameters
     glacier = simulation.glaciers[glacier_idx]
-    glacier_id = isnothing(glacier.rgi_id) ? "unnamed" : glacier.rgi_id
+    glacier_id = glacier.rgi_id == "" ? "unnamed" : glacier.rgi_id
     println("Processing glacier: ", glacier_id)
 
     # === Glacier Initialization ===
