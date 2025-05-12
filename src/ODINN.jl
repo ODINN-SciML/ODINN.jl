@@ -86,4 +86,7 @@ include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Inversion for SIA equation
 include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))
 
+# Results
+include(joinpath(root_dir, "src/results/Results.jl"))
+
 end # module
