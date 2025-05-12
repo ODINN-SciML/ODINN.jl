@@ -13,7 +13,11 @@ This function initiates the training of a Universal Differential Equation (UDE) 
 - The `Sleipnir.save_results_file!` function call is currently commented out and should be enabled once the optimization process is confirmed to be working.
 - The garbage collector is explicitly run using `GC.gc()` to manage memory usage.
 """
-function run!(simulation::FunctionalInversion)
+function run!(
+    simulation::FunctionalInversion;
+    path::Union{String, Nothing} = nothing,
+    file_name::Union{String, Nothing} = nothing
+    )
 
     println("Running training of UDE...\n")
 
@@ -46,7 +50,10 @@ function run!(simulation::FunctionalInversion)
     simulation.stats.θ = sol.u
 
     # TODO: Save when optimization is working
-    # Sleipnir.save_results_file!(results_list, simulation)
+    # Save results in path is provided
+    if !isnothing(path) & !isnothing(file_name)
+        ODINN.save_simulation_file!(sol, simulation; path = path, file_name = file_name)
+    end
 
     @everywhere GC.gc() # run garbage collector
 
