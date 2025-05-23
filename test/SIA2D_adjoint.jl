@@ -1,7 +1,7 @@
 
 function test_adjoint_SIA2D(
     adjointFlavor::ADJ;
-    thres = [3e-2, 1e-14, 3e-2],
+    thres = [2e-4, 2e-4, 2e-2],
     target = :A
 ) where {ADJ<:AbstractAdjointMethod}
 
@@ -138,9 +138,6 @@ function test_adjoint_SIA2D(
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
-    thres_ratio = 1e-4
-    thres_angle = 2e-4
-    thres_relerr = 2e-2
     if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt H")
         println("eps    = ",printVecScientific(eps))
