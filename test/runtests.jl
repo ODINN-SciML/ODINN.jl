@@ -42,7 +42,7 @@ ENV["GKSwstype"] = "nul"
 @testset "Run all tests" begin
 
 @testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB = false)
-# @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB = true)
+@testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB = true)
 # @testset "UDE SIA2D training with MB" ude_solve_test(; MB = true)
 # @testset "Parameters constructors with specified values" params_constructor_specified()
 
