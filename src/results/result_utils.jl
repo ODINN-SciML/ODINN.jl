@@ -21,6 +21,8 @@ function save_simulation_file!(
 
     res = ODINN.Result(
         θ = sol.u,
+        θ_hist = simulation.stats.θ_hist,
+        ∇θ_hist = simulation.stats.∇θ_hist,
         losses = simulation.stats.losses,
         params = simulation.parameters
     )
