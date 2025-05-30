@@ -54,6 +54,9 @@ function callback_diagnosis(θ, l, simulation)
     # update_training_state!(simulation, l)
 
     push!(simulation.stats.losses, l)
+    push!(simulation.stats.θ_hist, θ.u)
+    push!(simulation.stats.∇θ_hist, θ.grad)
+
     step = 1
     if length(simulation.stats.losses) % step == 0
         if length(simulation.stats.losses) == 1
@@ -63,6 +66,15 @@ function callback_diagnosis(θ, l, simulation)
         end
         printProgressLoss(length(simulation.stats.losses), simulation.stats.niter, l, improvement)
     end
+
+    # Save state of intermediate simulation
+    if !isnothing(Base.source_path)
+        path = Base.dirname(Base.source_path())
+    else
+        path = @__DIR__
+        println("Saving intermediate solution in $(path).")
+    end
+    ODINN.save_simulation_file!(θ, simulation; path = path, file_name = "_inversion_result.jld2")
 
     return false
 end

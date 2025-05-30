@@ -72,12 +72,14 @@ function NeuralNetwork(
     θ::Union{ComponentArrayType, Nothing} = nothing,
     st::Union{NamedTupleType, Nothing} = nothing,
     target::Union{TAR, Nothing} = nothing,
+    seed::Union{RNG, Nothing} = nothing
 ) where {
     P<:Sleipnir.Parameters,
     ChainType<:Lux.Chain,
     ComponentArrayType<:ComponentArray,
     NamedTupleType<:NamedTuple,
-    TAR<:AbstractTarget
+    TAR<:AbstractTarget,
+    RNG<:AbstractRNG
 }
 
     # Float type
@@ -86,19 +88,21 @@ function NeuralNetwork(
 
     if isnothing(architecture) & isnothing(θ) & isnothing(st)
         if params.UDE.target == :A
-            architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN)
+            architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN, seed = seed)
         elseif params.UDE.target == :D_hybrid
             architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
-            architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
+            architecture, θ, st = set_NN(architecture; ft = ft, seed = seed)
         elseif params.UDE.target == :D
             architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
-            architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
+            architecture, θ, st = set_NN(architecture; ft = ft, seed = seed)
         else
             @warn "Constructing default Neural Network"
-            architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN)
+            architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN, seed = seed)
         end
     elseif !isnothing(architecture) & isnothing(θ) & isnothing(st)
-        architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft)
+        architecture, θ, st = set_NN(architecture; ft = ft, seed = seed)
+    elseif !isnothing(architecture) & !isnothing(θ) & isnothing(st)
+        architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft, seed = seed)
     elseif !isnothing(architecture) & !isnothing(θ) & !isnothing(st)
         # Architecture and setup already provided
         nothing

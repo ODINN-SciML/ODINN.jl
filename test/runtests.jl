@@ -35,6 +35,7 @@ include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
 include("test_grad_Enzyme.jl")
+include("save_results.jl")
 
 # # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"] = "nul"
@@ -81,5 +82,7 @@ end
     @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, steady_state = true, save_refs = false)
     @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, steady_state = true, save_refs = false)
 end
+
+@testset "Save results" save_simulation_test!()
 
 end
