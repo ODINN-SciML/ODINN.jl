@@ -13,9 +13,9 @@ Generates a neural network.
 - `θ`: Neural network parameters.
 - `st`: Lux state.
 """
-function get_default_NN(θ_trained, ft; lightNN = false)
+function get_default_NN(θ_trained, ft; lightNN = false, seed = nothing)
     architecture = build_default_NN(; lightNN = lightNN)
-    return set_NN(architecture; θ_trained = θ_trained, ft = ft)
+    return set_NN(architecture; θ_trained = θ_trained, ft = ft, seed = seed)
 end
 
 function build_default_NN(; n_input = 1, lightNN = false)
@@ -38,13 +38,20 @@ function build_default_NN(; n_input = 1, lightNN = false)
     return architecture
 end
 
-function set_NN(architecture; θ_trained = nothing, ft = nothing)
+function set_NN(architecture; θ_trained = nothing, ft = nothing, seed = nothing)
     # Set neural network using Lux
-    θ, st = Lux.setup(rng_seed(), architecture)
+    if isnothing(seed)
+        θ, st = Lux.setup(rng_seed(), architecture)
+    else
+        θ, st = Lux.setup(seed, architecture)
+    end
 
     # Set pre-trained weights if provided
     if !isnothing(θ_trained)
         θ = θ_trained
+    else
+        # Build parameter as component array
+        θ = ComponentArray(θ=θ)
     end
 
     # TODO: To re-write with the new type stability fix
@@ -54,8 +61,6 @@ function set_NN(architecture; θ_trained = nothing, ft = nothing)
         st = f64(st)
     end
 
-    # Build parameter as component array
-    θ = ComponentArray(θ=θ)
     return architecture, θ, st
 end
 

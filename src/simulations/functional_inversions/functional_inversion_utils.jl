@@ -320,9 +320,15 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
     iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb_MB, batch_id; du = du)
 
     # Update simulation results
-    result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=!simulation.parameters.solver.save_everystep, batch_id = batch_id, processVelocity=Huginn.V_from_H)
-    return result
+    result = Sleipnir.create_results(
+        simulation, batch_id, iceflow_sol, nothing;
+        tstops = simulation.parameters.solver.tstops,
+        light = !simulation.parameters.solver.save_everystep,
+        batch_id = batch_id,
+        processVelocity = Huginn.V_from_H
+        )
 
+    return result
 end
 
 
@@ -349,14 +355,22 @@ function simulate_iceflow_UDE!(
     # Define closure with apply_parametrization inside the function call
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
-    iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H₀, params.simulation.tspan, θ; tstops=params.solver.tstops)
+    iceflow_prob = ODEProblem(
+        SIA2D_UDE_closure,
+        model.iceflow[batch_id].H₀,
+        params.simulation.tspan,
+        θ;
+        tstops = params.solver.tstops
+        )
 
-    iceflow_sol = solve(iceflow_prob,
-                        params.solver.solver,
-                        callback=cb,
-                        sensealg=params.UDE.sensealg,
-                        reltol=params.solver.reltol,
-                        progress=false)
+    iceflow_sol = solve(
+        iceflow_prob,
+        params.solver.solver,
+        callback = cb,
+        sensealg = params.UDE.sensealg,
+        reltol = params.solver.reltol,
+        progress = false
+        )
 
     # Compute average ice surface velocities for the simulated period
     model.iceflow[batch_id].H = iceflow_sol.u[end]
