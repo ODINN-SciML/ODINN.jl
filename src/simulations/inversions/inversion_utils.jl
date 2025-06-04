@@ -208,10 +208,6 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         # be different from those of the function in which we are defining objfun
         # Otherwise this can result in AD issues
 
-        # WARNING: it seems that the implementation of this function wasn't finished. Things to implement:
-        # - solve the iceflow problem
-        # - retrieve the ice thickness and compare it to the observations
-
         # Apply parameter transformations for optimization
         simulation.model.iceflow.C[] = x[1]
 
