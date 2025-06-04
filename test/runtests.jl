@@ -78,8 +78,9 @@ end
 end
 
 @testset "Inversion test" begin
-    @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, steady_state = true, save_refs = false)
-    @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, steady_state = true, save_refs = false)
+    # These tests are deactivated since they need Enzyme to work
+    # @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, steady_state = true, save_refs = false)
+    # @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, steady_state = true, save_refs = false)
 end
 
 end

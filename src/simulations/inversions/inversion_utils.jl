@@ -40,9 +40,9 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
 
     params.solver.tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
     stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, params.solver.tstops) #closure
-    
+
     function action!(integrator)
-        if params.simulation.use_MB 
+        if params.simulation.use_MB
             # Compute mass balance
             MB_timestep!(model, glacier, params.solver.step, integrator.t)
             apply_MB_mask!(integrator.u, glacier, model.iceflow)
@@ -53,28 +53,31 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
 
     ####### Objective function #######
     function objfun(x, simulation, realsol)
-        
+        # Unless they are explicitely shared, the argument names of this function must
+        # be different from those of the function in which we are defining objfun
+        # Otherwise this can result in AD issues
+
         simulation.model.iceflow.A[]=x[1]*1e-17  #scaling for optimization
         #simulation.model.iceflow.n[]=x[2]
 
         iceflow_prob = ODEProblem{false}(Huginn.SIA2D, model.iceflow.H, params.simulation.tspan, tstops=params.solver.tstops, simulation)
-        iceflow_sol = solve(iceflow_prob, 
-                        params.solver.solver, 
-                        callback=cb_MB, 
-                        tstops=params.solver.tstops, 
-                        reltol=params.solver.reltol, 
+        iceflow_sol = solve(iceflow_prob,
+                        params.solver.solver,
+                        callback=cb_MB,
+                        tstops=params.solver.tstops,
+                        reltol=params.solver.reltol,
                         abstol=params.solver.reltol,
-                        save_everystep=params.solver.save_everystep, 
-                        progress=params.solver.progress, 
+                        save_everystep=params.solver.save_everystep,
+                        progress=params.solver.progress,
                         progress_steps=params.solver.progress_steps)
 
         H_obs = realsol[1]
         V_obs = realsol[2]
-        
-        H_pred = iceflow_sol.u[end]        
+
+        H_pred = iceflow_sol.u[end]
         map!(x -> ifelse(x>0.0,x,0.0), H_pred, H_pred)
-        
-        V_pred = Huginn.avg_surface_V(H_pred, simulation)[3] 
+
+        V_pred = Huginn.V_from_H(simulation, H_pred)[3]
 
         ofv = 0.0
         if any((s.retcode != :Success for s in iceflow_sol))
@@ -82,22 +85,22 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
         else
             mask_H = H_obs .!= 0
             mask_V = V_obs .!= 0
-            
+
             ofv_H = mean((H_pred[mask_H] .- H_obs[mask_H]) .^ 2)
             ofv_V = mean((V_obs[mask_V] .- V_pred[mask_V]) .^ 2)
 
             count_H = 50 #sum(mask_H)
             count_V = 50 #sum(mask_V)
-    
+
             ofv = (count_H * ofv_H + count_V * ofv_V) / (count_H + count_V)
-            
+
             #ofv = x[3] * ofv_H + x[4] * ofv_V
-            
+
         end
-        
+
         println("A = $x")
         println("MSE = $ofv")
-        
+
         return ofv
     end
 
@@ -183,21 +186,54 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
 
     # === Glacier Initialization ===
     Huginn.initialize_iceflow_model(model.iceflow, Sleipnir.Int(glacier_idx), glacier, params)
-    simulation.model.iceflow.A[] = 7.57382e-17 # Temperate glaciers value
-    
+    # simulation.model.iceflow.A[] = 7.57382e-17 # Temperate glaciers value
+
+
+    params.solver.tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
+    stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, params.solver.tstops) #closure
+
+    function action!(integrator)
+        if params.simulation.use_MB
+            # Compute mass balance
+            MB_timestep!(model, glacier, params.solver.step, integrator.t)
+            apply_MB_mask!(integrator.u, glacier, model.iceflow)
+        end
+    end
+
+    cb_MB = DiscreteCallback(stop_condition, action!)
+
     # === Objective Function Definition ===
     function objfun(x, simulation, realsol)
         # Unless they are explicitely shared, the argument names of this function must
         # be different from those of the function in which we are defining objfun
         # Otherwise this can result in AD issues
 
+        # WARNING: it seems that the implementation of this function wasn't finished. Things to implement:
+        # - solve the iceflow problem
+        # - retrieve the ice thickness and compare it to the observations
+
         # Apply parameter transformations for optimization
         simulation.model.iceflow.C[] = x[1]
+
+        iceflow_prob = ODEProblem{false}(Huginn.SIA2D, model.iceflow.H, params.simulation.tspan, tstops=params.solver.tstops, simulation)
+        iceflow_sol = solve(
+            iceflow_prob,
+            params.solver.solver,
+            callback=cb_MB,
+            tstops=params.solver.tstops,
+            reltol=params.solver.reltol,
+            abstol=params.solver.reltol,
+            save_everystep=params.solver.save_everystep,
+            progress=params.solver.progress,
+            progress_steps=params.solver.progress_steps,
+        )
 
         # Extract and predict H values based on V observations
         Hobs = realsol[1][1:end-1, 1:end-1]
         Vobs = realsol[2]
-        Hpred = Huginn.H_from_V(Vobs, simulation)
+
+        Hpred = iceflow_sol.u[end]
+        map!(x -> ifelse(x>0.0,x,0.0), Hpred, Hpred)
 
         # Calculate and return the weighted mean squared error
         mask_H = Hobs .!= 0
@@ -206,11 +242,12 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     end
 
     # === Optimization Setup ===
+    fn(x, p) = objfun(x, p[1], p[2])
     initial_conditions = params.inversion.initial_conditions
     lower_bound = params.inversion.lower_bound
     upper_bound = params.inversion.upper_bound
     Enzyme.API.strictAliasing!(false)
-    optfun = OptimizationFunction((x, p) -> objfun(x, p[1], p[2]), simulation.parameters.UDE.optim_autoAD)
+    optfun = OptimizationFunction(fn, simulation.parameters.UDE.optim_autoAD)
 
 
     # === Region-based Optimization and Prediction ===
@@ -218,43 +255,32 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
     regions = split_regions(glacier.H_glathida, glacier.dist_border, n_regions[1], n_regions[2])
 
     total_H_pred = zeros(size(glacier.H_glathida[1:end-1, 1:end-1]))
-    C_values = zeros(size(glacier.H_glathida))
-    C_values[glacier.V .!= 0] .= NaN
 
-    
     for region_H_obs in regions
         realsol = (region_H_obs, glacier.V)
         optprob = OptimizationProblem(optfun, initial_conditions, (simulation, realsol), lb = lower_bound, ub = upper_bound)
         sol = solve(optprob, params.inversion.solver, x_tol = params.inversion.x_tol , f_tol = params.inversion.f_tol)
-        
+
         # Apply optimized parameters and predict H values
         simulation.model.iceflow.C[] = sol[1]
 
-        H_pred = Huginn.H_from_V(realsol[2], simulation)
-        H_pred[realsol[1][1:end-1, 1:end-1] .== 0] .= 0
+        H_pred = iceflow_sol.u[end]
+        map!(x -> ifelse(x>0.0,x,0.0), H_pred, H_pred)
+        H_pred[region_H_obs[1:end-1, 1:end-1] .== 0] .= 0
         total_H_pred += H_pred
-        
-        # Create parameter matrices
-        C_values[realsol[1] .!= 0].= sol[1] 
     end
 
-    # === Interpolate and smooth basal sliding === # NOTE:  this part results in non physically correct H and V
-    C_values = fill_with_nearest_neighbor(C_values)
-    C_values[glacier.V .== 0] .= NaN
-    
-    C_values = safe_gaussian_filter(C_values, (5,5), 1.0, 1.0)
-   
-    H_pred = H_from_V(glacier.V, C_values,simulation)
-    
-    H_pred[total_H_pred .!= 0] .= total_H_pred[total_H_pred .!= 0]
+    H_pred = total_H_pred
 
-    V_pred = surface_V(H_pred, C_values, simulation)
-    
+    simulation.model.iceflow.C = C_values
+
+    V_pred = surface_V(H_pred, simulation)
+
     # === Post-Optimization Analysis ===
     # Prepare observed values for comparison
-    H_obs  = glacier.H_glathida[1:end-1, 1:end-1] 
+    H_obs  = glacier.H_glathida[1:end-1, 1:end-1]
     V_obs = glacier.V[1:end-1, 1:end-1]
-  
+
     # Compute absolute differences
     H_diff = abs.(total_H_pred - H_obs)
     V_diff = abs.(V_pred - V_obs)
@@ -329,104 +355,4 @@ function split_regions(H_obs, dist_border, n_splits_H_obs, n_splits_dist_border)
     end
     return regions
 end
-
-
-function fill_with_nearest_neighbor(C)
-    gtable = georef((; C)) # georeference array C into grid
-
-    inds = findall(!isnan, gtable.C) # find indices with data
-
-    data = gtable[inds, :] # view of geotable
-
-    interp = data |> Interpolate(gtable.geometry) # interpolate over grid
-
-    return asarray(interp, "C")
-end
-
-function safe_gaussian_filter(matrix, kernel_size, σx, σy)
-    # Create a mask of where the NaNs are
-    nan_mask = isnan.(matrix)
-
-    # Replace NaNs with the median of the non-NaN values
-    median_val = mean(matrix[.!nan_mask])
-    matrix[nan_mask] .= median_val
-
-    # Apply the Gaussian filter
-    filtered_matrix = imfilter(matrix, Kernel.gaussian((σx, σy),kernel_size))
-
-    # Restore NaNs
-    filtered_matrix[nan_mask] .= NaN
-
-    return filtered_matrix
-end
-
-function H_from_V(V::Matrix{<:Real}, C::Matrix{<:Real}, simulation::SIM) where {SIM <: Simulation}
-    params::Sleipnir.Parameters = simulation.parameters
-    
-    iceflow_model = simulation.model.iceflow
-    glacier = simulation.glaciers[iceflow_model.glacier_idx[]]
-    B = glacier.B
-    Δx = glacier.Δx
-    Δy = glacier.Δy
-    A = iceflow_model.A
-    n = iceflow_model.n
-    ρ = params.physical.ρ
-    g = params.physical.g
-    H₀ = glacier.H₀
-
-    # Update glacier surface altimetry
-    S = glacier.S  
-    V = Huginn.avg(V)
-    
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
-    dSdx = Huginn.diff_x(S) / Δx
-    dSdy = Huginn.diff_y(S) / Δy
-    ∇S = (Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2).^(1/2)
-    ∇S[V .== 0] .= 0
-    C = C[1:end-1, 1:end-1]
-    C[V .== 0] .= 0
-    
-    Γꜛ = (2.0 * A[] * (ρ * g)^n[]) / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
-    
-    H = ( V .+ C ./ (Γꜛ .*(∇S .^ n[]))) .^ (1 / (n[] + 1)) 
-    
-    replace!(H, NaN=>0.0)
-    replace!(H, Inf=>0.0)
-    return H   
-end
-
-function surface_V(H::Matrix{<:Real}, C::Matrix{<:Real}, simulation::SIM) where {SIM <: Simulation}
-    params::Sleipnir.Parameters = simulation.parameters
-    
-    iceflow_model = simulation.model.iceflow
-    glacier::Sleipnir.Glacier2D = simulation.glaciers[iceflow_model.glacier_idx[]]
-    B = glacier.B
-    Δx = glacier.Δx
-    Δy = glacier.Δy
-    A = iceflow_model.A
-    n = iceflow_model.n
-    ρ = params.physical.ρ
-    g = params.physical.g
-    
-    # Update glacier surface altimetry
-    S = glacier.S
-    C = deepcopy(C)
-    C[glacier.V .== 0] .= 0
-    C = C[1:end-1, 1:end-1]
-    
-    # All grid variables computed in a staggered grid
-    # Compute surface gradients on edges
-    dSdx = Huginn.diff_x(S) / Δx
-    dSdy = Huginn.diff_y(S) / Δy
-    ∇S = sqrt.(Huginn.avg_y(dSdx).^2 .+ Huginn.avg_x(dSdy).^2)
-    
-    Γꜛ = 2.0 * A[] * (ρ * g)^n[] / (n[]+1) # surface stress (not average)  # 1 / m^3 s 
-    
-       
-    V =  Γꜛ .* H.^(n[] + 1) .* ∇S .+ C
-
-    return V
-end
 # === [End] Steady State Inversion ===
-
