@@ -27,7 +27,7 @@ function run!(simulation::FunctionalInversion)
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
         epochs = simulation.parameters.hyper.epochs
-        @assert length(optimizers) == length(optimizers) "Provide number of epochs as a vector with the same length of optimizers"
+        @assert length(optimizers) == length(epochs) "Provide number of epochs as a vector with the same length of optimizers"
         for i in 1:length(epochs)
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
@@ -72,7 +72,7 @@ BFGS Training
 """
 function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer)
 
-    @info "Trainign with BFGS optimizer"
+    @info "Training with BFGS optimizer"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
@@ -88,7 +88,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data))
+    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation))
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         # Enzyme.API.strictAliasing!(false)
@@ -177,6 +177,7 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
     loss_function = simulation.parameters.UDE.empirical_loss_function
 
     l_H = 0.0
+    l_V = 0.0
 
     for i in 1:length(simulation.glaciers)
 
@@ -188,15 +189,45 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
         t = simulation.results[i].t
         Δt = diff(t)
         H = simulation.results[i].H
+        Vx = simulation.results[i].Vx
+        Vy = simulation.results[i].Vy
+        V = simulation.results[i].V
+        Vx_ref = simulation.results[i].Vx_ref
+        Vy_ref = simulation.results[i].Vy_ref
+        V_ref = simulation.results[i].V_ref
+        date_VRef = simulation.results[i].date_VRef
         @assert length(H_ref) == length(H) "Reference and Prediction datasets need to be evaluated in same timestamps."
         @assert size(H_ref[begin]) == size(H[begin])
 
         β = 2.0
         for τ in 2:length(H)
+            println("t[τ] = ", t[τ])
+            # TODO: check the values of the time steps so that they match with the ice velocity product
             normalization = 1.0
             # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
-            mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
-            l_H += Δt[τ-1] * mean_error
+            indVel, errTime = findmin(abs.(date_VRef .- t[τ]))
+            if errTime <= 10/365.
+                @info "Using reference data at date $(date_VRef[indVel]) for t[τ]=$(t[τ])"
+                # Use available data only if the mean date is up to 10 days before or after the beginning of the month
+                mean_error_H, mean_error_V = loss(
+                    loss_function,
+                    simulation.parameters.UDE.scale_loss,
+                    H[τ],
+                    Vx[τ],
+                    Vy[τ],
+                    V[uτ],
+                    H_ref[τ],
+                    Vx_ref[indVel],
+                    Vy_ref[indVel],
+                    V_ref[indVel],
+                    normalization=prod(size(H_ref[τ]))*normalization,
+                )
+            else
+                mean_error_H = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
+                mean_error_V = 0.0
+            end
+            l_H += Δt[τ-1] * mean_error_H
+            l_V += Δt[τ-1] * mean_error_V
         end
     end
 

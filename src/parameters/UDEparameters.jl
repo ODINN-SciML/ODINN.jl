@@ -41,7 +41,7 @@ Create a `UDEparameters` object for configuring the sensitivity analysis and opt
 - `grad::ADJ`: The adjoint gradient computation method. Defaults to `SciMLSensitivityAdjoint()`.
 - `optimization_method::String`: The optimization method to use. Must be either `"AD+AD"` or `"AD+Diff"`. Defaults to `"AD+AD"`.
 - `loss_type::String`: The type of loss function to use. Must be either `"V"` (velocity) or `"H"` (thickness). Defaults to `"V"`.
-- `empirical_loss_function::AbstractLoss`: The loss function to use for optimization. Defaults to `L2Sum()`.
+- `empirical_loss_function::AbstractLoss`: The loss function to use for optimization. Defaults to `LossHV()`.
 - `scale_loss::Bool`: Whether to scale the loss function. Defaults to `true`.
 - `target::Union{Symbol, Nothing}`: The target variable for optimization. Defaults to `:A`.
 
@@ -62,7 +62,7 @@ function UDEparameters(;
         grad::ADJ = SciMLSensitivityAdjoint(),
         optimization_method::String = "AD+AD",
         loss_type::String = "V",
-        empirical_loss_function::AbstractLoss = L2Sum(),
+        empirical_loss_function::AbstractLoss = LossHV(),
         scale_loss::Bool = true,
         target::Union{Symbol, Nothing} = :A
     ) where {ADJ <: AbstractAdjointMethod}
