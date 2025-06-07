@@ -35,7 +35,7 @@ function run!(
         for i in 1:length(epochs)
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
-            simulation.parameters.hyper.epochs = epochs[i] - 1
+            simulation.parameters.hyper.epochs = epochs[i]
             if i !== 1
                 θ_trained = sol.u
                 simulation.model.machine_learning.θ = θ_trained
@@ -102,9 +102,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-
         loss_function_grad!(_dθ, _θ, _simulation) = SIA2D_grad!(_dθ, _θ, only(_simulation))
-
         optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
@@ -114,14 +112,14 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     # Training diagnosis callback
     cb(θ, l) = callback_diagnosis(θ, l, simulation)
 
-    println("Training iceflow UDE...")
-
-    iceflow_trained = solve(optprob,
-                            simulation.parameters.hyper.optimizer,
-                            maxiters = simulation.parameters.hyper.epochs,
-                            allow_f_increases = true,
-                            callback = cb,
-                            progress = false)
+    iceflow_trained = solve(
+        optprob,
+        simulation.parameters.hyper.optimizer,
+        maxiters = simulation.parameters.hyper.epochs,
+        allow_f_increases = true,
+        callback = cb,
+        progress = false
+        )
 
     return iceflow_trained
 end
@@ -155,9 +153,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-
         loss_function_grad!(_dθ, _θ, simulation_loader) = SIA2D_grad!(_dθ, _θ, simulation_loader[1])
-
         optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
@@ -166,13 +162,13 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     # Training diagnosis callback
     cb(θ, l) = callback_diagnosis(θ, l, simulation)
 
-    println("Training iceflow UDE...")
-
-    iceflow_trained = solve(optprob,
-                            simulation.parameters.hyper.optimizer,
-                            maxiters = simulation.parameters.hyper.epochs,
-                            callback = cb,
-                            progress = false)
+    iceflow_trained = solve(
+        optprob,
+        simulation.parameters.hyper.optimizer,
+        maxiters = simulation.parameters.hyper.epochs,
+        callback = cb,
+        progress = false
+        )
 
     return iceflow_trained
 end

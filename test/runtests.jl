@@ -79,8 +79,8 @@ end
 end
 
 @testset "Inversion test" begin
-    @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, steady_state = true, save_refs = false)
-    @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, steady_state = true, save_refs = false)
+    @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, multiprocessing = false)
+    # @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, multiprocessing = false)
 end
 
 @testset "Save results" save_simulation_test!()

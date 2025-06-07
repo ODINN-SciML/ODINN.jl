@@ -104,6 +104,7 @@ function pretraining(
 
     function train_model!(model, ps, st, opt, nepochs::Int)
         tstate = Training.TrainState(model, ps, st, opt)
+        losses = Float64[]
         for i in 1:nepochs
             grads, loss, _, tstate = Training.single_train_step!(
                 AutoZygote(), lossfn, (X, Y), tstate
@@ -111,16 +112,17 @@ function pretraining(
             if i % 100 == 0 || i == 1 || i == nepochs
                 ODINN.@printf "Loss Value after %6d iterations: %.8f\n" i loss
             end
+            push!(losses, loss)
         end
-        return tstate.model, tstate.parameters, tstate.states
+        return tstate.model, tstate.parameters, tstate.states, losses
     end
 
     θ_setup, st_setup = Lux.setup(rng, architecture)
     θ_setup = ComponentArray(θ_setup)
-    _architecture, θ_pretrain, st_pretrain = train_model!(
+    _architecture, θ_pretrain, st_pretrain, losses = train_model!(
         architecture, θ_setup, st_setup,
         ODINN.ADAM(), nepochs
         )
 
-    return _architecture, θ_pretrain, st_pretrain
+    return _architecture, θ_pretrain, st_pretrain, losses
 end
