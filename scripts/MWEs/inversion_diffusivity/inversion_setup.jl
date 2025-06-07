@@ -14,6 +14,9 @@ The neural network should learn the function NN(Temp, H, ∇S) ≈  2A / (n + 2)
 which corresponds to the time integrated ice surface velocity.
 
 with n the Glen exponent.
+
+In order to evaluate the quality of our inversions, we are going to use analytical solutions
+given by Halfar solutions to evaluate the performance of the invesion.
 """
 
 using Pkg; Pkg.activate(".")
@@ -36,7 +39,7 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 use_MB = false
 λ = use_MB ? 5.0 : 0.0
-nx, ny = 40, 40
+nx, ny = 100, 100
 R₀ = 2000.0
 H₀ = 200.0
 H_max = 1.2 * H₀
@@ -71,12 +74,22 @@ params = Parameters(
         workers = 1,
         test_mode = false,
         rgi_paths = rgi_paths,
-        gridScalingFactor = 2
         ),
     hyper = Hyperparameters(
         batch_size = 1,
-        epochs = [40, 60],
-        optimizer = [ODINN.ADAM(0.001), ODINN.LBFGS()]
+        epochs = [100, 30],
+        optimizer = [
+            ODINN.ADAM(0.001),
+            ODINN.LBFGS(
+                linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
+                )
+                # ODINN.LineSearches.HagerZhang( # See https://github.com/JuliaNLSolvers/LineSearches.jl/blob/3259cd240144b96a5a3a309ea96dfb19181058b2/src/hagerzhang.jl#L37
+                #     linesearchmax = 10,
+                #     display = true,
+                #     delta = 0.01,
+                #     sigma = 0.1)
+                #     )
+                ]
         ),
     UDE = UDEparameters(
         sensealg = SciMLSensitivity.ZygoteAdjoint(),
@@ -149,20 +162,20 @@ architecture = Lux.Chain(
     Dense(20, 30, x -> softplus.(x)),
     Dense(30, 10, x -> softplus.(x)),
     Dense(10, 1, sigmoid),
-    WrappedFunction(y -> 10.0 .* exp.((y .- 1.0) ./ y))
+    WrappedFunction(y -> 1e5 .* exp.((y .- 1.0) ./ y))
     # WrappedFunction(y -> 10.0.^( 3.0 .* (y .- 1.0) .+ 1.0 .* (y .+ 1.0) ))
 )
 
 ### Pretraining
 
 H_samples = 0.0:2.0:H_max
-∇S_samples = 0.0:0.02:0.7
+∇S_samples = 0.0:0.02:0.4
 all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
 X_samples = hcat(first.(all_combinations), last.(all_combinations))
 function template_diffusivity(h, ∇s)
     ρ, g = params.physical.ρ, params.physical.g
-    n = 2.5
-    A = 4.75e-15
+    n = 3.0
+    A = 2e-16
     return 2 * A * (ρ * g)^n * h^(n+1) * ∇s^(n-1) / (n + 2)
 end
 Y_samples = map(x -> template_diffusivity(x[1], x[2]), eachrow(X_samples))
@@ -171,10 +184,10 @@ X_samples = transpose(X_samples)
 X_samples = Matrix(X_samples)
 Y_samples = reshape(Y_samples, (1, :))
 
-architecture, θ_pretrain, st_pretrain = pretraining(
+architecture, θ_pretrain, st_pretrain, losses = pretraining(
     architecture;
     X = X_samples, Y = Y_samples,
-    nepochs = 3000, rng = rng
+    nepochs = 5000, rng = rng
 )
 
 # We define the prescale and postscale of quantities.
