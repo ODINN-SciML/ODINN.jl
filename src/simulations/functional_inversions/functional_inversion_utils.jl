@@ -13,7 +13,11 @@ This function initiates the training of a Universal Differential Equation (UDE) 
 - The `Sleipnir.save_results_file!` function call is currently commented out and should be enabled once the optimization process is confirmed to be working.
 - The garbage collector is explicitly run using `GC.gc()` to manage memory usage.
 """
-function run!(simulation::FunctionalInversion)
+function run!(
+    simulation::FunctionalInversion;
+    path::Union{String, Nothing} = nothing,
+    file_name::Union{String, Nothing} = nothing
+    )
 
     println("Running training of UDE...\n")
 
@@ -31,7 +35,7 @@ function run!(simulation::FunctionalInversion)
         for i in 1:length(epochs)
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
-            simulation.parameters.hyper.epochs = epochs[i] - 1
+            simulation.parameters.hyper.epochs = epochs[i]
             if i !== 1
                 θ_trained = sol.u
                 simulation.model.machine_learning.θ = θ_trained
@@ -46,7 +50,10 @@ function run!(simulation::FunctionalInversion)
     simulation.stats.θ = sol.u
 
     # TODO: Save when optimization is working
-    # Sleipnir.save_results_file!(results_list, simulation)
+    # Save results in path is provided
+    if !isnothing(path) & !isnothing(file_name)
+        ODINN.save_simulation_file!(sol, simulation; path = path, file_name = file_name)
+    end
 
     @everywhere GC.gc() # run garbage collector
 
@@ -95,9 +102,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-
         loss_function_grad!(_dθ, _θ, _simulation) = SIA2D_grad!(_dθ, _θ, only(_simulation))
-
         optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
@@ -107,14 +112,14 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     # Training diagnosis callback
     cb(θ, l) = callback_diagnosis(θ, l, simulation)
 
-    println("Training iceflow UDE...")
-
-    iceflow_trained = solve(optprob,
-                            simulation.parameters.hyper.optimizer,
-                            maxiters = simulation.parameters.hyper.epochs,
-                            allow_f_increases = true,
-                            callback = cb,
-                            progress = false)
+    iceflow_trained = solve(
+        optprob,
+        simulation.parameters.hyper.optimizer,
+        maxiters = simulation.parameters.hyper.epochs,
+        allow_f_increases = true,
+        callback = cb,
+        progress = false
+        )
 
     return iceflow_trained
 end
@@ -148,9 +153,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-
         loss_function_grad!(_dθ, _θ, simulation_loader) = SIA2D_grad!(_dθ, _θ, simulation_loader[1])
-
         optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
@@ -159,13 +162,13 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     # Training diagnosis callback
     cb(θ, l) = callback_diagnosis(θ, l, simulation)
 
-    println("Training iceflow UDE...")
-
-    iceflow_trained = solve(optprob,
-                            simulation.parameters.hyper.optimizer,
-                            maxiters = simulation.parameters.hyper.epochs,
-                            callback = cb,
-                            progress = false)
+    iceflow_trained = solve(
+        optprob,
+        simulation.parameters.hyper.optimizer,
+        maxiters = simulation.parameters.hyper.epochs,
+        callback = cb,
+        progress = false
+        )
 
     return iceflow_trained
 end
@@ -313,9 +316,15 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) wh
     iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb_MB, batch_id; du = du)
 
     # Update simulation results
-    result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=!simulation.parameters.solver.save_everystep, batch_id = batch_id, processVelocity=Huginn.V_from_H)
-    return result
+    result = Sleipnir.create_results(
+        simulation, batch_id, iceflow_sol, nothing;
+        tstops = simulation.parameters.solver.tstops,
+        light = !simulation.parameters.solver.save_everystep,
+        batch_id = batch_id,
+        processVelocity = Huginn.V_from_H
+        )
 
+    return result
 end
 
 
@@ -342,14 +351,22 @@ function simulate_iceflow_UDE!(
     # Define closure with apply_parametrization inside the function call
     SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
 
-    iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H₀, params.simulation.tspan, θ; tstops=params.solver.tstops)
+    iceflow_prob = ODEProblem(
+        SIA2D_UDE_closure,
+        model.iceflow[batch_id].H₀,
+        params.simulation.tspan,
+        θ;
+        tstops = params.solver.tstops
+        )
 
-    iceflow_sol = solve(iceflow_prob,
-                        params.solver.solver,
-                        callback=cb,
-                        sensealg=params.UDE.sensealg,
-                        reltol=params.solver.reltol,
-                        progress=false)
+    iceflow_sol = solve(
+        iceflow_prob,
+        params.solver.solver,
+        callback = cb,
+        sensealg = params.UDE.sensealg,
+        reltol = params.solver.reltol,
+        progress = false
+        )
 
     # Compute average ice surface velocities for the simulated period
     model.iceflow[batch_id].H = iceflow_sol.u[end]
