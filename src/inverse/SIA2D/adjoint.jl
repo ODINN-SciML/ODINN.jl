@@ -160,6 +160,143 @@ function VJP_λ_∂SIA_discrete(
 end
 
 
+function VJP_λ_∂surface_V∂H_discrete(
+    ∂Vx::Matrix{R},
+    ∂Vy::Matrix{R},
+    H::Matrix{R},
+    θ,
+    simulation::SIM,
+    t::R;
+    batch_id::Union{Nothing, I} = nothing,
+) where {R <:Real, I <: Integer, SIM <: Simulation}
+
+    if isnothing(batch_id)
+        SIA2D_model = simulation.model.iceflow
+        glacier = simulation.glaciers[SIA2D_model.glacier_idx[]]
+    else
+        SIA2D_model = simulation.model.iceflow[batch_id] # We pick the right iceflow model for this glacier
+        glacier = simulation.glaciers[batch_id]
+    end
+
+    # Retrieve models and parameters
+    params = simulation.parameters
+    ml_model = simulation.model.machine_learning
+    target = ml_model.target
+
+    B = glacier.B
+    Δx = glacier.Δx
+    Δy = glacier.Δy
+
+    # First, enforce values to be positive
+    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    # Update glacier surface altimetry
+    S = B .+ H
+
+    dSdx = Huginn.diff_x(S) / Δx
+    dSdy = Huginn.diff_y(S) / Δy
+    ∇Sx = Huginn.avg_y(dSdx)
+    ∇Sy = Huginn.avg_x(dSdy)
+
+    # Compute surface slope
+    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+
+    # Compute average ice thickness
+    H̄ = Huginn.avg(H)
+
+    # Equals ∂Dꜛ/∂H
+    α = ∂Diffusivityꜛ∂H(
+        target;
+        H = H̄, ∇S = ∇S, θ = θ,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+    # Equals ∂Dꜛ/∂(∇H)
+    β = ∂Diffusivityꜛ∂∇H(
+        target;
+        H = H̄, ∇S = ∇S, θ = θ,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+
+    ∇S∂V = (∇Sx .* ∂Vx .+ ∇Sy .* ∂Vy)
+
+    βx = β .* ∇Sx
+    βy = β .* ∇Sy
+    ∂D∂H = avg_adjoint(α .* ∇S∂V) .+ diff_x_adjoint(avg_y_adjoint(βx .* ∇S∂V), Δx) + diff_y_adjoint(avg_x_adjoint(βy .* ∇S∂V), Δy)
+
+    Dꜛ = Diffusivityꜛ(
+        target;
+        H = H̄, ∇S = ∇S, θ = θ,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* ∂Vx), Δx) .+ diff_y_adjoint(avg_x_adjoint(Dꜛ .* ∂Vy), Δy)
+    ∂H = ∂D∂H .+ ∂∇S∂H
+
+    return -∂H
+end
+
+function VJP_λ_∂surface_V∂θ_discrete(
+    ∂Vx::Matrix{R},
+    ∂Vy::Matrix{R},
+    H::Matrix{R},
+    θ,
+    simulation::SIM,
+    t::R;
+    batch_id::Union{Nothing, I} = nothing,
+) where {R <:Real, I <: Integer, SIM <: Simulation}
+
+    if isnothing(batch_id)
+        SIA2D_model = simulation.model.iceflow
+        glacier = simulation.glaciers[SIA2D_model.glacier_idx[]]
+    else
+        SIA2D_model = simulation.model.iceflow[batch_id] # We pick the right iceflow model for this glacier
+        glacier = simulation.glaciers[batch_id]
+    end
+
+    # Retrieve models and parameters
+    params = simulation.parameters
+    ml_model = simulation.model.machine_learning
+    target = ml_model.target
+
+    B = glacier.B
+    Δx = glacier.Δx
+    Δy = glacier.Δy
+
+    # First, enforce values to be positive
+    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    # Update glacier surface altimetry
+    S = B .+ H
+
+    dSdx = Huginn.diff_x(S) / Δx
+    dSdy = Huginn.diff_y(S) / Δy
+    ∇Sx = Huginn.avg_y(dSdx)
+    ∇Sy = Huginn.avg_x(dSdy)
+
+    # Compute surface slope
+    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+
+    # Compute average ice thickness
+    H̄ = Huginn.avg(H)
+
+    ∇S∂V = (∇Sx .* ∂Vx .+ ∇Sy .* ∂Vy)
+
+    # Gradient wrt θ
+    ∂D∂θ = ∂Diffusivityꜛ∂θ(
+        target;
+        H = H̄, ∇S = ∇S, θ = θ,
+        iceflow_model = SIA2D_model, ml_model = ml_model,
+        glacier = glacier, params = params
+    )
+    # Evaluate numerical integral for loss
+    @tullio ∂θ_v[k] := ∂D∂θ[i, j, k] * ∇S∂V[i, j]
+    # Construct component vector
+    ∂θ = Vector2ComponentVector(∂θ_v, θ)
+
+    return -∂θ
+end
+
+
 #######################################
 #####     Contiuous Adjoint      ######
 #######################################
@@ -366,14 +503,6 @@ function VJP_λ_∂SIA∂θ_continuous(
 
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
-
-    # Compute diffusivity based on target objective
-    # D = Diffusivity(
-    #     target;
-    #     H = H̄, ∇S = ∇S, θ = θ,
-    #     iceflow_model = SIA2D_model, ml_model = ml_model,
-    #     glacier = glacier, params = params
-    # )
 
     # Gradient wrt θ
     ∂D∂θ = ∂Diffusivity∂θ(

@@ -146,7 +146,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 @error "VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet."
             end
 
-            ### Definition of callback to introduce contrubution of loss function to adjoint
+            ### Definition of callback to introduce contribution of loss function to adjoint
             t_ref_inv = .-reverse(t_ref)
             stop_condition(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
             function effect!(integrator)

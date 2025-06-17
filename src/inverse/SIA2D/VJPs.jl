@@ -65,3 +65,13 @@ function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, dH_λ, simulati
     end
     return λ_∂f∂θ
 end
+
+function VJP_λ_∂surface_V∂H(VJPMode::DiscreteVJP, λx, λy, H, θ, simulation, t, batch_id)
+    λ_∂V∂H = VJP_λ_∂surface_V∂H_discrete(λx, λy, H, θ, simulation, t; batch_id = batch_id)
+    return λ_∂V∂H, nothing
+end
+
+function VJP_λ_∂surface_V∂θ(VJPMode::DiscreteVJP, λx, λy, H, θ, dH_H, dH_λ, simulation, t, batch_id)
+    λ_∂V∂H = VJP_λ_∂surface_V∂θ_discrete(λx, λy, H, θ, simulation, t; batch_id = batch_id)
+    return λ_∂V∂H, nothing
+end
