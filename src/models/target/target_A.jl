@@ -30,7 +30,7 @@ function Diffusivity(
         H = H, ∇S = ∇S, θ = θ,
         iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
     )
-    return (C .+ A .* Γ_no_A .* H) .* H.^(n[] + 1) .* ∇S.^(n[] - 1)
+    return (C .* (ρ * g)^n .+ A .* Γ_no_A .* H) .* H.^(n[] + 1) .* ∇S.^(n[] - 1)
 end
 
 function ∂Diffusivity∂H(
@@ -39,7 +39,7 @@ function ∂Diffusivity∂H(
     )
     n = iceflow_model.n
     C = iceflow_model.C
-    return ( C .* (n[] + 1) .+ Γ(iceflow_model, params) .* H .* (n[] + 2) ) .* H.^n[] .* ∇S.^(n[] - 1)
+    return ( C .* (n[] + 1) .* (ρ * g)^n .+ Γ(iceflow_model, params) .* H .* (n[] + 2) ) .* H.^n[] .* ∇S.^(n[] - 1)
 end
 
 function ∂Diffusivity∂∇H(
@@ -48,7 +48,7 @@ function ∂Diffusivity∂∇H(
     )
     n = iceflow_model.n
     C = iceflow_model.C
-    return ( C .+ Γ(iceflow_model, params) .* H ) .* (n[] - 1) .* H.^(n[] + 1) .* ∇S.^(n[] - 3)
+    return ( C .* (ρ * g)^n .+ Γ(iceflow_model, params) .* H ) .* (n[] - 1) .* H.^(n[] + 1) .* ∇S.^(n[] - 3)
 end
 
 function ∂Diffusivity∂θ(
