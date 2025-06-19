@@ -209,7 +209,7 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
             normalization = 1.0
             # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
             Vxτ_ref, Vyτ_ref, Vτ_ref, useVel = mapVelocity(simulation.parameters.simulation.mapping, Vx_ref, Vy_ref, V_ref, date_Vref, t[τ])
-            loss_function_timestep = useVel ? loss_function : loss_function.hLoss
+            loss_function_timestep = (useVel || !isa(loss_function, LossHV)) ? loss_function : loss_function.hLoss
             mean_error_H, mean_error_V = loss(
                 loss_function_timestep,
                 H[τ],

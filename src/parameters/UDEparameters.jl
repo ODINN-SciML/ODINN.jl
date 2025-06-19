@@ -36,7 +36,7 @@ Create a `UDEparameters` object for configuring the sensitivity analysis and opt
 - `optim_autoAD::AbstractADType`: The automatic differentiation type for optimization. Defaults to `Optimization.AutoEnzyme()`.
 - `grad::ADJ`: The adjoint gradient computation method. Defaults to `SciMLSensitivityAdjoint()`.
 - `optimization_method::String`: The optimization method to use. Must be either `"AD+AD"` or `"AD+Diff"`. Defaults to `"AD+AD"`.
-- `empirical_loss_function::AbstractLoss`: The loss function to use for optimization. Defaults to `LossHV()`.
+- `empirical_loss_function::AbstractLoss`: The loss function to use for optimization. Defaults to `LossH()`.
 - `target::Union{Symbol, Nothing}`: The target variable for optimization. Defaults to `:A`.
 
 # Returns
@@ -54,7 +54,7 @@ function UDEparameters(;
         optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
         grad::ADJ = SciMLSensitivityAdjoint(),
         optimization_method::String = "AD+AD",
-        empirical_loss_function::AbstractLoss = LossHV(),
+        empirical_loss_function::AbstractLoss = LossH(),
         target::Union{Symbol, Nothing} = :A
     ) where {ADJ <: AbstractAdjointMethod}
 

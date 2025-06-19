@@ -61,7 +61,7 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     loss_function = simulation.parameters.UDE.empirical_loss_function
     Vxτ_ref, Vyτ_ref, Vτ_ref, useVel = mapVelocity(simulation.parameters.simulation.mapping, Vx_ref, Vy_ref, V_ref, date_Vref, t[i])
-    loss_function_timestep = useVel ? loss_function : loss_function.hLoss
+    loss_function_timestep = (useVel || !isa(loss_function, LossHV)) ? loss_function : loss_function.hLoss
     ∂L∂H, ∂L∂Vx, ∂L∂Vy, ∂L∂V = backward_loss(
         loss_function_timestep,
         H[i], Vx[i], Vy[i], V[i],

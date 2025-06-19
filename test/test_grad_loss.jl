@@ -4,7 +4,8 @@ function test_grad_finite_diff(
     thres = [0., 0., 0.],
     target = :A,
     finite_difference_method = :FiniteDifferences,
-    finite_difference_order = 3
+    finite_difference_order = 3,
+    velocityLoss = false,
 ) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing adjoint $(adjointFlavor)")
@@ -13,13 +14,14 @@ function test_grad_finite_diff(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    rgi_ids = ["RGI60-11.03638"]
+    rgi_ids = velocityLoss ? ["RGI60-11.03646"] : ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
 
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
 
+    empirical_loss_function = velocityLoss ? LossHV() : LossH()
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
@@ -44,6 +46,7 @@ function test_grad_finite_diff(
             optim_autoAD=ODINN.NoAD(),
             grad=adjointFlavor,
             optimization_method="AD+AD",
+            empirical_loss_function=empirical_loss_function,
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
@@ -58,7 +61,12 @@ function test_grad_finite_diff(
     )
 
     # We retrieve some glaciers for the simulation
-    glaciers = initialize_glaciers(rgi_ids, params)
+    kwargs = velocityLoss ? (;
+        velocityDatacubes=Dict(
+            rgi_ids[1] => Sleipnir.fake_multi_datacube()
+        )
+    ) : NamedTuple()
+    glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
 
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)

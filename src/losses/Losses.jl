@@ -1,4 +1,4 @@
-export AbstractLoss, L2Sum, lossH, lossV, LossHV
+export AbstractLoss, L2Sum, LossH, LossV, LossHV
 export loss, backward_loss
 
 # Abstract type as a parent type for all losses
