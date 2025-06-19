@@ -2,7 +2,8 @@
 function test_adjoint_SIA2D(
     adjointFlavor::ADJ;
     thres = [2e-4, 2e-4, 2e-2],
-    target = :A
+    target = :A,
+    C = 0.0,
 ) where {ADJ<:AbstractAdjointMethod}
 
     Random.seed!(1234)
@@ -71,6 +72,7 @@ function test_adjoint_SIA2D(
     batch_idx = 1
 
     H = glaciers[glacier_idx].H₀
+    glaciers[glacier_idx].C = C
 
     simulation = FunctionalInversion(model, glaciers, params)
 
@@ -102,7 +104,7 @@ function test_adjoint_SIA2D(
         simulation,
         t,
         batch_idx
-        )
+    )
     ∂θ = ODINN.VJP_λ_∂SIA∂θ(
         adjointFlavor.VJP_method,
         vecBackwardSIA2D,
@@ -113,7 +115,7 @@ function test_adjoint_SIA2D(
         simulation,
         t,
         batch_idx
-        )
+    )
 
     # Check gradient wrt H
     function f_H(H, args)
@@ -125,7 +127,7 @@ function test_adjoint_SIA2D(
     angle = []
     relerr = []
     eps = []
-    for k in range(3,8)
+    for k in range(2,8)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
         ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
@@ -157,7 +159,7 @@ function test_adjoint_SIA2D(
     angle = []
     relerr = []
     eps = []
-    for k in range(5,7)
+    for k in range(3,7)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
         ∂θ_num = compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ; varStr="of θ")

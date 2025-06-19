@@ -6,7 +6,7 @@ export SIA2D_D_hybrid_target
 Struct to define inversion where elements of the diffusivity D in the SIA equations are
 replaced by a generic regressor. For this example, we consider the inversion of the form
 
-    D(H, ∇S, θ) = 2 / (n + 2) * (ρg)^n H^{n+2} |∇S|^{n-1} * NeuralNet(T, H, ∇S; θ)
+    D(H, ∇S, θ) = ( C * (ρ * g)^n + 2 * H * NeuralNet(T, H, ∇S; θ) / (n + 2) * (ρg)^n ) H^{n+1} |∇S|^{n-1}
 """
 
 @kwdef struct SIA2D_D_hybrid_target <: AbstractSIA2DTarget
@@ -41,12 +41,15 @@ function ∂Diffusivity∂H(
     # Allow different n for power in inversion of diffusivity
     # TODO: n is also inside Γ, so probably we want to grab this one too
     n = iceflow_model.n
+    C = iceflow_model.C
+    ρ = params.physical.ρ
+    g = params.physical.g
     n_H = isnothing(target.n_H) ? n[] : target.n_H
     n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
 
     Γ_no_A = Γ(iceflow_model, params; include_A = false)
     A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    ∂D∂H_no_NN = (n_H + 2) .* A .* Γ_no_A .* H.^(n_H + 1) .* ∇S.^(n_∇S - 1)
+    ∂D∂H_no_NN = ( (n_H + 1) .* C .* (ρ * g).^n .+ (n_H + 2) .* A .* Γ_no_A .* H ) .* H.^n_H .* ∇S.^(n_∇S - 1)
 
     # Derivative of the output of the NN with respect to input layer
     # TODO: Change this to be done with AD or have this as an extra parameter.
@@ -75,11 +78,14 @@ function ∂Diffusivity∂∇H(
     )
 
     n = iceflow_model.n
+    C = iceflow_model.C
+    ρ = params.physical.ρ
+    g = params.physical.g
     n_H = isnothing(target.n_H) ? n[] : target.n_H
     n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
 
     A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    ∂D∂∇S_no_NN = Γ(iceflow_model, params; include_A = false) .* A .* (n_∇S - 1) .* H.^(n_H + 2) .* ∇S.^(n_∇S - 3)
+    ∂D∂∇S_no_NN = (C .* (ρ * g).^n .+ Γ(iceflow_model, params; include_A = false) .* A .* H) .* (n_∇S - 1) .* H.^(n_H + 1) .* ∇S.^(n_∇S - 3)
 
     return ∂D∂∇S_no_NN
 end
@@ -157,6 +163,9 @@ function apply_parametrization(
     )
 
     n = iceflow_model.n
+    C = iceflow_model.C
+    ρ = params.physical.ρ
+    g = params.physical.g
     n_H = isnothing(target.n_H) ? n[] : target.n_H
     n_∇S = isnothing(target.n_∇S) ? n[] : target.n_∇S
 
@@ -179,7 +188,7 @@ function apply_parametrization(
 
     # # Predict value of A based on Temp and H
     A = apply_parametrization_A(target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
-    D = A .* Γ_no_A .* H.^(n_H + 2) .* ∇S.^(n_∇S - 1)
+    D = (C .* (ρ * g).^n .+ A .* Γ_no_A .* H) .* H.^(n_H + 1) .* ∇S.^(n_∇S - 1)
 
     return D
 end
