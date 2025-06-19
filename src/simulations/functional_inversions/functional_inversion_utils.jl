@@ -195,35 +195,37 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
         Vx_ref = simulation.results[i].Vx_ref
         Vy_ref = simulation.results[i].Vy_ref
         V_ref = simulation.results[i].V_ref
-        date_VRef = simulation.results[i].date_VRef
+        date_Vref = simulation.results[i].date_Vref
         @assert length(H_ref) == length(H) "Reference and Prediction datasets need to be evaluated in same timestamps."
         @assert size(H_ref[begin]) == size(H[begin])
 
+        if isa(loss_function, LossHV) || isa(loss_function, LossV)
+            @assert length(date_Vref)>0 "Using $(typeof(loss_function)) but no reference velocity in the results"
+        end
+
         β = 2.0
         for τ in 2:length(H)
-            println("t[τ] = ", t[τ])
-            # TODO: check the values of the time steps so that they match with the ice velocity product
+            println("t[τ] = ", t[τ], "  τ=",τ)
             normalization = 1.0
             # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
-            indVel, errTime = findmin(abs.(date_VRef .- t[τ]))
-            if errTime <= 10/365.
-                @info "Using reference data at date $(date_VRef[indVel]) for t[τ]=$(t[τ])"
-                # Use available data only if the mean date is up to 10 days before or after the beginning of the month
-                mean_error_H, mean_error_V = loss(
-                    loss_function,
-                    simulation.parameters.UDE.scale_loss,
-                    H[τ],
-                    Vx[τ],
-                    Vy[τ],
-                    V[uτ],
-                    H_ref[τ],
-                    Vx_ref[indVel],
-                    Vy_ref[indVel],
-                    V_ref[indVel],
-                    normalization=prod(size(H_ref[τ]))*normalization,
-                )
-            else
-                mean_error_H = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
+            Vxτ_ref, Vyτ_ref, Vτ_ref, useVel = mapVelocity(simulation.parameters.simulation.mapping, Vx_ref, Vy_ref, V_ref, date_Vref, t[τ])
+            loss_function_timestep = useVel ? loss_function : loss_function.hLoss
+            mean_error_H, mean_error_V = loss(
+                loss_function_timestep,
+                H[τ],
+                Vx[τ],
+                Vy[τ],
+                V[τ],
+                H_ref[τ],
+                Vxτ_ref,
+                Vyτ_ref,
+                Vτ_ref,
+                normalization=prod(size(H_ref[τ]))*normalization,
+            )
+            @info "mean_error_H=",mean_error_H
+            @info "mean_error_V=",mean_error_V
+            if !useVel
+                @info "Discarding reference data for t[τ]=$(t[τ])"
                 mean_error_V = 0.0
             end
             l_H += Δt[τ-1] * mean_error_H
@@ -231,7 +233,7 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion)
         end
     end
 
-    return l_H
+    return l_H+l_V
 
 end
 

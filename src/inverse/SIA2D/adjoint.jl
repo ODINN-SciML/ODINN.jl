@@ -160,6 +160,18 @@ function VJP_λ_∂SIA_discrete(
 end
 
 
+function VJP_λ_∂V∂Vxy(
+    ∂V::Matrix{R},
+    Vx::Matrix{R},
+    Vy::Matrix{R},
+) where {R <:Real}
+    V = (Vx.^2 .+ Vy.^2).^(1/2)
+    ∂Vx = Vx .* ∂V ./ V
+    ∂Vy = Vy .* ∂V ./ V
+    return ∂Vx, ∂Vy
+end
+
+
 function VJP_λ_∂surface_V∂H_discrete(
     ∂Vx::Matrix{R},
     ∂Vy::Matrix{R},
@@ -218,7 +230,10 @@ function VJP_λ_∂surface_V∂H_discrete(
         glacier = glacier, params = params
     )
 
-    ∇S∂V = (∇Sx .* ∂Vx .+ ∇Sy .* ∂Vy)
+    inn1∂Vx = inn1(∂Vx)
+    inn1∂Vy = inn1(∂Vy)
+
+    ∇S∂V = (∇Sx .* inn1∂Vx .+ ∇Sy .* inn1∂Vy)
 
     βx = β .* ∇Sx
     βy = β .* ∇Sy
@@ -230,7 +245,7 @@ function VJP_λ_∂surface_V∂H_discrete(
         iceflow_model = SIA2D_model, ml_model = ml_model,
         glacier = glacier, params = params
     )
-    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* ∂Vx), Δx) .+ diff_y_adjoint(avg_x_adjoint(Dꜛ .* ∂Vy), Δy)
+    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* inn1∂Vx), Δx) .+ diff_y_adjoint(avg_x_adjoint(Dꜛ .* inn1∂Vy), Δy)
     ∂H = ∂D∂H .+ ∂∇S∂H
 
     return -∂H
@@ -279,7 +294,7 @@ function VJP_λ_∂surface_V∂θ_discrete(
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
 
-    ∇S∂V = (∇Sx .* ∂Vx .+ ∇Sy .* ∂Vy)
+    ∇S∂V = (∇Sx .* inn1(∂Vx) .+ ∇Sy .* inn1(∂Vy))
 
     # Gradient wrt θ
     ∂D∂θ = ∂Diffusivityꜛ∂θ(

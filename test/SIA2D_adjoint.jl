@@ -287,7 +287,7 @@ function test_adjoint_surface_V(
         t,
         batch_idx
     )
-    ∂θ = ODINN.VJP_λ_∂surface_V∂θ(
+    ∂θ, = ODINN.VJP_λ_∂surface_V∂θ(
         adjointFlavor.VJP_method,
         vecBackwardSIA2D[1],
         vecBackwardSIA2D[2],
