@@ -71,7 +71,49 @@ function VJP_λ_∂surface_V∂H(VJPMode::DiscreteVJP, λx, λy, H, θ, simulati
     return λ_∂V∂H, nothing
 end
 
-function VJP_λ_∂surface_V∂θ(VJPMode::DiscreteVJP, λx, λy, H, θ, dH_H, dH_λ, simulation, t, batch_id)
+function VJP_λ_∂surface_V∂θ(VJPMode::DiscreteVJP, λx, λy, H, θ, simulation, t, batch_id)
     λ_∂V∂H = VJP_λ_∂surface_V∂θ_discrete(λx, λy, H, θ, simulation, t; batch_id = batch_id)
     return λ_∂V∂H, nothing
+end
+
+function VJP_λ_SIA_H(
+    λH, # Backward gradient of H
+    λVx, # Backward gradient of Vx
+    λVy, # Backward gradient of Vy
+    H, # Ice thickness
+    θ, # Learnable parameters
+    simulation,
+    t,
+    batch_id,
+)
+    λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λH, H, θ, simulation, t, batch_id)
+    λ_∂V∂H = if !isnothing(λVx) && !isnothing(λVy)
+        # We need to compute this VJP only when the loss depends on V
+        VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, λVx, λVy, H, θ, simulation, t, batch_id)[1]
+    else
+        0.0
+    end
+    return λ_∂f∂H .+ λ_∂V∂H, dH_H
+end
+
+function VJP_λ_SIA_θ(
+    λH, # Backward gradient of H
+    λVx, # Backward gradient of Vx
+    λVy, # Backward gradient of Vy
+    H, # Ice thickness
+    θ, # Learnable parameters
+    dH_H, # dH computed in the VJP wrt H (for Enzyme only), used to check the value of dH between the VJP wrt H and the VJP wrt θ
+    dH_λ, # Backward of dH
+    simulation,
+    t,
+    batch_id,
+)
+    λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λH, H, θ, dH_H, dH_λ, simulation, t, batch_id)
+    λ_∂V∂θ = if !isnothing(λVx) && !isnothing(λVy)
+        # We need to compute this VJP only when the loss depends on V
+        VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, λVx, λVy, H, θ, simulation, t, batch_id)[1]
+    else
+        0.0
+    end
+    return λ_∂f∂θ .+ λ_∂V∂θ
 end

@@ -192,10 +192,11 @@ function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, physicalParams,
     normalization = 1.0
     l_H = 0.0
     Δt = diff(tstops)
+    V = Matrix{Sleipnir.Float}([;;]) # Contribution of V is not tested
     for τ in range(2,length(tstops))
         t₁ = tstops[τ]
         _H₁ = halfar_solution(R₀, t₁, h₀, r₀, A[1], n, physicalParams)
-        mean_error = loss(lossType, _H₁, H_ref[τ]; normalization=prod(size(H_ref[τ]))/normalization)
+        mean_error, = loss(lossType, _H₁, V, V, V, H_ref[τ], V, V, V; normalization=prod(size(H_ref[τ]))/normalization)
         l_H += Δt[τ-1] * mean_error
     end
     l[1] = l_H
@@ -205,7 +206,7 @@ end
 function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
     Random.seed!(1234)
 
-    lossType = L2Sum(distance=15)
+    lossType = LossH(L2Sum(distance=15))
     A = 8e-19
     t₀ = 5.0
     t₁ = 30.0

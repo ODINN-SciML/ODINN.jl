@@ -165,36 +165,23 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 # Compute derivative of local contribution to loss function
                 ∂ℓ∂H = ∂L∂H[j]
 
+                # Compute loss function for verification purpose
                 ℓ += Δt[j-1]*ℓi[j]
 
                 ### Custom VJP to compute the adjoint
-                λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, t₀, i)
-
-                if !isnothing(λVx[j]) && !isnothing(λVy[j])
-                    # We need to compute this VJP only when the loss depends on V
-                    λ_∂V∂H, = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, λVx[j], λVy[j], H[j], θ, simulation, t₀, i)
-                else
-                    λ_∂V∂H = 0
-                end
+                λ_∂f∂H, dH_H = VJP_λ_SIA_H(λ[j], λVx[j], λVy[j], H[j], θ, simulation, t₀, i)
 
                 ### Update adjoint
-                # Ici il faut ajouter la contribution des vitesses
-                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ λ_∂V∂H .+ ∂ℓ∂H)
+                λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 ### Custom VJP for grad of loss function
-                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀, i)
-                if !isnothing(λVx[j-1]) && !isnothing(λVy[j-1])
-                    # We need to compute this VJP only when the loss depends on V
-                    λ_∂V∂θ, = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, λVx[j-1], λVy[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀, i)
-                else
-                    λ_∂V∂θ = 0
-                end
+                λ_∂f∂θ = VJP_λ_SIA_θ(λ[j-1], λVx[j-1], λVy[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀, i)
 
                 ### Update gradient
                 # @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
 
-                # Contributions of ice thickness and ice velocity terms
-                dLdθ .+= Δt[j-1] .* (λ_∂f∂θ .+ λ_∂V∂θ)
+                # Contribution to the loss
+                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
