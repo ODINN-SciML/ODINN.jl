@@ -4,7 +4,8 @@ function test_grad_finite_diff(
     thres = [0., 0., 0.],
     target = :A,
     finite_difference_method = :FiniteDifferences,
-    finite_difference_order = 3
+    finite_difference_order = 3,
+    velocityLoss = false,
 ) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing adjoint $(adjointFlavor)")
@@ -13,13 +14,14 @@ function test_grad_finite_diff(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    rgi_ids = ["RGI60-11.03638"]
+    rgi_ids = velocityLoss ? ["RGI60-11.03646"] : ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
 
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
 
+    empirical_loss_function = velocityLoss ? LossHV() : LossH()
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
@@ -44,6 +46,7 @@ function test_grad_finite_diff(
             optim_autoAD=ODINN.NoAD(),
             grad=adjointFlavor,
             optimization_method="AD+AD",
+            empirical_loss_function=empirical_loss_function,
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
@@ -58,7 +61,12 @@ function test_grad_finite_diff(
     )
 
     # We retrieve some glaciers for the simulation
-    glaciers = initialize_glaciers(rgi_ids, params)
+    kwargs = velocityLoss ? (;
+        velocityDatacubes=Dict(
+            rgi_ids[1] => Sleipnir.fake_multi_datacube()
+        )
+    ) : NamedTuple()
+    glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
 
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)
@@ -147,37 +155,7 @@ function test_grad_loss_term()
     end
 
 
-    lossType = L2Sum()
-    nx = 4
-    ny = 5
-    norm = 3.5
-    a = randn(nx, ny)
-    b = randn(nx, ny)
-    l = [0.]
-    _loss!(l, a, b, norm, lossType)
-    dl_enzyme = [1.]
-    l_enzyme = Enzyme.make_zero(dl_enzyme)
-    da_enzyme = Enzyme.make_zero(a)
-    Enzyme.autodiff(
-        Reverse, _loss!, Const,
-        Duplicated(l_enzyme, dl_enzyme),
-        Duplicated(a, da_enzyme),
-        Enzyme.Const(b),
-        Enzyme.Const(norm),
-        Enzyme.Const(lossType),
-    )
-    da = backward_loss(lossType, a, b; normalization=norm)
-    ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
-    thres = 1e-14
-    if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
-        printVecScientific("ratio  = ", [ratio], thres)
-        printVecScientific("angle  = ", [angle], thres)
-        printVecScientific("relerr = ", [relerr], thres)
-    end
-    @test (abs(ratio) < thres) & (abs(angle) < thres) & (abs(relerr) < thres)
-
-
-    lossType = L2SumWithinGlacier(distance=2)
+    lossType = L2Sum(distance=2)
     nx = 9
     ny = 10
     norm = 3.5
@@ -214,10 +192,11 @@ function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, physicalParams,
     normalization = 1.0
     l_H = 0.0
     Δt = diff(tstops)
+    V = Matrix{Sleipnir.Float}([;;]) # Contribution of V is not tested
     for τ in range(2,length(tstops))
         t₁ = tstops[τ]
         _H₁ = halfar_solution(R₀, t₁, h₀, r₀, A[1], n, physicalParams)
-        mean_error = loss(lossType, _H₁, H_ref[τ]; normalization=prod(size(H_ref[τ]))/normalization)
+        mean_error, = loss(lossType, _H₁, V, V, V, H_ref[τ], V, V, V; normalization=prod(size(H_ref[τ]))/normalization)
         l_H += Δt[τ-1] * mean_error
     end
     l[1] = l_H
@@ -227,7 +206,7 @@ end
 function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
     Random.seed!(1234)
 
-    lossType = L2SumWithinGlacier(distance=15)
+    lossType = LossH(L2Sum(distance=15))
     A = 8e-19
     t₀ = 5.0
     t₁ = 30.0

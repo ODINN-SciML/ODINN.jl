@@ -77,6 +77,54 @@ function ∂Diffusivity∂θ(
     return cartesian_tensor(∂A_spatial, ∇θ_cv)
 end
 
+function Diffusivityꜛ(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+)
+    n = iceflow_model.n
+    Γ_no_A = Γꜛ(iceflow_model, params; include_A = false)
+    A = apply_parametrization(
+        target;
+        H = H, ∇S = ∇S, θ = θ,
+        iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params
+    )
+    return (A .* Γ_no_A) .* H.^(n[] + 1) .* ∇S.^(n[] - 1)
+end
+
+function ∂Diffusivityꜛ∂H(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    return Γꜛ(iceflow_model, params) .* (iceflow_model.n[] + 1) .* H.^(iceflow_model.n[]) .* ∇S.^(iceflow_model.n[] - 1)
+end
+
+function ∂Diffusivityꜛ∂∇H(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    return Γꜛ(iceflow_model, params) .* (iceflow_model.n[] - 1) .* H.^(iceflow_model.n[] + 1) .* ∇S.^(iceflow_model.n[] - 3)
+end
+
+function ∂Diffusivityꜛ∂θ(
+    target::SIA2D_A_target;
+    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+    )
+    n = iceflow_model.n
+    Γ_no_A = Γꜛ(iceflow_model, params; include_A = false)
+    ∂A_spatial = Γ_no_A .* H.^(n[] + 1) .* ∇S.^(n[] - 1)
+
+    # Unfortunatelly, we need to vectorize ∇θ to do the inner product
+    ∇θ, = Zygote.gradient(_θ -> apply_parametrization(
+        target;
+        H = H, ∇S = ∇S, θ = _θ,
+        iceflow_model = iceflow_model, ml_model = ml_model, glacier = glacier, params = params),
+        θ)
+    ∇θ_cv = ComponentVector2Vector(∇θ)
+
+    # Create a tensor with both elements
+    return cartesian_tensor(∂A_spatial, ∇θ_cv)
+end
+
 function apply_parametrization(
     target::SIA2D_A_target;
     H, ∇S, θ, iceflow_model, ml_model, glacier, params
@@ -113,6 +161,17 @@ function Γ(model, params; include_A::Bool = true)
         return 2.0 * A[] * (ρ * g)^n[] / (n[]+2)
     else
         return 2.0 * (ρ * g)^n[] / (n[]+2)
+    end
+end
+function Γꜛ(model, params; include_A::Bool = true)
+    n = model.n
+    ρ = params.physical.ρ
+    g = params.physical.g
+    if include_A
+        A = model.A
+        return 2.0 * A[] * (ρ * g)^n[] / (n[]+1)
+    else
+        return 2.0 * (ρ * g)^n[] / (n[]+1)
     end
 end
 
