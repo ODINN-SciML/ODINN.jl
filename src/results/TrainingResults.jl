@@ -1,9 +1,9 @@
 export Result
-export save_simulation_file!
+export save_inversion_file!
 
 abstract type AbstractResult end
 
-@kwdef struct Result{F <: AbstractFloat} <: AbstractResult
+@kwdef struct TrainingResult{F <: AbstractFloat} <: AbstractResult
     θ::ComponentVector
     θ_hist::Vector{ComponentVector}
     ∇θ_hist::Vector{ComponentVector}
@@ -11,4 +11,4 @@ abstract type AbstractResult end
     params::Sleipnir.Parameters
 end
 
-include("result_utils.jl")
+include("trainingresult_utils.jl")

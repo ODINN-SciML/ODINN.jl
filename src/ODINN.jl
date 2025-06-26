@@ -88,6 +88,6 @@ include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))
 
 # Results
-include(joinpath(root_dir, "src/results/Results.jl"))
+include(joinpath(root_dir, "src/results/TrainingResults.jl"))
 
 end # module

@@ -52,7 +52,7 @@ function run!(
     # TODO: Save when optimization is working
     # Save results in path is provided
     if !isnothing(path) & !isnothing(file_name)
-        ODINN.save_simulation_file!(sol, simulation; path = path, file_name = file_name)
+        ODINN.save_inversion_file!(sol, simulation; path = path, file_name = file_name)
     end
 
     @everywhere GC.gc() # run garbage collector

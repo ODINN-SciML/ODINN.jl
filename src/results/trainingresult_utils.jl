@@ -1,8 +1,8 @@
 """
 
-This function saves the results of a simulation to a file in JLD2 format. If the `path` argument is not provided, the function will create a default path based on the current project directory. The results are saved in a file named `prediction_<nglaciers>glaciers_<tspan>.jld2`, where `<nglaciers>` is the number of glaciers in the simulation and `<tspan>` is the simulation time span.
+This function saves the results of an inversion to a file in JLD2 format. If the `path` argument is not provided, the function will create a default path based on the current project directory. The results are saved in a file named `prediction_<nglaciers>glaciers_<tspan>.jld2`, where `<nglaciers>` is the number of glaciers in the simulation and `<tspan>` is the simulation time span.
 """
-function save_simulation_file!(
+function save_inversion_file!(
     sol,
     simulation::SIM;
     path::Union{String,Nothing} = nothing,
@@ -11,7 +11,7 @@ function save_simulation_file!(
 
     # Create path for simulation results
     if isnothing(path)
-        simulation_path = joinpath(dirname(Base.current_project()), "data/results/simulation")
+        simulation_path = joinpath(dirname(Base.current_project()), "data/results/inversions")
     else
         simulation_path = path
     end
@@ -19,7 +19,7 @@ function save_simulation_file!(
         mkpath(simulation_path)
     end
 
-    res = ODINN.Result(
+    res = ODINN.TrainingResult(
         θ = sol.u,
         θ_hist = simulation.stats.θ_hist,
         ∇θ_hist = simulation.stats.∇θ_hist,

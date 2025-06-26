@@ -74,7 +74,7 @@ function callback_diagnosis(θ, l, simulation)
         path = @__DIR__
         println("Saving intermediate solution in $(path).")
     end
-    ODINN.save_simulation_file!(θ, simulation; path = path, file_name = "_inversion_result.jld2")
+    ODINN.save_inversion_file!(θ, simulation; path = path, file_name = "_inversion_result.jld2")
 
     return false
 end
