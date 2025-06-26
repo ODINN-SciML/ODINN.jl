@@ -16,7 +16,8 @@ This function initiates the training of a Universal Differential Equation (UDE) 
 function run!(
     simulation::FunctionalInversion;
     path::Union{String, Nothing} = nothing,
-    file_name::Union{String, Nothing} = nothing
+    file_name::Union{String, Nothing} = nothing,
+    save_every_iter::Bool = false,
     )
 
     println("Running training of UDE...\n")
@@ -26,7 +27,7 @@ function run!(
 
     if !(typeof(simulation.parameters.hyper.optimizer) <: Vector)
         # One single optimizer
-        sol = train_UDE!(simulation)
+        sol = train_UDE!(simulation; save_every_iter=save_every_iter)
     else
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
@@ -40,7 +41,7 @@ function run!(
                 θ_trained = sol.u
                 simulation.model.machine_learning.θ = θ_trained
             end
-            sol = train_UDE!(simulation)
+            sol = train_UDE!(simulation; save_every_iter=save_every_iter)
         end
     end
 
@@ -60,24 +61,24 @@ function run!(
 end
 
 """
-train_UDE!(simulation::FunctionalInversion)
+train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false)
 
 Trains UDE based on the current FunctionalInversion.
 """
-function train_UDE!(simulation::FunctionalInversion)
+function train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false)
     optimizer = simulation.parameters.hyper.optimizer
     # for i in 1:length(simulation.glaciers)
     #     if !isnothing(simulation.model.iceflow[])
     #     @assert size(simulation.model.iceflow[i].S) == (simulation.glaciers[i].nx, simulation.glaciers[i].ny) "Glacier and model simulation are non sync: $(size(simulation.model.iceflow[i].S)) != ($(simulation.glaciers[i].nx), $(simulation.glaciers[i].ny))" 
     # end
-    iceflow_trained = train_UDE!(simulation, optimizer)
+    iceflow_trained = train_UDE!(simulation, optimizer; save_every_iter=save_every_iter)
     return iceflow_trained
 end
 
 """
 BFGS Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer)
+function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer; save_every_iter::Bool=false)
 
     @info "Trainign with BFGS optimizer"
 
@@ -110,7 +111,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Training diagnosis callback
-    cb(θ, l) = callback_diagnosis(θ, l, simulation)
+    cb(θ, l) = callback_diagnosis(θ, l, simulation; save=save_every_iter)
 
     iceflow_trained = solve(
         optprob,
@@ -127,7 +128,7 @@ end
 """
 ADAM Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <: Optimisers.AbstractRule}
+function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_iter::Bool=false) where {AR <: Optimisers.AbstractRule}
 
     @info "Training with ADAM optimizer"
 
@@ -160,7 +161,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Training diagnosis callback
-    cb(θ, l) = callback_diagnosis(θ, l, simulation)
+    cb(θ, l) = callback_diagnosis(θ, l, simulation; save=save_every_iter)
 
     iceflow_trained = solve(
         optprob,

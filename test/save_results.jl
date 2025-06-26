@@ -1,6 +1,6 @@
 function save_simulation_test!()
 
-    rgi_ids = ["RGI60-08.00203"]
+    rgi_ids = ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
     working_dir = joinpath(ODINN.root_dir, "test/data")
     δt = 1/12
@@ -47,7 +47,7 @@ function save_simulation_test!()
 
     functional_inversion = FunctionalInversion(model, glaciers, params)
 
-    path = joinpath(ODINN.root_dir, "test/data")
+    path = mktempdir()
     file_name = "simulation_results.jld2"
     run!(functional_inversion; path = path, file_name = file_name)
 

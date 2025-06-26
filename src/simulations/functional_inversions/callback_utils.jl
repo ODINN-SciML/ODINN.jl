@@ -44,11 +44,11 @@ function callback_plots_A(θ, l, simulation)
 end
 
 """
-    callback_diagnosis(θ, l, simulation)
+    callback_diagnosis(θ, l, simulation; save::Bool = false)
 
 Callback function to track and diagose training. It includes print and updates in simulation::Simulation.
 """
-function callback_diagnosis(θ, l, simulation)
+function callback_diagnosis(θ, l, simulation; save::Bool = false)
 
     # See if we want to change this or leave it
     # update_training_state!(simulation, l)
@@ -74,7 +74,9 @@ function callback_diagnosis(θ, l, simulation)
         path = @__DIR__
         println("Saving intermediate solution in $(path).")
     end
-    ODINN.save_inversion_file!(θ, simulation; path = path, file_name = "_inversion_result.jld2")
+    if save
+        ODINN.save_inversion_file!(θ, simulation; path = path, file_name = "_inversion_result.jld2")
+    end
 
     return false
 end
