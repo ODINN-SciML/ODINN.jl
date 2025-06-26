@@ -80,10 +80,14 @@ include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInve
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 # ML models
 include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
+include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))
 include(joinpath(root_dir, "src/models/target/Target.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 
 # Inversion for SIA equation
 include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))
+
+# Results
+include(joinpath(root_dir, "src/results/TrainingResults.jl"))
 
 end # module

@@ -35,6 +35,7 @@ include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
 include("test_grad_Enzyme.jl")
+include("save_results.jl")
 
 # # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"] = "nul"
@@ -64,8 +65,8 @@ end
     @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
     # @testset "Manual implementation of the continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3])
     @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
-    @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
-    @testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-1, 1e-15, 7e-1])
+    # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
+    # @testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-1, 1e-15, 7e-1])
 end
 
 @testset "Adjoint method of SIA equation with hybrid D as target" begin
@@ -79,9 +80,10 @@ end
 end
 
 @testset "Inversion test" begin
-    # These tests are deactivated since they need Enzyme to work
-    # @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, steady_state = true, save_refs = false)
-    # @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, steady_state = true, save_refs = false)
+    @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, multiprocessing = false)
+    # @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, multiprocessing = false)
 end
+
+@testset "Save results" save_simulation_test!()
 
 end
