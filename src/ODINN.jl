@@ -74,6 +74,8 @@ include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
 include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
 include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
+# Parameterizations
+include(joinpath(root_dir, "src/laws/Laws.jl"))
 # Simulations
 include(joinpath(root_dir, "src/simulations/training_stats/TrainingStats.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))

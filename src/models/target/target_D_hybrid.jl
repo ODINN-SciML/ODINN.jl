@@ -10,7 +10,7 @@ replaced by a generic regressor. For this example, we consider the inversion of 
 """
 
 @kwdef struct SIA2D_D_hybrid_target <: AbstractSIA2DTarget
-    interpolation::Symbol = :Linear
+    interpolation::Symbol = :None
     n_interp_half::Int = 75
 end
 
