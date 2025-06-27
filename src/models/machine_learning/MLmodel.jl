@@ -5,25 +5,34 @@ export NeuralNetwork
 abstract type MLmodel <: AbstractModel end
 
 """
-    Model(; iceflow::Union{IFM, Vector{IFM}, Nothing}, mass_balance::Union{MBM, Vector{MBM}, Nothing}, machine_learning::Union{MLM, Nothing}) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
+    Model(; iceflow::Union{IFM, Nothing}, mass_balance::Union{MBM, Nothing}, machine_learning::Union{MLM, Nothing}) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
 
 Creates a new model instance using the provided iceflow, mass balance, and machine learning components.
 
 # Arguments
-- `iceflow::Union{IFM, Vector{IFM}, Nothing}`: The iceflow model(s) to be used. Can be a single model, a vector of models, or `nothing`.
-- `mass_balance::Union{MBM, Vector{MBM}, Nothing}`: The mass balance model(s) to be used. Can be a single model, a vector of models, or `nothing`.
+- `iceflow::Union{IFM, Nothing}`: The iceflow model to be used. Can be a single model or `nothing`.
+- `mass_balance::Union{MBM, Nothing}`: The mass balance model to be used. Can be a single model or `nothing`.
 - `machine_learning::Union{MLM, Nothing}`: The machine learning model to be used. Can be a single model or `nothing`.
 # Returns
 - `model`: A new instance of `Sleipnir.Model` initialized with the provided components.
 """
 function Model(;
-    iceflow::Union{IFM, Vector{IFM}, Nothing},
-    mass_balance::Union{MBM, Vector{MBM}, Nothing},
+    iceflow::Union{IFM, Nothing},
+    mass_balance::Union{MBM, Nothing},
     machine_learning::Union{MLM, Nothing},
     ) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
 
-    iceflowType = isa(iceflow, Vector) ? typeof(iceflow[1]) : typeof(iceflow)
-    massbalanceType = isa(mass_balance, Vector) ? typeof(mass_balance[1]) : typeof(mass_balance)
+    errMssg = "law must be differentiable in order to be used within ODINN"
+    if iceflow.U_is_provided
+        @assert is_differentiable(iceflow.U) "U $(errMssg)"
+    else
+        @assert is_differentiable(iceflow.A) "A $(errMssg)"
+        @assert is_differentiable(iceflow.C) "C $(errMssg)"
+        @assert is_differentiable(iceflow.n) "n $(errMssg)"
+    end
+
+    iceflowType = typeof(iceflow)
+    massbalanceType = typeof(mass_balance)
     model = Sleipnir.Model{iceflowType, massbalanceType, typeof(machine_learning)}(iceflow, mass_balance, machine_learning)
 
     return model

@@ -61,7 +61,8 @@ fakeA(T) = A_poly(T)
 
 ## We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities
 ## for each glacier at each time step. The dataset will be used to train the machine learning model.
-ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+# TODO: change with law here
+generate_ground_truth!(glaciers, params, model, tstops)
 
 ## After this forward simulation, we restart the iceflow model to be ready for the inversions
 model.iceflow = SIA2Dmodel(params)
@@ -178,7 +179,8 @@ run!(functional_inversion)
 # # We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities
 # # for each glacier at each time step. The dataset will be used to train the machine learning model. This will run under the hood
 # # a `Prediction` using `Huginn.jl`. 
-# ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+# TODO: change with a law here
+# generate_ground_truth!(glaciers, params, model, tstops)
 
 # # After this forward simulation, we restart the iceflow model to be ready for the inversions
 # model.iceflow = SIA2Dmodel(params)

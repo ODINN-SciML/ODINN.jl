@@ -106,73 +106,6 @@ function A_fake(temp, noise=false)
     return A
 end
 
-function build_D_features(H::Matrix, temp, ∇S)
-    ∇S_flat = ∇S[inn1(H) .!= 0.0] # flatten
-    H_flat = H[H .!= 0.0] # flatten
-    T_flat = repeat(temp,length(H_flat))
-    X = Lux.normalise(hcat(H_flat,T_flat,∇S_flat))' # build feature matrix
-    return X
-end
-
-function build_D_features(H::Float64, temp::Float64, ∇S::Float64)
-    X = Lux.normalise(hcat([H],[temp],[∇S]))' # build feature matrix
-    return X
-end
-
-function predict_diffusivity(UD_f, θ, X)
-    UD = UD_f(θ)
-    return UD(X)[1,:]
-end
-
-"""
-    generate_ground_truth(glaciers::Vector{G}, law::Symbol, params, model, tstops::Vector{F}) where {G <: Sleipnir.AbstractGlacier, F <: AbstractFloat}
-
-Generate ground truth data for a glacier simulation by applying a specified flow law and running a forward model.
-
-# Arguments
-- `glaciers::Vector{G}`: A vector of glacier objects of type `G`, where `G` is a subtype of `Sleipnir.AbstractGlacier`.
-- `law::Symbol`: The flow law to use for the simulation. Currently supports `:PatersonCuffey`.
-- `params`: Simulation parameters, typically of type `Sleipnir.Parameters`.
-- `model`: The model to use for the simulation, typically of type `Sleipnir.Model`.
-- `tstops::Vector{F}`: A vector of time steps (of type `F <: AbstractFloat`) at which the simulation will be evaluated.
-
-# Description
-1. Applies the specified flow law (`law`) to generate a polynomial function for the flow rate factor `A`.
-2. Generates a fake flow rate factor `A` for each glacier based on the long-term temperature of the glacier.
-3. Runs a forward model simulation for the glaciers using the provided parameters, model, and time steps.
-
-# Notes
-- If an unsupported flow law is provided, an error is logged.
-- The function modifies the `glaciers` vector in place by updating their flow rate factor `A` and running the forward model.
-
-# Example
-```julia
-glaciers = [glacier1, glacier2] # dummy example
-law = :PatersonCuffey
-params = Sleipnir.Parameters(...) # to be filled
-model = Sleipnir.Model(...) # to be filled
-tstops = 0.0:1.0:10.0
-
-generate_ground_truth(glaciers, law, params, model, tstops)
-```
-"""
-function generate_ground_truth(
-    glaciers::Vector{G},
-    law::Union{Symbol, Function, Polynomials.Polynomial},
-    params::Sleipnir.Parameters,
-    model::Sleipnir.Model,
-    tstops::Vector{F}
-) where {G <: Sleipnir.AbstractGlacier, F <: AbstractFloat}
-    # Generate a fake forward model for the simulation
-    fakeA = get_rheology_law(law)
-
-    # Generate a fake A for the glaciers
-    generate_fake_A!(glaciers, fakeA)
-
-    # Generate a fake forward model for the simulation
-    generate_glacier_prediction!(glaciers, params, model, tstops)
-end
-
 """
     get_rheology_law(law::Symbol)
 
@@ -239,77 +172,16 @@ function get_rheology_law(law::Function)
     return law
 end
 
-"""
-    generate_fake_A!(glaciers::Vector{G}, fakeA::Function) where {G <: Sleipnir.AbstractGlacier}
-
-Generate and assign a fake flow rate factor `A` for a vector of glaciers based on their long-term temperatures.
-
-# Arguments
-- `glaciers::Vector{G}`: A vector of glacier objects of type `G`, where `G` is a subtype of `Sleipnir.AbstractGlacier`.
-- `fakeA::Function`: A function that computes the flow rate factor `A` based on the mean long-term temperature of a glacier.
-
-# Description
-This function iterates over a vector of glaciers and computes the flow rate factor `A` for each glacier using the provided `fakeA` function. The flow rate factor is computed based on the mean of the glacier's long-term temperature (`longterm_temps`) and is assigned to the glacier's `A` property.
-
-# Notes
-- The `fakeA` function should take a single argument (temperature) and return the corresponding flow rate factor.
-- This function modifies the `glaciers` vector in place by updating the `A` property of each glacier.
-"""
-function generate_fake_A!(glaciers::Vector{G}, fakeA::Function) where {G <: Sleipnir.AbstractGlacier}
-    # Generate a fake A for the glaciers 
-    for glacier in glaciers
-        T = glacier.climate.longterm_temps
-        glacier.A = fakeA(mean(T))
-    end
-end
-
-"""
-    store_thickness_data!(prediction::Prediction, tstops::Vector{F}) where {F <: AbstractFloat}
-
-Store the simulated thickness data in the corresponding glaciers within a `Prediction` object.
-
-# Arguments
-- `prediction::Prediction`: A `Prediction` object containing the simulation results and associated glaciers.
-- `tstops::Vector{F}`: A vector of time steps (of type `F <: AbstractFloat`) at which the simulation was evaluated.
-
-# Description
-This function iterates over the glaciers in the `Prediction` object and stores the simulated thickness data (`H`) and corresponding time steps (`t`) in the `data` field of each glacier. If the `data` field is empty (`nothing`), it initializes it with the thickness data. Otherwise, it appends the new thickness data to the existing data.
-
-# Notes
-- The function asserts that the time steps (`ts`) in the simulation results match the provided `tstops`. If they do not match, an error is raised.
-- T
-"""
-function store_thickness_data!(prediction::Prediction, tstops::Vector{F}) where {F <: AbstractFloat}
-
-    # Store the thickness data in the glacier
-    for i in 1:length(prediction.glaciers)
-        ts = prediction.results[i].t
-        Hs = prediction.results[i].H
-
-        @assert ts ≈ tstops "Timestops of simulated PDE solution and UDE solution do not match."
-
-        prediction.glaciers[i].thicknessData = Sleipnir.ThicknessData(ts, Hs)
-    end
-end
-
 function build_simulation_batch(simulation::FunctionalInversion, i::I, nbatches::I=1) where {I <: Integer}
-    iceflow = simulation.model.iceflow[i]
-    massbalance = simulation.model.mass_balance[i]
+    iceflow = simulation.model.iceflow
+    massbalance = simulation.model.mass_balance
     ml = simulation.model.machine_learning
-    model = Sleipnir.Model{typeof(iceflow), typeof(massbalance), typeof(ml)}([iceflow], [massbalance], ml)
-    ####
-    # iceflow = simulation.model.iceflow[(i-1)*nbatches+1:i*nbatches]
-    # massbalance = simulation.model.mass_balance[(i-1)*nbatches+1:i*nbatches]
-    # ml = simulation.model.machine_learning
-    # Sleipnir.Model{typeof(iceflow[1]), typeof(massbalance[1]), typeof(ml)}(iceflow, massbalance, ml)
-    ####
+    model = Sleipnir.Model{typeof(iceflow), typeof(massbalance), typeof(ml)}(iceflow, massbalance, ml)
+    cache = init_cache(model, simulation, i, simulation.parameters)
     if length(simulation.results) < 1
-        # TODO: Pass empty results object: machine learning should not be here!
-        return FunctionalInversion{typeof(simulation.glaciers[i]), typeof(model), typeof(simulation.parameters)}(model, [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats)
-        # return FunctionalInversion{typeof(simulation.glaciers[i*nbatches]), typeof(model), typeof(simulation.parameters)}(model, simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, simulation.results, simulation.stats)
+        return FunctionalInversion{cache_type(model)}(model, cache, [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats)
     else
-        return FunctionalInversion{typeof(simulation.glaciers[i]), typeof(model), typeof(simulation.parameters)}(model, [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats)
-        # return FunctionalInversion{typeof(simulation.glaciers[i*nbatches]), typeof(model), typeof(simulation.parameters)}(model, simulation.glaciers[(i-1)*nbatches+1:i*nbatches], simulation.parameters, [simulation.results[(i-1)*nbatches+1:i*nbatches]], simulation.stats)
+        return FunctionalInversion{cache_type(model)}(model, cache, [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats)
     end
 end
 

@@ -51,10 +51,14 @@ function test_grad_finite_diff(
             progress=true)
     )
 
-    model = Model(
-        iceflow = SIA2Dmodel(params),
+    ml_model = NeuralNetwork(params)
+
+    # Use a constant A for testing
+    A_law = ConstantA(2.21e-18)
+    model = ODINN.Model(
+        iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        machine_learning = NeuralNetwork(params)
+        machine_learning = ml_model # TODO: remove
     )
 
     # We retrieve some glaciers for the simulation
@@ -63,16 +67,38 @@ function test_grad_finite_diff(
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)
 
-    # Overwrite constant A fake function for testing
-    fakeA(T) = 2.21e-18
+    generate_ground_truth!(glaciers, params, model, tstops)
+    # Do a clean restart
+    # model.iceflow = SIA2Dmodel(params)
+    iceflow_model = if target==:A
+        inputs=(; T=InpTemp())
+        A_law = LawA(; inputs=inputs, ml_model=ml_model, params=params)
+        SIA2Dmodel(params; A=A_law)
+    elseif target==:D_hybrid
+        inputs=(; T=InpTemp(), H=InpH̄())
+        A_law = LawDhybrid(; inputs=inputs, ml_model=ml_model, params=params)
+        SIA2Dmodel(params; A=A_law)
+    elseif target==:D
+        inputs=(; T=InpTemp(), H=InpH̄())
+        U_law = LawU(; inputs=inputs, ml_model=ml_model, params=params)
+        SIA2Dmodel(params; U=U_law)
+    else
+        throw("Unsupported target $(target)")
+    end
+    model = ODINN.Model(
+        iceflow = iceflow_model,
+        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+        machine_learning = ml_model
+    )
 
-    ODINN.generate_ground_truth(glaciers, fakeA, params, model, tstops)
-    # TODO: For now we do a clean restart
-    model.iceflow = SIA2Dmodel(params)
 
     # We create an ODINN prediction
     functional_inversion = FunctionalInversion(model, glaciers, params)
     simulation = functional_inversion
+
+    glacier_idx = 1
+    cache = init_cache(model, simulation, glacier_idx, params)
+    simulation.cache = cache
 
 
     θ = simulation.model.machine_learning.θ
@@ -80,6 +106,7 @@ function test_grad_finite_diff(
     loss_iceflow_grad!(dθ, θ, _simulation) = SIA2D_grad!(dθ, θ, _simulation)
 
     function f(x, simulation)
+        simulation.model.machine_learning.θ = x
         return loss_function(x, simulation)
     end
 
@@ -92,7 +119,7 @@ function test_grad_finite_diff(
 
         dθ_FD, = FiniteDifferences.grad(
             central_fdm(finite_difference_order, 1),
-            _θ -> loss_function(_θ, (simulation)),
+            _θ -> f(_θ, simulation),
             θ
         )
         ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
@@ -273,8 +300,10 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
 
     # Bed (it has to be flat for the Halfar solution)
     B = zeros((nx,ny))
+
+    # Use a constant A for testing
     model = Model(
-        iceflow = SIA2Dmodel(parameters),
+        iceflow = SIA2Dmodel(parameters),#; A=A_law),
         mass_balance = nothing,
         machine_learning = NeuralNetwork(parameters)
     )
@@ -300,7 +329,8 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
     fakeA(T) = A
-    ODINN.generate_ground_truth(glaciers, fakeA, parameters, model, tstops)
+    # TODO: add law
+    generate_ground_truth!(glaciers, parameters, model, tstops)
 
     model.iceflow = SIA2Dmodel(parameters)
 
@@ -333,6 +363,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
     println("∂A_enzyme=", ∂A_enzyme)
 
     # Retrieve apply parametrization from inversion
+    # TODO: replace function below
     ∇θ, = Zygote.gradient(_θ -> apply_parametrization(
         model.machine_learning.target;
         H = nothing, ∇S = nothing, θ = _θ,

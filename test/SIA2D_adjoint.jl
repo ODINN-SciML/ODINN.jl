@@ -13,15 +13,8 @@ function test_adjoint_SIA2D(
     thres_relerr = thres[3]
 
     function _loss(H, θ, simulation, t, vecBackwardSIA2D)
-        apply_parametrization!(
-            simulation.model.machine_learning.target;
-            H = H, ∇S = nothing, θ = θ,
-            iceflow_model = simulation.model.iceflow[batch_idx],
-            ml_model = simulation.model.machine_learning,
-            glacier = glaciers[batch_idx],
-            params = simulation.parameters
-        )
-        dH = Huginn.SIA2D(H, simulation, t; batch_id=glacier_idx)
+        simulation.model.machine_learning.θ = θ
+        dH = Huginn.SIA2D(H, simulation, t)
         return sum(dH.*vecBackwardSIA2D)
     end
 
@@ -59,43 +52,48 @@ function test_adjoint_SIA2D(
             progress=true)
     )
 
+    ml_model = NeuralNetwork(params)
+
+    iceflow_model = if target==:A
+        inputs=(; T=InpTemp())
+        A_law = LawA(; inputs=inputs, ml_model=ml_model, params=params)
+        SIA2Dmodel(params; A=A_law)
+    elseif target==:D_hybrid
+        inputs=(; T=InpTemp(), H=InpH̄())
+        A_law = LawDhybrid(; inputs=inputs, ml_model=ml_model, params=params)
+        SIA2Dmodel(params; A=A_law)
+    elseif target==:D
+        inputs=(; T=InpTemp(), H=InpH̄())
+        U_law = LawU(; inputs=inputs, ml_model=ml_model, params=params)
+        SIA2Dmodel(params; U=U_law)
+    else
+        throw("Unsupported target $(target)")
+    end
 
     model = ODINN.Model(
-        iceflow = SIA2Dmodel(params),
+        iceflow = iceflow_model,
         mass_balance = nothing,
-        machine_learning = NeuralNetwork(params)
+        machine_learning = ml_model
     )
 
     glaciers = initialize_glaciers(rgi_ids, params)
 
     glacier_idx = 1
-    batch_idx = 1
 
     H = glaciers[glacier_idx].H₀
     glaciers[glacier_idx].C = C
 
     simulation = FunctionalInversion(model, glaciers, params)
 
-    initialize_iceflow_model(model.iceflow[glacier_idx], glacier_idx, glaciers[glacier_idx], params)
+    cache = init_cache(model, simulation, glacier_idx, params)
 
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
-    iceflow_model = simulation.model.iceflow[batch_idx]
-    iceflow_model.glacier_idx = glacier_idx
+    simulation.cache = cache
 
     vecBackwardSIA2D = randn(size(H, 1), size(H, 2))
 
-    # Initialize A by making one prediction with the neural network
-    # ODINN.apply_UDE_parametrization!(θ, simulation, nothing, glacier_idx)
-    apply_parametrization!(
-        simulation.model.machine_learning.target;
-        H = H, ∇S = nothing, θ = θ,
-        iceflow_model = iceflow_model,
-        ml_model = simulation.model.machine_learning,
-        glacier = glaciers[batch_idx],
-        params = simulation.parameters
-    )
-    dH = Huginn.SIA2D(H, simulation, t; batch_id = batch_idx)
+    dH = Huginn.SIA2D(H, simulation, t)
 
     ∂H, = ODINN.VJP_λ_∂SIA∂H(
         adjointFlavor.VJP_method,
@@ -104,7 +102,6 @@ function test_adjoint_SIA2D(
         θ,
         simulation,
         t,
-        batch_idx
     )
     ∂θ = ODINN.VJP_λ_∂SIA∂θ(
         adjointFlavor.VJP_method,
@@ -115,7 +112,6 @@ function test_adjoint_SIA2D(
         nothing,
         simulation,
         t,
-        batch_idx
     )
 
     # Check gradient wrt H

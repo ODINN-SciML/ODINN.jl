@@ -1,5 +1,4 @@
 export SIA2D_grad!
-export generate_glacier_prediction!
 
 """
 Inverse with batch
@@ -99,13 +98,13 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 ℓ += Δt[j-1] * loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)*normalization)
 
                 ### Custom VJP to compute the adjoint
-                λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, t₀, i)
+                λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, t₀)
 
                 ### Update adjoint
                 λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 ### Custom VJP for grad of loss function
-                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀, i)
+                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀)
 
                 ### Update gradient
                 # @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
@@ -139,14 +138,14 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 function f_adjoint_rev(dλ, λ, p, τ)
                     t = -τ
-                    λ_∂f∂H, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ, H_itp(t), θ, simulation, t, i)
+                    λ_∂f∂H, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ, H_itp(t), θ, simulation, t)
                     dλ .= λ_∂f∂H
                 end
             else
                 @error "VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet."
             end
 
-            ### Definition of callback to introduce contrubution of loss function to adjoint
+            ### Definition of callback to introduce contribution of loss function to adjoint
             t_ref_inv = .-reverse(t_ref)
             stop_condition(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
             function effect!(integrator)
@@ -182,15 +181,17 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 simulation.parameters.UDE.grad.solver,
                 dtmax = simulation.parameters.UDE.grad.dtmax,
                 reltol = simulation.parameters.UDE.grad.reltol,
-                abstol = simulation.parameters.UDE.grad.abstol
+                abstol = simulation.parameters.UDE.grad.abstol,
+                maxiters = simulation.parameters.solver.maxiters,
                 )
+            @assert sol_rev.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
 
             ### Numerical integration using quadrature to compute gradient
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(-t_nodes[j])
                     _H = H_itp(t_nodes[j])
-                    λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ_sol, _H, θ, nothing, zero(λ_sol), simulation, t_nodes[j], i)
+                    λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ_sol, _H, θ, nothing, zero(λ_sol), simulation, t_nodes[j])
                     dLdθ .+= weights[j] .* λ_∂f∂θ
                 end
             else
@@ -201,7 +202,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             if isnothing(simulation.parameters.UDE.grad.grad_function)
                 dLdθ .+= maximum(abs.(θ)) .* rand(Float64, size(θ))
             else
-                dLdθ .+ simulation.parameters.UDE.grad.grad_function(θ)
+                dLdθ .+= simulation.parameters.UDE.grad.grad_function(θ)
             end
         else
             @error "Adjoint method $(simulation.parameters.UDE.grad) is not supported yet."
@@ -213,44 +214,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     return loss_val, dLdθs_vector
 
-end
-
-
-"""
-Generate fake forward simulation
-"""
-function generate_glacier_prediction!(glaciers::Vector{G}, params::Sleipnir.Parameters, model::Sleipnir.Model, tstops::Vector{Float64}) where {G <: Sleipnir.AbstractGlacier}
-    # Generate timespan from simulation
-
-    t₀, t₁ = params.simulation.tspan
-    # Δt = params.simulation.step
-
-    @assert t₀ <= minimum(tstops)
-    @assert t₁ >= maximum(tstops)
-    # @assert Δt <= t₁-t₀
-
-    # nSteps = length(tstops)
-    # ts = t₀ .+ Δt .* collect(0:nSteps)
-
-    # Update reference value of glacier 
-    # glacier.A = A
-
-    prediction = Huginn.Prediction(model, glaciers, params)
-
-    # # Update model iceflow parameter 
-    # prediction.model.iceflow.A = Ref(A)
-
-    Huginn.run!(prediction)
-
-    # println("Reference value of A used for synthetic data:")
-    # @show prediction.model.iceflow.A
-    # @show glacier.A
-
-    # Lets create a very simple static glacier
-    # Hs = [glacier.H₀ for _ in 1:nSteps]
-
-    # Store the thickness data in the glacier
-    store_thickness_data!(prediction, tstops)
 end
 
 """
