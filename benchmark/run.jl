@@ -51,7 +51,7 @@ glacier_idx = 1
 batch_idx = 1
 H = glaciers[glacier_idx].H₀
 simulation = FunctionalInversion(model, glaciers, params)
-initialize_iceflow_model!(model.iceflow[batch_idx], glacier_idx, glaciers[glacier_idx], params)
+simulation.cache = init_cache(model, simulation, glacier_idx, params)
 t = tspan[1]
 θ = simulation.model.machine_learning.θ
 simulation.model.iceflow[batch_idx].glacier_idx = glacier_idx

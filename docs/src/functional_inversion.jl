@@ -61,7 +61,6 @@ tstops = collect(2010:δt:2015)
 
 ## We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities
 ## for each glacier at each time step. The dataset will be used to train the machine learning model.
-# TODO: change with law here
 generate_ground_truth!(glaciers, params, model, tstops)
 
 ## After this forward simulation, we restart the iceflow model to be ready for the inversions
