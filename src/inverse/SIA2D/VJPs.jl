@@ -13,7 +13,6 @@ function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation, t)
     dH_H = Enzyme.make_zero(H)
     λ_∂f∂H = Enzyme.make_zero(H)
     _simulation = Enzyme.make_zero(simulation)
-    smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
 
     λH = deepcopy(λ) # Need to copy because Enzyme changes the backward gradient in-place
     Enzyme.autodiff(
@@ -22,7 +21,6 @@ function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation, t)
         Duplicated(dH_H, λH),
         Duplicated(H, λ_∂f∂H),
         Enzyme.Duplicated(simulation, _simulation),
-        Enzyme.Const(smodel),
         Enzyme.Const(t),
     )
     return λ_∂f∂H, dH_H
@@ -41,8 +39,6 @@ end
 function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, dH_λ, simulation, t)
     λ_∂f∂θ = Enzyme.make_zero(θ)
     _simulation = Enzyme.make_zero(simulation)
-    smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
-    _smodel = Enzyme.make_zero(smodel)
     _H = Enzyme.make_zero(H)
 
     λθ = deepcopy(λ) # Need to copy because Enzyme changes the backward gradient in-place
@@ -52,7 +48,6 @@ function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, dH_λ, simulati
         Duplicated(dH_λ, λθ),
         Duplicated(H, _H),
         Duplicated(simulation, _simulation),
-        Duplicated(smodel, _smodel),
         Const(t),
     )
     # Run simple test that both closures are computing the same primal

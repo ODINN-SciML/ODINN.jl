@@ -388,7 +388,7 @@ end
 """
 currently just use for Enzyme
 """
-function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R) where {R <: Real}
+function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R) where {R <: Real}
     simulation.model.machine_learning.θ .= _θ
     Huginn.SIA2D!(_dH, _H, simulation, t)
     return nothing

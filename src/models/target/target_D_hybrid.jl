@@ -20,24 +20,26 @@ replaced by a generic regressor. For this example, we consider the inversion of 
     postscale_provided::Bool = false
 end
 
+targetType(::SIA2D_D_hybrid_target) = :D_hybrid
+
 # For this simple case, the target coincides with D, but not always.
 # TODO: D should be cap to its maximum physical value. This can be done with one extra
 # function and one extra differentiation.
 function Diffusivity(
     target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     return compute_D(
         target;
-        H̄, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
+        H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
         )
 end
 
 function ∂Diffusivity∂H(
     target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -60,12 +62,12 @@ function ∂Diffusivity∂H(
     iceflow_model.A.f.f(iceflow_cache.∂A∂H, (; T=temp, H̄=H̄+δH), θ)
     a = compute_D(
         target, iceflow_cache.∂A∂H;
-        H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
+        H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     iceflow_model.A.f.f(iceflow_cache.∂A∂H, (; T=temp, H̄=H̄), θ)
     b = compute_D(
         target, iceflow_cache.∂A∂H;
-        H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
+        H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     ∂D∂H_NN = (a .- b) ./ δH
 
@@ -74,7 +76,7 @@ end
 
 function ∂Diffusivity∂∇H(
     target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -91,7 +93,7 @@ end
 
 function ∂Diffusivity∂θ(
     target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -162,7 +164,7 @@ end
 
 function compute_D(
     target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
+    H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     # Use the value of A in the cache
 
@@ -180,7 +182,7 @@ end
 
 function compute_D(
     target::SIA2D_D_hybrid_target, A;
-    H̄, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
+    H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     # Use the value of A provided as an argument
 

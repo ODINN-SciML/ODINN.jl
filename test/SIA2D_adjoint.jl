@@ -52,29 +52,32 @@ function test_adjoint_SIA2D(
             progress=true)
     )
 
-    ml_model = NeuralNetwork(params)
+    nn_model = NeuralNetwork(params)
 
-    iceflow_model = if target==:A
-        inputs=(; T=InpTemp())
-        A_law = LawA(; inputs=inputs, ml_model=ml_model, params=params)
-        SIA2Dmodel(params; A=A_law)
+    model = if target==:A
+        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
+        ODINN.Model(
+            iceflow = iceflow_model,
+            mass_balance = nothing,
+            regressors = (; A=nn_model),
+        )
     elseif target==:D_hybrid
-        inputs=(; T=InpTemp(), H=InpH̄())
-        A_law = LawDhybrid(; inputs=inputs, ml_model=ml_model, params=params)
-        SIA2Dmodel(params; A=A_law)
+        iceflow_model = SIA2Dmodel(params; A=LawDhybrid(nn_model, params))
+        ODINN.Model(
+            iceflow = iceflow_model,
+            mass_balance = nothing,
+            regressors = (; A=nn_model),
+        )
     elseif target==:D
-        inputs=(; T=InpTemp(), H=InpH̄())
-        U_law = LawU(; inputs=inputs, ml_model=ml_model, params=params)
-        SIA2Dmodel(params; U=U_law)
+        iceflow_model = SIA2Dmodel(params; U=LawU(nn_model, params))
+        ODINN.Model(
+            iceflow = iceflow_model,
+            mass_balance = nothing,
+            regressors = (; U=nn_model),
+        )
     else
         throw("Unsupported target $(target)")
     end
-
-    model = ODINN.Model(
-        iceflow = iceflow_model,
-        mass_balance = nothing,
-        machine_learning = ml_model
-    )
 
     glaciers = initialize_glaciers(rgi_ids, params)
 

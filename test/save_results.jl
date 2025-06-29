@@ -34,16 +34,22 @@ function save_simulation_test!()
             )
     )
 
-    model = Model(
-        iceflow = SIA2Dmodel(params, C=0.0),
+    model = Huginn.Model(
+        iceflow = SIA2Dmodel(params, A=CuffeyPaterson()),
         mass_balance = TImodel1(params),
-        machine_learning = NeuralNetwork(params)
     )
 
     glaciers = initialize_glaciers(rgi_ids, params)
 
     tstops = collect(2010:δt:2015)
-    ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+    generate_ground_truth!(glaciers, params, model, tstops)
+
+    nn_model = NeuralNetwork(params)
+    model = Model(
+        iceflow = SIA2Dmodel(params, A=LawA(nn_model, params)),
+        mass_balance = TImodel1(params),
+        regressors = (; A=nn_model)
+    )
 
     functional_inversion = FunctionalInversion(model, glaciers, params)
 

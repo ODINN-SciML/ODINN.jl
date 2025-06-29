@@ -85,11 +85,11 @@ tstops = collect(2010:δt:2015)
 
 generate_ground_truth!(glaciers, params, model, tstops)
 
-ml_model = NeuralNetwork(params)
+nn_model = NeuralNetwork(params)
 model = Model(
-    iceflow = SIA2Dmodel(params; A=LawA(; inputs=(; T=InpTemp()), ml_model=ml_model, params=params)),
+    iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
     mass_balance = nothing,
-    machine_learning = ml_model)
+    regressors = (; A=nn_model))
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)

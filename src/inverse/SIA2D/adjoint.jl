@@ -45,8 +45,7 @@ function VJP_λ_∂SIA_discrete(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.machine_learning.target
 
     B = glacier.B
     Δx = glacier.Δx
@@ -81,7 +80,7 @@ function VJP_λ_∂SIA_discrete(
     D = Diffusivity(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -111,14 +110,14 @@ function VJP_λ_∂SIA_discrete(
     α = ∂Diffusivity∂H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     # Equals ∂D/∂(∇H)
     β = ∂Diffusivity∂∇H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -149,7 +148,7 @@ function VJP_λ_∂SIA_discrete(
     ∂D∂θ = ∂Diffusivity∂θ(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     # Evaluate numerical integral for loss
@@ -200,8 +199,7 @@ function VJP_λ_∂SIA∂H_continuous(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.machine_learning.target
 
     # Retrieve parameters
     B = glacier.B
@@ -236,7 +234,7 @@ function VJP_λ_∂SIA∂H_continuous(
     D = Diffusivity(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -246,7 +244,7 @@ function VJP_λ_∂SIA∂H_continuous(
     ∂D∂H_dual = ∂Diffusivity∂H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     ∂D∂H = Huginn.avg(∂D∂H_dual)
@@ -254,7 +252,7 @@ function VJP_λ_∂SIA∂H_continuous(
     β = ∂Diffusivity∂∇H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -336,8 +334,7 @@ function VJP_λ_∂SIA∂θ_continuous(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.machine_learning.target
 
     # Retrieve parameters
     B = glacier.B
@@ -375,7 +372,7 @@ function VJP_λ_∂SIA∂θ_continuous(
     ∂D∂θ = ∂Diffusivity∂θ(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
-        simulation = simulation, glacier_idx = glacier_idx, t = t, ml_model = ml_model,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 

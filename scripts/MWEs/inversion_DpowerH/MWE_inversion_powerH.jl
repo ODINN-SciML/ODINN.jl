@@ -131,7 +131,7 @@ for i in 1:length(glaciers)
 end
 
 # TODO: This function does shit on the model variable, for now we do a clean restart
-ml_model = NeuralNetwork(
+nn_model = NeuralNetwork(
     params;
     architecture = architecture,
     target = SIA2D_D_hybrid_target(
@@ -139,11 +139,11 @@ ml_model = NeuralNetwork(
         max_NN = max_NN
     )
 )
-A_law = LawDhybrid(; inputs=(; T=InpTemp(), H̄=InpH̄()), ml_model=ml_model, params=params)
+A_law = LawDhybrid(nn_model, params)
 model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
-    machine_learning = ml_model,
+    regressors = (; A=nn_model),
 )
 
 # We create an ODINN prediction

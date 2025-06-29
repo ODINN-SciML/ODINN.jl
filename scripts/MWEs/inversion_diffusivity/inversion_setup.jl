@@ -207,14 +207,13 @@ ml_model = NeuralNetwork(
     ),
     seed = rng
 )
-inputs = (; H̄=InpH̄(), ∇S=Inp∇S())
 model = Model(
-    iceflow = SIA2Dmodel(params; U=LawU(; inputs=inputs, ml_model=ml_model, params=params)),
+    iceflow = SIA2Dmodel(params; U=LawU(nn_model, params)),
     mass_balance = TImodel1(
         params; DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0
         ),
-    machine_learning = ml_model,
+    regressors = (; U=nn_model),
 )
 
 # We create an ODINN prediction

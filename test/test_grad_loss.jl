@@ -7,7 +7,7 @@ function test_grad_finite_diff(
     finite_difference_order = 3
 ) where {ADJ<:AbstractAdjointMethod}
 
-    println("> Testing adjoint $(adjointFlavor)")
+    println("> Testing target $(target) with adjoint $(adjointFlavor)")
 
     thres_ratio = thres[1]
     thres_angle = thres[2]
@@ -64,30 +64,33 @@ function test_grad_finite_diff(
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)
 
-    ml_model = NeuralNetwork(params)
+    nn_model = NeuralNetwork(params)
     generate_ground_truth!(glaciers, params, model, tstops)
     # Do a clean restart
-    # model.iceflow = SIA2Dmodel(params)
-    iceflow_model = if target==:A
-        inputs=(; T=InpTemp())
-        A_law = LawA(; inputs=inputs, ml_model=ml_model, params=params)
-        SIA2Dmodel(params; A=A_law)
+    model = if target==:A
+        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
+        ODINN.Model(
+            iceflow = iceflow_model,
+            mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+            regressors = (; A=nn_model),
+        )
     elseif target==:D_hybrid
-        inputs=(; T=InpTemp(), H=InpH̄())
-        A_law = LawDhybrid(; inputs=inputs, ml_model=ml_model, params=params)
-        SIA2Dmodel(params; A=A_law)
+        iceflow_model = SIA2Dmodel(params; A=LawDhybrid(nn_model, params))
+        ODINN.Model(
+            iceflow = iceflow_model,
+            mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+            regressors = (; A=nn_model),
+        )
     elseif target==:D
-        inputs=(; T=InpTemp(), H=InpH̄())
-        U_law = LawU(; inputs=inputs, ml_model=ml_model, params=params)
-        SIA2Dmodel(params; U=U_law)
+        iceflow_model = SIA2Dmodel(params; U=LawU(nn_model, params))
+        ODINN.Model(
+            iceflow = iceflow_model,
+            mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+            regressors = (; U=nn_model),
+        )
     else
         throw("Unsupported target $(target)")
     end
-    model = ODINN.Model(
-        iceflow = iceflow_model,
-        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        machine_learning = ml_model
-    )
 
 
     # We create an ODINN prediction

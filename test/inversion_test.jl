@@ -34,7 +34,6 @@ function inversion_test(;
             ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-            # epochs = [100,50],
             epochs = [20,20],
             optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
             ),
@@ -76,12 +75,12 @@ function inversion_test(;
 
     generate_ground_truth!(glaciers, params, model, tstops)
 
-    ml_model = NeuralNetwork(params)
-    A_law = LawA(; inputs=inputs=(; T=InpTemp()), ml_model=ml_model, params=params)
+    nn_model = NeuralNetwork(params)
+    A_law = LawA(nn_model, params)
     model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = MB_model,
-        machine_learning = ml_model)
+        regressors = (; A=nn_model))
 
     # We create an ODINN prediction
     functional_inversion = FunctionalInversion(model, glaciers, params)

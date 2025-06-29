@@ -16,11 +16,13 @@ constructed automatically by just providing the keyword `name` for the inversion
 @kwdef struct SIA2D_A_target <: AbstractSIA2DTarget
 end
 
+targetType(::SIA2D_A_target) = :A
+
 ### Target functions
 
 function Diffusivity(
     target::SIA2D_A_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -32,7 +34,7 @@ end
 
 function ∂Diffusivity∂H(
     target::SIA2D_A_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -43,7 +45,7 @@ end
 
 function ∂Diffusivity∂∇H(
     target::SIA2D_A_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -54,7 +56,7 @@ end
 
 function ∂Diffusivity∂θ(
     target::SIA2D_A_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow

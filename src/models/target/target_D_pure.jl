@@ -34,8 +34,10 @@ learnign the velocity field assuming that this is parallel to the gradient in su
     postscale_provided::Bool = false
 end
 
+targetType(::SIA2D_D_target) = :D
+
 """
-    Diffusivity(target::SIA2D_D_target; H, ∇S, θ, iceflow_model, ml_model, glacier, params)
+    Diffusivity(target::SIA2D_D_target; H, ∇S, θ, iceflow_model, glacier, params)
 
 Compute the effective diffusivity field for a 2D shallow ice model using the diagnostic `target` and 
 a predicted velocity matrix `U`.
@@ -52,7 +54,6 @@ if dimensions differ by one grid cell (staggered grid). Errors if dimensions are
 - `∇S`: Ice surface slope.
 - `θ`: Parameters of the model.
 - `iceflow_model`: Iceflow model used for simulation.
-- `ml_model`: Machine learning model used for simulation.
 - `glacier`: Glacier data.
 - `params`: Model parameters.
 
@@ -67,7 +68,7 @@ Supports both grid-matched and staggered configurations by averaging `H` where n
 """
 function Diffusivity(
     target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -83,7 +84,7 @@ end
 
 function ∂Diffusivity∂H(
     target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -106,7 +107,7 @@ end
 
 function ∂Diffusivity∂∇H(
     target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -124,7 +125,7 @@ end
 
 function ∂Diffusivity∂θ(
     target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
