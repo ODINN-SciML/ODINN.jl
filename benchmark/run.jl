@@ -51,7 +51,7 @@ glacier_idx = 1
 batch_idx = 1
 H = glaciers[glacier_idx].H₀
 simulation = FunctionalInversion(model, glaciers, params)
-initialize_iceflow_model!(model.iceflow[batch_idx], glacier_idx, glaciers[glacier_idx], params)
+simulation.cache = init_cache(model, simulation, glacier_idx, params)
 t = tspan[1]
 θ = simulation.model.machine_learning.θ
 simulation.model.iceflow[batch_idx].glacier_idx = glacier_idx
@@ -63,11 +63,11 @@ for VJPMode in (ODINN.EnzymeVJP(), ODINN.DiscreteVJP(), ODINN.ContinuousVJP())
     println("<details>")
     println("")
     println("### VJP wrt H")
-    trial = @benchmark ODINN.VJP_λ_∂SIA∂H($VJPMode, $λ, $H, $θ, $simulation, $t, $batch_idx)
+    trial = @benchmark ODINN.VJP_λ_∂SIA∂H($VJPMode, $λ, $H, $θ, $simulation, $t)
     display(trial)
     println("")
     println("### VJP wrt θ")
-    trial = @benchmark ODINN.VJP_λ_∂SIA∂θ($VJPMode, $λ, $H, $θ, $(nothing), $λ, $simulation, $t, $batch_idx)
+    trial = @benchmark ODINN.VJP_λ_∂SIA∂θ($VJPMode, $λ, $H, $θ, $(nothing), $λ, $simulation, $t)
     display(trial)
     println("")
     println("</details>")

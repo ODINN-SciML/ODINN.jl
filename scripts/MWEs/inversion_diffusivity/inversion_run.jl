@@ -1,4 +1,7 @@
-using Pkg; Pkg.activate(".")
+using Pkg
+odinn_folder = split(Base.source_dir(), "scripts")[1]
+Pkg.activate(odinn_folder*"/scripts/")
+
 include("inversion_setup.jl")
 
 # We run the simulation with ADAM and then LBFGS

@@ -4,24 +4,26 @@
 Callback function to generate plots during training.
 """
 function callback_plots_A(θ, l, simulation)
+    @assert inputs(simulation.model.iceflow.A)==_inputs_A_law "In order to use `callback_plots_A`, A law must be used and its inputs must be $(_inputs_A_law)"
 
     @ignore_derivatives begin
 
-    avg_temps = Float64[mean(simulation.glaciers[i].climate.longterm_temps) for i in 1:length(simulation.glaciers)]
-    p = sortperm(avg_temps)
-    avg_temps = avg_temps[p]
-    # We load the ML model with the parameters
-    U = simulation.model.machine_learning.NN_f(θ)
-    pred_A = predict_A̅(U, collect(-23.0:1.0:0.0)')
-    pred_A = Float64[pred_A...] # flatten
-    true_A = A_fake(avg_temps, true)
+    t = simulation.parameters.simulation.tspan[1] # We need to provide t but it isn't important here
+    res = map(glacier_idx -> T_A_Alaw(simulation, glacier_idx, θ, t), 1:length(simulation.glaciers))
+    avg_temps, avg_temps = collect.(zip(res...))
+
+    Tvec = collect(-23.0:1.0:0.0)
+    pred_A = map(Ti -> eval_law(simulation.model.iceflow.A, simulation, 1, (;T=Ti), θ), Tvec)
+
+    A_poly = Huginn.polyA_PatersonCuffey()
+    true_A = A_poly.(avg_temps)
 
     yticks = collect(0.0:2e-17:8e-17)
 
     training_path = joinpath(simulation.parameters.simulation.working_dir, "training")
 
     Plots.scatter(avg_temps, true_A, label="True A", c=:lightsteelblue2)
-    plot_epoch = Plots.plot!(-23:1:0, pred_A, label="Predicted A", 
+    plot_epoch = Plots.plot!(Tvec, pred_A, label="Predicted A",
                         xlabel="Long-term air temperature (°C)", yticks=yticks,
                         ylabel=:A, ylims=(0.0, simulation.parameters.physical.maxA), lw = 3, c=:dodgerblue4,
                         legend=:topleft)
@@ -67,14 +69,14 @@ function callback_diagnosis(θ, l, simulation; save::Bool = false)
         printProgressLoss(length(simulation.stats.losses), simulation.stats.niter, l, improvement)
     end
 
-    # Save state of intermediate simulation
-    if !isnothing(Base.source_path)
-        path = Base.dirname(Base.source_path())
-    else
-        path = @__DIR__
-        println("Saving intermediate solution in $(path).")
-    end
     if save
+        # Save state of intermediate simulation
+        if !isnothing(Base.source_path)
+            path = Base.dirname(Base.source_path())
+        else
+            path = @__DIR__
+            println("Saving intermediate solution in $(path).")
+        end
         ODINN.save_inversion_file!(θ, simulation; path = path, file_name = "_inversion_result.jld2")
     end
 

@@ -12,7 +12,7 @@ function grad_free_test(;use_MB::Bool=false)
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
-            use_MB=false,
+            use_MB=use_MB,
             velocities=true,
             tspan=(2010.0, 2015.0),
             step=δt,
@@ -39,10 +39,14 @@ function grad_free_test(;use_MB::Bool=false)
             progress=true)
     )
 
-    model = Model(
-        iceflow = SIA2Dmodel(params),
+    nn_model = NeuralNetwork(params)
+
+    # Use a constant A for testing
+    A_law = ConstantA(2.21e-18)
+    model = Huginn.Model(
+        iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        machine_learning = NeuralNetwork(params))
+    )
 
     # We retrieve some glaciers for the simulation
     glaciers = initialize_glaciers(rgi_ids, params)
@@ -50,12 +54,14 @@ function grad_free_test(;use_MB::Bool=false)
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)
 
-    # Overwrite constant A fake function for testing
-    fakeA(T) = 2.21e-18
-
-    ODINN.generate_ground_truth(glaciers, fakeA, params, model, tstops)
-    # TODO: This function does shit on the model variable, for now we do a clean restart
-    model.iceflow = SIA2Dmodel(params)
+    generate_ground_truth!(glaciers, params, model, tstops)
+    # Do a clean restart
+    A_law = LawA(nn_model, params)
+    model = ODINN.Model(
+        iceflow = SIA2Dmodel(params; A=A_law),
+        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+        regressors = (; A=nn_model)
+    )
 
     # We create an ODINN prediction
     functional_inversion = FunctionalInversion(model, glaciers, params)
@@ -67,6 +73,6 @@ function grad_free_test(;use_MB::Bool=false)
     @test length(functional_inversion.stats.losses) > 2
     # Check that losses change over iterations
     @test any(!=(first(functional_inversion.stats.losses)), functional_inversion.stats.losses)
-    # Check parameter has change
-    # @test any(!=(first(simulation.model.machine_learning.θ)),  simulation.model.machine_learning.θ)
+    # Check parameter has changed
+    @test any(!=(first(functional_inversion.model.machine_learning.θ)),  functional_inversion.model.machine_learning.θ)
 end

@@ -29,10 +29,11 @@ function test_grad_Enzyme_SIAD2D()
             progress=true)
     )
 
+    nn_model = NeuralNetwork(params)
     model = Model(
-        iceflow = SIA2Dmodel(params),
+        iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
         mass_balance = nothing,
-        machine_learning = NeuralNetwork(params)
+        regressors = (; A=nn_model)
     )
 
     glaciers = initialize_glaciers(rgi_ids, params)
@@ -43,8 +44,7 @@ function test_grad_Enzyme_SIAD2D()
     H = glaciers[glacier_idx].H₀
 
     simulation = FunctionalInversion(model, glaciers, params)
-
-    initialize_iceflow_model!(model.iceflow[batch_idx], glacier_idx, glaciers[glacier_idx], params)
+    simulation.cache = init_cache(model, simulation, glacier_idx, params)
 
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
@@ -60,7 +60,8 @@ function test_grad_Enzyme_SIAD2D()
     # dH = zero(H)
     # ODINN.SIA2D_adjoint!(θ, dH, H, s, smodel, t, batch_idx)
 
-    # dH = Huginn.SIA2D(H, simulation, t; batch_id=batch_idx)
+    @assert false "TODO: replace by SIA2D with laws"
+    # dH = Huginn.SIA2D(H, simulation, t)
 
 
     dH_H = Enzyme.make_zero(H)

@@ -175,7 +175,7 @@ Every `Simulation` type has an associated `Results` object(s), one for each one 
 
 ```@docs
 Sleipnir.Results
-Sleipnir.Results(glacier::G, ifm::IF) where {G <: AbstractGlacier, F <: AbstractFloat, IF <: AbstractModel, I <: Int}
+Sleipnir.Results(glacier::G, ifm::IF) where {G <: AbstractGlacier, F <: AbstractFloat, IF <: AbstractModel, I <: Integer}
 ```
 
 One of the main things one can do with a `Results` object, is plotting them. The main function to do so is the following one:

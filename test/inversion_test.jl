@@ -34,7 +34,6 @@ function inversion_test(;
             ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-            # epochs = [100,50],
             epochs = [20,20],
             optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
             ),
@@ -61,10 +60,9 @@ function inversion_test(;
         MB_model = nothing
     end
 
-    model = Model(
-        iceflow = SIA2Dmodel(params),
+    model = Huginn.Model(
+        iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
         mass_balance = MB_model,
-        machine_learning = NeuralNetwork(params)
     )
 
     # We retrieve some glaciers for the simulation
@@ -73,12 +71,16 @@ function inversion_test(;
     # Time snapshots for transient inversion
     tstops = collect(2010:δt:2015)
 
-    A_poly = ODINN.A_law_PatersonCuffey()
-    fakeA(T) = A_poly(T)
+    A_poly = Huginn.polyA_PatersonCuffey()
 
-    ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+    generate_ground_truth!(glaciers, params, model, tstops)
 
-    model.iceflow = SIA2Dmodel(params)
+    nn_model = NeuralNetwork(params)
+    A_law = LawA(nn_model, params)
+    model = Model(
+        iceflow = SIA2Dmodel(params; A=A_law),
+        mass_balance = MB_model,
+        regressors = (; A=nn_model))
 
     # We create an ODINN prediction
     functional_inversion = FunctionalInversion(model, glaciers, params)
@@ -88,7 +90,7 @@ function inversion_test(;
         functional_inversion;
         path = joinpath(ODINN.root_dir, "test/data"),
         file_name = "inversion_test.jld2"
-        )
+    )
 
     res_load = load(joinpath(ODINN.root_dir, "test/data", "inversion_test.jld2"), "res")
 
@@ -100,21 +102,22 @@ function inversion_test(;
     Temps = Float64[]
     As_pred = Float64[]
 
+    t = tstops[end]
     for (i, glacier) in enumerate(glaciers)
-        T = ODINN.mean(glacier.climate.longterm_temps)
-        A = ODINN.apply_parametrization(
-            functional_inversion.model.machine_learning.target;
-            H = nothing, ∇S = nothing, θ = θ,
-            iceflow_model = functional_inversion.model.iceflow[i],
-            ml_model = functional_inversion.model.machine_learning,
-            glacier = glacier,
-            params = functional_inversion.parameters)
+        # Initialize the cache to make predictions with the law
+        functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, params)
+        functional_inversion.model.machine_learning.θ .= θ
+
+        T = get_input(InpTemp(), functional_inversion, i, t)
+        apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
         push!(Temps, T)
-        push!(As_pred, A)
+        push!(As_pred, functional_inversion.cache.iceflow.A[1])
     end
 
     # Reference value of A
-    As_fake = fakeA.(Temps)
+    As_fake = A_poly.(Temps)
+    @show As_fake
+    @show As_pred
 
     # Loss did not decrease enough during inversion training
     @test losses[end] < 1e-6
@@ -128,6 +131,3 @@ function inversion_test(;
     # Inversion not working even for the best behaved glacier
     @test minimum(rel_error) < 1e-4
 end
-
-
-
