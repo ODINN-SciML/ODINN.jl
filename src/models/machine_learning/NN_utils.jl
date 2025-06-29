@@ -100,7 +100,7 @@ function pretraining(
     rng::AbstractRNG = Random.default_rng(),
     )
 
-    @info "Pretrainign neural network with initial guess for diffusivity."
+    @info "Pretraining neural network with initial guess for diffusivity."
 
     function train_model!(model, ps, st, opt, nepochs::Int)
         tstate = Training.TrainState(model, ps, st, opt)

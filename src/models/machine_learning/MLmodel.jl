@@ -1,5 +1,10 @@
 export NeuralNetwork
 
+_inputs_A_law = (; T=InpTemp())
+_inputs_Ahybrid_law = (; T=InpTemp(), H̄=InpH̄())
+_inputs_C_law = (; )
+_inputs_n_law = (; )
+_inputs_U_law = (; H̄=InpH̄(), ∇S=Inp∇S())
 
 # Abstract type as a parent type for Machine Learning models
 abstract type MLmodel <: AbstractModel end
@@ -22,13 +27,12 @@ function Model(;
     machine_learning::Union{MLM, Nothing},
     ) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
 
-    errMssg = "law must be differentiable in order to be used within ODINN"
     if iceflow.U_is_provided
-        @assert is_differentiable(iceflow.U) "U $(errMssg)"
+        @assert inputs(iceflow.U)==_inputs_U_law "Inputs of U law must be $(_inputs_U_law) in ODINN."
     else
-        @assert is_differentiable(iceflow.A) "A $(errMssg)"
-        @assert is_differentiable(iceflow.C) "C $(errMssg)"
-        @assert is_differentiable(iceflow.n) "n $(errMssg)"
+        @assert inputs(iceflow.A)==_inputs_A_law || inputs(iceflow.A)==_inputs_Ahybrid_law "Inputs of A law must be $(_inputs_A_law) or $(_inputs_Ahybrid_law) in ODINN."
+        @assert inputs(iceflow.C)==_inputs_C_law "Inputs of C law must be $(_inputs_C_law) in ODINN."
+        @assert inputs(iceflow.n)==_inputs_n_law "Inputs of n law must be $(_inputs_n_law) in ODINN."
     end
 
     iceflowType = typeof(iceflow)

@@ -1,5 +1,8 @@
-import Pkg
-Pkg.activate(dirname(Base.current_project()))
+using Pkg
+# Activate the "scripts" environment, this works both if the user is in "ODINN/", in "ODINN/scripts/" or in any subfolder
+odinn_folder = split(Base.source_dir(), "scripts")[1]
+Pkg.activate(odinn_folder*"/scripts/")
+Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use local version, you might do as well for Huginn, Muninn and Sleipnir
 
 using Revise
 using ODINN
@@ -69,11 +72,10 @@ params = Parameters(
         )
     )
 
-model = Model(
-    iceflow = SIA2Dmodel(params),
+model = Huginn.Model(
+    iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
     mass_balance = nothing, #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-    machine_learning = NeuralNetwork(params)
-    )
+)
 
 # We retrieve some glaciers for the simulation
 glaciers = initialize_glaciers(rgi_ids, params)
@@ -81,16 +83,13 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-A_poly = ODINN.A_law_PatersonCuffey()
-fakeA(T) = A_poly(T)
+generate_ground_truth!(glaciers, params, model, tstops)
 
-# Overwrite constant A fake function for testing
-# fakeA(T) = 2.21e-18
-
-ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
-
-# TODO: This function does shit on the model variable, for now we do a clean restart
-model.iceflow = SIA2Dmodel(params)
+ml_model = NeuralNetwork(params)
+model = Model(
+    iceflow = SIA2Dmodel(params; A=LawA(; inputs=(; T=InpTemp()), ml_model=ml_model, params=params)),
+    mass_balance = nothing,
+    machine_learning = ml_model)
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)

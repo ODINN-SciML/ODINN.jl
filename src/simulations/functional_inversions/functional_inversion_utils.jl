@@ -18,7 +18,7 @@ function run!(
     path::Union{String, Nothing} = nothing,
     file_name::Union{String, Nothing} = nothing,
     save_every_iter::Bool = false,
-    )
+)
 
     println("Running training of UDE...\n")
 
@@ -265,7 +265,7 @@ end
 # end
 
 function predict_iceflow!(θ, simulation::FunctionalInversion)
-    simulations = ODINN.generate_simulation_batches(simulation)
+    simulations = generate_simulation_batches(simulation)
     results = pmap(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
     simulation.results = ODINN.merge_batches(results)
 end

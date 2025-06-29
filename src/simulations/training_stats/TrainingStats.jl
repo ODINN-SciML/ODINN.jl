@@ -1,7 +1,7 @@
 export TrainingStats
 
 """
-    mutable struct TrainingStats
+    mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
 
 An object with the information of the training.
 
@@ -23,10 +23,13 @@ mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
 end
 
 """
-    function TrainingStats(;
+    TrainingStats(;
         retcode::Union{String, Nothing} = nothing,
         losses::Vector{F} = Float64[],
-        niter::I = 0
+        niter::I = 0,
+        θ::Union{ComponentVector, Nothing} = nothing,
+        θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[],
+        ∇θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[]
     ) where {F <: AbstractFloat, I <: Integer}
 
 Constructor for TrainingStats object used to store important information during training.

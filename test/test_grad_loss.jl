@@ -51,14 +51,11 @@ function test_grad_finite_diff(
             progress=true)
     )
 
-    ml_model = NeuralNetwork(params)
-
     # Use a constant A for testing
     A_law = ConstantA(2.21e-18)
-    model = ODINN.Model(
+    model = Huginn.Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        machine_learning = ml_model # TODO: remove
     )
 
     # We retrieve some glaciers for the simulation
@@ -67,6 +64,7 @@ function test_grad_finite_diff(
     # Time stanpshots for transient inversion
     tstops = collect(2010:δt:2015)
 
+    ml_model = NeuralNetwork(params)
     generate_ground_truth!(glaciers, params, model, tstops)
     # Do a clean restart
     # model.iceflow = SIA2Dmodel(params)

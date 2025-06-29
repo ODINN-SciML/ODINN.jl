@@ -20,7 +20,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     # glaciers = simulation.glaciers
     # SIA2D_models = simulation.model.iceflow
 
-    simulations = ODINN.generate_simulation_batches(simulation)
+    simulations = generate_simulation_batches(simulation)
     loss_grad = pmap(simulation -> SIA2D_grad_batch!(θ, simulation), simulations)
 
     # Retrieve loss function

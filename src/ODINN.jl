@@ -22,7 +22,7 @@ module ODINN
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
-using Statistics, LinearAlgebra, Random, Polynomials
+using Statistics, LinearAlgebra, Random
 using EnzymeCore
 using Enzyme
 using JLD2

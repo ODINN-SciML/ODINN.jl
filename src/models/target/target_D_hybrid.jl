@@ -10,7 +10,7 @@ replaced by a generic regressor. For this example, we consider the inversion of 
 """
 
 @kwdef struct SIA2D_D_hybrid_target <: AbstractSIA2DTarget
-    interpolation::Symbol = :None
+    interpolation::Symbol = :Linear
     n_interp_half::Int = 75
     n_H::Union{Float64, Nothing} = nothing
     n_∇S::Union{Float64, Nothing} = nothing
@@ -50,7 +50,7 @@ function ∂Diffusivity∂H(
     n_∇S = isnothing(target.n_∇S) ? n : target.n_∇S
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
-    ∂D∂H_no_NN = ( (n_H + 1) .* C .* (ρ * g).^n .+ (n_H + 2) .* A .* Γ_no_A .* H̄ ) .* H̄.^n_H .* ∇S.^(n_∇S - 1)
+    ∂D∂H_no_NN = ( (n_H .+ 1) .* C .* (ρ * g).^n .+ (n_H .+ 2) .* A .* Γ_no_A .* H̄ ) .* H̄.^n_H .* ∇S.^(n_∇S .- 1)
 
     # Derivative of the output of the NN with respect to input layer
     # TODO: Change this to be done with AD or have this as an extra parameter.
@@ -84,7 +84,7 @@ function ∂Diffusivity∂∇H(
     n_H = isnothing(target.n_H) ? n : target.n_H
     n_∇S = isnothing(target.n_∇S) ? n : target.n_∇S
 
-    ∂D∂∇S_no_NN = (C .* (ρ * g).^n .+ Γ(iceflow_model, iceflow_cache, params; include_A = false) .* A .* H̄) .* (n_∇S - 1) .* H̄.^(n_H + 1) .* ∇S.^(n_∇S - 3)
+    ∂D∂∇S_no_NN = (C .* (ρ * g).^n .+ Γ(iceflow_model, iceflow_cache, params; include_A = false) .* A .* H̄) .* (n_∇S .- 1) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 3)
 
     return ∂D∂∇S_no_NN
 end
@@ -109,7 +109,7 @@ function ∂Diffusivity∂θ(
     n_∇S = isnothing(target.n_∇S) ? n : target.n_∇S
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H̄.^(n_H + 2) .* ∇S.^(n_∇S - 1)
+    ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 1)
 
     temp = get_input(InpTemp(), simulation, glacier_idx, t)
 
@@ -173,7 +173,7 @@ function compute_D(
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
-    D = (C .* (ρ * g).^n .+ A .* Γ_no_A .* H̄) .* H̄.^(n_H + 1) .* ∇S.^(n_∇S - 1)
+    D = (C .* (ρ * g).^n .+ A .* Γ_no_A .* H̄) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
 
     return D
 end
@@ -191,7 +191,7 @@ function compute_D(
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
-    D = (C .* (ρ * g).^n .+ A .* Γ_no_A .* H̄) .* H̄.^(n_H + 1) .* ∇S.^(n_∇S - 1)
+    D = (C .* (ρ * g).^n .+ A .* Γ_no_A .* H̄) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
 
     return D
 end

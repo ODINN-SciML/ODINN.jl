@@ -76,106 +76,15 @@ function generate_plot_folders(path)
     end
 end
 
-"""
-    A_law_PatersonCuffey()
-
-Returns a law of the coefficient A as a polynomial of the temperature.
-The values used to fit the polynomial come from Peterson & Cuffey.
-"""
-function A_law_PatersonCuffey()
-    # Law of A(T) from Peterson & Cuffey
-    A_values_sec = ([0.0 -2.0 -5.0 -10.0 -15.0 -20.0 -25.0 -30.0 -35.0 -40.0 -45.0 -50.0;
-                                2.4e-24 1.7e-24 9.3e-25 3.5e-25 2.1e-25 1.2e-25 6.8e-26 3.7e-26 2.0e-26 1.0e-26 5.2e-27 2.6e-27]) # s⁻¹Pa⁻³
-    A_values = hcat(A_values_sec[1,:], A_values_sec[2,:].*60.0*60.0*24.0*365.25)'
-    return Polynomials.fit(A_values[1,:], A_values[2,:])
-end
-
-# Polynomial fit for Cuffey and Paterson data
-A_f = A_law_PatersonCuffey() # degree = length(xs) - 1
-
-const noise_A_magnitude = 5e-18  # magnitude of noise to be added to A
 const rng_seed() = MersenneTwister(666)   # Random seed
-
-function A_fake(temp, noise=false)
-    # A = @. minA + (maxA - minA) * ((temp-minT)/(maxT-minT) )^2
-    A = A_f.(temp) # polynomial fit
-    if noise
-        A_noise = rand(rng_seed()) .* noise_A_magnitude
-        A = abs.(A .+ A_noise)
-    end
-    return A
-end
-
-"""
-    get_rheology_law(law::Symbol)
-
-Retrieve the rheology law function for the flow rate factor `A` based on the specified law.
-
-# Arguments
-- `law::Symbol`: A symbol representing the rheology law to use. Currently supports `:PatersonCuffey`.
-
-# Returns
-- A function `fakeA(T)` that computes the flow rate factor `A` for a given temperature `T` using the specified rheology law.
-
-# Description
-This function retrieves the parametrization law for the glacier's flow rate factor `A`. If the specified law is `:PatersonCuffey`, it uses the `A_law_PatersonCuffey` polynomial to define the flow rate factor as a function of temperature. If an unsupported law is provided, an error is logged.
-
-# Notes
-- The returned function `fakeA(T)` can be used to compute the flow rate factor for a given temperature `T`.
-- If an unknown law is provided, the function logs an error and does not return a valid function.
-"""
-function get_rheology_law(law::Symbol)
-    # Get the parametrization law for the glacier
-    if law == :PatersonCuffey
-        A_poly = A_law_PatersonCuffey()
-        fakeA(T) = A_poly(T)
-        return fakeA
-    else
-        @error "Unknown law of A: $law"
-    end
-end
-
-"""
-    get_rheology_law(law::Polynomial)
-
-Convert a polynomial into a rheology law function for the flow rate factor `A`.
-
-# Arguments
-- `law::Polynomial`: A polynomial representing the rheology law for the flow rate factor `A`.
-
-# Returns
-- A function `fakeA(T)` that computes the flow rate factor `A` for a given temperature `T` using the provided polynomial.
-"""
-function get_rheology_law(law::Polynomials.Polynomial)
-    # Convert polynomial into function
-    fakeA(T) = law(T)
-    return fakeA(T)
-end
-
-"""
-    get_rheology_law(law::Function)
-
-Return the provided rheology law function without modification. 
-This just uses multiple dispatch to handle cases where the rheology law is already a function.
-
-# Arguments
-- `law::Function`: A function representing the rheology law for the flow rate factor `A`.
-
-# Returns
-- The input function `law`, unchanged.
-
-# Description
-This function is a simple bypass that uses multiple dispatch to handle cases where the rheology law is already provided as a function. It directly returns the input function without any modifications.
-"""
-function get_rheology_law(law::Function)
-    # Just bypass using multiple dispatch
-    return law
-end
 
 function build_simulation_batch(simulation::FunctionalInversion, i::I, nbatches::I=1) where {I <: Integer}
     iceflow = simulation.model.iceflow
     massbalance = simulation.model.mass_balance
     ml = simulation.model.machine_learning
+
+    # TODO: in the future we could avoid a copy of model since it is stateless
+    # but we need to pay attention that there is no side effect with multiprocessing
     model = Sleipnir.Model{typeof(iceflow), typeof(massbalance), typeof(ml)}(iceflow, massbalance, ml)
     cache = init_cache(model, simulation, i, simulation.parameters)
     if length(simulation.results) < 1

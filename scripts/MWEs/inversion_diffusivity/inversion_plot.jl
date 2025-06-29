@@ -16,7 +16,10 @@ which corresponds to the time integrated ice surface velocity.
 with n the Glen exponent.
 """
 
-using Pkg; Pkg.activate(".")
+using Pkg
+odinn_folder = split(Base.source_dir(), "scripts")[1]
+Pkg.activate(odinn_folder*"/scripts/")
+
 include("inversion_setup.jl")
 
 using Plots; pythonplot()
@@ -25,8 +28,8 @@ using JLD2
 using ForwardDiff
 using LinearAlgebra
 
-# res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_test.jld2"), "res")
-res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity", "_inversion_result_working.jld2"), "res")
+res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_Halfar.jld2"), "res")
+# res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity", "_inversion_result_working.jld2"), "res")
 
 # Load parameters of the trained neural network
 θ = res_load.θ
@@ -45,28 +48,19 @@ R_smooth = collect(0.0:10.0:(halfar_params.R₀))
 """
 Function to generate predicion and true diffusivity used in diffusivity
 """
-function diffusivity_generate(θ, Hs, ∇Ss)
+function diffusivity_generate(functional_inversion, θ, Hs, ∇Ss)
 
     D_pred = zeros(length(Hs), length(∇Ss))
     D_true = zeros(length(Hs), length(∇Ss))
 
     for i in 1:length(Hs), j in 1:length(∇Ss)
-        # A_pred = ODINN.predict_A_target_D(architecture, T, [100.0, 200.0])
         h = Hs[i]
         ∇s = ∇Ss[j]
-        _D = ODINN.Diffusivity_scalar(
-            functional_inversion.model.machine_learning.target;
-            h = h, ∇s = ∇s, θ = θ,
-            iceflow_model = only(functional_inversion.model.iceflow),
-            ml_model = functional_inversion.model.machine_learning,
-            glacier = only(glaciers),
-            params = functional_inversion.parameters)
-        D_pred[i, j] = _D
+        inputs = (; H̄=h, ∇S=∇s)
+        U = eval_law(functional_inversion.model.iceflow.U, functional_inversion, 1, inputs, θ)
+        D_pred[i, j] = only(unique(U)) * h # The cache is a matrix and the result of the NN evaluation has been broadcasted to a matrix, we retrieve the only value
         # Compute true diffusivity used for simulation
-        A = halfar_params.A
-        ρ = halfar_params.ρ
-        g = halfar_params.g
-        n = halfar_params.n
+        (; A, ρ, g, n) = halfar_params
         D_true[i, j] = 2 * A * (ρ * g)^n * h^(n + 2) * ∇s^(n - 1) / (n + 2)
     end
 
@@ -75,7 +69,7 @@ function diffusivity_generate(θ, Hs, ∇Ss)
 end
 
 # Generate matrix of prediction and reference
-D_true, D_pred = diffusivity_generate(θ, H_smooth, ∇S_smooth)
+D_true, D_pred = diffusivity_generate(functional_inversion, θ, H_smooth, ∇S_smooth)
 
 ### Preprocessing for figures
 
@@ -136,13 +130,14 @@ ylabel!(L"Surface slope $\| \nabla S \|$")
 Plots.scatter!(H_flat, ∇S_flat, ms=0.2, color=:black, label=false)
 Plots.plot!(H_analytical, ∇S_analytical, color=:black, linewidth=1.0)
 
+mkpath("scripts/MWEs/inversion_diffusivity/figures")
 Plots.savefig(plot_cont, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_contour.pdf")
 
 ### Figure: Same plot but now for the whole history during training
 
 for (i, _θ) in enumerate(θ_hist)
 
-    D_true, D_pred = diffusivity_generate(_θ, H_smooth, ∇S_smooth)
+    D_true, D_pred = diffusivity_generate(functional_inversion, _θ, H_smooth, ∇S_smooth)
     D_pred[D_pred .< 0.1 .* minimum(D_true)] .= NaN
 
     plot_cont = Plots.contourf(
@@ -168,7 +163,7 @@ end
 # The single Halfar solution has a very specific function for ∇S as a function of H.
 # We can plot along this trajectory
 
-_D_true, _D_pred = diffusivity_generate(θ, H_analytical, ∇S_analytical)
+_D_true, _D_pred = diffusivity_generate(functional_inversion, θ, H_analytical, ∇S_analytical)
 D_true_analytical = diag(_D_true)
 D_pred_analytical = diag(_D_pred)
 
