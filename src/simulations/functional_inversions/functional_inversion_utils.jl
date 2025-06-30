@@ -293,7 +293,7 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, glacier_idx::I)
             if params.simulation.use_MB
                 # Compute mass balance
                 MB_timestep!(cache, model, glacier, step, integrator.t)
-                apply_MB_mask!(integrator.u, glacier, cache.iceflow)
+                apply_MB_mask!(integrator.u, cache.iceflow)
             end
         end
     end

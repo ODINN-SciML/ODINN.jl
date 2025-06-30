@@ -62,7 +62,7 @@ function test_adjoint_SIA2D(
             regressors = (; A=nn_model),
         )
     elseif target==:D_hybrid
-        iceflow_model = SIA2Dmodel(params; A=LawDhybrid(nn_model, params))
+        iceflow_model = SIA2Dmodel(params; A=LawUhybrid(nn_model, params))
         ODINN.Model(
             iceflow = iceflow_model,
             mass_balance = nothing,

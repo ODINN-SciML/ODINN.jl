@@ -139,7 +139,7 @@ nn_model = NeuralNetwork(
         max_NN = max_NN
     )
 )
-A_law = LawDhybrid(nn_model, params)
+A_law = LawUhybrid(nn_model, params)
 model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),

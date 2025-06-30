@@ -1,16 +1,9 @@
 export SIA2D_A_target
 
 """
-    function SIA2D_target(;
-       name::Symbol = :A,
-    )
+    SIA2D_A_target <: AbstractSIA2DTarget
 
-Target to inverse creep coefficient A as a function of other quantities
-Constructor of the SIA target. All the relevant functions defined inside Target are
-constructed automatically by just providing the keyword `name` for the inversion.
-
-# Arguments
-- `name::Symbol`: Identifying name for the model inversion.
+Struct to define inversion where only the creep coefficient `A` is learnt.
 """
 
 @kwdef struct SIA2D_A_target <: AbstractSIA2DTarget

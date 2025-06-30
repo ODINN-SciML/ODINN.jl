@@ -8,7 +8,7 @@ Inversion of general diffusivity as a function of physical parameters.
 
 D(H, ∇S, θ) = H * NN(H, ∇S; θ)
 
-So now we are learning the velocoty field given by D * ∇S. This inversion is similar to
+So now we are learning the velocity field given by D * ∇S. This inversion is similar to
 learnign the velocity field assuming that this is parallel to the gradient in surface ∇S.
 
 # Arguments

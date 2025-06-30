@@ -1,55 +1,5 @@
 export ComponentVector2Vector, Vector2ComponentVector
 
-### Dummy target for testing
-
-# function build_target_foo()
-#     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> nothing
-
-#     return SIA2D_target{
-#         typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
-#         }(
-#         :foo, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
-#     )
-# end
-"""
-Create foo target for testing
-"""
-@kwdef struct SIA2D_foo_target <: AbstractSIA2DTarget
-end
-
-function Diffusivity(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
-    )
-    return 1.0
-end
-
-function ∂Diffusivity∂H(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
-    )
-    return 1.0
-end
-
-function ∂Diffusivity∂∇H(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, iceflow_cache, ml_model, glacier, params
-    )
-    return 1.0
-end
-
-function ∂Diffusivity∂θ(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, simulation, glacier_idx, t, ml_model, glacier, params
-    )
-    return 1.0
-end
-
 """
     _ml_model_prescale(
         X::Vector,
