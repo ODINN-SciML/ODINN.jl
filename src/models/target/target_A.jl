@@ -69,16 +69,3 @@ function ∂Diffusivity∂θ(
     # Create a tensor with both elements
     return cartesian_tensor(∂A_spatial, ∇θ_cv)
 end
-
-### Auxiliary functions
-
-function Γ(model, model_cache, params; include_A::Bool = true)
-    n = model_cache.n
-    (; ρ, g) = params.physical
-    if include_A
-        A = model_cache.A
-        return 2.0 .* A .* (ρ * g).^n ./ (n.+2)
-    else
-        return 2.0 .* (ρ * g).^n ./ (n.+2)
-    end
-end

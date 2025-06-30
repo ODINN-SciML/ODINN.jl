@@ -74,8 +74,6 @@ include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
 include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
 include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
-# Parameterizations
-include(joinpath(root_dir, "src/laws/Laws.jl"))
 # Simulations
 include(joinpath(root_dir, "src/simulations/training_stats/TrainingStats.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
@@ -85,6 +83,9 @@ include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))
 include(joinpath(root_dir, "src/models/target/Target.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
+
+# Parameterizations
+include(joinpath(root_dir, "src/laws/Laws.jl"))
 
 # Inversion for SIA equation
 include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))

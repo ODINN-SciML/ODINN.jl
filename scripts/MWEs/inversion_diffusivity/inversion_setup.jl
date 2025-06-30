@@ -195,25 +195,23 @@ architecture, θ_pretrain, st_pretrain, losses = pretraining(
 )
 
 # We define the prescale and postscale of quantities.
-ml_model = NeuralNetwork(
+nn_model = NeuralNetwork(
     params;
     architecture = architecture,
     θ = ComponentVector(θ = θ_pretrain), # We should give the actual solution!!!
-    target = SIA2D_D_target(
-        interpolation = :Linear,
-        n_interp_half = 5, # Notice we use a very low value for this!
-        prescale_provided = true,
-        postscale_provided = true
-    ),
     seed = rng
 )
 model = Model(
-    iceflow = SIA2Dmodel(params; U=LawU(nn_model, params)),
+    iceflow = SIA2Dmodel(params; U=LawU(nn_model, params; prescale_bounds=nothing, max_NN=nothing)),
     mass_balance = TImodel1(
         params; DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0
         ),
     regressors = (; U=nn_model),
+    target = SIA2D_D_target(
+        interpolation = :Linear,
+        n_interp_half = 5, # Notice we use a very low value for this!
+    ),
 )
 
 # We create an ODINN prediction

@@ -30,7 +30,7 @@ function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer
     params = simulation.parameters
     cache = init_cache(law, simulation, glacier_idx, params)
     if !isnothing(simulation.model.machine_learning)
-        simulation.model.machine_learning.θ .= θ
+        simulation.model.machine_learning.θ = θ
     end
 
     law.f.f(cache, inputs, θ)

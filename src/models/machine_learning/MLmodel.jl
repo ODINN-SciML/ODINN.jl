@@ -1,9 +1,9 @@
 export NeuralNetwork
 
 _inputs_A_law = (; T=InpTemp())
-_inputs_Ahybrid_law = (; T=InpTemp(), H̄=InpH̄())
 _inputs_C_law = (; )
 _inputs_n_law = (; )
+_inputs_Y_law = (; T=InpTemp(), H̄=InpH̄())
 _inputs_U_law = (; H̄=InpH̄(), ∇S=Inp∇S())
 
 # Abstract type as a parent type for Machine Learning models
@@ -30,8 +30,10 @@ function Model(;
 
     if iceflow.U_is_provided
         @assert inputs(iceflow.U)==_inputs_U_law "Inputs of U law must be $(_inputs_U_law) in ODINN."
+    elseif iceflow.Y_is_provided
+        @assert inputs(iceflow.Y)==_inputs_Y_law "Inputs of Y law must be $(_inputs_Y_law) in ODINN."
     else
-        @assert inputs(iceflow.A)==_inputs_A_law || inputs(iceflow.A)==_inputs_Ahybrid_law "Inputs of A law must be $(_inputs_A_law) or $(_inputs_Ahybrid_law) in ODINN."
+        @assert inputs(iceflow.A)==_inputs_A_law "Inputs of A law must be $(_inputs_A_law) in ODINN."
         @assert inputs(iceflow.C)==_inputs_C_law "Inputs of C law must be $(_inputs_C_law) in ODINN."
         @assert inputs(iceflow.n)==_inputs_n_law "Inputs of n law must be $(_inputs_n_law) in ODINN."
     end
@@ -40,16 +42,18 @@ function Model(;
     if isnothing(target)
         if iceflow.U_is_provided
             target = SIA2D_D_target()
+        elseif iceflow.Y_is_provided
+            target = SIA2D_D_hybrid_target()
         elseif inputs(iceflow.A)==_inputs_A_law
             target = SIA2D_A_target()
-        elseif inputs(iceflow.A)==_inputs_Ahybrid_law
-            target = SIA2D_D_hybrid_target()
         else
             throw("Cannot infer target from the laws.")
         end
     else
         if iceflow.U_is_provided
             @assert targetType(target) == :D "The provided laws do not match with the provided target. Make sure that the target is a SIA2D_D_target."
+        elseif iceflow.Y_is_provided
+            @assert targetType(target) == :D_hybrid "The provided laws do not match with the provided target. Make sure that the target is a SIA2D_D_hybrid_target."
         else
             @assert targetType(target) == :A "The provided laws do not match with the provided target. Make sure that the target is a SIA2D_A_target."
         end
@@ -144,6 +148,7 @@ mutable struct MachineLearning{
     MLmodelAType <: MLmodel,
     MLmodelCType <: MLmodel,
     MLmodelnType <: MLmodel,
+    MLmodelYType <: MLmodel,
     MLmodelUType <: MLmodel,
     TAR <: AbstractTarget,
     ComponentArrayType <: ComponentArray,
@@ -151,6 +156,7 @@ mutable struct MachineLearning{
     A::Union{MLmodelAType, Nothing}
     C::Union{MLmodelCType, Nothing}
     n::Union{MLmodelnType, Nothing}
+    Y::Union{MLmodelYType, Nothing}
     U::Union{MLmodelUType, Nothing}
     target::TAR
     θ::Union{ComponentArrayType, Nothing}
@@ -166,8 +172,9 @@ mutable struct MachineLearning{
         A = haskey(regressors, :A) ? regressors.A : emptyMLmodel()
         C = haskey(regressors, :C) ? regressors.C : emptyMLmodel()
         n = haskey(regressors, :n) ? regressors.n : emptyMLmodel()
+        Y = haskey(regressors, :Y) ? regressors.Y : emptyMLmodel()
         U = haskey(regressors, :U) ? regressors.U : emptyMLmodel()
 
-        new{typeof(A), typeof(C), typeof(n), typeof(U), typeof(target), typeof(θ)}(A, C, n, U, target, θ)
+        new{typeof(A), typeof(C), typeof(n), typeof(Y), typeof(U), typeof(target), typeof(θ)}(A, C, n, Y, U, target, θ)
     end
 end

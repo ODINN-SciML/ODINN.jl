@@ -66,9 +66,11 @@ params = Parameters(
 rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351"]
 
 # We specify a model based on an iceflow model, a mass balance model and a machine learning model
-model = Model(iceflow = SIA2Dmodel(params),
+
+nn_model = NeuralNetwork(params)
+model = Model(iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
 	      mass_balance = mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-	      machine_learning = NeuralNetwork(params))
+	      regressors = (; A=nn_model))
 
 # We initialize the glaciers with all the necessary data
 glaciers = initialize_glaciers(rgi_ids, params)
@@ -79,7 +81,7 @@ functional_inversion = FunctionalInversion(model, glaciers, params)
 # And finally, we just run! the simulation
 run!(functional_inversion)
 
-````	
+```
 
 ## How to cite 📖
 

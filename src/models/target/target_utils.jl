@@ -1,5 +1,16 @@
 export ComponentVector2Vector, Vector2ComponentVector
 
+function Γ(model, model_cache, params; include_A::Bool = true)
+    n = model_cache.n
+    (; ρ, g) = params.physical
+    if include_A
+        A = model_cache.A
+        return 2.0 .* A .* (ρ * g).^n ./ (n.+2)
+    else
+        return 2.0 .* (ρ * g).^n ./ (n.+2)
+    end
+end
+
 """
     _ml_model_prescale(
         X::Vector,

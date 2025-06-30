@@ -1,6 +1,6 @@
 import Sleipnir: get_input, default_name
 
-export LawA, LawUhybrid, LawU
+export LawA, LawY, LawU
 
 """
     _pred_NN(inp::Vector{F}, smodel, θ, prescale, postscale) where {F <: AbstractFloat}
@@ -36,8 +36,8 @@ end
     LawU(
         nn_model::NeuralNetwork,
         params::Sleipnir.Parameters;
-        max_NN::F = 50.0,
-        prescale_bounds::Vector{Tuple{F,F}} = [(0.0, 300.0), (0.0, 0.5)],
+        max_NN::Union{F, Nothing} = 50.0,
+        prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing} = [(0.0, 300.0), (0.0, 0.5)],
     ) where {F <: AbstractFloat}
 
 Constructs a law object for the diffusive velocity `U` in the SIA based on a neural
@@ -51,10 +51,12 @@ See also [`SIA2D_D_target`](@ref).
     `archi` and state `st` used for evaluation of the law.
 - `params::Sleipnir.Parameters`: Parameters struct. Not used for the moment but kept
     as an argument to keep consistency with other equivalent functions `LawA` and
-    `LawUhybrid`.
-- `max_NN::AbstractFloat`: Expected maximum value of the neural network output.
-- `prescale_bounds::Vector{Tuple{F,F}}`: Vector of tuples where each tuple defines
-    the lower and upper bounds of the input for scaling.
+    `LawY`.
+- `max_NN::Union{F, Nothing}`: Expected maximum value of the neural network output.
+    If set to `nothing`, no postscaling is applied.
+- `prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing}`: Vector of tuples where each
+    tuple defines the lower and upper bounds of the input for scaling.
+    If set to `nothing`, no prescaling is applied.
 
 # Returns
 - `U_law`: A `Law{Array{Float64, 2}}` instance that computes the diffusive velocity `U`
@@ -82,12 +84,12 @@ U_law = LawU(nn_model, params; max_NN = 50.0, prescale_bounds = [bounds_H, bound
 function LawU(
     nn_model::NeuralNetwork,
     params::Sleipnir.Parameters;
-    max_NN::F = 50.0,
-    prescale_bounds::Vector{Tuple{F,F}} = [(0.0, 300.0), (0.0, 0.5)],
+    max_NN::Union{F, Nothing} = 50.0,
+    prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing} = [(0.0, 300.0), (0.0, 0.5)],
 ) where {F <: AbstractFloat}
     prescale = !isnothing(prescale_bounds) ? X -> _ml_model_prescale(X, prescale_bounds) : identity
     # The value of max_NN should correspond to maximum of Umax * dSdx
-    postscale = Y -> _ml_model_postscale(Y, max_NN)
+    postscale = !isnothing(max_NN) ? Y -> _ml_model_postscale(Y, max_NN) : identity
 
     archi = nn_model.architecture
     st = nn_model.st
@@ -116,15 +118,16 @@ end
 
 """
 
-    LawUhybrid(
+    LawY(
         nn_model::NeuralNetwork,
         params::Sleipnir.Parameters;
-        prescale_bounds = [(-25.0, 0.0), (0.0, 500.0)],
-    )
+        max_NN::Union{F, Nothing} = nothing,
+        prescale_bounds::Vector{Tuple{F,F}} = [(-25.0, 0.0), (0.0, 500.0)],
+    ) where {F <: AbstractFloat}
 
-Constructs a law object for the creep coefficient `A` in the SIA based on a neural
+Constructs a law object for the hybrid diffusivity `Y` in the SIA based on a neural
 network that takes as input the long term air temperature and the ice thickness `H̄`.
-The creep coefficient `A` with this law is a matrix as it depends on the ice thickness.
+The hybrid diffusivity `Y` with this law is a matrix as it depends on the ice thickness.
 This law is used in an hybrid setting where the `n` exponent in the mathematical
 expression of the diffusivity is different from the one used to generate the ground
 truth. The goal of this law is to retrieve the missing part of the diffusivity.
@@ -135,11 +138,13 @@ Please refer to [`SIA2D_D_hybrid_target`](@ref) for a mathematical definition.
     `archi` and state `st` used for evaluation of the law.
 - `params::Sleipnir.Parameters`: Parameters struct used to retrieve the maximum
     value of A for scaling of the neural network output.
+- `max_NN::Union{F, Nothing}`: Expected maximum value of the neural network output.
+    If not specified, the law takes as an expected maximum value `params.physical.maxA`.
 - `prescale_bounds::Vector{Tuple{F,F}}`: Vector of tuples where each tuple defines
     the lower and upper bounds of the input for scaling.
 
 # Returns
-- `Uhybrid_law`: A `Law{Array{Float64, 2}}` instance that computes the creep coefficient `A`
+- `Y_law`: A `Law{Array{Float64, 2}}` instance that computes the hybrid diffusivity `Y`
     based on an input temperature and ice thickness using the neural network. The
     law scales the output to the physical bounds defined by `params`.
 
@@ -149,7 +154,7 @@ Please refer to [`SIA2D_D_hybrid_target`](@ref) for a mathematical definition.
 # Details
 - The function wraps the architecture and state of the neural network in a`StatefulLuxLayer`.
 - The resulting law takes input variables, applies the neural network, and scales its output
-    to match the maximum value `params.physical.maxA`.
+    to match the maximum value which is either `max_NN` or `params.physical.maxA`.
 - The in-place assignment to `cache` is ignored in differentiation to allow gradient
     computation with Zygote.
 - The `init_cache` function initializes the cache with a zero matrix.
@@ -159,25 +164,27 @@ Please refer to [`SIA2D_D_hybrid_target`](@ref) for a mathematical definition.
 nn_model = NeuralNetwork(params)
 bounds_T = (-25.0, 0.0)
 bounds_H = (0.0, 500.0)
-Uhybrid_law = LawUhybrid(nn_model, params; prescale_bounds = [bounds_T, bounds_H])
+Y_law = LawY(nn_model, params; prescale_bounds = [bounds_T, bounds_H])
 """
-function LawUhybrid(
+function LawY(
     nn_model::NeuralNetwork,
     params::Sleipnir.Parameters;
+    max_NN::Union{F, Nothing} = nothing,
     prescale_bounds::Vector{Tuple{F,F}} = [(-25.0, 0.0), (0.0, 500.0)],
 ) where {F <: AbstractFloat}
     prescale = !isnothing(prescale_bounds) ? X -> _ml_model_prescale(X, prescale_bounds) : identity
-    postscale = Y -> _ml_model_postscale(Y, params.physical.maxA)
+    max_NN = isnothing(max_NN) ? params.physical.maxA : max_NN
+    postscale = Y -> _ml_model_postscale(Y, max_NN)
 
     archi = nn_model.architecture
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
-    Uhybrid_law = let smodel = smodel, prescale = prescale, postscale = postscale
+    Y_law = let smodel = smodel, prescale = prescale, postscale = postscale
     Law{Array{Float64, 2}}(;
         inputs = (; T=InpTemp(), H̄=InpH̄()),
         f! = function (cache, inp, θ)
-            A = map(h -> _pred_NN([inp.T, h], smodel, θ.A, prescale, postscale), inp.H̄)
+            A = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
             # Flag the in-place assignment as non differented and return A instead in
             # order to be able to compute ∂A∂θ with Zygote
@@ -190,7 +197,7 @@ function LawUhybrid(
         end,
     )
     end
-    return Uhybrid_law
+    return Y_law
 end
 
 """

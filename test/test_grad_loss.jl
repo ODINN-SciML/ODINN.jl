@@ -75,11 +75,11 @@ function test_grad_finite_diff(
             regressors = (; A=nn_model),
         )
     elseif target==:D_hybrid
-        iceflow_model = SIA2Dmodel(params; A=LawUhybrid(nn_model, params))
+        iceflow_model = SIA2Dmodel(params; Y=LawY(nn_model, params))
         ODINN.Model(
             iceflow = iceflow_model,
             mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-            regressors = (; A=nn_model),
+            regressors = (; Y=nn_model),
         )
     elseif target==:D
         iceflow_model = SIA2Dmodel(params; U=LawU(nn_model, params))

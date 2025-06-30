@@ -134,16 +134,13 @@ end
 nn_model = NeuralNetwork(
     params;
     architecture = architecture,
-    target = SIA2D_D_hybrid_target(
-        n_H = 1.0,
-        max_NN = max_NN
-    )
 )
-A_law = LawUhybrid(nn_model, params)
+Y_law = LawY(nn_model, params; max_NN=max_NN)
 model = Model(
-    iceflow = SIA2Dmodel(params; A=A_law),
+    iceflow = SIA2Dmodel(params; Y=Y_law, n_H=1.0),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
-    regressors = (; A=nn_model),
+    regressors = (; Y=nn_model),
+    target = SIA2D_D_hybrid_target(),
 )
 
 # We create an ODINN prediction
@@ -168,7 +165,7 @@ for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
     temp = Temps_smooth[i]
     H = H_smooth[j]
 
-    A_pred = eval_law(functional_inversion.model.iceflow.A, functional_inversion, 1, (;T=temp, H̄=H), θ)
+    A_pred = eval_law(functional_inversion.model.iceflow.Y, functional_inversion, 1, (;T=temp, H̄=H), θ)
     AtimesH_pred[i, j] = only(unique(A_pred)) # The cache is a matrix and the result of the NN evaluation has been broadcasted to a matrix, we retrieve the only value
 end
 

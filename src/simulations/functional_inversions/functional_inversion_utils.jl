@@ -50,6 +50,8 @@ function run!(
     # simulation.stats.retcode = sol.
     simulation.stats.θ = sol.u
 
+    simulation.model.machine_learning.θ = sol.u
+
     # TODO: Save when optimization is working
     # Save results in path is provided
     if !isnothing(path) & !isnothing(file_name)
@@ -281,7 +283,7 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, glacier_idx::I)
     glacier = simulation.glaciers[glacier_idx]
 
     simulation.cache = init_cache(simulation.model, simulation, glacier_idx, params)
-    simulation.model.machine_learning.θ .= θ
+    simulation.model.machine_learning.θ = θ
 
     # Create mass balance callback
     tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
@@ -381,7 +383,7 @@ end
 Wrapper to pass a parametrization to the SIA2D
 """
 function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM) where {R <: Real, SIM <: Simulation}
-    simulation.model.machine_learning.θ .= θ
+    simulation.model.machine_learning.θ = θ
     return Huginn.SIA2D(H, simulation, t)
 end
 
@@ -389,7 +391,7 @@ end
 currently just use for Enzyme
 """
 function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R) where {R <: Real}
-    simulation.model.machine_learning.θ .= _θ
+    simulation.model.machine_learning.θ = _θ
     Huginn.SIA2D!(_dH, _H, simulation, t)
     return nothing
 end
