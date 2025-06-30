@@ -95,7 +95,7 @@ function Inversion(
     model::Sleipnir.Model,
     glaciers::Vector{G},
     parameters::Sleipnir.Parameters
-    ) where {G <: Sleipnir.AbstractGlacier}
+) where {G <: Sleipnir.AbstractGlacier}
 
     # Build the results struct based on input values
     inversion = Inversion(model,

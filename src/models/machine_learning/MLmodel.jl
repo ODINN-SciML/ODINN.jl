@@ -10,7 +10,12 @@ _inputs_U_law = (; H̄=InpH̄(), ∇S=Inp∇S())
 abstract type MLmodel <: AbstractModel end
 
 """
-    Model(; iceflow::Union{IFM, Nothing}, mass_balance::Union{MBM, Nothing}, machine_learning::Union{MLM, Nothing}) where {IFM <: IceflowModel, MBM <: MBmodel, MLM <: MLmodel}
+    Model(;
+        iceflow::Union{IFM, Nothing},
+        mass_balance::Union{MBM, Nothing},
+        regressors::NamedTuple = (;),
+        target::Union{TAR, Nothing} = nothing,
+    ) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
 
 Creates a new model instance using the provided iceflow, mass balance, and machine learning components.
 

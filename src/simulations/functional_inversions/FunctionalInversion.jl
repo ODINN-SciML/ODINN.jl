@@ -42,7 +42,7 @@ function FunctionalInversion(
     model::M,
     glaciers::Vector{G},
     parameters::P
-    ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
+) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 
     # We perform this check here to avoid having to provide the parameters when creating the model
     @assert targetType(model.machine_learning.target) == parameters.UDE.target "Target does not match the one provided in the parameters."

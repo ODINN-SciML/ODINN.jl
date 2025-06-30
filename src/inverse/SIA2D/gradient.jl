@@ -58,6 +58,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     for i in 1:length(simulation.glaciers)
 
+        simulation.cache = init_cache(simulation.model, simulation, i, simulation.parameters)
+        simulation.model.machine_learning.θ = θ
+
         result = simulation.results[i]
 
         # Results from forward simulation
