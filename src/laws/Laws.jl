@@ -44,7 +44,7 @@ Constructs a law object for the diffusive velocity `U` in the SIA based on a neu
 network that takes as input the ice thickness `H̄` and the surface slope `∇S`.
 The diffusive velocity `U` with this law is a matrix and the diffusivity in the SIA
 is obtained through D = U * H̄.
-See also [`SIA2D_D_target`](@ref).
+See also `SIA2D_D_target`.
 
 # Arguments
 - `nn_model::NeuralNetwork`: A neural network model containing the architecture
@@ -131,7 +131,7 @@ The hybrid diffusivity `Y` with this law is a matrix as it depends on the ice th
 This law is used in an hybrid setting where the `n` exponent in the mathematical
 expression of the diffusivity is different from the one used to generate the ground
 truth. The goal of this law is to retrieve the missing part of the diffusivity.
-Please refer to [`SIA2D_D_hybrid_target`](@ref) for a mathematical definition.
+Please refer to `SIA2D_D_hybrid_target` for a mathematical definition.
 
 # Arguments
 - `nn_model::NeuralNetwork`: A neural network model containing the architecture
@@ -210,7 +210,7 @@ end
 Constructs a law object for the creep coefficient `A` in the SIA based on a neural
 network that takes as input the long term air temperature.
 The creep coefficient `A` with this law is a scalar.
-See also [`SIA2D_A_target`](@ref).
+See also `SIA2D_A_target`.
 
 # Arguments
 - `nn_model::NeuralNetwork`: A neural network model containing the architecture

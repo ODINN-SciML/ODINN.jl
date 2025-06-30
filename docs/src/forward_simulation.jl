@@ -28,10 +28,9 @@ params = Parameters(
 )
 
 ## Specify a model based on an iceflow model, a mass balance model, and a machine learning model
-model = Model(
+model = Huginn.Model(
     iceflow = SIA2Dmodel(params),
     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
-	machine_learning = nothing
 )
 
 ## We initialize the glaciers with all the necessary data 
@@ -101,10 +100,9 @@ params = Parameters(
 
 # Generally, a model can be initialized directly using the `Model` constructor:
 
-model = Model(
+model = Huginn.Model(
     iceflow = SIA2Dmodel(params),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-    machine_learning = nothing
 )
 
 # #### Step 3: Glacier initialization

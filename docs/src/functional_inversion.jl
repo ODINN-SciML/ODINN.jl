@@ -22,33 +22,41 @@ rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
 ## Define the time step for the simulation output and for the adjoint calculation. In this case, a month. 
 δt = 1/12
 
-params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
-                                                    use_MB=false,
-                                                    velocities=true,
-                                                    tspan=(2010.0, 2015.0),
-                                                    step=δt,
-                                                    multiprocessing=true,
-                                                    workers=7,
-                                                    test_mode=false,
-                                                    rgi_paths=rgi_paths),
-                    hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=[20,30],
-                                            optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
-                    physical = PhysicalParameters(minA = 8e-21,
-                                                  maxA = 8e-17),
-                    UDE = UDEparameters(optim_autoAD=ODINN.NoAD(),
-                                        grad=ContinuousAdjoint(),
-                                        optimization_method="AD+AD",
-                                        target = :A),
-                    solver = Huginn.SolverParameters(step=δt,
-                                                     save_everystep=true,
-                                                     progress=true)
-                    )
+batch_size = length(rgi_ids) # We set batch size equals all datasize so we test gradient
+
+params = Parameters(
+    simulation = SimulationParameters(
+        working_dir=working_dir,
+        use_MB=false,
+        velocities=true,
+        tspan=(2010.0, 2015.0),
+        step=δt,
+        multiprocessing=true,
+        workers=7,
+        test_mode=false,
+        rgi_paths=rgi_paths),
+    hyper = Hyperparameters(
+        batch_size=batch_size,
+        epochs=[20,30],
+        optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
+    physical = PhysicalParameters(
+        minA = 8e-21,
+        maxA = 8e-17),
+    UDE = UDEparameters(
+        optim_autoAD=ODINN.NoAD(),
+        grad=ContinuousAdjoint(),
+        optimization_method="AD+AD",
+        target = :A),
+    solver = Huginn.SolverParameters(
+        step=δt,
+        save_everystep=true,
+        progress=true)
+)
 
 ## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
 A_law = CuffeyPaterson()
 
-model = Model(
+model = Huginn.Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
@@ -66,7 +74,7 @@ generate_ground_truth!(glaciers, params, model, tstops)
 ## After this forward simulation, we restart the iceflow model to be ready for the inversions
 nn_model = NeuralNetwork(params)
 A_law = LawA(nn_model, params)
-model = ODINN.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
     regressors = (; A=nn_model)
@@ -165,13 +173,13 @@ run!(functional_inversion)
 # # The next step is to generate a synthetic dataset using a forward simulation. This will generate a dataset with the ice thickness and surface velocities
 # # for each glacier at each time step. The dataset will be used to train the machine learning model.
 
-## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
+# ## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
 
 # A_law = CuffeyPaterson()
 
 # # Generally, a model can be initialized directly using the `Model` constructor:
 
-# model = Model(
+# model = Huginn.Model(
 #     iceflow = SIA2Dmodel(params; A=A_law),
 #     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 # )
@@ -191,7 +199,7 @@ run!(functional_inversion)
 
 # nn_model = NeuralNetwork(params)
 # A_law = LawA(nn_model, params)
-# model = ODINN.Model(
+# model = Model(
 #     iceflow = SIA2Dmodel(params; A=A_law),
 #     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 #     regressors = (; A=nn_model)
@@ -204,6 +212,6 @@ run!(functional_inversion)
 # functional_inversion = FunctionalInversion(model, glaciers, params)
 
 # # And finally, we just run the simulation. This will run the adjoint method to compute the gradients and then use the ADAM optimizer
-# # to train the UDE model. 
+# # to train the UDE model.
 # run!(functional_inversion)
 
