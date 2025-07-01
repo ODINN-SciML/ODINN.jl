@@ -183,3 +183,43 @@ mutable struct MachineLearning{
         new{typeof(A), typeof(C), typeof(n), typeof(Y), typeof(U), typeof(target), typeof(θ)}(A, C, n, Y, U, target, θ)
     end
 end
+
+
+# Display setup
+function Base.show(io::IO, nn_model::NeuralNetwork)
+    println("--- NeuralNetwork ---")
+    println("    architecture:")
+    # Retrieve the printed lines
+    iotmp = IOBuffer()
+    show(iotmp, "text/plain", nn_model.architecture)
+    str = String(take!(iotmp))
+    # Add prefix to each line
+    prefix = "      "
+    prefixed_str = join(prefix .* split(str, '\n'), '\n')
+    println(prefixed_str)
+    # show(io, "text/plain", nn_model.architecture)
+    print("    θ: ComponentVector of length $(length(nn_model.θ))")
+end
+
+function Base.show(io::IO, ml_model::MachineLearning)
+    if !(ml_model.A isa emptyMLmodel)
+        print("  A: ")
+        println(ml_model.A)
+    end
+    if !(ml_model.C isa emptyMLmodel)
+        print("  C: ")
+        println(ml_model.C)
+    end
+    if !(ml_model.n isa emptyMLmodel)
+        print("  n: ")
+        println(ml_model.n)
+    end
+    if !(ml_model.Y isa emptyMLmodel)
+        print("  Y: ")
+        println(ml_model.Y)
+    end
+    if !(ml_model.U isa emptyMLmodel)
+        print("  U: ")
+        println(ml_model.U)
+    end
+end
