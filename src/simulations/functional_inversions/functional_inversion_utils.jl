@@ -94,7 +94,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data))
+    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         # Enzyme.API.strictAliasing!(false)
@@ -145,7 +145,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
     # Simplify API for optimization problem and include data loaded in argument for minibatch
     # glacier_data_batch is a pair of the data sampled (e.g, glacier_data_batch = (id, glacier))
     # _glacier_data_batch has a simulation!
-    loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1])
+    loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         # Enzyme.API.strictAliasing!(false)
@@ -172,9 +172,9 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
     return iceflow_trained
 end
 
-function loss_iceflow_transient(θ, simulation::FunctionalInversion)
+function loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
 
-    predict_iceflow!(θ, simulation)
+    predict_iceflow!(θ, simulation, mappingFct)
 
     loss_function = simulation.parameters.UDE.empirical_loss_function
 
@@ -266,9 +266,9 @@ end
 #     end # let
 # end
 
-function predict_iceflow!(θ, simulation::FunctionalInversion)
+function predict_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
     simulations = generate_simulation_batches(simulation)
-    results = pmap(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
+    results = mappingFct(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
     simulation.results = ODINN.merge_batches(results)
 end
 

@@ -5,20 +5,7 @@ Inverse with batch
 """
 function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
 
-    # Run forward simulation in dense mode
-    # batch_ids = glacier_data_loader[1] # e.g., [2, 1]
-    # Maybe this first forward run is not neccesary, since the adjoint will compute this same stuff.
-    # l = loss_iceflow_transient(θ, simulation)
-    #l = loss_iceflow_transient(θ, glaciers, results, SIA2D_models, simulation.params)
-
     @assert simulation.parameters.solver.save_everystep "Forward solution needs to be stored in dense mode (ie save_everystep should be set to true), for gradient computation."
-
-    # glacier_results_ids = map(batch_id -> Sleipnir.get_result_id_from_rgi(batch_id, simulation), batch_ids)
-    # TODO: move out this from here and make the re-arangement of the results outside
-
-    # results = simulation.results[glacier_results_ids]
-    # glaciers = simulation.glaciers
-    # SIA2D_models = simulation.model.iceflow
 
     simulations = generate_simulation_batches(simulation)
     loss_grad = pmap(simulation -> SIA2D_grad_batch!(θ, simulation), simulations)
@@ -49,7 +36,7 @@ Inverse by glacier
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     # Run forward simulation to trigger Result
-    loss_val = loss_iceflow_transient(θ, simulation)
+    loss_val = loss_iceflow_transient(θ, simulation, map) # Use a map and not a pmap because we are already computing in parallel, cf SIA2D_grad!
     # Let's compute the forward loss inside gradient
     ℓ = 0.0
     # Extract relevant data

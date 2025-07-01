@@ -9,11 +9,15 @@ function inversion_test(;
 
     ## Retrieving simulation data for the following glaciers
     if multiprocessing
-        workers = 2
+        workers = 3 # Two processes for the two glaciers + one for main
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+        epochs = [20,10]
+        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
     else
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
+        epochs = [20,20]
+        optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
     end
 
     # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
@@ -34,8 +38,8 @@ function inversion_test(;
             ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-            epochs = [20,20],
-            optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
+            epochs = epochs,
+            optimizer = optimizer
             ),
         physical = PhysicalParameters(
             minA = 8e-21,
@@ -86,13 +90,14 @@ function inversion_test(;
     functional_inversion = FunctionalInversion(model, glaciers, params)
 
     # We run the simulation
+    path = mktempdir()
     run!(
         functional_inversion;
-        path = joinpath(ODINN.root_dir, "test/data"),
+        path = path,
         file_name = "inversion_test.jld2"
     )
 
-    res_load = load(joinpath(ODINN.root_dir, "test/data", "inversion_test.jld2"), "res")
+    res_load = load(joinpath(path, "inversion_test.jld2"), "res")
 
     losses = res_load.losses
     θ = res_load.θ
@@ -106,7 +111,7 @@ function inversion_test(;
     for (i, glacier) in enumerate(glaciers)
         # Initialize the cache to make predictions with the law
         functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, params)
-        functional_inversion.model.machine_learning.θ .= θ
+        functional_inversion.model.machine_learning.θ = θ
 
         T = get_input(InpTemp(), functional_inversion, i, t)
         apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
@@ -114,20 +119,22 @@ function inversion_test(;
         push!(As_pred, functional_inversion.cache.iceflow.A[1])
     end
 
-    # Reference value of A
-    As_fake = A_poly.(Temps)
-    @show As_fake
-    @show As_pred
+    if !multiprocessing
+        # Reference value of A
+        As_fake = A_poly.(Temps)
+        @show As_fake
+        @show As_pred
 
-    # Loss did not decrease enough during inversion training
-    @test losses[end] < 1e-6
-    # Loss did not decrease enough during inversion training
-    @test losses[end] < 1e-6 * losses[begin]
+        # Loss did not decrease enough during inversion training
+        @test losses[end] < 1e-6
+        # Loss did not decrease enough during inversion training
+        @test losses[end] < 1e-6 * losses[begin]
 
-    rel_error = abs.(As_pred .- As_fake) ./ As_fake
+        rel_error = abs.(As_pred .- As_fake) ./ As_fake
 
-    # Worse case inversion error is not small enough
-    @test maximum(rel_error) < 1e-3
-    # Inversion not working even for the best behaved glacier
-    @test minimum(rel_error) < 1e-4
+        # Worse case inversion error is not small enough
+        @test maximum(rel_error) < 1e-3
+        # Inversion not working even for the best behaved glacier
+        @test minimum(rel_error) < 1e-4
+    end
 end

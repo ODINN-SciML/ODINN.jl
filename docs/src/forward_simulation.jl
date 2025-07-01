@@ -21,9 +21,9 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
-		multiprocessing = true,
+        multiprocessing = true,
         workers = 5,
-		rgi_paths = rgi_paths
+        rgi_paths = rgi_paths
     )
 )
 
@@ -80,9 +80,9 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
-		multiprocessing = false,
+        multiprocessing = false,
         #workers = 5,
-		rgi_paths = rgi_paths
+        rgi_paths = rgi_paths
     )
 )
 # #### Step 2: Model specification

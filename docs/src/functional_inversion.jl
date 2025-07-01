@@ -1,4 +1,4 @@
-# ## Forward simulation tutorial
+# ## Functional inversion tutorial
 
 ## This tutorial provides a simple example on how to perform a functional inversion using Universal Differential Equations (UDEs) in ODINN.jl.
 ## For this, we will generate a synthetic dataset using a forward simulation, and then we will use this dataset to perform the functional inversion.
@@ -22,8 +22,6 @@ rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
 ## Define the time step for the simulation output and for the adjoint calculation. In this case, a month. 
 δt = 1/12
 
-batch_size = length(rgi_ids) # We set batch size equals all datasize so we test gradient
-
 params = Parameters(
     simulation = SimulationParameters(
         working_dir=working_dir,
@@ -36,7 +34,7 @@ params = Parameters(
         test_mode=false,
         rgi_paths=rgi_paths),
     hyper = Hyperparameters(
-        batch_size=batch_size,
+        batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
         epochs=[20,30],
         optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
     physical = PhysicalParameters(

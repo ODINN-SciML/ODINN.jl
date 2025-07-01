@@ -103,7 +103,7 @@ function test_grad_finite_diff(
 
 
     θ = simulation.model.machine_learning.θ
-    loss_function(_θ, (_simulation)) = ODINN.loss_iceflow_transient(_θ, _simulation)
+    loss_function(_θ, (_simulation)) = ODINN.loss_iceflow_transient(_θ, _simulation, pmap)
     loss_iceflow_grad!(dθ, θ, _simulation) = SIA2D_grad!(dθ, θ, _simulation)
 
     function f(x, simulation)
