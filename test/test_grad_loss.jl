@@ -1,3 +1,4 @@
+using Distributed: pmap
 
 function test_grad_finite_diff(
     adjointFlavor::ADJ;

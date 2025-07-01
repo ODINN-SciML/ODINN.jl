@@ -27,6 +27,7 @@ Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use
 
 using Revise
 using ODINN
+using Sleipnir: DummyClimate2D
 using SciMLSensitivity
 using Lux, ComponentArrays
 using Statistics
@@ -112,6 +113,7 @@ params = Parameters(
 # We are going to create a glacier using the Halfar solution
 glacier = Glacier2D(
     rgi_id = "Halfar",
+    climate = DummyClimate2D(),
     H₀ = Hs[begin],
     S = B + Hs[begin],
     B = B,
