@@ -1,4 +1,7 @@
-using Pkg; Pkg.activate(".")
+using Pkg
+odinn_folder = split(Base.source_dir(), "scripts")[1]
+Pkg.activate(odinn_folder*"/scripts/")
+
 include("inversion_setup.jl")
 
 using Plots; pythonplot()
@@ -10,20 +13,14 @@ losses = res_load.losses
 θ = res_load.θ
 
 Temps_smooth = collect(-23.0:0.1:0.0)
-As_fake = fakeA.(Temps_smooth)
+A_poly = Huginn.polyA_PatersonCuffey()
+As_fake = A_poly.(Temps_smooth)
 
 Temps = Float64[]
 As_pred = Float64[]
 
 for (i, glacier) in enumerate(glaciers)
-    T = ODINN.mean(glacier.climate.longterm_temps)
-    A = ODINN.apply_parametrization(
-        functional_inversion.model.machine_learning.target;
-        H = nothing, ∇S = nothing, θ = θ,
-        iceflow_model = functional_inversion.model.iceflow[i],
-        ml_model = functional_inversion.model.machine_learning,
-        glacier = glacier,
-        params = functional_inversion.parameters)
+    T, A = ODINN.T_A_Alaw(functional_inversion, i, θ, tstops[end])
     push!(Temps, T)
     push!(As_pred, A)
 end
@@ -38,4 +35,5 @@ plot_epoch = Plots.scatter!(Temps, As_pred, label="Predicted A",
 # @test As_pred ≈ As_fake rtol=0.1
 # @test log10.(As_pred) ≈ log10.(As_fake) rtol=0.1
 
+mkpath("scripts/MWEs/inversion_A/figures")
 Plots.savefig(plot_epoch, "scripts/MWEs/inversion_A/figures/MWE_inversion_A.pdf")

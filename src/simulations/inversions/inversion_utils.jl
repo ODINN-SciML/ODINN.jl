@@ -45,7 +45,7 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
         if params.simulation.use_MB
             # Compute mass balance
             MB_timestep!(model, glacier, params.solver.step, integrator.t)
-            apply_MB_mask!(integrator.u, glacier, model.iceflow)
+            apply_MB_mask!(integrator.u, model.iceflow)
         end
     end
 
@@ -196,7 +196,7 @@ function invert_iceflow_ss(glacier_idx::Int, simulation::Inversion)
         if params.simulation.use_MB
             # Compute mass balance
             MB_timestep!(model, glacier, params.solver.step, integrator.t)
-            apply_MB_mask!(integrator.u, glacier, model.iceflow)
+            apply_MB_mask!(integrator.u, model.iceflow)
         end
     end
 

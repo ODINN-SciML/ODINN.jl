@@ -1,0 +1,9 @@
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+Huginn = "9cb796e9-d0ea-421b-b37d-eb97bc1add55"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+Muninn = "4b816528-16ba-4e32-9a2e-3c1bc2049d3a"
+ODINN = "c36d5296-eba1-40be-a153-0a8fa632a659"
+PythonPlot = "274fc56d-3b97-40fa-a1cd-1b4a50311bf9"
+Sleipnir = "f5e6c550-199f-11ee-3608-394420200519"

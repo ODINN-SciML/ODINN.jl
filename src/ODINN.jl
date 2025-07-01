@@ -22,7 +22,7 @@ module ODINN
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
-using Statistics, LinearAlgebra, Random, Polynomials
+using Statistics, LinearAlgebra, Random
 using EnzymeCore
 using Enzyme
 using JLD2
@@ -83,6 +83,9 @@ include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))
 include(joinpath(root_dir, "src/models/target/Target.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
+
+# Parameterizations
+include(joinpath(root_dir, "src/laws/Laws.jl"))
 
 # Inversion for SIA equation
 include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))

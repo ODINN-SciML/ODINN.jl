@@ -19,10 +19,15 @@ In order to evaluate the quality of our inversions, we are going to use analytic
 given by Halfar solutions to evaluate the performance of the invesion.
 """
 
-using Pkg; Pkg.activate(".")
+using Pkg
+# Activate the "scripts" environment, this works both if the user is in "ODINN/", in "ODINN/scripts/" or in any subfolder
+odinn_folder = split(Base.source_dir(), "scripts")[1]
+Pkg.activate(odinn_folder*"/scripts/")
+Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use local version, you might do as well for Huginn, Muninn and Sleipnir
 
 using Revise
 using ODINN
+using Sleipnir: DummyClimate2D
 using SciMLSensitivity
 using Lux, ComponentArrays
 using Statistics
@@ -108,6 +113,7 @@ params = Parameters(
 # We are going to create a glacier using the Halfar solution
 glacier = Glacier2D(
     rgi_id = "Halfar",
+    climate = DummyClimate2D(),
     H₀ = Hs[begin],
     S = B + Hs[begin],
     B = B,
@@ -173,7 +179,7 @@ H_samples = 0.0:2.0:H_max
 all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
 X_samples = hcat(first.(all_combinations), last.(all_combinations))
 function template_diffusivity(h, ∇s)
-    ρ, g = params.physical.ρ, params.physical.g
+    (; ρ, g) = params.physical
     n = 3.0
     A = 2e-16
     return 2 * A * (ρ * g)^n * h^(n+1) * ∇s^(n-1) / (n + 2)
@@ -191,27 +197,24 @@ architecture, θ_pretrain, st_pretrain, losses = pretraining(
 )
 
 # We define the prescale and postscale of quantities.
+nn_model = NeuralNetwork(
+    params;
+    architecture = architecture,
+    θ = ComponentVector(θ = θ_pretrain), # We should give the actual solution!!!
+    seed = rng
+)
 model = Model(
-    iceflow = SIA2Dmodel(params),
+    iceflow = SIA2Dmodel(params; U=LawU(nn_model, params; prescale_bounds=nothing, max_NN=nothing)),
     mass_balance = TImodel1(
         params; DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0
         ),
-    machine_learning = NeuralNetwork(
-        params;
-        architecture = architecture,
-        θ = ComponentVector(θ = θ_pretrain), # We should give the actual solution!!!
-        target = SIA2D_D_target(
-            interpolation = :Linear,
-            n_interp_half = 5, # Notice we use a very low value for this!
-            prescale_provided = true,
-            postscale_provided = true
-        ),
-        seed = rng
-    )
+    regressors = (; U=nn_model),
+    target = SIA2D_D_target(
+        interpolation = :Linear,
+        n_interp_half = 5, # Notice we use a very low value for this!
+    ),
 )
-
-model.iceflow = SIA2Dmodel(params)
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)

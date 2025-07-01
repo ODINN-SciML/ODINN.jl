@@ -4,7 +4,7 @@ In this page, we will go through the main types (i.e. `struct`s) used in `ODINN.
 
 ## Parameters
 
-There are different types of parameters, holding specific information for different modelling aspects. All the types of parameters are wrapped into a `Parameter` type, which is threaded throughout `ODINN.jl`. 
+There are different types of parameters, holding specific information for different modelling aspects. All the types of parameters are wrapped into a `Parameter` type, which is threaded throughout `ODINN.jl`.
 
 ```@docs
 Sleipnir.Parameters
@@ -24,9 +24,9 @@ Sleipnir.SimulationParameters()
 
 ### Physical parameters
 
-Physical parameters are used to store physical constants used in the physical and machine learning models. 
+Physical parameters are used to store physical constants used in the physical and machine learning models.
 
-```@docs 
+```@docs
 Sleipnir.PhysicalParameters
 Sleipnir.PhysicalParameters()
 ```
@@ -42,7 +42,7 @@ Huginn.SolverParameters()
 
 ### Hyperparameters
 
-Hyperparameters determine different aspects of a given machine learning model. For now, these are focused on neural networks, but we plan to extend them in the future for other types of regressors. 
+Hyperparameters determine different aspects of a given machine learning model. For now, these are focused on neural networks, but we plan to extend them in the future for other types of regressors.
 
 ```@docs
 ODINN.Hyperparameters
@@ -53,7 +53,7 @@ ODINN.Hyperparameters()
 
 Universal Differential Equation (UDE) parameters are used to determine different modelling choices regarding the use of UDEs, such as wich sensitivity algorithm to use, which target (e.g. SIA parameter to target), or which optimization method to use.
 
-```@docs 
+```@docs
 ODINN.UDEparameters
 ODINN.UDEparameters()
 ```
@@ -71,9 +71,9 @@ Every glacier has its associated climate, following the same spatial representat
 
 ```@docs
 Sleipnir.Climate2D
-``` 
+```
 
-In order to create `Glacier` types with information of a given glacier for a simulation, one can initialize a list of glaciers based on RGI (Randolph Glacier Inventory) IDs. Before running this, make sure to have used `Gungnir` to download all the necessary data for those glaciers, or double check that these glaciers are already available on the ODINN server. 
+In order to create `Glacier` types with information of a given glacier for a simulation, one can initialize a list of glaciers based on RGI (Randolph Glacier Inventory) IDs. Before running this, make sure to have used `Gungnir` to download all the necessary data for those glaciers, or double check that these glaciers are already available on the ODINN server.
 
 ```@docs
 Sleipnir.initialize_glaciers
@@ -81,7 +81,7 @@ Sleipnir.initialize_glaciers
 
 ## Models
 
-There are 3 main types of models in `ODINN.jl`, iceflow models, mass balance models and machine learning models. These three families are determined by abstract types, with specific types being declared as subtypes of these abstract types to ensure compatibility through the ODINN ecosystem. 
+There are 3 main types of models in `ODINN.jl`, iceflow models, mass balance models and machine learning models. These three families are determined by abstract types, with specific types being declared as subtypes of these abstract types to ensure compatibility through the ODINN ecosystem.
 
 The three main types of models are gathered in a type `Model` in the following way:
 
@@ -91,13 +91,12 @@ ODINN.Model()
 ```
 ### Ice flow models
 
-Ice flow models are used to solve the PDEs describing the gravitational flow of glaciers. All ice flow models must be a subtype of abstract type `IceflowModel`. Ice flow models are managed by `Huginn.jl`. 
+Ice flow models are used to solve the PDEs describing the gravitational flow of glaciers. All ice flow models must be a subtype of abstract type `IceflowModel`. Ice flow models are managed by `Huginn.jl`.
 
 The main type of ice flow model used in `ODINN.jl` right now is a 2D Shallow Ice Approximation (SIA) model *(Hutter, 1983)*. This is declared in the following way:
 
 ```@docs
 Huginn.SIA2Dmodel
-Huginn.SIA2Dmodel(params::Sleipnir.Parameters)
 ```
 
 When a simulation will be run in `ODINN.jl` using an ice flow model, its related equation will be solved using `OrdinaryDiffEq.jl`. The related equation to a `SIA2Dmodel` is declared in its related util functions. Generally, these equations need to exist both in-place (to reduce memory allocations and ensure maximum performance, see example below) or out-of-place (to be more AD-friendly).
@@ -117,7 +116,7 @@ Muninn.TImodel1(params::Sleipnir.Parameters)
 
 Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specificly prescribed time steps determined in the `steps`field in [`Sleipnir.SimulationParameters`](@ref).
 
-We soon plan to add compatibility with neural networks coming from the [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine), which should become the *de facto* surface mass balance model in the `ODINN.jl` ecosystem. 
+We soon plan to add compatibility with neural networks coming from the [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine), which should become the *de facto* surface mass balance model in the `ODINN.jl` ecosystem.
 
 ### Machine Learning models
 
@@ -125,7 +124,6 @@ Machine learning models are used in the context of Universal Differential Equati
 
 ```@docs
 ODINN.NeuralNetwork
-ODINN.NeuralNetwork(params::Sleipnir.Parameters)
 ```
 
 ## Simulations
@@ -145,7 +143,7 @@ Huginn.Prediction(model::Sleipnir.Model, glaciers::Vector{G}, parameters::Sleipn
 
 ### Inversion
 
-An inversion optimises a given set of model parameters, based on a given target and an optimizer. These are handled by `ODINN.jl`. 
+An inversion optimises a given set of model parameters, based on a given target and an optimizer. These are handled by `ODINN.jl`.
 
 ```@docs
 ODINN.Inversion
@@ -153,7 +151,7 @@ ODINN.Inversion(
     model::Sleipnir.Model,
     glaciers::Vector{G},
     parameters::Sleipnir.Parameters
-    ) where {G <: Sleipnir.AbstractGlacier}
+) where {G <: Sleipnir.AbstractGlacier}
 ```
 
 ### Functional inversion
@@ -163,19 +161,19 @@ A functional inversion is the inversion of the parameters of a regressor (e.g. a
 ```@docs
 ODINN.FunctionalInversion
 ODINN.FunctionalInversion(
-    model::Sleipnir.Model,
+    model::M,
     glaciers::Vector{G},
-    parameters::Sleipnir.Parameters
-    ) where {G <: Sleipnir.AbstractGlacier}
+    parameters::P
+) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 ```
 
 ## Results and plotting
 
-Every `Simulation` type has an associated `Results` object(s), one for each one of the glaciers in the simulation. This object, as its name indicates, stores all the results of the simulation, which can be used for data anlysis and plotting. These types are handled by `Sleipnir.jl`. 
+Every `Simulation` type has an associated `Results` object(s), one for each one of the glaciers in the simulation. This object, as its name indicates, stores all the results of the simulation, which can be used for data anlysis and plotting. These types are handled by `Sleipnir.jl`.
 
 ```@docs
 Sleipnir.Results
-Sleipnir.Results(glacier::G, ifm::IF) where {G <: AbstractGlacier, F <: AbstractFloat, IF <: AbstractModel, I <: Int}
+Sleipnir.Results(glacier::G, ifm::IF) where {G <: AbstractGlacier, F <: AbstractFloat, IF <: AbstractModel, I <: Integer}
 ```
 
 One of the main things one can do with a `Results` object, is plotting them. The main function to do so is the following one:

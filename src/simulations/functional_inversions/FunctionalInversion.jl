@@ -2,7 +2,7 @@ export FunctionalInversion
 
 # Subtype composite type for a prediction simulation
 """
-    mutable struct FunctionalInversion <: Simulation
+    mutable struct FunctionalInversion{CACHE} <: Simulation
 
 An object representing a functional inversion simulation (i.e. the inversion of a function using some data-driven regressor).
 
@@ -12,21 +12,22 @@ An object representing a functional inversion simulation (i.e. the inversion of 
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
 - `results::Vector{Results}`: A vector to store the results of the simulation.
 """
-mutable struct FunctionalInversion{G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters} <: Simulation
-    model::M
-    glaciers::Vector{G}
-    parameters::P
-    results::Vector{Results}
+mutable struct FunctionalInversion{CACHE} <: Simulation
+    model::Sleipnir.Model
+    cache::Union{CACHE, Nothing}
+    glaciers::Vector{<: Sleipnir.AbstractGlacier}
+    parameters::Sleipnir.Parameters
+    results::Vector{<: Results}
     stats::TrainingStats
 end
 
 """
     function FunctionalInversion(
-        model::Sleipnir.Model,
+        model::M,
         glaciers::Vector{G},
-        parameters::Sleipnir.Parameters
-    ) where {G <: Sleipnir.AbstractGlacier}
-     
+        parameters::P
+        ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
+
 Constructor for FunctionalInversion struct with glacier model information, glaciers, and parameters.
 
 # Arguments
@@ -41,21 +42,16 @@ function FunctionalInversion(
     model::M,
     glaciers::Vector{G},
     parameters::P
-    ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
+) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 
-    # Generate multiple instances of the models for differentiation compatibility
-    if !(model.iceflow isa Vector) || ((model.iceflow isa Vector) && (length(model.iceflow) != length(glaciers)))
-        model.iceflow = [deepcopy(model.iceflow) for _ in 1:length(glaciers)]
-    end
-    if !(model.mass_balance isa Vector) || ((model.mass_balance isa Vector) && (length(model.mass_balance) != length(glaciers)))
-        model.mass_balance = [deepcopy(model.mass_balance) for _ in 1:length(glaciers)]
-    end
+    # We perform this check here to avoid having to provide the parameters when creating the model
+    @assert targetType(model.machine_learning.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
 
     # Build the results struct based on input values
-    functional_inversion = FunctionalInversion(model,
+    functional_inversion = FunctionalInversion{cache_type(model)}(model, nothing,
                             glaciers,
                             parameters,
-                            Vector{Results}([]),
+                            Vector{Results{Sleipnir.Float, Sleipnir.Int}}([]),
                             TrainingStats())
 
     return functional_inversion
