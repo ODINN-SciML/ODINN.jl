@@ -160,6 +160,164 @@ function VJP_λ_∂SIA_discrete(
 end
 
 
+function VJP_λ_∂V∂Vxy(
+    ∂V::Matrix{R},
+    Vx::Matrix{R},
+    Vy::Matrix{R},
+) where {R <:Real}
+    V = (Vx.^2 .+ Vy.^2).^(1/2)
+    ∂Vx = Vx .* ∂V ./ V
+    ∂Vy = Vy .* ∂V ./ V
+    return ∂Vx, ∂Vy
+end
+
+
+function VJP_λ_∂surface_V∂H_discrete(
+    ∂Vx::Matrix{R},
+    ∂Vy::Matrix{R},
+    H::Matrix{R},
+    θ,
+    simulation::SIM,
+    t::R
+) where {R <:Real, SIM <: Simulation}
+
+    SIA2D_model = simulation.model.iceflow
+    SIA2D_cache = simulation.cache.iceflow
+    glacier_idx = SIA2D_cache.glacier_idx
+    glacier = simulation.glaciers[glacier_idx]
+
+    # Retrieve models and parameters
+    params = simulation.parameters
+    ml_model = simulation.model.machine_learning
+    target = ml_model.target
+
+    B = glacier.B
+    Δx = glacier.Δx
+    Δy = glacier.Δy
+
+    # First, enforce values to be positive
+    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    # Update glacier surface altimetry
+    S = B .+ H
+
+    dSdx = Huginn.diff_x(S) / Δx
+    dSdy = Huginn.diff_y(S) / Δy
+    ∇Sx = Huginn.avg_y(dSdx)
+    ∇Sy = Huginn.avg_x(dSdy)
+
+    # Compute surface slope
+    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+
+    # Compute average ice thickness
+    H̄ = Huginn.avg(H)
+
+    # Store temporary variables for use with the laws
+    SIA2D_cache.∇S .= ∇S
+    SIA2D_cache.H̄ .= H̄
+
+    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+
+    # Equals ∂Dꜛ/∂H
+    α = ∂Diffusivityꜛ∂H(
+        target;
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
+        glacier = glacier, params = params
+    )
+    # Equals ∂Dꜛ/∂(∇H)
+    β = ∂Diffusivityꜛ∂∇H(
+        target;
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
+        glacier = glacier, params = params
+    )
+
+    inn1∂Vx = inn1(∂Vx)
+    inn1∂Vy = inn1(∂Vy)
+
+    ∇S∂V = (∇Sx .* inn1∂Vx .+ ∇Sy .* inn1∂Vy)
+
+    βx = β .* ∇Sx
+    βy = β .* ∇Sy
+    ∂D∂H = avg_adjoint(α .* ∇S∂V) .+ diff_x_adjoint(avg_y_adjoint(βx .* ∇S∂V), Δx) + diff_y_adjoint(avg_x_adjoint(βy .* ∇S∂V), Δy)
+
+    Dꜛ = Diffusivityꜛ(
+        target;
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
+        glacier = glacier, params = params
+    )
+    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* inn1∂Vx), Δx) .+ diff_y_adjoint(avg_x_adjoint(Dꜛ .* inn1∂Vy), Δy)
+    ∂H = ∂D∂H .+ ∂∇S∂H
+
+    return -∂H
+end
+
+function VJP_λ_∂surface_V∂θ_discrete(
+    ∂Vx::Matrix{R},
+    ∂Vy::Matrix{R},
+    H::Matrix{R},
+    θ,
+    simulation::SIM,
+    t::R
+) where {R <:Real, SIM <: Simulation}
+
+    SIA2D_model = simulation.model.iceflow
+    SIA2D_cache = simulation.cache.iceflow
+    glacier_idx = SIA2D_cache.glacier_idx
+    glacier = simulation.glaciers[glacier_idx]
+
+    # Retrieve models and parameters
+    params = simulation.parameters
+    ml_model = simulation.model.machine_learning
+    target = ml_model.target
+
+    B = glacier.B
+    Δx = glacier.Δx
+    Δy = glacier.Δy
+
+    # First, enforce values to be positive
+    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    # Update glacier surface altimetry
+    S = B .+ H
+
+    dSdx = Huginn.diff_x(S) / Δx
+    dSdy = Huginn.diff_y(S) / Δy
+    ∇Sx = Huginn.avg_y(dSdx)
+    ∇Sy = Huginn.avg_x(dSdy)
+
+    # Compute surface slope
+    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+
+    # Compute average ice thickness
+    H̄ = Huginn.avg(H)
+
+    # Store temporary variables for use with the laws
+    SIA2D_cache.∇S .= ∇S
+    SIA2D_cache.H̄ .= H̄
+
+    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+
+    ∇S∂V = (∇Sx .* inn1(∂Vx) .+ ∇Sy .* inn1(∂Vy))
+
+    # Gradient wrt θ
+    ∂D∂θ = ∂Diffusivityꜛ∂θ(
+        target;
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
+        glacier = glacier, params = params
+    )
+    # Evaluate numerical integral for loss
+    @tullio ∂θ_v[k] := ∂D∂θ[i, j, k] * ∇S∂V[i, j]
+    # Construct component vector
+    ∂θ = Vector2ComponentVector(∂θ_v, θ)
+
+    return -∂θ
+end
+
+
 #######################################
 #####     Contiuous Adjoint      ######
 #######################################
