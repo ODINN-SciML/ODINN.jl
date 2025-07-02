@@ -132,6 +132,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
 
+            @assert !(loss_function isa LossHV || loss_function isa LossV) "ContinuousAdjoint is not compatible with the ice velocity loss for the moment"
+
             # Adjoint setup
 
             """
@@ -168,7 +170,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             stop_condition(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
             function effect!(integrator)
                 t = - integrator.t
-                ∂ℓ∂H = backward_loss(loss_function, H_itp(t), H_ref_itp(t); normalization=prod(N)*normalization)
+                ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
+                    loss_function, H_itp(t), H_ref_itp(t),
+                    t, glacier, θ, simulation; normalization=prod(N)*normalization)
                 integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             cb_adjoint_loss = DiscreteCallback(stop_condition, effect!)
@@ -178,8 +182,10 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Include contribution of loss from last step since this is not accounted for in the discrete callback
             if simulation.parameters.simulation.tspan[2] ∈ t_ref
                 t_final = simulation.parameters.simulation.tspan[2]
-                λ₁ .+= simulation.parameters.simulation.step .* backward_loss(loss_function, H_itp(t_final), H_ref_itp(t_final); normalization=prod(N)*normalization)
-                # λ₁ .-= only(backward_loss(loss_function, [H_itp(t_final)], [H_ref_itp(t_final)]; normalization=prod(N)*normalization))
+                ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
+                    loss_function, H_itp(t_final), H_ref_itp(t_final),
+                    t_final, glacier, θ, simulation; normalization=prod(N)*normalization)
+                λ₁ .+= simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             # Define ODE Problem with time in reverse
             adjoint_PDE_rev = ODEProblem(

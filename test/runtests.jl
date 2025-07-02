@@ -70,8 +70,8 @@ end
 end
 
 @testset "Adjoint method of SIA equation with A as target and ice velocity loss" begin
-    # @testset "VJP (discrete) of surface_V vs finite differences" test_adjoint_surface_V(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[1e-6, 1e-13, 1e-6], target = :A)
-    @testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], velocityLoss=true)
+    @testset "VJP (discrete) of surface_V vs finite differences" test_adjoint_surface_V(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[1e-6, 1e-13, 1e-6], target = :A)
+    @testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-7, 5e-4], velocityLoss=true)
     # @testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], velocityLoss=true)
     # @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], velocityLoss=true)
     # @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], velocityLoss=true)
