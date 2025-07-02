@@ -65,7 +65,7 @@ function ∂Diffusivity∂θ(
     end
 
     ∇θ, = Zygote.gradient(_θ -> apply_law!(
-        iceflow_model.A, iceflow_cache.A, simulation, glacier_idx, t, _θ),
+        iceflow_model.A, iceflow_cache.∂A∂θ, simulation, glacier_idx, t, _θ),
         θ)
     ∇θ_cv = ComponentVector2Vector(∇θ)
 
@@ -80,50 +80,50 @@ function Diffusivityꜛ(
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     (; n, A) = iceflow_cache
-    Γ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
+    Γꜛ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
     return (
-            Sꜛ(iceflow_model, iceflow_cache, params) .+ A .* Γ_no_A
+            Sꜛ(iceflow_model, iceflow_cache, params) .+ A .* Γꜛ_no_A
         ) .* H̄.^(n .+ 1) .* ∇S.^(n .- 1)
 end
 
 function ∂Diffusivityꜛ∂H(
     target::SIA2D_A_target;
-    H, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     n = iceflow_cache.n
     return (
             Sꜛ(iceflow_model, iceflow_cache, params) .+ Γꜛ(iceflow_model, iceflow_cache, params)
-        ) .* (n .+ 1) .* H.^n .* ∇S.^(n .- 1)
+        ) .* (n .+ 1) .* H̄.^n .* ∇S.^(n .- 1)
 end
 
 function ∂Diffusivityꜛ∂∇H(
     target::SIA2D_A_target;
-    H, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     n = iceflow_cache.n
     return (
             Sꜛ(iceflow_model, iceflow_cache, params) .+ Γꜛ(iceflow_model, iceflow_cache, params)
-        ) .* (n .- 1) .* H.^(n .+ 1) .* ∇S.^(n .- 3)
+        ) .* (n .- 1) .* H̄.^(n .+ 1) .* ∇S.^(n .- 3)
 end
 
 function ∂Diffusivityꜛ∂θ(
     target::SIA2D_A_target;
-    H, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     n = iceflow_cache.n
-    Γ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H.^(n .+ 1) .* ∇S.^(n .- 1)
+    Γꜛ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
+    ∂A_spatial = Γꜛ_no_A .* H̄.^(n .+ 1) .* ∇S.^(n .- 1)
 
     if is_callback_law(iceflow_model.A)
         @assert "The A law cannot be a callback law as it needs to be differentiated in ∂Diffusivityꜛ∂θ. To support A as a callback law, you need to update the structure of the adjoint code computation."
     end
 
     ∇θ, = Zygote.gradient(_θ -> apply_law!(
-        iceflow_model.A, iceflow_cache.A, simulation, glacier_idx, t, _θ),
+        iceflow_model.A, iceflow_cache.∂A∂θ, simulation, glacier_idx, t, _θ),
         θ)
     ∇θ_cv = ComponentVector2Vector(∇θ)
 

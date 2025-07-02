@@ -96,6 +96,7 @@ function ∂Diffusivity∂H(
 
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H̄))
+    # We don't use apply_law! because we want to evaluate with custom inputs
     iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄+δH, ∇S=∇S), θ)
     a = iceflow_cache.∂U∂H .* (H̄+δH)
     iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S), θ)
@@ -114,6 +115,7 @@ function ∂Diffusivity∂∇H(
 
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
+    # We don't use apply_law! because we want to evaluate with custom inputs
     iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
     a = iceflow_cache.∂U∂H .* H̄
     iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S), θ)
@@ -153,6 +155,7 @@ function ∂Diffusivity∂θ(
             if H̄[i, j] == 0.0
                 continue
             end
+            # We don't use apply_law! because we want to evaluate with custom inputs
             ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.U.f.f(
                 iceflow_cache.∂U∂θ,
                 (; H̄=H̄[i, j], ∇S=∇S[i, j]), _θ
@@ -182,6 +185,7 @@ function ∂Diffusivity∂θ(
 
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for (i, h) in enumerate(H_interp), (j, ∇s) in enumerate(∇S_interp)
+            # We don't use apply_law! because we want to evaluate with custom inputs
             ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.U.f.f(
                 iceflow_cache.∂U∂θ,
                 (; H̄=h, ∇S=∇s), _θ
