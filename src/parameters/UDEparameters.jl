@@ -61,8 +61,6 @@ function UDEparameters(;
     # Verify that the optimization method is correct
     @assert ((optimization_method == "AD+AD") || (optimization_method == "AD+Diff")) "Wrong optimization method! Needs to be either `AD+AD` or `AD+Diff`"
 
-    # target_object = SIA2D_target(name = target)
-
     # Build the solver parameters based on input values
     UDE_parameters = UDEparameters{typeof(grad)}(
         sensealg, optim_autoAD, grad, optimization_method,

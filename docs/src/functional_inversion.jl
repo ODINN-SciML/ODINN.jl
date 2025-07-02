@@ -1,4 +1,4 @@
-# ## Forward simulation tutorial
+# ## Functional inversion tutorial
 
 ## This tutorial provides a simple example on how to perform a functional inversion using Universal Differential Equations (UDEs) in ODINN.jl.
 ## For this, we will generate a synthetic dataset using a forward simulation, and then we will use this dataset to perform the functional inversion.
@@ -22,49 +22,61 @@ rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
 ## Define the time step for the simulation output and for the adjoint calculation. In this case, a month. 
 δt = 1/12
 
-params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
-                                                    use_MB=false,
-                                                    velocities=true,
-                                                    tspan=(2010.0, 2015.0),
-                                                    step=δt,
-                                                    multiprocessing=true,
-                                                    workers=7,
-                                                    test_mode=false,
-                                                    rgi_paths=rgi_paths),
-                    hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-                                            epochs=[20,30],
-                                            optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
-                    physical = PhysicalParameters(minA = 8e-21,
-                                                  maxA = 8e-17),
-                    UDE = UDEparameters(optim_autoAD=ODINN.NoAD(),
-                                        grad=ContinuousAdjoint(),
-                                        optimization_method="AD+AD",
-                                        target = :A),
-                    solver = Huginn.SolverParameters(step=δt,
-                                                     save_everystep=true,
-                                                     progress=true)
-                    )
+params = Parameters(
+    simulation = SimulationParameters(
+        working_dir=working_dir,
+        use_MB=false,
+        velocities=true,
+        tspan=(2010.0, 2015.0),
+        step=δt,
+        multiprocessing=true,
+        workers=7,
+        test_mode=false,
+        rgi_paths=rgi_paths),
+    hyper = Hyperparameters(
+        batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
+        epochs=[20,30],
+        optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
+    physical = PhysicalParameters(
+        minA = 8e-21,
+        maxA = 8e-17),
+    UDE = UDEparameters(
+        optim_autoAD=ODINN.NoAD(),
+        grad=ContinuousAdjoint(),
+        optimization_method="AD+AD",
+        target = :A),
+    solver = Huginn.SolverParameters(
+        step=δt,
+        save_everystep=true,
+        progress=true)
+)
 
-model = Model(iceflow = SIA2Dmodel(params),
-                mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-                machine_learning = NeuralNetwork(params))
+## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
+A_law = CuffeyPaterson()
 
-## We initialize the glaciers with all the necessary data 
+model = Huginn.Model(
+    iceflow = SIA2Dmodel(params; A=A_law),
+    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+)
+
+## We initialize the glaciers with all the necessary data
 glaciers = initialize_glaciers(rgi_ids, params)
 
 ## Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
-A_poly = ODINN.A_law_PatersonCuffey()
-fakeA(T) = A_poly(T)
-
 ## We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities
 ## for each glacier at each time step. The dataset will be used to train the machine learning model.
-ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+generate_ground_truth!(glaciers, params, model, tstops)
 
 ## After this forward simulation, we restart the iceflow model to be ready for the inversions
-model.iceflow = SIA2Dmodel(params)
+nn_model = NeuralNetwork(params)
+A_law = LawA(nn_model, params)
+model = Model(
+    iceflow = SIA2Dmodel(params; A=A_law),
+    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    regressors = (; A=nn_model)
+)
 
 ## We specify the type of simulation we want to perform
 functional_inversion = FunctionalInversion(model, glaciers, params)
@@ -144,12 +156,6 @@ run!(functional_inversion)
 # # - *Machine learning model*: `MLmodel` is the machine learning model (e.g. a neural network) which will
 # #                               be used as part of a hybrid model based on a Universal Differential Equation.
 
-# # Generally, a model can be initialized directly using the `Model` constructor:
-
-# model = Model(iceflow = SIA2Dmodel(params),
-#                 mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-#                 machine_learning = NeuralNetwork(params))
-
 # # #### Step 3: Glacier initialization
 
 # # The third step is to fetch and initialize all the necessary data for our glaciers of interest.
@@ -165,23 +171,37 @@ run!(functional_inversion)
 # # The next step is to generate a synthetic dataset using a forward simulation. This will generate a dataset with the ice thickness and surface velocities
 # # for each glacier at each time step. The dataset will be used to train the machine learning model.
 
+# ## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
+
+# A_law = CuffeyPaterson()
+
+# # Generally, a model can be initialized directly using the `Model` constructor:
+
+# model = Huginn.Model(
+#     iceflow = SIA2Dmodel(params; A=A_law),
+#     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+# )
+
 # # We define the time snapshots for transient inversion, i.e. the time steps at which we want to save the results, which will be used
 # # to compute the adjoint in reverse mode.
 # tstops = collect(2010:δt:2015)
 
 # prediction = Prediction(model, glaciers, params)
 
-# # We define a synthetic law to generate the synthetic dataset. For this, we use the data from a table in Cuffey and Paterson (2010).
-# A_poly = ODINN.A_law_PatersonCuffey()
-# fakeA(T) = A_poly(T)
-
 # # We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities
 # # for each glacier at each time step. The dataset will be used to train the machine learning model. This will run under the hood
-# # a `Prediction` using `Huginn.jl`. 
-# ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+# # a `Prediction` using `Huginn.jl`.
+# generate_ground_truth!(glaciers, params, model, tstops)
 
 # # After this forward simulation, we restart the iceflow model to be ready for the inversions
-# model.iceflow = SIA2Dmodel(params)
+
+# nn_model = NeuralNetwork(params)
+# A_law = LawA(nn_model, params)
+# model = Model(
+#     iceflow = SIA2Dmodel(params; A=A_law),
+#     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+#     regressors = (; A=nn_model)
+# )
 
 # # #### Step 5: Train a Universal Differential Equation via a functional inversion
 # # The next step is to specify the type of simulation we want to perform. In this case, we will use a `FunctionalInversion` simulation,
@@ -190,6 +210,6 @@ run!(functional_inversion)
 # functional_inversion = FunctionalInversion(model, glaciers, params)
 
 # # And finally, we just run the simulation. This will run the adjoint method to compute the gradients and then use the ADAM optimizer
-# # to train the UDE model. 
+# # to train the UDE model.
 # run!(functional_inversion)
 

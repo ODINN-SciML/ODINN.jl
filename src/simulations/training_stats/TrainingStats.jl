@@ -1,48 +1,60 @@
 export TrainingStats
 
 """
-    mutable struct TrainingStats
+    mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
 
-An object with the information of the training. 
+An object with the information of the training.
 
 # Fields
 - `retcode`: Report code of the optimization.
-- `losses`: Vector storing the value of the loss function at each iteration. 
+- `losses`: Vector storing the value of the loss function at each iteration.
 - `niter`: Total number of iterations/epochs.
 - `θ`: Parameters of neural network after training
+- `θ_hist`: History of parameters of neural network during training
+- `∇θ_hist`: History of gradients training
 """
-mutable struct TrainingStats{F <: AbstractFloat, I <: Int}
+mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
     retcode::Union{String, Nothing}
     losses::Vector{F}
     niter::I
     θ::Union{ComponentVector, Nothing}
-end 
+    θ_hist::Vector{ComponentVector}
+    ∇θ_hist::Vector{ComponentVector}
+end
 
 """
-    function TrainingStats(;
+    TrainingStats(;
         retcode::Union{String, Nothing} = nothing,
         losses::Vector{F} = Float64[],
-        niter::I = 0
-    ) where {F <: AbstractFloat, I <: Int}
+        niter::I = 0,
+        θ::Union{ComponentVector, Nothing} = nothing,
+        θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[],
+        ∇θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[]
+    ) where {F <: AbstractFloat, I <: Integer}
 
-Constructor for TrainingStats object used to store important information during training. 
+Constructor for TrainingStats object used to store important information during training.
 
 # Arguments
 - `retcode`: Report code of the optimization.
-- `losses`: Vector storing the value of the loss function at each iteration. 
+- `losses`: Vector storing the value of the loss function at each iteration.
 - `niter`: Total number of iterations/epochs.
 - `θ`: Parameters of neural network after training
+- `θ_hist`: History of parameters of neural network during training
+- `∇θ_hist`: History of gradients training
 """
 function TrainingStats(;
     retcode::Union{String, Nothing} = nothing,
     losses::Vector{F} = Float64[],
     niter::I = 0,
-    θ::Union{ComponentVector, Nothing} = nothing
-) where {F <: AbstractFloat, I <: Int}
+    θ::Union{ComponentVector, Nothing} = nothing,
+    θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[],
+    ∇θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[]
+) where {F <: AbstractFloat, I <: Integer}
 
     @assert length(losses) == niter
+    @assert length(θ_hist) == niter
 
-    training_stats = TrainingStats(retcode, losses, niter, θ)
+    training_stats = TrainingStats{eltype(losses), typeof(niter)}(retcode, losses, niter, θ, θ_hist, ∇θ_hist)
 
     return training_stats
 end

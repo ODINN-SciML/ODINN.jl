@@ -1,7 +1,7 @@
 export Hyperparameters
 
 """
-    mutable struct Hyperparameters{F <: AbstractFloat, I <: Int} <: AbstractParameters
+    mutable struct Hyperparameters{F <: AbstractFloat, I <: Integer} <: AbstractParameters
 
 A mutable struct that holds hyperparameters for training a machine learning model.
 
@@ -14,7 +14,7 @@ A mutable struct that holds hyperparameters for training a machine learning mode
 - `epochs::I`: The total number of epochs for training.
 - `batch_size::I`: The size of each minibatch.
 """
-mutable struct Hyperparameters{F <: AbstractFloat, I <: Int} <: AbstractParameters
+mutable struct Hyperparameters{F <: AbstractFloat, I <: Integer} <: AbstractParameters
     current_epoch::I
     current_minibatch::I
     loss_history::Vector{F}

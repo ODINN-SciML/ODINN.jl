@@ -10,10 +10,10 @@ export VJP_λ_∂SIA∂H_continuous, VJP_λ_∂SIA∂θ_continuous
     VJP_λ_∂SIA_discrete(
         ∂dH::Matrix{R},
         H::Matrix{R},
+        θ,
         simulation::SIM,
-        t::R;
-        batch_id::Union{Nothing, I} = nothing
-    )
+        t::R,
+    ) where {R <:Real, SIM <: Simulation}
 
 Compute an out-of-place adjoint step of the Shallow Ice Approximation PDE.
 Given an output gradient, it backpropagates the gradient to the inputs H and A.
@@ -25,34 +25,27 @@ Arguments:
 - `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
 - `simulation::SIM`: Simulation parameters.
 - `t::R`: Time value, not used as SIA2D is time independent.
-- `batch_id::Union{Nothing, I}`: Batch index.
 
 Returns:
 - `∂H::Matrix{R}`: Input gradient wrt H.
 - `∂A::F`: Input gradient wrt A.
 """
 function VJP_λ_∂SIA_discrete(
-# function SIA2D_discrete_adjoint(
     ∂dH::Matrix{R},
     H::Matrix{R},
     θ,
     simulation::SIM,
-    t::R;
-    batch_id::Union{Nothing, I} = nothing
-) where {R <:Real, I <: Integer, SIM <: Simulation}
+    t::R,
+) where {R <:Real, SIM <: Simulation}
 
-    if isnothing(batch_id)
-        SIA2D_model = simulation.model.iceflow
-        glacier = simulation.glaciers[SIA2D_model.glacier_idx[]]
-    else
-        SIA2D_model = simulation.model.iceflow[batch_id] # We pick the right iceflow model for this glacier
-        glacier = simulation.glaciers[batch_id]
-    end
+    SIA2D_model = simulation.model.iceflow
+    SIA2D_cache = simulation.cache.iceflow
+    glacier_idx = SIA2D_cache.glacier_idx
+    glacier = simulation.glaciers[glacier_idx]
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.machine_learning.target
 
     B = glacier.B
     Δx = glacier.Δx
@@ -76,11 +69,18 @@ function VJP_λ_∂SIA_discrete(
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
 
+    # Store temporary variables for use with the laws
+    SIA2D_cache.∇S .= ∇S
+    SIA2D_cache.H̄ .= H̄
+
+    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+
     # Compute diffusivity based on target objective
     D = Diffusivity(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -109,15 +109,15 @@ function VJP_λ_∂SIA_discrete(
     # Equals ∂D/∂H
     α = ∂Diffusivity∂H(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     # Equals ∂D/∂(∇H)
     β = ∂Diffusivity∂∇H(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -147,8 +147,8 @@ function VJP_λ_∂SIA_discrete(
     # Gradient wrt θ
     ∂D∂θ = ∂Diffusivity∂θ(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     # Evaluate numerical integral for loss
@@ -178,8 +178,7 @@ function VJP_λ_∂surface_V∂H_discrete(
     H::Matrix{R},
     θ,
     simulation::SIM,
-    t::R;
-    batch_id::Union{Nothing, I} = nothing,
+    t::R
 ) where {R <:Real, I <: Integer, SIM <: Simulation}
 
     if isnothing(batch_id)
@@ -257,8 +256,7 @@ function VJP_λ_∂surface_V∂θ_discrete(
     H::Matrix{R},
     θ,
     simulation::SIM,
-    t::R;
-    batch_id::Union{Nothing, I} = nothing,
+    t::R
 ) where {R <:Real, I <: Integer, SIM <: Simulation}
 
     if isnothing(batch_id)
@@ -320,10 +318,10 @@ end
     VJP_λ_∂SIA∂H_continuous(
         λ::Matrix{R},
         H::Matrix{R},
+        θ,
         simulation::SIM,
-        t::R;
-        batch_id::Union{Nothing, I} = nothing
-    )
+        t::R,
+    ) where {R <: Real, SIM <: Simulation}
 Implementation of the continuous adjoint of the SIA2D equation with respect to H.
 Given λ and H, it returns the VJP of λ^T * ∂(SIA2D)/∂H (H).
 
@@ -332,7 +330,6 @@ Arguments:
 - `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
 - `simulation::SIM`: Simulation parameters.
 - `t::R`: Time value, not used as SIA2D is time independent.
-- `batch_id::Union{Nothing, I}`: Batch index.
 
 Returns:
 - `dλ::Matrix{R}`: Jacobian vector product, also called input gradient in reverse-mode AD.
@@ -342,22 +339,17 @@ function VJP_λ_∂SIA∂H_continuous(
     H::Matrix{R},
     θ,
     simulation::SIM,
-    t::R;
-    batch_id::Union{Nothing, I} = nothing
-) where {R <: Real, I <: Integer, SIM <: Simulation}
+    t::R,
+) where {R <: Real, SIM <: Simulation}
 
-    if isnothing(batch_id)
-        SIA2D_model = simulation.model.iceflow
-        glacier = simulation.glaciers[SIA2D_model.glacier_idx[]]
-    else
-        SIA2D_model = simulation.model.iceflow[batch_id] # We pick the right iceflow model for this glacier
-        glacier = simulation.glaciers[batch_id]
-    end
+    SIA2D_model = simulation.model.iceflow
+    SIA2D_cache = simulation.cache.iceflow
+    glacier_idx = SIA2D_cache.glacier_idx
+    glacier = simulation.glaciers[glacier_idx]
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.machine_learning.target
 
     # Retrieve parameters
     B = glacier.B
@@ -381,11 +373,18 @@ function VJP_λ_∂SIA∂H_continuous(
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
 
+    # Store temporary variables for use with the laws
+    SIA2D_cache.∇S .= ∇S
+    SIA2D_cache.H̄ .= H̄
+
+    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+
     # Compute diffusivity based on target objective
     D = Diffusivity(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -394,16 +393,16 @@ function VJP_λ_∂SIA∂H_continuous(
     ### Computation of partial derivatives of diffusivity
     ∂D∂H_dual = ∂Diffusivity∂H(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     ∂D∂H = Huginn.avg(∂D∂H_dual)
 
     β = ∂Diffusivity∂∇H(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 
@@ -451,13 +450,12 @@ end
 
 """
     VJP_λ_∂SIA∂θ_continuous(
-        θ,
         λ::Matrix{R},
         H::Matrix{R},
+        θ,
         simulation::SIM,
-        t::R;
-        batch_id::Union{Nothing, I} = nothing
-    )
+        t::R,
+    ) where {R <: Real, SIM <: Simulation}
 Implementation of the continuous adjoint of the SIA2D equation with respect to θ.
 Given λ, H and θ, it returns the VJP of λ^T * ∂(SIA2D)/∂θ (θ).
 
@@ -467,7 +465,6 @@ Arguments:
 - `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
 - `simulation::SIM`: Simulation parameters.
 - `t::R`: Time value, not used as SIA2D is time independent.
-- `batch_id::Union{Nothing, I}`: Batch index.
 
 Returns:
 - `dλ::Matrix{R}`: Jacobian vector product, also called input gradient in reverse-mode AD.
@@ -477,22 +474,17 @@ function VJP_λ_∂SIA∂θ_continuous(
     H::Matrix{R},
     θ,
     simulation::SIM,
-    t::R;
-    batch_id::Union{Nothing, I} = nothing
-) where {R <: Real, I <: Integer, SIM <: Simulation}
+    t::R,
+) where {R <: Real, SIM <: Simulation}
 
-    if isnothing(batch_id)
-        SIA2D_model = simulation.model.iceflow
-        glacier = simulation.glaciers[SIA2D_model.glacier_idx[]]
-    else
-        SIA2D_model = simulation.model.iceflow[batch_id] # We pick the right iceflow model for this glacier
-        glacier = simulation.glaciers[batch_id]
-    end
+    SIA2D_model = simulation.model.iceflow
+    SIA2D_cache = simulation.cache.iceflow
+    glacier_idx = SIA2D_cache.glacier_idx
+    glacier = simulation.glaciers[glacier_idx]
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.machine_learning.target
 
     # Retrieve parameters
     B = glacier.B
@@ -519,11 +511,18 @@ function VJP_λ_∂SIA∂θ_continuous(
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
 
+    # Store temporary variables for use with the laws
+    SIA2D_cache.∇S .= ∇S
+    SIA2D_cache.H̄ .= H̄
+
+    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+
     # Gradient wrt θ
     ∂D∂θ = ∂Diffusivity∂θ(
         target;
-        H = H̄, ∇S = ∇S, θ = θ,
-        iceflow_model = SIA2D_model, ml_model = ml_model,
+        H̄ = H̄, ∇S = ∇S, θ = θ,
+        simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
 

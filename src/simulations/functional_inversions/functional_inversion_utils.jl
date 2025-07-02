@@ -13,7 +13,12 @@ This function initiates the training of a Universal Differential Equation (UDE) 
 - The `Sleipnir.save_results_file!` function call is currently commented out and should be enabled once the optimization process is confirmed to be working.
 - The garbage collector is explicitly run using `GC.gc()` to manage memory usage.
 """
-function run!(simulation::FunctionalInversion)
+function run!(
+    simulation::FunctionalInversion;
+    path::Union{String, Nothing} = nothing,
+    file_name::Union{String, Nothing} = nothing,
+    save_every_iter::Bool = false,
+)
 
     println("Running training of UDE...\n")
 
@@ -22,7 +27,7 @@ function run!(simulation::FunctionalInversion)
 
     if !(typeof(simulation.parameters.hyper.optimizer) <: Vector)
         # One single optimizer
-        sol = train_UDE!(simulation)
+        sol = train_UDE!(simulation; save_every_iter=save_every_iter)
     else
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
@@ -31,12 +36,12 @@ function run!(simulation::FunctionalInversion)
         for i in 1:length(epochs)
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
-            simulation.parameters.hyper.epochs = epochs[i] - 1
+            simulation.parameters.hyper.epochs = epochs[i]
             if i !== 1
                 θ_trained = sol.u
                 simulation.model.machine_learning.θ = θ_trained
             end
-            sol = train_UDE!(simulation)
+            sol = train_UDE!(simulation; save_every_iter=save_every_iter)
         end
     end
 
@@ -45,32 +50,33 @@ function run!(simulation::FunctionalInversion)
     # simulation.stats.retcode = sol.
     simulation.stats.θ = sol.u
 
+    simulation.model.machine_learning.θ = sol.u
+
     # TODO: Save when optimization is working
-    # Sleipnir.save_results_file!(results_list, simulation)
+    # Save results in path is provided
+    if !isnothing(path) & !isnothing(file_name)
+        ODINN.save_inversion_file!(sol, simulation; path = path, file_name = file_name)
+    end
 
     @everywhere GC.gc() # run garbage collector
 
 end
 
 """
-train_UDE!(simulation::FunctionalInversion)
+train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false)
 
 Trains UDE based on the current FunctionalInversion.
 """
-function train_UDE!(simulation::FunctionalInversion)
+function train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false)
     optimizer = simulation.parameters.hyper.optimizer
-    # for i in 1:length(simulation.glaciers)
-    #     if !isnothing(simulation.model.iceflow[])
-    #     @assert size(simulation.model.iceflow[i].S) == (simulation.glaciers[i].nx, simulation.glaciers[i].ny) "Glacier and model simulation are non sync: $(size(simulation.model.iceflow[i].S)) != ($(simulation.glaciers[i].nx), $(simulation.glaciers[i].ny))" 
-    # end
-    iceflow_trained = train_UDE!(simulation, optimizer)
+    iceflow_trained = train_UDE!(simulation, optimizer; save_every_iter=save_every_iter)
     return iceflow_trained
 end
 
 """
 BFGS Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer)
+function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer; save_every_iter::Bool=false)
 
     @info "Training with BFGS optimizer"
 
@@ -88,16 +94,14 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation))
+    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         # Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-
         loss_function_grad!(_dθ, _θ, _simulation) = SIA2D_grad!(_dθ, _θ, only(_simulation))
-
         optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
@@ -105,16 +109,16 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Training diagnosis callback
-    cb(θ, l) = callback_diagnosis(θ, l, simulation)
+    cb(θ, l) = callback_diagnosis(θ, l, simulation; save=save_every_iter)
 
-    println("Training iceflow UDE...")
-
-    iceflow_trained = solve(optprob,
-                            simulation.parameters.hyper.optimizer,
-                            maxiters = simulation.parameters.hyper.epochs,
-                            allow_f_increases = true,
-                            callback = cb,
-                            progress = false)
+    iceflow_trained = solve(
+        optprob,
+        simulation.parameters.hyper.optimizer,
+        maxiters = simulation.parameters.hyper.epochs,
+        allow_f_increases = true,
+        callback = cb,
+        progress = false
+        )
 
     return iceflow_trained
 end
@@ -122,7 +126,7 @@ end
 """
 ADAM Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <: Optimisers.AbstractRule}
+function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_iter::Bool=false) where {AR <: Optimisers.AbstractRule}
 
     @info "Training with ADAM optimizer"
 
@@ -141,38 +145,36 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR) where {AR <:
     # Simplify API for optimization problem and include data loaded in argument for minibatch
     # glacier_data_batch is a pair of the data sampled (e.g, glacier_data_batch = (id, glacier))
     # _glacier_data_batch has a simulation!
-    loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1])
+    loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         # Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-
         loss_function_grad!(_dθ, _θ, simulation_loader) = SIA2D_grad!(_dθ, _θ, simulation_loader[1])
-
         optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
 
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Training diagnosis callback
-    cb(θ, l) = callback_diagnosis(θ, l, simulation)
+    cb(θ, l) = callback_diagnosis(θ, l, simulation; save=save_every_iter)
 
-    println("Training iceflow UDE...")
-
-    iceflow_trained = solve(optprob,
-                            simulation.parameters.hyper.optimizer,
-                            maxiters = simulation.parameters.hyper.epochs,
-                            callback = cb,
-                            progress = false)
+    iceflow_trained = solve(
+        optprob,
+        simulation.parameters.hyper.optimizer,
+        maxiters = simulation.parameters.hyper.epochs,
+        callback = cb,
+        progress = false
+        )
 
     return iceflow_trained
 end
 
-function loss_iceflow_transient(θ, simulation::FunctionalInversion)
+function loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
 
-    predict_iceflow!(θ, simulation)
+    predict_iceflow!(θ, simulation, mappingFct)
 
     loss_function = simulation.parameters.UDE.empirical_loss_function
 
@@ -297,104 +299,115 @@ end
 #     end # let
 # end
 
-function predict_iceflow!(θ, simulation::FunctionalInversion)
-    simulations = ODINN.generate_simulation_batches(simulation)
-    results = pmap(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
+function predict_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
+    simulations = generate_simulation_batches(simulation)
+    results = mappingFct(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
     simulation.results = ODINN.merge_batches(results)
 end
 
 
 function batch_iceflow_UDE(θ, simulation::FunctionalInversion)
-    return [_batch_iceflow_UDE(θ, simulation, batch_id) for batch_id in 1:length(simulation.glaciers)]
+    return [_batch_iceflow_UDE(θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
 end
 
-function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, batch_id::I) where {I <: Integer}
+function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, glacier_idx::I) where {I <: Integer}
 
-    iceflow_model = simulation.model.iceflow[batch_id]
     params = simulation.parameters
-    # batch_id = Sleipnir.Int(batch_id)
-    glacier = simulation.glaciers[batch_id]
+    glacier = simulation.glaciers[glacier_idx]
 
-    if size(iceflow_model.S) != (0, 0)
-        @assert size(iceflow_model.S) == (glacier.nx, glacier.ny) "Glacier and model simulation are non sync: $(size(iceflow_model.S)) != ($(glacier.nx), $(glacier.ny))"
-    else
-        # TODO: change API of inicitalize glacier
-        initialize_iceflow_model!(iceflow_model, batch_id, glacier, params)
-    end
+    simulation.cache = init_cache(simulation.model, simulation, glacier_idx, params)
+    simulation.model.machine_learning.θ = θ
 
+    # Create mass balance callback
     tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
-    params.solver.tstops = tstops
     stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, tstops)
-    function action!(integrator)
-        if params.simulation.use_MB
-            # Compute mass balance
-            @warn "Changes in API not propagated for MB=true"
-            @ignore_derivatives begin
-                MB_timestep!(simulation.model, glacier, params.solver.step, integrator.t)
-                apply_MB_mask!(integrator.u, glacier, simulation.model)
+    params.solver.tstops = tstops
+
+    mb_action! = let model = simulation.model, cache = simulation.cache, glacier = glacier, step = params.solver.step
+        function (integrator)
+            if params.simulation.use_MB
+                # Compute mass balance
+                MB_timestep!(cache, model, glacier, step, integrator.t)
+                apply_MB_mask!(integrator.u, cache.iceflow)
             end
         end
-        # Apply parametrization
-        # TODO: Do we need this UDE_parametrization here?
-        # apply_UDE_parametrization!(θ, simulation, integrator, batch_id)
     end
+    cb_MB = DiscreteCallback(stop_condition, mb_action!)
 
-    cb_MB = DiscreteCallback(stop_condition, action!)
+    # Create iceflow law callback
+    cb_iceflow = Huginn.build_callback(simulation.model.iceflow, simulation.cache.iceflow, simulation.cache.iceflow.glacier_idx, θ)
+
+    cb = CallbackSet(cb_MB, cb_iceflow)
 
     # Run iceflow UDE for this glacier
-    du = params.simulation.use_iceflow ? Huginn.SIA2D! : Huginn.noSIA2D
-    iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb_MB, batch_id; du = du)
+    iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb, glacier_idx)
 
     # Update simulation results
-    result = Sleipnir.create_results(simulation, batch_id, iceflow_sol, nothing; light=!simulation.parameters.solver.save_everystep, batch_id = batch_id, processVelocity=Huginn.V_from_H)
-    return result
+    result = Sleipnir.create_results(
+        simulation, glacier_idx, iceflow_sol, nothing;
+        tstops = simulation.parameters.solver.tstops,
+        light = !simulation.parameters.solver.save_everystep,
+        processVelocity = Huginn.V_from_H
+    )
 
+    return result
 end
 
 
 """
-function simulate_iceflow_UDE!(
-    θ,
-    simulation::SIM,
-    cb::DiscreteCallback,
-    batch_id::I;
-    du = Huginn.SIA2D) where {I <: Integer, SIM <: Simulation}
+    simulate_iceflow_UDE!(
+        θ,
+        simulation::SIM,
+        cb::SciMLBase.DECallback,
+        glacier_idx::I,
+    ) where {I <: Integer, SIM <: Simulation}
 
-Make forward simulation of the iceflow UDE determined in `du`.
+Make forward simulation of the iceflow UDE.
 """
 function simulate_iceflow_UDE!(
     θ,
     simulation::SIM,
-    cb::DiscreteCallback,
-    batch_id::I;
-    du = Huginn.SIA2D) where {I <: Integer, SIM <: Simulation}
+    cb::SciMLBase.DECallback,
+    glacier_idx::I,
+) where {I <: Integer, SIM <: Simulation}
 
     model = simulation.model
+    cache = simulation.cache
     params = simulation.parameters
 
     # Define closure with apply_parametrization inside the function call
-    SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation, batch_id)
+    SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation)
 
-    iceflow_prob = ODEProblem(SIA2D_UDE_closure, model.iceflow[batch_id].H₀, params.simulation.tspan, θ; tstops=params.solver.tstops)
+    iceflow_prob = ODEProblem(
+        SIA2D_UDE_closure,
+        cache.iceflow.H₀,
+        params.simulation.tspan,
+        θ;
+        tstops=params.solver.tstops,
+    )
 
-    iceflow_sol = solve(iceflow_prob,
-                        params.solver.solver,
-                        callback=cb,
-                        sensealg=params.UDE.sensealg,
-                        reltol=params.solver.reltol,
-                        progress=false)
+    iceflow_sol = solve(
+        iceflow_prob,
+        params.solver.solver,
+        callback=cb,
+        sensealg=params.UDE.sensealg,
+        reltol=params.solver.reltol,
+        progress=false,
+        maxiters=params.solver.maxiters,
+    )
+    @assert iceflow_sol.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
 
     # Compute average ice surface velocities for the simulated period
-    model.iceflow[batch_id].H = iceflow_sol.u[end]
-    model.iceflow[batch_id].H = ifelse.(model.iceflow[batch_id].H .> 0.0, model.iceflow[batch_id].H , 0.0)
+    cache.iceflow.H .= iceflow_sol.u[end]
+    cache.iceflow.H .= ifelse.(cache.iceflow.H .> 0.0, cache.iceflow.H , 0.0)
 
     # Average surface velocity
-    Huginn.avg_surface_V(simulation; batch_id = batch_id)
+    Huginn.avg_surface_V(simulation, iceflow_sol.t[end])
 
-    glacier = simulation.glaciers[batch_id]
+    glacier = simulation.glaciers[glacier_idx]
 
     # Surface topography
-    model.iceflow[batch_id].S = glacier.B .+ model.iceflow[batch_id].H
+    cache.iceflow.S .= glacier.B .+ cache.iceflow.H
 
     return iceflow_sol
 end
@@ -402,77 +415,16 @@ end
 """
 Wrapper to pass a parametrization to the SIA2D
 """
-function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM, batch_id::I) where {R <: Real, I <: Integer, SIM <: Simulation}
-
-    if isnothing(batch_id)
-        iceflow_model = simulation.model.iceflow
-        glacier = simulation.glaciers
-    else
-        iceflow_model = simulation.model.iceflow[batch_id]
-        glacier = simulation.glaciers[batch_id]
-    end
-
-    # apply_parametrization! = simulation.model.machine_learning.target.apply_parametrization!
-    apply_parametrization!(
-        simulation.model.machine_learning.target;
-        H = H, ∇S = nothing, θ = θ,
-        iceflow_model = iceflow_model, ml_model = simulation.model.machine_learning,
-        glacier = glacier, params = simulation.parameters
-    )
-
-    return Huginn.SIA2D(H, simulation, t; batch_id = batch_id)
+function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM) where {R <: Real, SIM <: Simulation}
+    simulation.model.machine_learning.θ = θ
+    return Huginn.SIA2D(H, simulation, t)
 end
 
 """
 currently just use for Enzyme
 """
-function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, smodel, t::R, batch_id::I) where {R <: Real, I <: Integer}
-
-    # TODO: add assert statement that this is just when VJP is Enzyme
-
-    # if isnothing(batch_id)
-    #     iceflow_model = simulation.model.iceflow
-    #     glacier = simulation.glaciers
-    # else
-    #     iceflow_model = simulation.model.iceflow[batch_id]
-    #     glacier = simulation.glaciers[batch_id]
-    # end
-
-    # We load the ML model with the parameters
-    smodel.ps = _θ.θ
-    smodel.st = simulation.model.machine_learning.st
-
-    apply_parametrization!(
-        simulation.model.machine_learning.target;
-        H = _H, ∇S = nothing, θ = _θ,
-        iceflow_model = simulation.model.iceflow[batch_id],
-        ml_model = simulation.model.machine_learning,
-        glacier = simulation.glaciers[batch_id],
-        params = simulation.parameters
-    )
-
-    Huginn.SIA2D!(_dH, _H, simulation, t; batch_id = batch_id)
-
+function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R) where {R <: Real}
+    simulation.model.machine_learning.θ = _θ
+    Huginn.SIA2D!(_dH, _H, simulation, t)
     return nothing
 end
-
-"""
-Functional inversion functions
-"""
-
-# function apply_UDE_parametrization_enzyme!(θ, simulation::FunctionalInversion, smodel::StatefulLuxLayer, batch_id::I) where {I <: Integer}
-#     # We load the ML model with the parameters
-#     smodel.ps = θ.θ
-#     smodel.st = simulation.model.machine_learning.st
-#     # smodel = StatefulLuxLayer{true}(simulation.model.machine_learning.architecture, θ.θ, simulation.model.machine_learning.st)
-
-#     # We generate the ML parametrization based on the target
-#     if simulation.model.machine_learning.target.name == :A
-#         # @show predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)])
-#         min_NN = simulation.parameters.physical.minA
-#         max_NN = simulation.parameters.physical.maxA
-#         simulation.model.iceflow[batch_id].A .= predict_A̅(smodel, [mean(simulation.glaciers[batch_id].climate.longterm_temps)], (min_NN, max_NN))
-#     else
-#         @error "Simulation target not specified"
-#     end
-# end

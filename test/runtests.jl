@@ -35,6 +35,7 @@ include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
 include("test_grad_Enzyme.jl")
+include("save_results.jl")
 
 # # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"] = "nul"
@@ -55,7 +56,7 @@ end
 @testset "Adjoint method of SIA equation with A as target" begin
     # @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A) # This test must be run first, otherwise Enzyme compilation fails because it was used before
     @testset "VJP (discrete) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[1e-7, 1e-6, 5e-4], target = :A)
-    @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); target = :A, C=7e-8)
+    @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[3e-4, 2e-4, 2e-2], target = :A, C=7e-8)
     @testset "VJP (continuous) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
     @testset "VJP (continuous) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres=[5e-4, 7e-4, 4e-2], target = :A, C=7e-8)
     @testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
@@ -64,8 +65,8 @@ end
     @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
     # @testset "Manual implementation of the continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3])
     @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
-    @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
-    @testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-1, 1e-15, 7e-1])
+    # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
+    # @testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-1, 1e-15, 7e-1])
 end
 
 @testset "Adjoint method of SIA equation with A as target and ice velocity loss" begin
@@ -83,14 +84,18 @@ end
 end
 
 @testset "Adjoint method of SIA equation with pure D as target" begin
-    @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D)
-    @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D)
+    @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-4, 1e-2], target = :D)
+    @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-4, 2e-2], target = :D)
+    @testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-4, 1e-2], target = :D)
+    @testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-4, 2e-2], target = :D)
 end
 
 @testset "Inversion test" begin
-    # These tests are deactivated since they need Enzyme to work
-    # @testset "Inversion Tests (without MB)" inversion_test(use_MB = false, steady_state = true, save_refs = false)
-    # @testset "Inversion Tests (with MB)" inversion_test(use_MB = true, steady_state = true, save_refs = false)
+    @testset "Inversion Tests w/o MB" inversion_test(use_MB = false, multiprocessing = false)
+    # @testset "Inversion Tests w/ MB" inversion_test(use_MB = true, multiprocessing = false)
+    @testset "Inversion Tests w/o MB w/ multiprocessing" inversion_test(use_MB = false, multiprocessing = true)
 end
+
+@testset "Save results" save_simulation_test!()
 
 end

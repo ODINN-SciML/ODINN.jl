@@ -105,42 +105,43 @@ min_temp, max_temp = - 25.0, 0.0
 min_H, max_H = 0.0, H_max
 
 # We define the prescale and postscale of quantities.
-model = Model(
-    iceflow = SIA2Dmodel(params),
+model = Huginn.Model(
+    iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
-    machine_learning = NeuralNetwork(
-        params;
-        architecture = architecture,
-        target = SIA2D_D_hybrid_target(
-            n_H = 1.0,
-            max_NN = max_NN
-        )
-    )
 )
 
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-A_poly = ODINN.A_law_PatersonCuffey()
-fakeA(T) = A_poly(T)
+A_poly = Huginn.polyA_PatersonCuffey()
 
 # We generate a fake law with A and no direct dependency on H
-ODINN.generate_ground_truth(glaciers, :PatersonCuffey, params, model, tstops)
+generate_ground_truth!(glaciers, params, model, tstops)
+
+prediction = Huginn.Prediction(model, glaciers, params)
 
 Temps = Float64[]
 As_fake = Float64[]
 
-for glacier in glaciers
-    T = mean(glacier.climate.longterm_temps)
-    A = fakeA(T)
+for i in 1:length(glaciers)
+    T, A = ODINN.T_A_Alaw(prediction, i, nothing, tstops[end])
     println("Value of A used to generate fake data: $(A)")
     push!(Temps, T)
     push!(As_fake, A)
 end
 
 # TODO: This function does shit on the model variable, for now we do a clean restart
-
-model.iceflow = SIA2Dmodel(params)
+nn_model = NeuralNetwork(
+    params;
+    architecture = architecture,
+)
+Y_law = LawY(nn_model, params; max_NN=max_NN)
+model = Model(
+    iceflow = SIA2Dmodel(params; Y=Y_law, n_H=1.0),
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+    regressors = (; Y=nn_model),
+    target = SIA2D_D_hybrid_target(),
+)
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)
@@ -153,25 +154,22 @@ run!(functional_inversion)
 losses = functional_inversion.stats.losses
 
 # Temps_smooth = collect(-23.0:1.0:0.0)
-T₀ = mean(glaciers[1].climate.longterm_temps)
+T₀ = Temps[1]
 Temps_smooth = [T₀]
 H_smooth = collect(0.0:1.0:max_H)
 
 AtimesH_pred = zeros(length(Temps_smooth), length(H_smooth))
 
+θ = functional_inversion.model.machine_learning.θ
 for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
-    # A_pred = ODINN.predict_A_target_D(architecture, T, [100.0, 200.0])
     temp = Temps_smooth[i]
     H = H_smooth[j]
-    A_pred = ODINN.predict_A(
-        functional_inversion.model.machine_learning.target,
-        functional_inversion.stats.θ, temp, H;
-        ml_model = functional_inversion.model.machine_learning,
-        params = functional_inversion.parameters)
-    AtimesH_pred[i, j] = A_pred
+
+    A_pred = eval_law(functional_inversion.model.iceflow.Y, functional_inversion, 1, (;T=temp, H̄=H), θ)
+    AtimesH_pred[i, j] = only(unique(A_pred)) # The cache is a matrix and the result of the NN evaluation has been broadcasted to a matrix, we retrieve the only value
 end
 
-A₀ = fakeA(T₀)
+A₀ = A_poly.(T₀)
 H_pred = AtimesH_pred[1, :] #./ A₀
 
 plot = Plots.scatter(H_smooth, H_pred, label="Neural network prediction", c=:lightsteelblue2)
@@ -181,7 +179,7 @@ Plots.plot!(H_smooth, A₀ .* H_smooth.^2.0, label="Ground True Value",
                     legend=:topleft)
 Plots.savefig(plot, "MWE_inversion_diffusion_result_H_2.pdf")
 
-# T₀ = mean(glaciers[1].climate.longterm_temps)
+# T₀ = Temps[1]
 
 
 # Plots.scatter(Temps, As_fake, label="True A", c=:lightsteelblue2)

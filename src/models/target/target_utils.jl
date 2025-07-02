@@ -1,79 +1,97 @@
 export ComponentVector2Vector, Vector2ComponentVector
-export predict_A̅
 
-### Dummy target for testing
+function Γ(model, model_cache, params; include_A::Bool = true)
+    n = model_cache.n
+    (; ρ, g) = params.physical
+    if include_A
+        A = model_cache.A
+        return 2.0 .* A .* (ρ * g).^n ./ (n.+2)
+    else
+        return 2.0 .* (ρ * g).^n ./ (n.+2)
+    end
+end
 
-# function build_target_foo()
-#     fD = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     f∂D∂H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     f∂D∂∇H = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     f∂D∂θ = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     fP = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> 1.0
-#     fP! = (; H, ∇S, θ, iceflow_model, ml_model, glacier, params) -> nothing
+function S(model, model_cache, params)
+    (; C, n) = model_cache
+    (; ρ, g) = params.physical
+    return C .* (ρ * g).^n
+end
 
-#     return SIA2D_target{
-#         typeof(fD), typeof(f∂D∂H), typeof(f∂D∂∇H), typeof(f∂D∂θ), typeof(fP), typeof(fP!)
-#         }(
-#         :foo, fD, f∂D∂H, f∂D∂∇H, f∂D∂θ, fP, fP!
-#     )
-# end
+function Γꜛ(model, model_cache, params; include_A::Bool = true)
+    n = model_cache.n
+    (; ρ, g) = params.physical
+    if include_A
+        A = model_cache.A
+        return 2.0 .* A .* (ρ * g).^n ./ (n.+1)
+    else
+        return 2.0 .* (ρ * g).^n ./ (n.+1)
+    end
+end
+
+function Sꜛ(model, model_cache, params)
+    (; C, n) = model_cache
+    (; ρ, g) = params.physical
+    return (n.+2) .* C .* (ρ * g).^n
+end
+
 """
-Create foo target for testing
+    _ml_model_prescale(
+        X::Vector,
+        prescale_bounds::Vector{Tuple{F, F}},
+    ) where {F <: AbstractFloat}
+
+Scales each element of the input vector `X` using the corresponding bounds from `prescale_bounds`.
+For each index `i`, `X[i]` is normalized based on the interval specified in `prescale_bounds[i]`
+using the `normalize` function.
+This function is typically used to ensure that the scales of the inputs of a neural network are
+comparable to each other.
+
+# Arguments
+- `X::Vector`: A vector of input values to be normalized.
+- `prescale_bounds::Vector{Tuple{F, F}}`: A vector of tuples specifying the lower and upper bounds
+    for normalization of each corresponding element in `X`.
+
+# Returns
+- A vector where each element is the normalized value of the corresponding input, using the
+    specified bounds.
+
+# Notes
+- The length of `X` and `prescale_bounds` must be equal.
 """
-@kwdef struct SIA2D_foo_target <: AbstractSIA2DTarget
+function _ml_model_prescale(
+    X::Vector,
+    prescale_bounds::Vector{Tuple{F, F}},
+) where {F <: AbstractFloat}
+    @assert length(X)==length(prescale_bounds)
+    return [
+        normalize(X[i]; lims=prescale_bounds[i])
+        for i in 1:length(X)
+    ]
 end
 
-function Diffusivity(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
+"""
+    _ml_model_postscale(
+        Y::Vector,
+        max_NN,
     )
-    return 1.0
+
+Applies an exponential transformation to each element in `Y`, then rescales the
+result by multiplying with `max_NN`.
+For each element, the transformation is: `max_NN * exp((Y - 1.0) / Y)`
+
+# Arguments
+- `Y::Vector`: Values to be post-processed.
+- `max_NN`: Scalar representing the maximum value for rescaling.
+
+# Returns
+- The rescaled values after applying the exponential transformation.
+"""
+function _ml_model_postscale(
+    Y::Vector,
+    max_NN,
+)
+    return max_NN .* exp.((Y .- 1.0) ./ Y)
 end
-
-function ∂Diffusivity∂H(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
-    )
-    return 1.0
-end
-
-function ∂Diffusivity∂∇H(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
-    )
-    return 1.0
-end
-
-function ∂Diffusivity∂θ(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
-    )
-    return 1.0
-end
-
-function apply_parametrization(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
-    )
-    return 1.0
-end
-
-function apply_parametrization!(
-    Target::SIA2D_foo_target;
-    H, ∇S, θ, iceflow_model, ml_model, glacier, params
-    )
-    return nothing
-end
-
-### Normalization function to ensure the scales of input are comparable to each other
-
-# function normalize_T(T; lims)
-#     return (T .- lims[1]) ./ (lims[2] - lims[1]) .- 0.5
-# end
-
-# function normalize_H(H; lims)
-#     return (H .- lims[1]) ./ (lims[2] - lims[1]) .- 0.5
-# end
 
 """
     scale(x, lims::Tuple{F, F}) where {F <: AbstractFloat}
