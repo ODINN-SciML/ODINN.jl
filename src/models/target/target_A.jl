@@ -114,6 +114,8 @@ function ∂Diffusivityꜛ∂θ(
     target::SIA2D_A_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
+    iceflow_model = simulation.model.iceflow
+    iceflow_cache = simulation.cache.iceflow
     n = iceflow_cache.n
     Γꜛ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂A_spatial = Γꜛ_no_A .* H̄.^(n .+ 1) .* ∇S.^(n .- 1)

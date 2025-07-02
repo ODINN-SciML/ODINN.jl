@@ -30,64 +30,8 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     dθ .= sum(dθs)
 end
 
-function backward_loss(
-    simulation::FunctionalInversion,
-    i::Int,
-    H::Vector{Matrix{F}},
-    Vx::Vector{Matrix{F}},
-    Vy::Vector{Matrix{F}},
-    V::Vector{Matrix{F}},
-    H_ref::Vector{Matrix{F}},
-    Vx_ref::Vector{Matrix{F}},
-    Vy_ref::Vector{Matrix{F}},
-    V_ref::Vector{Matrix{F}},
-    t::Vector{F},
-    date_Vref::Vector{F},
-    normalization::F,
-) where {F <: AbstractFloat}
-    loss_function = simulation.parameters.UDE.empirical_loss_function
-    Vxτ_ref, Vyτ_ref, Vτ_ref, useVel = mapVelocity(simulation.parameters.simulation.mapping, Vx_ref, Vy_ref, V_ref, date_Vref, t[i])
-    loss_function_timestep = (useVel || !isa(loss_function, LossHV)) ? loss_function : loss_function.hLoss
-    ∂L∂H, ∂L∂Vx, ∂L∂Vy, ∂L∂V = backward_loss(
-        loss_function_timestep,
-        H[i], Vx[i], Vy[i], V[i],
-        H_ref[i], Vxτ_ref, Vyτ_ref, Vτ_ref;
-        normalization=normalization,
-    )
-    if !isnothing(∂L∂V)
-        ∂L∂Vx_Vcontrib, ∂L∂Vy_Vcontrib = VJP_λ_∂V∂Vxy(∂L∂V, Vx[i], Vy[i])
-        if isnothing(∂L∂Vx)
-            ∂L∂Vx = ∂L∂Vx_Vcontrib
-        else
-            ∂L∂Vx += ∂L∂Vx_Vcontrib
-        end
-        if isnothing(∂L∂Vy)
-            ∂L∂Vy = ∂L∂Vy_Vcontrib
-        else
-            ∂L∂Vy += ∂L∂Vy_Vcontrib
-        end
-    end
-    mean_error_H, mean_error_V = loss(
-        loss_function_timestep,
-        H[i],
-        Vx[i],
-        Vy[i],
-        V[i],
-        H_ref[i],
-        Vxτ_ref,
-        Vyτ_ref,
-        Vτ_ref,
-        normalization=normalization,
-    )
-    if !useVel
-        mean_error_V = 0.0
-    end
-    ℓi = mean_error_H + mean_error_V
-    return ∂L∂H, ∂L∂Vx, ∂L∂Vy, ℓi
-end
-
 """
-Inverse by glacier
+Compute gradient glacier per glacier
 """
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
@@ -111,17 +55,11 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         t = result.t
         Δt = diff(t)
         H = result.H
-        Vx = result.Vx
-        Vy = result.Vy
-        V = result.V
-        Vx_ref = result.Vx_ref
-        Vy_ref = result.Vy_ref
-        V_ref = result.V_ref
-        date_Vref = result.date_Vref
+        glacier = simulation.glaciers[i]
 
         # Reference data
-        t_ref = simulation.glaciers[i].thicknessData.t
-        H_ref = simulation.glaciers[i].thicknessData.H
+        t_ref = glacier.thicknessData.t
+        H_ref = glacier.thicknessData.H
 
         @assert t ≈ t_ref "Reference times of simulation and reference data do not coincide."
         @assert length(H) == length(H_ref)
@@ -141,10 +79,18 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             λ  = [Enzyme.make_zero(result.B) for _ in 1:k]
             dH_λ = [Enzyme.make_zero(H[1]) for _ in 1:k]
 
-            res_backward_loss = map(j -> backward_loss(simulation, j, H, Vx, Vy, V, H_ref, Vx_ref, Vy_ref, V_ref, t, date_Vref, prod(N)*normalization), 1:k)
-            # Unzip the backward gradients into three separate arrays + an array
-            # that gives the loss at each time step
-            ∂L∂H, λVx, λVy, ℓi = map(x -> collect(x), zip(res_backward_loss...))
+            res_backward_loss = map(j -> backward_loss(
+                    loss_function,
+                    H[j],
+                    H_ref[j],
+                    t[j],
+                    glacier,
+                    θ,
+                    simulation;
+                    normalization=prod(N)*normalization,
+                ), 1:k)
+            # Unzip ∂L∂H, ∂L∂θ at each timestep
+            ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
 
             for j in reverse(2:k)
 
@@ -153,24 +99,35 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
                 # Compute derivative of local contribution to loss function
                 ∂ℓ∂H = ∂L∂H[j]
+                ∂ℓ∂θ = ∂L∂θ[j]
 
                 # Compute loss function for verification purpose
-                ℓ += Δt[j-1]*ℓi[j]
+                ℓi = loss(
+                    loss_function,
+                    H[j],
+                    H_ref[j],
+                    t[j],
+                    glacier,
+                    θ,
+                    simulation;
+                    normalization=prod(N)*normalization,
+                )
+                ℓ += Δt[j-1]*ℓi
 
                 ### Custom VJP to compute the adjoint
-                λ_∂f∂H, dH_H = VJP_λ_SIA_H(λ[j], λVx[j], λVy[j], H[j], θ, simulation, t₀)
+                λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, t₀)
 
                 ### Update adjoint
                 λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 ### Custom VJP for grad of loss function
-                λ_∂f∂θ = VJP_λ_SIA_θ(λ[j-1], λVx[j-1], λVy[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀)
+                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, dH_λ[j], simulation, t₀)
 
                 ### Update gradient
                 # @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
 
                 # Contribution to the loss
-                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
+                dLdθ .+= Δt[j-1] .* (isnothing(∂ℓ∂θ) ? λ_∂f∂θ : λ_∂f∂θ .+ ∂ℓ∂θ)
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint

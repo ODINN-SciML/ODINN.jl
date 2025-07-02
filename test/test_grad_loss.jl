@@ -8,8 +8,9 @@ function test_grad_finite_diff(
     finite_difference_order = 3,
     velocityLoss = false,
 ) where {ADJ<:AbstractAdjointMethod}
+    empirical_loss_function = velocityLoss ? LossHV() : LossH()
 
-    println("> Testing target $(target) with adjoint $(adjointFlavor)")
+    println("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(empirical_loss_function)).name)")
 
     thres_ratio = thres[1]
     thres_angle = thres[2]
@@ -22,7 +23,6 @@ function test_grad_finite_diff(
 
     δt = 1/12
 
-    empirical_loss_function = velocityLoss ? LossHV() : LossH()
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
@@ -217,15 +217,24 @@ function test_grad_loss_term()
 end
 
 
-function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, physicalParams, lossType)
+function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, params, lossType, glacier, θ)
     normalization = 1.0
     l_H = 0.0
     Δt = diff(tstops)
-    V = Matrix{Sleipnir.Float}([;;]) # Contribution of V is not tested
+    physicalParams = params.physical
     for τ in range(2,length(tstops))
         t₁ = tstops[τ]
         _H₁ = halfar_solution(R₀, t₁, h₀, r₀, A[1], n, physicalParams)
-        mean_error, = loss(lossType, _H₁, V, V, V, H_ref[τ], V, V, V; normalization=prod(size(H_ref[τ]))/normalization)
+        mean_error, = loss(
+            lossType,
+            _H₁,
+            H_ref[τ],
+            t=t₁,
+            glacier=glacier,
+            θ=θ,
+            params=params;
+            normalization=prod(size(H_ref[τ]))/normalization
+        )
         l_H += Δt[τ-1] * mean_error
     end
     l[1] = l_H
@@ -317,7 +326,6 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
 
     # We create an ODINN prediction
     simulation = FunctionalInversion(model, glaciers, parameters)
-    physicalParams = parameters.physical
 
     # Compute gradient of with Halfar solution wrt A
     A_θ = [A_θ]
@@ -335,8 +343,10 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
         Enzyme.Const(n),
         Enzyme.Const(tstops),
         Enzyme.Const(H_ref),
-        Enzyme.Const(physicalParams),
+        Enzyme.Const(parameters),
         Enzyme.Const(lossType),
+        Enzyme.Const(glacier),
+        Enzyme.Const(θ),
     )
 
     # _loss_halfar!(l_enzyme, R₀, h₀, r₀, A_θ, n, tstops, H_ref, physicalParams, lossType)
