@@ -47,11 +47,11 @@ ENV["GKSwstype"] = "nul"
 # # @testset "UDE SIA2D training with MB" ude_solve_test(; MB = true)
 # # @testset "Parameters constructors with specified values" params_constructor_specified()
 
-# @testset "Adjoint of unit operations inside SIA2D" begin
-#     @testset "Adjoint of diff" test_adjoint_diff()
-#     @testset "Adjoint of clamp_borders" test_adjoint_clamp_borders()
-#     @testset "Adjoint of avg" test_adjoint_avg()
-# end
+@testset "Adjoint of unit operations inside SIA2D" begin
+    @testset "Adjoint of diff" test_adjoint_diff()
+    @testset "Adjoint of clamp_borders" test_adjoint_clamp_borders()
+    @testset "Adjoint of avg" test_adjoint_avg()
+end
 
 # @testset "Adjoint method of SIA equation with A as target" begin
 #     # @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A) # This test must be run first, otherwise Enzyme compilation fails because it was used before
@@ -82,7 +82,7 @@ ENV["GKSwstype"] = "nul"
 # end
 
 @testset "Inversion test" begin
-    @testset "Inversion Tests w/o MB" inversion_test(use_MB = false, multiprocessing = false)
+    # @testset "Inversion Tests w/o MB" inversion_test(use_MB = false, multiprocessing = false)
     # @testset "Inversion Tests w/ MB" inversion_test(use_MB = true, multiprocessing = false)
     @testset "Inversion Tests w/o MB w/ multiprocessing" inversion_test(use_MB = false, multiprocessing = true)
 end
