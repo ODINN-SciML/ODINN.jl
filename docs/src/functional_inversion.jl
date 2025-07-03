@@ -16,7 +16,7 @@ rgi_paths = get_rgi_paths()
 mkpath(working_dir)
 
 ## Define which glacier RGI IDs we want to work with
-rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-07.00065", "RGI60-08.00147","RGI60-07.00042"]
+rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346"]
 ## Filter out glaciers that are not used to avoid having references that depend on all the glaciers processed in Gungnir
 rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
 ## Define the time step for the simulation output and for the adjoint calculation. In this case, a month. 
@@ -30,13 +30,13 @@ params = Parameters(
         tspan=(2010.0, 2015.0),
         step=δt,
         multiprocessing=true,
-        workers=7,
+        workers=4,
         test_mode=false,
         rgi_paths=rgi_paths),
     hyper = Hyperparameters(
         batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs=[2,1],
-        optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
+        epochs=[25,10],
+        optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
     physical = PhysicalParameters(
         minA = 8e-21,
         maxA = 8e-17),
@@ -113,7 +113,7 @@ run!(functional_inversion)
 # # First we need to specify a list of RGI IDs of the glacier we want to work with. Specifying an RGI
 # # region is also possible. From these RGI IDs, we will look for the necessary files inside the workspace.
 
-# rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-07.00065", "RGI60-08.00147","RGI60-07.00042"]
+# rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346"]
 # rgi_paths = get_rgi_paths()
 # # Filter out glaciers that are not used to avoid having references that depend on all the glaciers processed in Gungnir
 # rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
@@ -126,12 +126,12 @@ run!(functional_inversion)
 #                                                     tspan=(2010.0, 2015.0),
 #                                                     step=δt,
 #                                                     multiprocessing=true,
-#                                                     workers=7,
+#                                                     workers=4,
 #                                                     test_mode=false,
 #                                                     rgi_paths=rgi_paths),
 #                     hyper = Hyperparameters(batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-#                                             epochs=[50,50],
-#                                             optimizer=[ODINN.ADAM(0.005), ODINN.LBFGS()]),
+#                                             epochs=[15,10],
+#                                             optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
 #                     physical = PhysicalParameters(minA = 8e-21,
 #                                                   maxA = 8e-17),
 #                     UDE = UDEparameters(optim_autoAD=ODINN.NoAD(),
