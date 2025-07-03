@@ -93,7 +93,9 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
     procs = params.simulation.workers
     if procs > 0 && params.simulation.multiprocessing
         if parse(Bool, get(ENV, "CI", "false"))
-            @assert procs == nprocs() "Within the CI it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()) in the yaml files."
+            # When -p 3 => nprocs() = 4
+            # When workers = 4 => procs = 4
+            @assert procs == nprocs() "Within the CI it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()-1) in the yaml files but in the simulation parameters workers=$(procs)."
         else
         if nprocs() < procs
             @eval begin
@@ -104,11 +106,11 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                 # end
                 println("Number of cores: ", nprocs())
                 println("Number of workers: ", nworkers())
-            
+
                 # Suppress output only on workers by temporarily redirecting stdout and stderr
                 old_stdout = stdout
                 old_stderr = stderr
-            
+
                 try
                     @info "[ODINN] $(nworkers()) workers precompiling... Please wait."
                     redirect_stdout(devnull)
