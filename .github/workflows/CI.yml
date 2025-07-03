@@ -18,10 +18,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 jobs:
+  pr-check:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check if branch has an open PR
+        id: check
+        run: |
+          if gh pr list --head "$GITHUB_REF_NAME" --state open --json number | grep -q '"number":'; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    needs: pr-check
+    # Skip CI if PR exists (on push only)
+    # Or if there is a label that states the CI is broken because a dependency needs a new release
+    if: ${{ (github.event_name != 'push' || needs.pr-check.outputs.skip == 'false') && !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
     runs-on: ${{ matrix.os }}
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
     defaults:
        run:
          shell: bash -el {0}
