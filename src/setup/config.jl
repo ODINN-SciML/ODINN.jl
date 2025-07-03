@@ -93,8 +93,6 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
     procs = params.simulation.workers
     if procs > 0 && params.simulation.multiprocessing
         if parse(Bool, get(ENV, "CI", "false"))
-            # When -p 3 => nprocs() = 4
-            # When workers = 4 => procs = 4
             @assert procs == nprocs() "Within the CI it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()-1) in the yaml files but in the simulation parameters workers=$(procs)."
         else
         if nprocs() < procs
