@@ -106,7 +106,7 @@ function LawU(
             Zygote.@ignore cache .= D
             return D
         end,
-        init_cache = function (simulation, glacier_idx, θ)
+        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return zeros(nx-1, ny-1)
         end,
@@ -191,7 +191,7 @@ function LawY(
             Zygote.@ignore cache .= A
             return A
         end,
-        init_cache = function (simulation, glacier_idx, θ)
+        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return zeros(nx-1, ny-1)
         end,
@@ -261,7 +261,7 @@ function LawA(
                 Zygote.@ignore cache .= A
                 return A
             end,
-            init_cache = function (simulation, glacier_idx, θ)
+            init_cache = function (simulation, glacier_idx, θ; scalar::Bool = false)
                 return zeros()
             end,
         )
@@ -270,3 +270,4 @@ function LawA(
 end
 
 include("laws_utils.jl")
+include("laws_plots.jl")
