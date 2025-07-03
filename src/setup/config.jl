@@ -92,6 +92,9 @@ Configures and enables multiprocessing based on the provided simulation paramete
 function enable_multiprocessing(params::Sleipnir.Parameters)
     procs = params.simulation.workers
     if procs > 0 && params.simulation.multiprocessing
+        if parse(Bool, get(ENV, "CI", "false"))
+            @assert procs == nprocs() "Within the CI it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()) in the yaml files."
+        else
         if nprocs() < procs
             @eval begin
                 # if isfile(SYSIMAGE_PATH)
@@ -124,6 +127,7 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
             @info "Number of cores: $(nprocs())"
             @info "Number of workers: $(nworkers())"
             end # @eval
+        end
         end
     end
     return nworkers()
