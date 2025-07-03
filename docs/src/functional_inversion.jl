@@ -27,7 +27,7 @@ params = Parameters(
         working_dir=working_dir,
         use_MB=false,
         velocities=true,
-        tspan=(2010.0, 2015.0),
+        tspan=(2010.0, 2011.0),
         step=δt,
         multiprocessing=true,
         workers=4,
@@ -35,7 +35,7 @@ params = Parameters(
         rgi_paths=rgi_paths),
     hyper = Hyperparameters(
         batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs=[25,10],
+        epochs=[2,1],
         optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
     physical = PhysicalParameters(
         minA = 8e-21,
@@ -63,7 +63,7 @@ model = Huginn.Model(
 glaciers = initialize_glaciers(rgi_ids, params)
 
 ## Time snapshots for transient inversion
-tstops = collect(2010:δt:2015)
+tstops = collect(2010:δt:2011)
 
 ## We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities
 ## for each glacier at each time step. The dataset will be used to train the machine learning model.
