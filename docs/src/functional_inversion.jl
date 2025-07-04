@@ -33,7 +33,7 @@ params = Parameters(
         rgi_paths=rgi_paths),
     hyper = Hyperparameters(
         batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs=[15,10],
+        epochs=[2,1],
         optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
     physical = PhysicalParameters(
         minA = 8e-21,
@@ -126,7 +126,7 @@ params = Parameters(
         rgi_paths=rgi_paths),
     hyper = Hyperparameters(
         batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs=[15,10],
+        epochs=[2,1],
         optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
     physical = PhysicalParameters(
         minA = 8e-21,
@@ -147,7 +147,7 @@ params = Parameters(
 # The next step is to generate a synthetic dataset using a forward simulation. This will generate a dataset with the ice thickness and surface velocities
 # for each glacier at each time step. The dataset will be used to train the machine learning model.
 
-## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010). This law shows that it maps the long term air temperature `T` to the creep coefficient `A`.
+# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010). This law shows that it maps the long term air temperature `T` to the creep coefficient `A`.
 
 A_law = CuffeyPaterson()
 

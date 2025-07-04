@@ -11,7 +11,7 @@ Pkg.activate(".")
 Pkg.develop(PackageSpec(path=".."))
 Pkg.instantiate()
 
-ENV["ODINN_OVERWRITE_MULTI"] = true
+ENV["ODINN_OVERWRITE_MULTI"] = false
 
 using Revise
 using Documenter, Literate
@@ -24,6 +24,7 @@ DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 tutorial_files = [
     "./src/forward_simulation.jl",
     "./src/functional_inversion.jl"
+    "./src/laws.jl"
 ]
 
 # Generate independent Markdown files for each tutorial
@@ -50,6 +51,7 @@ makedocs(
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
             "Functional inversion" => "functional_inversion.md"
+            "Laws" => "laws.md"
         ],
         "Types and functions" => "funcs_types.md",
         "API" => "api.md"
