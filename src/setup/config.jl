@@ -93,41 +93,41 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
     procs = params.simulation.workers
     if procs > 0 && params.simulation.multiprocessing
         if parse(Bool, get(ENV, "ODINN_OVERWRITE_MULTI", "false"))
-            @assert procs == nprocs() "In the documentation it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()-1) in the yaml files but in the simulation parameters workers=$(procs)."
+            @assert procs == nprocs() "In the documentation it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()-1) in the yaml files but the one defined in the simulation parameters is workers=$(procs)."
         else
-        if nprocs() < procs
-            @eval begin
-                # if isfile(SYSIMAGE_PATH)
-                #     addprocs($procs - nprocs(); exeflags="--sysimage=$SYSIMAGE_PATH") # Use custom system image if available
-                # else
-                addprocs($procs - nprocs(); exeflags="--project") # Fallback to default if system image is missing
-                # end
-                println("Number of cores: ", nprocs())
-                println("Number of workers: ", nworkers())
+            if nprocs() < procs
+                @eval begin
+                    # if isfile(SYSIMAGE_PATH)
+                    #     addprocs($procs - nprocs(); exeflags="--sysimage=$SYSIMAGE_PATH") # Use custom system image if available
+                    # else
+                    addprocs($procs - nprocs(); exeflags="--project") # Fallback to default if system image is missing
+                    # end
+                    println("Number of cores: ", nprocs())
+                    println("Number of workers: ", nworkers())
 
-                # Suppress output only on workers by temporarily redirecting stdout and stderr
-                old_stdout = stdout
-                old_stderr = stderr
+                    # Suppress output only on workers by temporarily redirecting stdout and stderr
+                    old_stdout = stdout
+                    old_stderr = stderr
 
-                try
-                    @info "[ODINN] $(nworkers()) workers precompiling... Please wait."
-                    redirect_stdout(devnull)
-                    redirect_stderr(devnull)
-                    using Dates
-                    @everywhere using Revise
-                    @everywhere using ODINN
-                finally
-                    redirect_stdout(old_stdout)
-                    redirect_stderr(old_stderr)
+                    try
+                        @info "[ODINN] $(nworkers()) workers precompiling... Please wait."
+                        redirect_stdout(devnull)
+                        redirect_stderr(devnull)
+                        using Dates
+                        @everywhere using Revise
+                        @everywhere using ODINN
+                    finally
+                        redirect_stdout(old_stdout)
+                        redirect_stderr(old_stderr)
+                    end
                 end
+            elseif nprocs() != procs && procs == 1
+                @eval begin
+                rmprocs(workers(), waitfor=0)
+                @info "Number of cores: $(nprocs())"
+                @info "Number of workers: $(nworkers())"
+                end # @eval
             end
-        elseif nprocs() != procs && procs == 1
-            @eval begin
-            rmprocs(workers(), waitfor=0)
-            @info "Number of cores: $(nprocs())"
-            @info "Number of workers: $(nworkers())"
-            end # @eval
-        end
         end
     end
     return nworkers()

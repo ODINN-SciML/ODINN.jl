@@ -1,8 +1,10 @@
 # # Functional inversion tutorial
 
-## This tutorial provides a simple example on how to perform a functional inversion using Universal Differential Equations (UDEs) in ODINN.jl.
-## For this, we will generate a synthetic dataset using a forward simulation, and then we will use this dataset to perform the functional inversion.
-## The goal of this functional inversion will be to learn a synthetic law that maps `A`, i.e. the ice rigidity, to long-term changes in atmospheric surface temperature.
+# This tutorial provides a simple example on how to perform a functional inversion using Universal Differential Equations (UDEs) in ODINN.jl.
+# For this, we will generate a synthetic dataset using a forward simulation, and then we will use this dataset to perform the functional inversion.
+# The goal of this functional inversion will be to learn a synthetic law that maps `A`, i.e. the ice rigidity, to long-term changes in atmospheric surface temperature.
+
+# ## Running the whole code
 
 using ODINN
 
@@ -34,7 +36,7 @@ params = Parameters(
         gridScalingFactor=4), # Downscale the glacier grid to speed-up this example
     hyper = Hyperparameters(
         batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs=[2,1],
+        epochs=[15,10],
         optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
     physical = PhysicalParameters(
         minA = 8e-21,
@@ -105,7 +107,7 @@ rgi_paths = get_rgi_paths()
 δt = 1/12
 
 # Then we need to define the parameters of the simulation we want to perform.
-# The arguments are very similar to the ones used in the [forward simulation tutorial](forward_simulation.jl) and for a complete explanation, the reader should refer to this tutorial.
+# The arguments are very similar to the ones used in the [forward simulation tutorial](forward_simulation) and for a complete explanation, the reader should refer to this tutorial.
 # The main difference with the forward simulation tutorial here is that we need to specify the parameters for the functional inversion through the `Hyperparameters` and the `UDEparameters`.
 # The `Hyperparameters` structure contains information about the optimization algorithm.
 # The `UDEparameters` define how the Universal Differential Equation (UDE) is solved and how its gradient is computed.
@@ -123,7 +125,7 @@ params = Parameters(
         gridScalingFactor=4), # Downscale the glacier grid to speed-up this example
     hyper = Hyperparameters(
         batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs=[2,1],
+        epochs=[15,10],
         optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
     physical = PhysicalParameters(
         minA = 8e-21,
@@ -145,7 +147,12 @@ glaciers = initialize_glaciers(rgi_ids, params)
 
 # ### Step 2: Defining a forward simulation as a synthetic ground truth
 
-## The next step is to generate a synthetic dataset using a forward simulation. This will generate a dataset with the ice thickness and surface velocities for each glacier at each time step. The dataset will be used to train the machine learning model. We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010). This law shows that it maps the long term air temperature `T` to the creep coefficient `A`.
+## The next step is to generate a synthetic dataset using a forward simulation.
+## This will generate a dataset with the ice thickness and surface velocities for
+## each glacier at each time step. The dataset will be used to train the machine
+## learning model. We define a synthetic law to generate the synthetic dataset.
+## For this, we use some tabular data from Cuffey and Paterson (2010). The REPL
+## shows that it maps the long term air temperature `T` to the creep coefficient `A`.
 A_law = CuffeyPaterson()
 
 # The model is initialized using the `Model` constructor:
@@ -170,12 +177,14 @@ generate_ground_truth!(glaciers, params, model, tstops)
 
 # ### Step 3: Model specification to perform a functional inversion
 
-## After this forward simulation, we define a new iceflow model to be ready for the inversions. The first step is to define a simple neural network that takes as input a scalar and returns a scalar.
+## After this forward simulation, we define a new iceflow model to be ready for the
+## inversions. The first step is to define a simple neural network that takes as
+## input a scalar and returns a scalar.
 nn_model = NeuralNetwork(params)
 
 # Then we define a law that uses this neural network to map the long term air temperature `T` to the creep coefficient `A`.
 # ODINN comes with a set of already defined laws. Only a few of them support functional inversion as the computation of the gradient needs to be carefully handled.
-# More information about these laws can be found in [the laws tutorial](laws.jl).
+# More information about these laws can be found in [the laws tutorial](laws).
 
 A_law = LawA(nn_model, params)
 

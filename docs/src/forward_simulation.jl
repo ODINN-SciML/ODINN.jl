@@ -2,6 +2,8 @@
 
 ## This tutorial provides a simple example on how to perform a forward simulation using ODINN.jl.
 
+# ## Running the whole code
+
 using ODINN
 
 ## Define the working directory
