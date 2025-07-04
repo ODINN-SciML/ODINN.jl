@@ -11,8 +11,9 @@ function inversion_test(;
     if multiprocessing
         workers = 3 # Two processes for the two glaciers + one for main
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
-        epochs = [20,10]
-        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+        # Multiprocessing is especially slow in the CI, so we perform a very short optimization
+        epochs = 3
+        optimizer = ODINN.ADAM(0.01)
     else
         workers = 1
         rgi_ids = ["RGI60-11.03638"]

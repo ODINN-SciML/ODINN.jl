@@ -105,7 +105,7 @@ rgi_paths = get_rgi_paths()
 δt = 1/12
 
 # Then we need to define the parameters of the simulation we want to perform.
-# The arguments are very similar to the ones used in the [forward simulation tutorial](forward_simulation) and for a complete explanation, the reader should refer to this tutorial.
+# The arguments are very similar to the ones used in the forward simulation tutorial and for a complete explanation, the reader should refer to this tutorial.
 # The main difference with the forward simulation tutorial here is that we need to specify the parameters for the functional inversion through the `Hyperparameters` and the `UDEparameters`.
 # The `Hyperparameters` structure contains information about the optimization algorithm.
 # The `UDEparameters` define how the Universal Differential Equation (UDE) is solved and how its gradient is computed.
@@ -182,7 +182,7 @@ nn_model = NeuralNetwork(params)
 
 # Then we define a law that uses this neural network to map the long term air temperature `T` to the creep coefficient `A`.
 # ODINN comes with a set of already defined laws. Only a few of them support functional inversion as the computation of the gradient needs to be carefully handled.
-# More information about these laws can be found in [the laws tutorial](laws).
+# More information about these laws can be found in the laws tutorial.
 
 A_law = LawA(nn_model, params)
 
