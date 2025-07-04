@@ -5,7 +5,7 @@
 using ODINN
 
 ## Define the working directory
-working_dir = joinpath(homedir(), "ODINN_simulations")
+working_dir = joinpath(ODINN.root_dir, "demos")
 
 ## Ensure the working directory exists
 mkpath(working_dir)
@@ -13,8 +13,6 @@ mkpath(working_dir)
 ## Define which glacier RGI IDs we want to work with
 rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-08.00203"]
 rgi_paths = get_rgi_paths()
-## Filter out glaciers that are not used to avoid having references that depend on all the glaciers processed in Gungnir
-rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
 
 ## Create the necessary parameters
 params = Parameters(
@@ -33,7 +31,7 @@ model = Huginn.Model(
     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
 )
 
-## We initialize the glaciers with all the necessary data 
+## We initialize the glaciers with all the necessary data
 glaciers = initialize_glaciers(rgi_ids, params)
 
 ## We specify the type of simulation we want to perform
@@ -47,10 +45,10 @@ pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metric
 
 # ### Step-by-step explanation of the tutorial
 
-# Here we will cover in detail each one of the steps that lead us to run the 
-# `Prediction` from the previous example (i.e. a forward run). This first tutorial keeps things simple, and since 
+# Here we will cover in detail each one of the steps that lead us to run the
+# `Prediction` from the previous example (i.e. a forward run). This first tutorial keeps things simple, and since
 # we are not using machine learning models, we will only use the `Model` type to specify the iceflow and mass balance models. These functionalities
-# are mainly covered by `Huginn.jl`. 
+# are mainly covered by `Huginn.jl`.
 
 # #### Step 1: Parameter initialization
 
@@ -65,7 +63,7 @@ pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metric
 # - *Hyperparameters*: `Hyperparameters` includes all the necessary hyperparameters for a machine learning model.
 # - *UDEparameters*: `UDEparameters` contains the parameters related to the training of a Universal Differential Equation.
 
-# All these sub-types of parameters are held in a `Parameters` struct, a general 
+# All these sub-types of parameters are held in a `Parameters` struct, a general
 # parameters structure to be passed to an ODINN simulation.
 
 # First we need to specify a list of RGI IDs of the glacier we want to work with. Specifying an RGI
@@ -73,15 +71,13 @@ pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metric
 
 rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-08.00203"]
 rgi_paths = get_rgi_paths()
-# Filter out glaciers that are not used to avoid having references that depend on all the glaciers processed in Gungnir
-rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
 
 params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
-        multiprocessing = false,
-        #workers = 5,
+        multiprocessing = true,
+        workers = 5,
         rgi_paths = rgi_paths
     )
 )
@@ -92,13 +88,13 @@ params = Parameters(
 
 # - *Iceflow model*: `IceflowModel` is the ice flow dynamics model that will be used to simulate
 #                       iceflow. It defaults to a 2D Shallow Ice Approximation.
-# - *Surface mass balance model*: `MassBalanceModel` is the mass balance model that will be used for 
-#                               simulations. Options here include temperature-index models, or 
+# - *Surface mass balance model*: `MassBalanceModel` is the mass balance model that will be used for
+#                               simulations. Options here include temperature-index models, or
 #                               machine learning models coming from `MassBalanceMachine`.
 # - *Machine learning model*: `MLmodel` is the machine learning model (e.g. a neural network) which will
 #                               be used as part of a hybrid model based on a Universal Differential Equation.
 
-# Generally, a model can be initialized directly using the `Model` constructor:
+# The model is initialized using the `Model` constructor:
 
 model = Huginn.Model(
     iceflow = SIA2Dmodel(params),
@@ -109,7 +105,7 @@ model = Huginn.Model(
 
 # The third step is to fetch and initialize all the necessary data for our glaciers of interest.
 # This is strongly built on top of OGGM, mostly providing a Julia interface to automatize this. The package
-# Gungnir is used to fetch the necessary data from the RGI and other sources. The data is then stored in servers 
+# Gungnir is used to fetch the necessary data from the RGI and other sources. The data is then stored in servers
 # and fetched and read using `Rasters.jl` directly by `Sleipnir.jl` when needed.
 
 # Then, we initialize those glaciers based on those RGI IDs and the parameters we previously specified.
