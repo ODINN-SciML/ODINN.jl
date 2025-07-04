@@ -1,6 +1,6 @@
 # # Forward simulation tutorial
 
-## This tutorial provides a simple example on how to perform a forward simulation using ODINN.jl.
+# This tutorial provides a simple example on how to perform a forward simulation using ODINN.jl.
 
 # ## Running the whole code
 

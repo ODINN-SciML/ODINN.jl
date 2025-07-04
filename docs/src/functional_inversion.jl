@@ -1,8 +1,6 @@
 # # Functional inversion tutorial
 
-# This tutorial provides a simple example on how to perform a functional inversion using Universal Differential Equations (UDEs) in ODINN.jl.
-# For this, we will generate a synthetic dataset using a forward simulation, and then we will use this dataset to perform the functional inversion.
-# The goal of this functional inversion will be to learn a synthetic law that maps `A`, i.e. the ice rigidity, to long-term changes in atmospheric surface temperature.
+# This tutorial provides a simple example on how to perform a functional inversion using Universal Differential Equations (UDEs) in ODINN.jl. For this, we will generate a synthetic dataset using a forward simulation, and then we will use this dataset to perform the functional inversion. The goal of this functional inversion will be to learn a synthetic law that maps `A`, i.e. the ice rigidity, to long-term changes in atmospheric surface temperature.
 
 # ## Running the whole code
 
