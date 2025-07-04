@@ -78,28 +78,28 @@ jobs:
         uses: julia-actions/julia-buildpkg@v1
       - name: Run tests
         uses: julia-actions/julia-runtest@v1
-      # - name: Performance benchmark
-      #   id: generate-comment
-      #   run: |
-      #     julia benchmark/run.jl > benchmark/results.txt
-      #     outTxt="$(cat benchmark/results.txt)"
-      #     EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-      #     echo "comment<<$EOF" >> $GITHUB_OUTPUT
-      #     echo "$outTxt" >> $GITHUB_OUTPUT
-      #     echo "$EOF" >> $GITHUB_OUTPUT
-      #   if: matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request'
-      # - name: Publish benchmark
-      #   uses: actions/github-script@v6
-      #   if: matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request'
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     script: |
-      #       github.rest.issues.createComment({
-      #         issue_number: `${{ env.PR_NUMBER }}`,
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         body: `${{steps.generate-comment.outputs.comment}}`
-      #       })
+      - name: Performance benchmark
+        id: generate-comment
+        run: |
+          julia benchmark/run.jl > benchmark/results.txt
+          outTxt="$(cat benchmark/results.txt)"
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "comment<<$EOF" >> $GITHUB_OUTPUT
+          echo "$outTxt" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+        if: ${{ matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run benchmark') }}
+      - name: Publish benchmark
+        uses: actions/github-script@v6
+        if: ${{ matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run benchmark') }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: `${{ env.PR_NUMBER }}`,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${{steps.generate-comment.outputs.comment}}`
+            })
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:
