@@ -92,8 +92,8 @@ Configures and enables multiprocessing based on the provided simulation paramete
 function enable_multiprocessing(params::Sleipnir.Parameters)
     procs = params.simulation.workers
     if procs > 0 && params.simulation.multiprocessing
-        if parse(Bool, get(ENV, "CI", "false"))
-            @assert procs == nprocs() "Within the CI it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()-1) in the yaml files but in the simulation parameters workers=$(procs)."
+        if parse(Bool, get(ENV, "ODINN_OVERWRITE_MULTI", "false"))
+            @assert procs == nprocs() "In the documentation it is not possible to configure the number of workers for multiprocessing. It is hardcoded to $(nprocs()-1) in the yaml files but in the simulation parameters workers=$(procs)."
         else
         if nprocs() < procs
             @eval begin

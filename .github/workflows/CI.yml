@@ -77,7 +77,7 @@ jobs:
       - name: Build Julia packages
         uses: julia-actions/julia-buildpkg@v1
       - name: Run tests
-        run: julia -p 4 --project -e 'using Pkg; Pkg.test()'
+        uses: julia-actions/julia-runtest@v1
       # - name: Performance benchmark
       #   id: generate-comment
       #   run: |
