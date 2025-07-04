@@ -1,4 +1,4 @@
-# ## Forward simulation tutorial
+# # Forward simulation tutorial
 
 ## This tutorial provides a simple example on how to perform a forward simulation using ODINN.jl.
 
@@ -43,14 +43,15 @@ Huginn.run!(prediction)
 ## Then we can visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier
 pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
 
-# ### Step-by-step explanation of the tutorial
+# ## Step-by-step explanation of the tutorial
 
 # Here we will cover in detail each one of the steps that lead us to run the
 # `Prediction` from the previous example (i.e. a forward run). This first tutorial keeps things simple, and since
 # we are not using machine learning models, we will only use the `Model` type to specify the iceflow and mass balance models. These functionalities
 # are mainly covered by `Huginn.jl`.
 
-# #### Step 1: Parameter initialization
+
+# ### Step 1: Parameter initialization
 
 # The first step is to initialize and specify all the necessary parameters. In ODINN.jl
 # we have many different types of parameters, specifying different aspects of the model.
@@ -81,7 +82,9 @@ params = Parameters(
         rgi_paths = rgi_paths
     )
 )
-# #### Step 2: Model specification
+
+
+# ### Step 2: Model specification
 
 # The next step is to specify which model(s) we want to use for our simulation. In ODINN
 # we have three different types of model, which are encompassed in a `Model` structure:
@@ -101,7 +104,8 @@ model = Huginn.Model(
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
 
-# #### Step 3: Glacier initialization
+
+# ### Step 3: Glacier initialization
 
 # The third step is to fetch and initialize all the necessary data for our glaciers of interest.
 # This is strongly built on top of OGGM, mostly providing a Julia interface to automatize this. The package
@@ -111,7 +115,8 @@ model = Huginn.Model(
 # Then, we initialize those glaciers based on those RGI IDs and the parameters we previously specified.
 glaciers = initialize_glaciers(rgi_ids, params)
 
-# #### Step 4: Creating and running a simulation
+
+# ### Step 4: Creating and running a simulation
 
 # The final step of the pipeline, is to create an ODINN simulation based on all the previous
 # steps, and then to run it. There are different types of simulations that we can do with ODINN:
@@ -128,7 +133,8 @@ Huginn.run!(prediction)
 
 # There we go, we have successfully simulated the evolution of 3 glaciers for 5 years in around 1-2 seconds!
 
-# #### Step 5: Visualizing the results
+
+# ### Step 5: Visualizing the results
 
 # Finally, we can use the plotting functions of `ODINN.jl` to visualize the results of the simulation. Like the glacier ice thickness evolution
 plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])

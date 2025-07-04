@@ -8,7 +8,17 @@ on:
   pull_request:
 
 jobs:
+  tutorials-check:
+    runs-on: ubuntu-latest
+    env:
+      ODINN_OVERWRITE_MULTI: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run all tutorials
+        run: julia -p 4 --project -e 'using Test; include("docs/testdocs.jl")'
+
   build:
+    needs: tutorials-check
     permissions:
       actions: write
       contents: write

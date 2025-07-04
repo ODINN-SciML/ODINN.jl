@@ -1,4 +1,4 @@
-# ## Laws tutorial
+# # Laws tutorial
 
 ## This tutorial provides simple examples on how to create laws and how to inject them into the iceflow model.
 
@@ -47,9 +47,9 @@ params = Parameters(
         progress=true)
 )
 
-# ### Non learnable laws
+# ## Non learnable laws
 
-## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
+# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
 A_law = CuffeyPaterson()
 
 model = Huginn.Model(
@@ -57,5 +57,5 @@ model = Huginn.Model(
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
 
-# ### Learnable laws
+# ## Learnable laws
 
