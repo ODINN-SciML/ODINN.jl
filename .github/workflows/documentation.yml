@@ -14,8 +14,14 @@ jobs:
       ODINN_OVERWRITE_MULTI: true
     steps:
       - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v2
+      - name: Install dependencies
+        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Run all tutorials
-        run: julia -p 4 --project -e 'using Test; include("docs/testdocs.jl")'
+        run: julia -p 4 --project=docs/ docs/testdocs.jl
 
   build:
     needs: tutorials-check
