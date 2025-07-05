@@ -36,7 +36,9 @@ function test_adjoint_SIA2D(
             multiprocessing=false,
             workers=1,
             test_mode=true,
-            rgi_paths=rgi_paths),
+            rgi_paths=rgi_paths,
+            gridScalingFactor=4,
+        ),
         physical = PhysicalParameters(
             minA = 8e-21,
             maxA = 8e-18),

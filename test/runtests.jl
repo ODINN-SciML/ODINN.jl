@@ -54,7 +54,7 @@ ENV["GKSwstype"] = "nul"
 end
 
 @testset "Adjoint method of SIA equation with A as target" begin
-    # @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A) # This test must be run first, otherwise Enzyme compilation fails because it was used before
+    @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A) # This test must be run first, otherwise Enzyme compilation fails because it was used before
     @testset "VJP (discrete) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); target = :A)
     @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[3e-4, 2e-4, 2e-2], target = :A, C=7e-8)
     @testset "VJP (continuous) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
