@@ -39,10 +39,11 @@ params = Parameters(
         progress=true)
 )
 
+nn_model = NeuralNetwork(params)
 model = Model(
-    iceflow = SIA2Dmodel(params),
+    iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
     mass_balance = nothing,
-    machine_learning = NeuralNetwork(params)
+    regressors = (; A=nn_model)
 )
 
 glaciers = initialize_glaciers(rgi_ids, params)
@@ -54,7 +55,6 @@ simulation = FunctionalInversion(model, glaciers, params)
 simulation.cache = init_cache(model, simulation, glacier_idx, params)
 t = tspan[1]
 θ = simulation.model.machine_learning.θ
-simulation.model.iceflow[batch_idx].glacier_idx = glacier_idx
 λ = rand(size(H)...)
 
 for VJPMode in (ODINN.EnzymeVJP(), ODINN.DiscreteVJP(), ODINN.ContinuousVJP())

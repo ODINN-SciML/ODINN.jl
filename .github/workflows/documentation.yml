@@ -8,13 +8,30 @@ on:
   pull_request:
 
 jobs:
+  tutorials-check:
+    runs-on: ubuntu-latest
+    env:
+      ODINN_OVERWRITE_MULTI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v2
+      - name: Install dependencies
+        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+      - name: Run all tutorials
+        run: julia -p 4 --project=docs/ docs/testdocs.jl
+
   build:
+    needs: tutorials-check
     permissions:
       actions: write
       contents: write
       pull-requests: read
       statuses: write
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -27,4 +44,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
-        run: julia --project=docs/ docs/make.jl
+        run: julia -p 4 --project=docs/ docs/make.jl
