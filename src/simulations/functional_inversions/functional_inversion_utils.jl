@@ -97,7 +97,6 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        # Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
@@ -148,7 +147,6 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
     loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        # Enzyme.API.strictAliasing!(false)
         optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"

@@ -27,23 +27,22 @@ function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation, t)
     return λ_∂f∂H, dH_H
 end
 
-function VJP_λ_∂SIA∂θ(VJPMode::DiscreteVJP, λ, H, θ, dH_H, dH_λ, simulation, t)
+function VJP_λ_∂SIA∂θ(VJPMode::DiscreteVJP, λ, H, θ, dH_H, simulation, t)
     λ_∂f∂θ = VJP_λ_∂SIA_discrete(λ, H, θ, simulation, t)[2]
     return λ_∂f∂θ
 end
 
-function VJP_λ_∂SIA∂θ(VJPMode::ContinuousVJP, λ, H, θ, dH_H, dH_λ, simulation, t)
+function VJP_λ_∂SIA∂θ(VJPMode::ContinuousVJP, λ, H, θ, dH_H, simulation, t)
     λ_∂f∂θ = VJP_λ_∂SIA∂θ_continuous(λ, H, θ, simulation, t)
     return λ_∂f∂θ
 end
 
-function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, dH_λ, simulation, t)
+function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, simulation, t)
     λ_∂f∂θ = Enzyme.make_zero(θ)
     _simulation = Enzyme.make_zero(simulation)
     _H = Enzyme.make_zero(H)
 
-    dH_λ = something(dH_λ, Enzyme.make_zero(H))
-
+    dH_λ = Enzyme.make_zero(H)
     λθ = deepcopy(λ) # Need to copy because Enzyme changes the backward gradient in-place
     Enzyme.autodiff(
         Reverse, SIA2D_UDE!, Const,

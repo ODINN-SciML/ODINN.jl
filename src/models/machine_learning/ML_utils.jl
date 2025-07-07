@@ -89,10 +89,11 @@ function build_simulation_batch(simulation::FunctionalInversion, i::I, nbatches:
 
     # Each element of the batch has access only to the current glacier, so glacier_idx=1
     cache = init_cache(model, simulation, 1, simulation.parameters)
+    glacier = simulation.glaciers[i]
     if length(simulation.results) < 1
-        return FunctionalInversion{cache_type(model)}(model, cache, [simulation.glaciers[i]], simulation.parameters, simulation.results, simulation.stats)
+        return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier)}(model, cache, [glacier], simulation.parameters, simulation.results, simulation.stats)
     else
-        return FunctionalInversion{cache_type(model)}(model, cache, [simulation.glaciers[i]], simulation.parameters, [simulation.results[i]], simulation.stats)
+        return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier)}(model, cache, [glacier], simulation.parameters, [simulation.results[i]], simulation.stats)
     end
 end
 
