@@ -86,9 +86,6 @@ include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Parameterizations
 include(joinpath(root_dir, "src/laws/Laws.jl"))
 
-# Parameterizations
-include(joinpath(root_dir, "src/laws/Laws.jl"))
-
 # Inversion for SIA equation
 include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))
 
