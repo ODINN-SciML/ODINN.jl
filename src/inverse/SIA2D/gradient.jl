@@ -13,7 +13,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     # Retrieve loss function
     losses = getindex.(loss_grad, 1)
     loss = sum(losses)
-    # Retrive gradient
+    # Retrieve gradient
     dθs  = getindex.(loss_grad, 2)
     dθs = ODINN.merge_batches(dθs)
 

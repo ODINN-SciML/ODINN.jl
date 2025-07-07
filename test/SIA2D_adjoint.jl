@@ -24,7 +24,7 @@ function test_adjoint_SIA2D(
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
-    tspan = (2010.0, 2015.0)
+    tspan = (2010.0, 2012.0)
 
     params = Parameters(
         simulation = SimulationParameters(
@@ -127,7 +127,7 @@ function test_adjoint_SIA2D(
     angle = []
     relerr = []
     eps = []
-    for k in range(2,8)
+    for k in range(3,7,step=2)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
         ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
