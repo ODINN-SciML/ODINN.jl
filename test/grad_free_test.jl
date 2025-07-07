@@ -8,13 +8,14 @@ function grad_free_test(;use_MB::Bool=false)
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
+    tspan = (2010.0, 2012.0)
 
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
             use_MB=use_MB,
             velocities=true,
-            tspan=(2010.0, 2015.0),
+            tspan=tspan,
             step=δt,
             multiprocessing=false,
             workers=1,
@@ -52,7 +53,7 @@ function grad_free_test(;use_MB::Bool=false)
     glaciers = initialize_glaciers(rgi_ids, params)
 
     # Time stanpshots for transient inversion
-    tstops = collect(2010:δt:2015)
+    tstops = collect(tspan[1]:δt:tspan[2])
 
     generate_ground_truth!(glaciers, params, model, tstops)
     # Do a clean restart
