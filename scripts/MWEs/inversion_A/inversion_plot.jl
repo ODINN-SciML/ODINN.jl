@@ -19,7 +19,6 @@ As_fake = A_poly.(Temps_smooth)
 Temps = Float64[]
 As_pred = Float64[]
 
-θ = functional_inversion.model.machine_learning.θ
 for (i, glacier) in enumerate(glaciers)
     T, A = ODINN.T_A_Alaw(functional_inversion, i, θ, tstops[end])
     push!(Temps, T)
