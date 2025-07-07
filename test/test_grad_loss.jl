@@ -22,6 +22,15 @@ function test_grad_finite_diff(
     δt = 1/12
     tspan = (2010.0, 2012.0)
 
+    if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+        optim_autoAD = Optimization.AutoEnzyme()
+        # sensealg = QuadratureAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP())
+        sensealg = GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP())
+    else
+        optim_autoAD = ODINN.NoAD()
+        sensealg = SciMLSensitivity.ZygoteAdjoint()
+    end
+
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
@@ -42,8 +51,8 @@ function test_grad_finite_diff(
             minA = 8e-21,
             maxA = 8e-18),
         UDE = UDEparameters(
-            sensealg=SciMLSensitivity.ZygoteAdjoint(),
-            optim_autoAD=ODINN.NoAD(),
+            sensealg=sensealg,
+            optim_autoAD=optim_autoAD,
             grad=adjointFlavor,
             optimization_method="AD+AD",
             target = target),
@@ -105,12 +114,22 @@ function test_grad_finite_diff(
 
 
     θ = simulation.model.machine_learning.θ
-    loss_function(_θ, (_simulation)) = ODINN.loss_iceflow_transient(_θ, _simulation, pmap)
-    loss_iceflow_grad!(dθ, θ, _simulation) = SIA2D_grad!(dθ, θ, _simulation)
+    loss_iceflow_grad!(dθ, θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+        # Not working for the moment because of several reasons:
+        # - Results and loss computation are not compatible with Zygote (in-place).
+        # - SciMLSensitivity does not call Enzyme the same way we do with `Duplicated` for each argument.
+        # - Currently we need to provide `simulation` to SIA2D using a closure which is not compatible with
+        #   Enzyme and we need to aggregate simulation and θ as a single argument. Unfortunately using a
+        #   simple NamedTuple does not work and we should try to pass these arguments in a different way.
+        ret = Zygote.gradient((_θ, _simulation) -> ODINN.loss_iceflow_transient(_θ, _simulation, map), θ, _simulation)
+        dθ .= ret[1]
+    else
+        SIA2D_grad!(dθ, θ, _simulation)
+    end
 
     function f(x, simulation)
         simulation.model.machine_learning.θ = x
-        return loss_function(x, simulation)
+        ODINN.loss_iceflow_transient(x, simulation, map)
     end
 
     dθ = zero(θ)
