@@ -61,5 +61,6 @@ end
 ################### UTILS #####################
 ###############################################
 
+include("sciml_utils.jl")
 include("functional_inversion_utils.jl")
 include("callback_utils.jl")

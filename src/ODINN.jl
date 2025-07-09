@@ -32,6 +32,7 @@ using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimise
 using ComponentArrays
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet
+using DiffEqCallbacks: PeriodicCallback
 using MLUtils: DataLoader
 using Base: @kwdef
 using Lux
@@ -47,8 +48,8 @@ using ImageFiltering
 using Printf
 using Interpolations, GeoStats
 using FastGaussQuadrature
-
 using Zygote
+
 
 # ##############################################
 # ############    PARAMETERS     ###############

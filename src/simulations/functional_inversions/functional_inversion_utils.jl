@@ -97,12 +97,16 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
+        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-        loss_function_grad!(_dθ, _θ, _simulation) = SIA2D_grad!(_dθ, _θ, only(_simulation))
-        optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
+    loss_function_grad!(_dθ, _θ, _simulation) = if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
+        grad_loss_iceflow!(_dθ, _θ, only(_simulation), pmap)
+    else
+        SIA2D_grad!(_dθ, _θ, only(_simulation))
+    end
+    optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
 
     # optprob = OptimizationProblem(optf, θ, (simultion_batch_ids))
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
@@ -118,6 +122,9 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
         callback = cb,
         progress = false
         )
+
+    θ_trained = iceflow_trained.u
+    simulation.results = create_results(θ_trained, simulation, pmap)
 
     return iceflow_trained
 end
@@ -147,12 +154,16 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
     loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        optf = OptimizationFunction(loss_function, simulation.parameters.UDE.optim_autoAD)
+        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
     else
         @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
-        loss_function_grad!(_dθ, _θ, simulation_loader) = SIA2D_grad!(_dθ, _θ, simulation_loader[1])
-        optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
     end
+    loss_function_grad!(_dθ, _θ, simulation_loader) = if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
+        grad_loss_iceflow!(_dθ, _θ, simulation_loader[1], pmap)
+    else
+        SIA2D_grad!(_dθ, _θ, simulation_loader[1])
+    end
+    optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
 
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
@@ -167,41 +178,59 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
         progress = false
         )
 
+    θ_trained = iceflow_trained.u
+    simulation.results = create_results(θ_trained, simulation, pmap)
+
     return iceflow_trained
 end
 
-function loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
+"""
+    create_results(θ, simulation::FunctionalInversion, mappingFct)
 
-    predict_iceflow!(θ, simulation, mappingFct)
+Given the parameters θ, solve the iceflow problem for all the glaciers and aggregate
+the results for all of them.
+This function is typically used at the end of a training once θ has been optimized
+and one wants to run one last forward simulation in order to retrieve statistics
+about each of the iceflow problems.
 
-    loss_function = simulation.parameters.UDE.empirical_loss_function
-
-    l_H = 0.0
-
-    for i in 1:length(simulation.glaciers)
-
-        # Reference cames from data
-        # Complete this with feeded data on glacier object
-        H_ref = simulation.glaciers[i].thicknessData.H
-        # Prediction comes from simulation
-        # batch_results_id = Sleipnir.get_result_id_from_rgi(batch_id, simulation)
-        t = simulation.results[i].t
-        Δt = diff(t)
-        H = simulation.results[i].H
-        @assert length(H_ref) == length(H) "Reference and Prediction datasets need to be evaluated in same timestamps."
-        @assert size(H_ref[begin]) == size(H[begin])
-
-        β = 2.0
-        for τ in 2:length(H)
-            normalization = 1.0
-            # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
-            mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
-            l_H += Δt[τ-1] * mean_error
-        end
+Arguments:
+- `θ`: Parameters to use for the forward simulation.
+- `simulation::FunctionalInversion`: Simulation structure that contains all the required information about the functional inversion.
+- `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
+"""
+function create_results(θ, simulation::FunctionalInversion, mappingFct)
+    simulations = generate_simulation_batches(simulation)
+    results = mappingFct(simulations) do simulation
+        container = FunctionalInversionBinder(simulation, θ)
+        [_batch_iceflow_UDE(
+            container, glacier_idx,
+            define_iceflow_prob(simulation, glacier_idx)
+        ) for glacier_idx in 1:length(container.simulation.glaciers)]
     end
+    results = merge_batches(results)
+    return results
+end
 
+"""
+    loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
+
+Given the parameters θ, solve the iceflow problem for all the glaciers, compute the loss function and return its value.
+
+Arguments:
+- `θ`: Parameters to use for the forward simulation.
+- `simulation::FunctionalInversion`: Simulation structure that contains all the required information about the functional inversion.
+- `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
+"""
+function loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
+    simulations = generate_simulation_batches(simulation)
+    losses = mappingFct(
+        simulation -> parallel_loss_iceflow_transient(
+            θ, simulation,
+        ), simulations)
+    losses = merge_batches(losses)
+
+    l_H = sum(losses)
     return l_H
-
 end
 
 # TODO: This function is not longer use in the new version of the code with transient
@@ -264,132 +293,232 @@ end
 #     end # let
 # end
 
-function predict_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
+"""
+    grad_loss_iceflow!(dθ, θ, simulation::FunctionalInversion, mappingFct)
+
+Compute the gradient with respect to θ for all the glaciers and assign the result in-place to `dθ`.
+
+Arguments:
+- `dθ`: Gradient of the parameters where the computed gradient should be stored.
+- `θ`: Parameters to differentiate.
+- `simulation::FunctionalInversion`: Simulation structure that contains all the required information about the functional inversion.
+- `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
+"""
+function grad_loss_iceflow!(dθ, θ, simulation::FunctionalInversion, mappingFct)
+    dθ .= grad_loss_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
+end
+
+"""
+    grad_loss_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
+
+Compute the gradient with respect to θ for all the glaciers and return the result out-of-place.
+See the in-place implementation for more information.
+"""
+function grad_loss_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
     simulations = generate_simulation_batches(simulation)
-    results = mappingFct(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
-    simulation.results = ODINN.merge_batches(results)
+    grads = mappingFct(simulations) do simulation
+        [grad_parallel_loss_iceflow!(θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
+    end
+    return sum(merge_batches(grads))
 end
 
+"""
+    grad_parallel_loss_iceflow!(θ, simulation::FunctionalInversion, glacier_idx::Integer)
 
-function batch_iceflow_UDE(θ, simulation::FunctionalInversion)
-    return [_batch_iceflow_UDE(θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
+Compute the gradient with respect to θ for a particular glacier and return the computed gradient.
+This function defines the iceflow problem and then calls Zygote to differentiate `batch_loss_iceflow_transient` with respect to θ.
+It uses the SciMLSensitivity implementation under the hood to compute the adjoint of the ODE.
+"""
+function grad_parallel_loss_iceflow!(θ, simulation::FunctionalInversion, glacier_idx::Integer)
+    iceflow_prob = define_iceflow_prob(simulation, glacier_idx)
+    ret, = Zygote.gradient(
+        _θ -> batch_loss_iceflow_transient(
+            FunctionalInversionBinder(simulation, _θ),
+            glacier_idx,
+            iceflow_prob,
+        )[1], θ)
+    return ret
 end
 
-function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, glacier_idx::I) where {I <: Integer}
+"""
+    parallel_loss_iceflow_transient(θ, simulation::FunctionalInversion)
 
-    params = simulation.parameters
-    glacier = simulation.glaciers[glacier_idx]
+Loop over a list of glaciers to process.
+When multiprocessing is enabled, each call of this function has a dedicated process.
+This function calls `batch_loss_iceflow_transient` which returns both the loss and the result structure. The function keeps only the loss.
+"""
+function parallel_loss_iceflow_transient(θ, simulation::FunctionalInversion)
+    return [batch_loss_iceflow_transient(FunctionalInversionBinder(simulation, θ), glacier_idx, define_iceflow_prob(simulation, glacier_idx))[1] for glacier_idx in 1:length(simulation.glaciers)]
+end
 
-    simulation.cache = init_cache(simulation.model, simulation, glacier_idx, params)
-    simulation.model.machine_learning.θ = θ
+"""
+    batch_loss_iceflow_transient(
+        container::FunctionalInversionBinder,
+        glacier_idx::Integer,
+        iceflow_prob::ODEProblem,
+    )
+
+Solve the ODE, retrieve the results and compute the loss.
+
+Arguments:
+- `container::FunctionalInversionBinder`: SciMLStruct that contains the simulation structure and the vector of parameters to optimize.
+- `glacier_idx::Integer`: Index of the glacier.
+- `iceflow_prob::ODEProblem`: Iceflow problem defined as an ODE with respect to time.
+"""
+function batch_loss_iceflow_transient(
+    container::FunctionalInversionBinder,
+    glacier_idx::Integer,
+    iceflow_prob::ODEProblem,
+)
+    result = _batch_iceflow_UDE(container, glacier_idx, iceflow_prob)
+
+    loss_function = container.simulation.parameters.UDE.empirical_loss_function
+
+    H_ref = container.simulation.glaciers[glacier_idx].thicknessData.H
+    t = result.t
+    Δt = diff(t)
+    H = result.H
+    @assert length(H_ref) == length(H) "Reference and Prediction datasets need to be evaluated in same timestamps."
+    @assert size(H_ref[begin]) == size(H[begin])
+
+    β = 2.0
+    l_H = map(2:length(H)) do τ
+        normalization = 1.0
+        # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
+        Hr = @ignore_derivatives(H_ref[τ]) # Ignore this part of the computational graph, otherwise AD fails
+        mean_error = loss(loss_function, H[τ], Hr; normalization=prod(size(H_ref[τ]))*normalization)
+        Δt[τ-1] * mean_error
+    end
+    return sum(l_H), result
+end
+
+"""
+    _batch_iceflow_UDE(
+        container::FunctionalInversionBinder,
+        glacier_idx::Integer,
+        iceflow_prob::ODEProblem,
+    )
+
+Define the callbacks to be called by the ODE solver, solve the ODE and create the results.
+"""
+function _batch_iceflow_UDE(
+    container::FunctionalInversionBinder,
+    glacier_idx::Integer,
+    iceflow_prob::ODEProblem,
+)
+
+    params = container.simulation.parameters
+    glacier = container.simulation.glaciers[glacier_idx]
+
+    container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, params)
+    container.simulation.model.machine_learning.θ = container.θ
 
     # Create mass balance callback
     tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
-    stop_condition(u,t,integrator) = Sleipnir.stop_condition_tstops(u,t,integrator, tstops)
     params.solver.tstops = tstops
 
-    mb_action! = let model = simulation.model, cache = simulation.cache, glacier = glacier, step = params.solver.step
-        function (integrator)
-            if params.simulation.use_MB
-                # Compute mass balance
-                MB_timestep!(cache, model, glacier, step, integrator.t)
-                apply_MB_mask!(integrator.u, cache.iceflow)
+    cb_MB = if params.simulation.use_MB
+        # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
+        mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, step = params.solver.step
+            function (integrator)
+                if params.simulation.use_MB
+                    # Compute mass balance
+                    MB_timestep!(cache, model, glacier, step, integrator.t)
+                    apply_MB_mask!(integrator.u, cache.iceflow)
+                end
             end
         end
+        PeriodicCallback(mb_action!, params.solver.step; initial_affect=false)
+    else
+        CallbackSet()
     end
-    cb_MB = DiscreteCallback(stop_condition, mb_action!)
 
     # Create iceflow law callback
-    cb_iceflow = Huginn.build_callback(simulation.model.iceflow, simulation.cache.iceflow, simulation.cache.iceflow.glacier_idx, θ)
+    cb_iceflow = Huginn.build_callback(
+        container.simulation.model.iceflow,
+        container.simulation.cache.iceflow,
+        container.simulation.cache.iceflow.glacier_idx,
+        container.θ)
 
     cb = CallbackSet(cb_MB, cb_iceflow)
 
     # Run iceflow UDE for this glacier
-    iceflow_sol = simulate_iceflow_UDE!(θ, simulation, cb, glacier_idx)
+    iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob)
 
-    # Update simulation results
-    result = Sleipnir.create_results(
-        simulation, glacier_idx, iceflow_sol, nothing;
-        tstops = simulation.parameters.solver.tstops,
-        light = !simulation.parameters.solver.save_everystep,
+    # Compute simulation results
+    return Sleipnir.create_results(
+        container.simulation, glacier_idx, iceflow_sol, nothing;
+        light = !container.simulation.parameters.solver.save_everystep,
         processVelocity = Huginn.V_from_H
     )
-
-    return result
 end
 
 
 """
     simulate_iceflow_UDE!(
-        θ,
-        simulation::SIM,
+        container::FunctionalInversionBinder,
         cb::SciMLBase.DECallback,
-        glacier_idx::I,
-    ) where {I <: Integer, SIM <: Simulation}
+        iceflow_prob::ODEProblem,
+    )
 
 Make forward simulation of the iceflow UDE.
 """
 function simulate_iceflow_UDE!(
-    θ,
-    simulation::SIM,
+    container::FunctionalInversionBinder,
     cb::SciMLBase.DECallback,
-    glacier_idx::I,
-) where {I <: Integer, SIM <: Simulation}
-
-    model = simulation.model
-    cache = simulation.cache
-    params = simulation.parameters
-
-    # Define closure with apply_parametrization inside the function call
-    SIA2D_UDE_closure(H, θ, t) = SIA2D_UDE(H, θ, t, simulation)
-
-    iceflow_prob = ODEProblem(
-        SIA2D_UDE_closure,
-        cache.iceflow.H₀,
-        params.simulation.tspan,
-        θ;
-        tstops=params.solver.tstops,
-    )
-
+    iceflow_prob::ODEProblem,
+)
+    params = container.simulation.parameters
+    iceflow_prob_remake = remake(iceflow_prob; p=container)
     iceflow_sol = solve(
-        iceflow_prob,
+        iceflow_prob_remake,
         params.solver.solver,
         callback=cb,
         sensealg=params.UDE.sensealg,
         reltol=params.solver.reltol,
         progress=false,
         maxiters=params.solver.maxiters,
+        tstops=params.solver.tstops,
     )
     @assert iceflow_sol.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
-
-    # Compute average ice surface velocities for the simulated period
-    cache.iceflow.H .= iceflow_sol.u[end]
-    cache.iceflow.H .= ifelse.(cache.iceflow.H .> 0.0, cache.iceflow.H , 0.0)
-
-    # Average surface velocity
-    Huginn.avg_surface_V(simulation, iceflow_sol.t[end])
-
-    glacier = simulation.glaciers[glacier_idx]
-
-    # Surface topography
-    cache.iceflow.S .= glacier.B .+ cache.iceflow.H
 
     return iceflow_sol
 end
 
 """
-Wrapper to pass a parametrization to the SIA2D
+    define_iceflow_prob(
+        simulation::FunctionalInversion,
+        glacier_idx::Integer,
+    )
+
+Given a `simulation` struct and a `glacier_idx`, build the iceflow problem that has to be solved in the ODE solver.
+In practice, the returned iceflow problem is used inside `simulate_iceflow_UDE!` through `remake`.
+The definition of the iceflow problem has to be done outside of the gradient computation, otherwise Zygote fails at differentiating it.
 """
-function SIA2D_UDE(H::Matrix{R}, θ, t::R, simulation::SIM) where {R <: Real, SIM <: Simulation}
-    simulation.model.machine_learning.θ = θ
-    return Huginn.SIA2D(H, simulation, t)
+function define_iceflow_prob(
+    simulation::FunctionalInversion,
+    glacier_idx::Integer,
+)
+    params = simulation.parameters
+    H₀ = simulation.glaciers[glacier_idx].H₀
+    iceflow_prob = ODEProblem(
+        SIA2D_UDE!,
+        H₀,
+        params.simulation.tspan,
+        simulation;
+        tstops=params.solver.tstops,
+    )
+    return iceflow_prob
 end
 
 """
-currently just use for Enzyme
+Currently just used for Enzyme
 """
-function SIA2D_UDE!(_θ, _dH::Matrix{R}, _H::Matrix{R}, simulation::FunctionalInversion, t::R) where {R <: Real}
-    simulation.model.machine_learning.θ = _θ
-    Huginn.SIA2D!(_dH, _H, simulation, t)
+function SIA2D_UDE!(_dH::Matrix{<: Real}, _H::Matrix{<: Real}, container::FunctionalInversionBinder, t::Real)
+    Huginn.SIA2D!(_dH, _H, container.simulation, t, container.θ)
+    return nothing
+end
+function SIA2D_UDE!(_θ, _dH::Matrix{<: Real}, _H::Matrix{<: Real}, simulation::FunctionalInversion, t::Real)
+    Huginn.SIA2D!(_dH, _H, simulation, t, _θ)
     return nothing
 end
