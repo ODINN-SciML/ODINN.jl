@@ -29,7 +29,7 @@ end
         F <: AbstractFloat,
         I <: Integer,
         VJP <: AbstractVJPMethod
-        } <: AbstractAdjointMethod
+    } <: AbstractAdjointMethod
 
 Continuous adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
@@ -40,6 +40,9 @@ scheme.
 - `solver::Any`: The solver to be used for adjoint.
 - `reltol::F`: Relative tolerance to be used in the ODE solver of the adjoint.
 - `abstol::F`: Absolute tolerance to be used in the ODE solver of the adjoint.
+- `dtmax::F`: Maximum time step to be used in the ODE solver of the adjoint.
+- `interpolation`: Interpolation method to be used to interpolate the variables in
+    the computation of the adjoint. Currently only `:Linear` is supported.
 - `n_quadrature::I`: Number of nodes used in the Gauss quadrature for the numerical
     integration of the loss function.
 """

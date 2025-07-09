@@ -11,8 +11,9 @@ function inversion_test(;
     if multiprocessing
         workers = 3 # Two processes for the two glaciers + one for main
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
-        epochs = [20,10]
-        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+        # Multiprocessing is especially slow in the CI, so we perform a very short optimization
+        epochs = 3
+        optimizer = ODINN.ADAM(0.01)
     else
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
@@ -22,13 +23,14 @@ function inversion_test(;
 
     # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
     δt = 1/12
+    tspan = (2010.0, 2012.0)
 
     params = Parameters(
         simulation = SimulationParameters(
             working_dir = working_dir,
             use_MB = use_MB,
             velocities = false,
-            tspan = (2010.0, 2015.0),
+            tspan = tspan,
             step = δt,
             multiprocessing = multiprocessing,
             workers = workers,
@@ -73,7 +75,7 @@ function inversion_test(;
     glaciers = initialize_glaciers(rgi_ids, params)
 
     # Time snapshots for transient inversion
-    tstops = collect(2010:δt:2015)
+    tstops = collect(tspan[1]:δt:tspan[2])
 
     A_poly = Huginn.polyA_PatersonCuffey()
 

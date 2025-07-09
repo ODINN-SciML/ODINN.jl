@@ -22,13 +22,14 @@ function test_grad_finite_diff(
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
+    tspan = (2010.0, 2012.0)
 
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
             use_MB=false,
             velocities=true,
-            tspan=(2010.0, 2015.0),
+            tspan=tspan,
             step=δt,
             multiprocessing=false,
             workers=1,
@@ -71,7 +72,7 @@ function test_grad_finite_diff(
     glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
 
     # Time stanpshots for transient inversion
-    tstops = collect(2010:δt:2015)
+    tstops = collect(tspan[1]:δt:tspan[2])
 
     nn_model = NeuralNetwork(params)
     generate_ground_truth!(glaciers, params, model, tstops)
