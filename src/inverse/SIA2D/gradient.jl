@@ -35,12 +35,18 @@ Inverse by glacier
 """
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
-    # Run forward simulation to trigger Result
-    loss_val = loss_iceflow_transient(θ, simulation, map) # Use a map and not a pmap because we are already computing in parallel, cf SIA2D_grad!
+    # Run forward simulation to build the results
+    loss_results = [batch_loss_iceflow_transient(
+            FunctionalInversionBinder(simulation, θ),
+            glacier_idx,
+            define_iceflow_prob(simulation, glacier_idx),
+        ) for glacier_idx in 1:length(simulation.glaciers)]
+    loss_val = sum(getindex.(loss_results, 1))
+    results = getindex.(loss_results, 2)
+    simulation.results = results
+
     # Let's compute the forward loss inside gradient
     ℓ = 0.0
-    # Extract relevant data
-    # glacier_results_id = Sleipnir.get_result_id_from_rgi(batch_id, simulation)
     dLdθs_vector = []
 
     for i in 1:length(simulation.glaciers)
@@ -173,7 +179,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 abstol = simulation.parameters.UDE.grad.abstol,
                 maxiters = simulation.parameters.solver.maxiters,
                 )
-            @assert sol_rev.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
+            @assert sol_rev.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(sol_rev.retcode)\""
 
             ### Numerical integration using quadrature to compute gradient
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)

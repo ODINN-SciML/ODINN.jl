@@ -13,8 +13,8 @@ function test_adjoint_SIA2D(
     thres_relerr = thres[3]
 
     function _loss(H, θ, simulation, t, vecBackwardSIA2D)
-        simulation.model.machine_learning.θ = θ
-        dH = Huginn.SIA2D(H, simulation, t)
+        dH = zero(H)
+        Huginn.SIA2D!(dH, H, simulation, t, θ)
         return sum(dH.*vecBackwardSIA2D)
     end
 
@@ -96,7 +96,7 @@ function test_adjoint_SIA2D(
 
     vecBackwardSIA2D = randn(size(H, 1), size(H, 2))
 
-    dH = Huginn.SIA2D(H, simulation, t)
+    dH = Huginn.SIA2D(H, simulation, t, θ)
 
     ∂H, = ODINN.VJP_λ_∂SIA∂H(
         adjointFlavor.VJP_method,
