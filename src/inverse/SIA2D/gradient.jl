@@ -31,7 +31,7 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
 end
 
 """
-Inverse by glacier
+Compute gradient glacier per glacier
 """
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
@@ -42,6 +42,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
     # Extract relevant data
     # glacier_results_id = Sleipnir.get_result_id_from_rgi(batch_id, simulation)
     dLdθs_vector = []
+    loss_function = simulation.parameters.UDE.empirical_loss_function
 
     for i in 1:length(simulation.glaciers)
 
@@ -54,10 +55,11 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         t = result.t
         Δt = diff(t)
         H = result.H
+        glacier = simulation.glaciers[i]
 
         # Reference data
-        t_ref = simulation.glaciers[i].thicknessData.t
-        H_ref = simulation.glaciers[i].thicknessData.H
+        t_ref = glacier.thicknessData.t
+        H_ref = glacier.thicknessData.H
 
         @assert t ≈ t_ref "Reference times of simulation and reference data do not coincide."
         @assert length(H) == length(H_ref)
@@ -77,15 +79,40 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             λ  = [Enzyme.make_zero(result.B) for _ in 1:k]
             dH_λ = [Enzyme.make_zero(H[1]) for _ in 1:k]
 
-            ∂L∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H, H_ref; normalization=prod(N)*normalization)
+            res_backward_loss = map(j -> backward_loss(
+                    loss_function,
+                    H[j],
+                    H_ref[j],
+                    t[j],
+                    glacier,
+                    θ,
+                    simulation;
+                    normalization=prod(N)*normalization,
+                ), 1:k)
+            # Unzip ∂L∂H, ∂L∂θ at each timestep
+            ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
 
             for j in reverse(2:k)
 
                 # β = 2.0
                 # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
+
                 # Compute derivative of local contribution to loss function
                 ∂ℓ∂H = ∂L∂H[j]
-                ℓ += Δt[j-1] * loss(simulation.parameters.UDE.empirical_loss_function, H[j], H_ref[j]; normalization=prod(N)*normalization)
+                ∂ℓ∂θ = ∂L∂θ[j]
+
+                # Compute loss function for verification purpose
+                ℓi = loss(
+                    loss_function,
+                    H[j],
+                    H_ref[j],
+                    t[j],
+                    glacier,
+                    θ,
+                    simulation;
+                    normalization=prod(N)*normalization,
+                )
+                ℓ += Δt[j-1]*ℓi
 
                 ### Custom VJP to compute the adjoint
                 λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, t₀)
@@ -99,10 +126,13 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 ### Update gradient
                 # @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
 
-                dLdθ .+= Δt[j-1] .* λ_∂f∂θ
+                # Contribution to the loss
+                dLdθ .+= Δt[j-1] .* (isnothing(∂ℓ∂θ) ? λ_∂f∂θ : λ_∂f∂θ .+ ∂ℓ∂θ)
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
+
+            @assert !(loss_function isa LossHV || loss_function isa LossV) "ContinuousAdjoint is not compatible with the ice velocity loss for the moment"
 
             # Adjoint setup
 
@@ -140,7 +170,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             stop_condition(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
             function effect!(integrator)
                 t = - integrator.t
-                ∂ℓ∂H = backward_loss(simulation.parameters.UDE.empirical_loss_function, H_itp(t), H_ref_itp(t); normalization=prod(N)*normalization)
+                ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
+                    loss_function, H_itp(t), H_ref_itp(t),
+                    t, glacier, θ, simulation; normalization=prod(N)*normalization)
                 integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             cb_adjoint_loss = DiscreteCallback(stop_condition, effect!)
@@ -150,8 +182,10 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Include contribution of loss from last step since this is not accounted for in the discrete callback
             if simulation.parameters.simulation.tspan[2] ∈ t_ref
                 t_final = simulation.parameters.simulation.tspan[2]
-                λ₁ .+= simulation.parameters.simulation.step .* backward_loss(simulation.parameters.UDE.empirical_loss_function, H_itp(t_final), H_ref_itp(t_final); normalization=prod(N)*normalization)
-                # λ₁ .-= only(backward_loss(simulation.parameters.UDE.empirical_loss_function, [H_itp(t_final)], [H_ref_itp(t_final)]; normalization=prod(N)*normalization))
+                ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
+                    loss_function, H_itp(t_final), H_ref_itp(t_final),
+                    t_final, glacier, θ, simulation; normalization=prod(N)*normalization)
+                λ₁ .+= simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             # Define ODE Problem with time in reverse
             adjoint_PDE_rev = ODEProblem(

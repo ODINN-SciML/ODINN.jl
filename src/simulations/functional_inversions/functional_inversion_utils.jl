@@ -32,7 +32,7 @@ function run!(
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
         epochs = simulation.parameters.hyper.epochs
-        @assert length(optimizers) == length(optimizers) "Provide number of epochs as a vector with the same length of optimizers"
+        @assert length(optimizers) == length(epochs) "Provide number of epochs as a vector with the same length of optimizers"
         for i in 1:length(epochs)
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
@@ -78,7 +78,7 @@ BFGS Training
 """
 function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer; save_every_iter::Bool=false)
 
-    @info "Trainign with BFGS optimizer"
+    @info "Training with BFGS optimizer"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
@@ -94,7 +94,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
+    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         # Enzyme.API.strictAliasing!(false)
@@ -178,100 +178,52 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
 
     loss_function = simulation.parameters.UDE.empirical_loss_function
 
-    l_H = 0.0
+    l = 0.0
 
     for i in 1:length(simulation.glaciers)
+        glacier = simulation.glaciers[i]
 
-        # Reference cames from data
-        # Complete this with feeded data on glacier object
-        H_ref = simulation.glaciers[i].thicknessData.H
-        # Prediction comes from simulation
-        # batch_results_id = Sleipnir.get_result_id_from_rgi(batch_id, simulation)
+        H_ref = glacier.thicknessData.H
         t = simulation.results[i].t
         Δt = diff(t)
         H = simulation.results[i].H
-        @assert length(H_ref) == length(H) "Reference and Prediction datasets need to be evaluated in same timestamps."
-        @assert size(H_ref[begin]) == size(H[begin])
+        @assert size(H_ref[begin]) == size(H[begin]) "Initial state of reference and predicted ice thickness do not match."
+        @assert length(H_ref) == length(H) "Size of reference and prediction datasets do not match."
+        @assert t == glacier.thicknessData.t "Reference and prediction need to be evaluated with the same timestamps."
+
+        if isa(loss_function, LossHV) || isa(loss_function, LossV)
+            @assert !isnothing(glacier.velocityData) "Using $(typeof(loss_function)) but no velocityData in the glacier $(glacier.rgi_id)"
+            @assert length(glacier.velocityData.date)>0 "Using $(typeof(loss_function)) but no reference velocity in the results"
+        end
 
         β = 2.0
         for τ in 2:length(H)
+            # println("t[τ] = ", t[τ], "  τ=",τ)
             normalization = 1.0
             # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
-            mean_error = loss(loss_function, H[τ], H_ref[τ]; normalization=prod(size(H_ref[τ]))*normalization)
-            l_H += Δt[τ-1] * mean_error
+            mean_error = loss(
+                loss_function,
+                H[τ],
+                H_ref[τ],
+                t[τ],
+                glacier,
+                θ,
+                simulation;
+                normalization=prod(size(H_ref[τ]))*normalization,
+            )
+            l += Δt[τ-1] * mean_error
         end
     end
 
-    return l_H
+    return l
 
 end
-
-# TODO: This function is not longer use in the new version of the code with transient
-# inversions. We may want just to remove it.
-# function loss_iceflow(θ, simulation::FunctionalInversion)
-
-#     # simulation.model.machine_learning.θ = θ # update model parameters
-#     predict_iceflow!(θ, simulation)
-
-#     loss = simulation.parameters.UDE.empirical_loss_function
-
-#     # Compute loss function for the full batch
-#     let l_V = 0.0, l_H =  0.0
-#     for result in simulation.results
-#         # Get ice thickness from the reference dataset
-#         H_ref = result.H_glathida
-#         # isnothing(H_ref) ? continue : nothing
-#         # Get ice velocities for the reference dataset
-#         Vx_ref = result.Vx_ref
-#         Vy_ref = result.Vy_ref
-#         # Get ice thickness from the UDE predictions
-#         H = result.H
-#         # Get ice velocities prediction from the UDE
-#         Vx_pred = result.Vx
-#         Vy_pred = result.Vy
-
-#         if simulation.parameters.UDE.scale_loss
-#             # Ice thickness
-#             if !isnothing(H_ref)
-#                 normHref = mean(H_ref.^2)^0.5
-#                 l_H_loc = loss(H, H_ref)
-#                 l_H += normHref^(-1) * l_H_loc
-#             end
-#             # Ice surface velocities
-#             normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
-#             # l_V_loc = loss(Vx_pred, inn1(Vx_ref)) + loss(Vy_pred, inn1(Vy_ref))
-#             l_V_loc = loss(Vx_pred, Vx_ref) + loss(Vy_pred, Vy_ref)
-#             l_V += normVref^(-1) * l_V_loc
-#         else
-#             # Ice thickness
-#             if !isnothing(H_ref)
-#                 l_H += loss(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0])
-#             end
-#             # Ice surface velocities
-#             l_V += loss(V_pred[V_ref .!= 0.0], V_ref[V_ref.!= 0.0])
-#         end
-#     end # for
-
-#     loss_type = simulation.parameters.UDE.loss_type
-#     @assert (loss_type == "H" || loss_type == "V" || loss_type == "HV") "Invalid `loss_type`. Needs to be 'H', 'V' or 'HV'"
-#     if loss_type == "H"
-#         l_tot = l_H/length(simulation.results)
-#     elseif loss_type == "V"
-#         l_tot = l_V/length(simulation.results)
-#     elseif loss_type == "HV"
-#         l_tot = (l_V + l_H)/length(simulation.results)
-#     end
-
-#     return l_tot
-#     end # let
-# end
 
 function predict_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
     simulations = generate_simulation_batches(simulation)
     results = mappingFct(simulation -> batch_iceflow_UDE(θ, simulation), simulations)
     simulation.results = ODINN.merge_batches(results)
 end
-
 
 function batch_iceflow_UDE(θ, simulation::FunctionalInversion)
     return [_batch_iceflow_UDE(θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
@@ -314,7 +266,6 @@ function _batch_iceflow_UDE(θ, simulation::FunctionalInversion, glacier_idx::I)
         simulation, glacier_idx, iceflow_sol, nothing;
         tstops = simulation.parameters.solver.tstops,
         light = !simulation.parameters.solver.save_everystep,
-        processVelocity = Huginn.V_from_H
     )
 
     return result
