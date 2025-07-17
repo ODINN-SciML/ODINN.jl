@@ -54,7 +54,10 @@ end
 function SS.replace(::SS.Tunable, p::FunctionalInversionBinder, newbuffer)
     N = length(p.θ)
     @assert length(newbuffer) == N
-    return FunctionalInversionBinder(p.simulation, Vector2ComponentVector(newbuffer, p.θ))
+    sim = deepcopy(p.simulation)
+    Enzyme.make_zero!(sim)
+    θ = Vector2ComponentVector(newbuffer, p.θ)
+    return FunctionalInversionBinder{typeof(sim), typeof(θ)}(sim, θ)
 end
 
 function SS.replace!(::SS.Tunable, p::FunctionalInversionBinder, newbuffer)
