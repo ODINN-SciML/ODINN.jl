@@ -18,7 +18,7 @@ The main type of ice flow model used in `ODINN.jl` right now is a 2D Shallow Ice
 Huginn.SIA2Dmodel
 ```
 
-When a simulation will be run in `ODINN.jl` using an ice flow model, its related equation will be solved using `OrdinaryDiffEq.jl`. The related equation to a `SIA2Dmodel` is declared in its related util functions. Generally, these equations need to exist both in-place (to reduce memory allocations and ensure maximum performance, see example below) or out-of-place (to be more AD-friendly).
+When a simulation will be run in `ODINN.jl` using an ice flow model, its related equation will be solved using `OrdinaryDiffEq.jl`. The related equation to a `SIA2Dmodel` is declared in its related util functions. Generally, these equations need to exist both in-place (to reduce memory allocations and ensure maximum performance, see example below) or out-of-place (to be more AD-friendly). However, Enzyme uses the in-place implementation.
 
 ```@docs
 Huginn.SIA2D!
