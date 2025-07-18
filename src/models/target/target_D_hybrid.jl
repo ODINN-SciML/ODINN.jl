@@ -150,7 +150,7 @@ function ∂Diffusivity∂θ(
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H̄[i, j])
         end
     else
-        @error "Method to spatially compute gradient with respect to H̄ not specified."
+        throw("Method to spatially compute gradient with respect to H̄ not specified.")
     end
 
     return ∂D∂θ
