@@ -41,7 +41,7 @@ makedocs(
     sitename="ODINN.jl",
     format = Documenter.HTML(
         prettyurls=get(ENV, "CI", nothing)=="true",
-        ansicolor=true, collapselevel=1,
+        ansicolor=true, collapselevel=2,
         size_threshold=2000 * 1024,  # Increase size threshold to 500 KiB
         size_threshold_warn=1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
         example_size_threshold=1000 * 1024

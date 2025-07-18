@@ -19,7 +19,7 @@ Sleipnir.Climate2D
 
 ## Initializing glaciers and their climate
 
-In order to create `Glacier` types with information of a given glacier for a simulation, one can initialize a list of glaciers based on RGI (Randolph Glacier Inventory) IDs. Before running this, make sure to have used `Gungnir` to download all the necessary data for those glaciers, or double check that these glaciers are already available on the ODINN server. The list of the already processed glaciers can be obtained with `get_rgi_paths()`.
+In order to create `Glacier` types with information of a given glacier for a simulation, one can initialize a list of glaciers based on RGI (Randolph Glacier Inventory) IDs. Before running this, make sure to have used `Gungnir` to download all the necessary data for those glaciers in local. [Here](https://github.com/ODINN-SciML/Gungnir/blob/main/notebooks/Example.ipynb) you will find a notebook showing how to do so. Even easier, you can just double check that these glaciers are already available on the ODINN server. The list of the already processed glaciers can be obtained with `get_rgi_paths()`.
 
 ```@docs
 Sleipnir.initialize_glaciers
