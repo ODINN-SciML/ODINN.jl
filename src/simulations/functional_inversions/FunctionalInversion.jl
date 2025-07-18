@@ -2,7 +2,7 @@ export FunctionalInversion
 
 # Subtype composite type for a prediction simulation
 """
-    struct FunctionalInversion{MODEL, CACHE, GLACIER} <: Simulation
+    mutable struct FunctionalInversion{MODEL, CACHE, GLACIER} <: Simulation
 
 An object representing a functional inversion simulation (i.e. the inversion of a function using some data-driven regressor).
 
