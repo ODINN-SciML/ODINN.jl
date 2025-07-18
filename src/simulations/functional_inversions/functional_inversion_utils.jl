@@ -214,7 +214,13 @@ end
 """
     loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
 
-Given the parameters θ, solve the iceflow problem for all the glaciers, compute the loss function and return its value.
+Given the parameters θ, this function:
+1) Solves the iceflow problem for all the glaciers.
+2) Computes the loss function defined as the sum of the loss functions for each of the glaciers.
+    The loss function of each glacier depends on the type of loss. Refer to `empirical_loss_function` in
+    the UDE parameters for more information. The loss function is transient meaning that the state of the
+    glacier is compared to a reference at different time steps over the simulated period.
+3) Return the value of the loss function.
 
 Arguments:
 - `θ`: Parameters to use for the forward simulation.
@@ -461,7 +467,7 @@ end
         iceflow_prob::ODEProblem,
     )
 
-Make forward simulation of the iceflow UDE.
+Make a forward simulation of the iceflow UDE.
 """
 function simulate_iceflow_UDE!(
     container::FunctionalInversionBinder,

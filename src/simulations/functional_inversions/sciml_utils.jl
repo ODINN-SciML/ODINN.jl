@@ -11,7 +11,7 @@ export FunctionalInversionBinder
     FunctionalInversionBinder{FI <: FunctionalInversion, CA <: ComponentArray}
 
 Struct used for the binding with SciMLSensitivity.
-It is defined as a SciMLStructures and it contains the functional inversion structure and the vector of parameters to differentiate.
+It is defined as a SciMLStructure and it contains the functional inversion structure and the vector of parameters to differentiate.
 
 # Fields
 - `simulation::FI`: Functional inversion instance.
