@@ -128,6 +128,8 @@ function test_grad_finite_diff(
 
     dθ = zero(θ)
     loss_iceflow_grad!(dθ, θ, simulation)
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) loss_iceflow_grad!(dθ, θ, simulation)
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) ODINN.loss_iceflow_transient(θ, simulation, map)
 
     if finite_difference_method == :FiniteDifferences
 

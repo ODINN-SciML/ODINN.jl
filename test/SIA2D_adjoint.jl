@@ -97,6 +97,7 @@ function test_adjoint_SIA2D(
     vecBackwardSIA2D = randn(size(H, 1), size(H, 2))
 
     dH = Huginn.SIA2D(H, simulation, t, θ)
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D(H, simulation, t, θ)
 
     ∂H, = ODINN.VJP_λ_∂SIA∂H(
         adjointFlavor.VJP_method,
