@@ -11,7 +11,7 @@ Pkg.activate(".")
 Pkg.develop(PackageSpec(path=".."))
 Pkg.instantiate()
 
-ENV["ODINN_OVERWRITE_MULTI"] = true
+ENV["ODINN_OVERWRITE_MULTI"] = false
 
 using Revise
 using Documenter, Literate
@@ -24,6 +24,7 @@ tutorial_files = [
     "./src/forward_simulation.jl",
     "./src/functional_inversion.jl",
     "./src/laws.jl",
+    "./src/quick_start.jl"
 ]
 
 # Generate independent Markdown files for each tutorial
@@ -40,20 +41,27 @@ makedocs(
     sitename="ODINN.jl",
     format = Documenter.HTML(
         prettyurls=get(ENV, "CI", nothing)=="true",
-        ansicolor=true, collapselevel=1,
+        ansicolor=true, collapselevel=2,
         size_threshold=2000 * 1024,  # Increase size threshold to 500 KiB
         size_threshold_warn=1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
         example_size_threshold=1000 * 1024
     ),
     pages=[
         "Home" => "index.md",
+        "Quick start" => "quick_start.md",
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
         ],
-        "Types and functions" => "funcs_types.md",
-        "API" => "api.md"
+        "Parameters" => "parameters.md",
+        "Glaciers" => "glaciers.md",
+        "Models" => "models.md",
+        "Results and plotting" => "results_plotting.md",
+        "API" => "api.md",
+        "Differentiability" => "differentiability.md",
+        "Code style and recommendations" => "style_recommendations.md",
+        "Ongoing changes and future plans" => "changes_plans.md",
     ],
     checkdocs=:none
 )
