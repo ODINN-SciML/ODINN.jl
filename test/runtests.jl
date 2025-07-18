@@ -25,6 +25,7 @@ using ProgressMeter
 using Printf
 using Lux
 using FiniteDifferences
+using JET
 
 include("test_utils.jl")
 include("params_construction.jl")
