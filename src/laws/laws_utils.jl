@@ -9,7 +9,7 @@ Evaluates a law on the specified glacier within a simulation context and for a u
 - `law::AbstractLaw`: The law object to be evaluated. Must provide a function `f` and an `init_cache` method.
 - `simulation::Simulation`: The simulation context, containing model parameters and machine learning components.
 - `glacier_idx::Integer`: Index identifying which glacier in the simulation to evaluate the law for.
-- `inputs::NamedTuple`: Input data required by the law and provided by the user.
+- `input_values::NamedTuple`: Input data required by the law and provided by the user.
 - `θ`: Weights used in the law to make inference. This can be `nothing` when the law has no parameter.
 
 # Returns
@@ -24,16 +24,18 @@ Evaluates a law on the specified glacier within a simulation context and for a u
 # Example
 ```julia
 result = eval_law(simulation.model.iceflow.A, simulation, glacier_idx, (; T=273.15), θ)
+````
 """
-function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, inputs::NamedTuple, θ)
+function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, input_values::NamedTuple, θ; scalar::Bool = false)
     # Initialize the cache to be able to make an inference of the law
     params = simulation.parameters
-    cache = init_cache(law, simulation, glacier_idx, params)
+    @show scalar
+    cache = init_cache(law, simulation, glacier_idx, params; scalar=scalar)
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
     end
 
-    law.f.f(cache, inputs, θ)
+    law.f.f(cache, input_values, θ)
     return cache
 end
 
