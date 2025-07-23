@@ -11,6 +11,29 @@ function Γ(model, model_cache, params; include_A::Bool = true)
     end
 end
 
+function S(model, model_cache, params)
+    (; C, n) = model_cache
+    (; ρ, g) = params.physical
+    return C .* (ρ * g).^n
+end
+
+function Γꜛ(model, model_cache, params; include_A::Bool = true)
+    n = model_cache.n
+    (; ρ, g) = params.physical
+    if include_A
+        A = model_cache.A
+        return 2.0 .* A .* (ρ * g).^n ./ (n.+1)
+    else
+        return 2.0 .* (ρ * g).^n ./ (n.+1)
+    end
+end
+
+function Sꜛ(model, model_cache, params)
+    (; C, n) = model_cache
+    (; ρ, g) = params.physical
+    return (n.+2) .* C .* (ρ * g).^n
+end
+
 """
     _ml_model_prescale(
         X::Vector,

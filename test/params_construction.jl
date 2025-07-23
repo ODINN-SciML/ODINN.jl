@@ -39,9 +39,7 @@ function params_constructor_specified(save_refs::Bool = false)
                                             rgi_paths = rgi_paths)
 
     ude_params = UDEparameters(sensealg = InterpolatingAdjoint(autojacvec=ODINN.EnzymeVJP()),
-                                optimization_method = "AD+AD",
-                                loss_type = "V",
-                                scale_loss = true)
+                                optimization_method = "AD+AD")
 
     params = Parameters(physical=physical_params,
                         hyper=hyparams,
