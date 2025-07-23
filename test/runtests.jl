@@ -1,6 +1,9 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
+# Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
+Pkg.develop(url="https://github.com/albangossard/SciMLSensitivity.jl/")
+
 if !parse(Bool, get(ENV, "CI", "false"))
     using Revise
     const printDebug = true
@@ -66,7 +69,7 @@ end
         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
         @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
         @testset "Manual implementation of the continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [5e-4, 1e-8, 5e-4])
-        # @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ODINN.SciMLSensitivityAdjoint(); thres = [5e-5, 1e-8, 1e-4])
+        @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ODINN.SciMLSensitivityAdjoint(); thres = [5e-5, 1e-8, 1e-4])
     end
 
     @testset "Manual backward of the loss terms vs Enzyme" test_grad_loss_term()
