@@ -399,11 +399,10 @@ function batch_loss_iceflow_transient(
         normalization = 1.0
         # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
         Hr = @ignore_derivatives(H_ref[τ]) # Ignore this part of the computational graph, otherwise AD fails
-        # mean_error = loss(loss_function, H[τ], Hr; normalization=prod(size(H_ref[τ]))*normalization)
         mean_error = loss(
                 loss_function,
                 H[τ],
-                H_ref[τ],
+                Hr,
                 t[τ],
                 glacier,
                 container.θ,
