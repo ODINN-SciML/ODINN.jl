@@ -46,6 +46,11 @@ function params_constructor_specified(save_refs::Bool = false)
                         solver=solver_params,
                         UDE=ude_params,
                         simulation=simulation_params)
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Parameters(physical=physical_params,
+                        hyper=hyparams,
+                        solver=solver_params,
+                        UDE=ude_params,
+                        simulation=simulation_params)
 
     if save_refs
         jldsave(joinpath(Sleipnir.root_dir, "test/data/params/solver_params.jld2"); solver_params)

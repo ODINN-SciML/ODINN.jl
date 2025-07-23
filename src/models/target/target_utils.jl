@@ -161,14 +161,32 @@ function cartesian_tensor(A, v)
     return B
 end
 
+"""
+    Vector2ComponentVector(v::Vector, cv_template::ComponentVector)
+
+Transform a vector `v` to a `ComponentVector` that has the same structure as `cv_template`.
+This function creates a new `ComponentVector` and copies the values of `v` explicitly.
+The arguments `v` and `cv_template` must be of the same length.
+
+Arguments:
+- `v::Vector`: Vector whose values are copied.
+- `cv_template::ComponentVector`: ComponentVector whose structure is used to create a new `ComponentVector`.
+"""
 function Vector2ComponentVector(v::Vector, cv_template::ComponentVector)
     cv = zero(cv_template)
-    for i in 1:length(v)
-        cv[i] = v[i]
-    end
+    vec(cv) .= vec(v)
     return cv
 end
 
+"""
+    ComponentVector2Vector(cv::ComponentVector)
+
+Transform a `ComponentVector` into a `Vector` of same length.
+This function creates a new `Vector` and does not mutate the original `ComponentVector`.
+
+Arguments:
+- `cv::ComponentVector`: Input `ComponentVector`.
+"""
 function ComponentVector2Vector(cv::ComponentVector)
     return collect(cv)
 end

@@ -41,8 +41,8 @@ function ∂Diffusivity∂H(
     # Allow different n for power in inversion of diffusivity
     # TODO: n is also inside Γ, so probably we want to grab this one too
     (; n, Y) = iceflow_cache
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂D∂H_no_NN = ( (n_H .+ 1) .* S(iceflow_model, iceflow_cache, params) .+ (n_H .+ 2) .* Y .* Γ_no_A .* H̄ ) .* H̄.^n_H .* ∇S.^(n_∇S .- 1)
@@ -76,8 +76,8 @@ function ∂Diffusivity∂∇H(
     iceflow_cache = simulation.cache.iceflow
 
     (; n, Y) = iceflow_cache
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
 
     ∂D∂∇S_no_NN = (S(iceflow_model, iceflow_cache, params) .+ Γ(iceflow_model, iceflow_cache, params; include_A = false) .* Y .* H̄) .* (n_∇S .- 1) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 3)
 
@@ -100,8 +100,8 @@ function ∂Diffusivity∂θ(
     interpolation = target.interpolation
     n_interp_half = target.n_interp_half
 
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 1)
@@ -151,7 +151,7 @@ function ∂Diffusivity∂θ(
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H̄[i, j])
         end
     else
-        @error "Method to spatially compute gradient with respect to H̄ not specified."
+        throw("Method to spatially compute gradient with respect to H̄ not specified.")
     end
 
     return ∂D∂θ
@@ -164,8 +164,8 @@ function compute_D(
     # Use the value of Y in the cache
 
     (; n, Y) = iceflow_cache
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
@@ -180,8 +180,8 @@ function compute_D(
     # Use the value of Y provided as an argument
 
     n = iceflow_cache.n
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 

@@ -181,7 +181,7 @@ function loss(
         if !isnothing(simulation.model.machine_learning)
             simulation.model.machine_learning.θ = θ
         end
-        Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t)
+        Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
         # TODO: in the future we should dispatch wrt the iceflow model
 
         mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
@@ -224,7 +224,7 @@ function backward_loss(
         if !isnothing(simulation.model.machine_learning)
             simulation.model.machine_learning.θ = θ
         end
-        Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t)
+        Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
         # TODO: in the future we should dispatch wrt the iceflow model
 
         mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)

@@ -1,4 +1,4 @@
-using Distributed: pmap
+using Distributed: map
 
 function test_grad_finite_diff(
     adjointFlavor::ADJ;
@@ -24,6 +24,14 @@ function test_grad_finite_diff(
     δt = 1/12
     tspan = (2010.0, 2012.0)
 
+    if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+        optim_autoAD = Optimization.AutoEnzyme()
+        sensealg = GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP())
+    else
+        optim_autoAD = ODINN.NoAD()
+        sensealg = SciMLSensitivity.ZygoteAdjoint()
+    end
+
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
@@ -44,8 +52,8 @@ function test_grad_finite_diff(
             minA = 8e-21,
             maxA = 8e-18),
         UDE = UDEparameters(
-            sensealg=SciMLSensitivity.ZygoteAdjoint(),
-            optim_autoAD=ODINN.NoAD(),
+            sensealg=sensealg,
+            optim_autoAD=optim_autoAD,
             grad=adjointFlavor,
             optimization_method="AD+AD",
             empirical_loss_function=empirical_loss_function,
@@ -108,21 +116,28 @@ function test_grad_finite_diff(
     simulation = functional_inversion
 
     glacier_idx = 1
-    cache = init_cache(model, simulation, glacier_idx, params)
-    simulation.cache = cache
+    simulation.cache = init_cache(model, simulation, glacier_idx, params)
 
 
     θ = simulation.model.machine_learning.θ
-    loss_function(_θ, (_simulation)) = ODINN.loss_iceflow_transient(_θ, _simulation, pmap)
-    loss_iceflow_grad!(dθ, θ, _simulation) = SIA2D_grad!(dθ, θ, _simulation)
+
+    loss_iceflow_grad!(dθ, _θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+        ret = ODINN.grad_loss_iceflow!(_θ, simulation, map)
+        @assert !any(isnan, ret) "Gradient computed with SciML contains NaNs. Try to run the code again if you just started the REPL. Gradient is $(ret)"
+        dθ .= ret
+    else
+        SIA2D_grad!(dθ, _θ, _simulation)
+    end
 
     function f(x, simulation)
         simulation.model.machine_learning.θ = x
-        return loss_function(x, simulation)
+        return ODINN.loss_iceflow_transient(x, simulation, map)
     end
 
     dθ = zero(θ)
     loss_iceflow_grad!(dθ, θ, simulation)
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) loss_iceflow_grad!(dθ, θ, simulation)
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) ODINN.loss_iceflow_transient(θ, simulation, map)
 
     if finite_difference_method == :FiniteDifferences
 
