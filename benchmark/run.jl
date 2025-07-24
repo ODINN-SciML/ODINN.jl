@@ -1,6 +1,9 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
+# Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
+Pkg.develop(url="https://github.com/albangossard/SciMLSensitivity.jl/")
+
 using ODINN
 using BenchmarkTools
 using Logging
@@ -67,7 +70,7 @@ for VJPMode in (ODINN.EnzymeVJP(), ODINN.DiscreteVJP(), ODINN.ContinuousVJP())
     display(trial)
     println("")
     println("### VJP wrt θ")
-    trial = @benchmark ODINN.VJP_λ_∂SIA∂θ($VJPMode, $λ, $H, $θ, $(nothing), $λ, $simulation, $t)
+    trial = @benchmark ODINN.VJP_λ_∂SIA∂θ($VJPMode, $λ, $H, $θ, $(nothing), $simulation, $t)
     display(trial)
     println("")
     println("</details>")

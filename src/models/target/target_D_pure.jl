@@ -78,7 +78,7 @@ function Diffusivity(
     elseif (size(U) .+ 1) == size(H̄)
         return Huginn.avg(H̄) .* U
     else
-        @error "Not matching dimensions between U (∇S) and H̄. size(U)=$(size(U)) but size(H̄)=$(size(H̄))"
+        throw("Not matching dimensions between U (∇S) and H̄. size(U)=$(size(U)) but size(H̄)=$(size(H̄))")
     end
 end
 
@@ -196,7 +196,7 @@ function ∂Diffusivity∂θ(
             ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j])
         end
     else
-        @error "Method to spatially compute gradient with respect to H̄ not specified."
+        throw("Method to spatially compute gradient with respect to H̄ not specified.")
     end
 
     return ∂D∂θ

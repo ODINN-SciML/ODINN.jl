@@ -2,7 +2,7 @@ export FunctionalInversion
 
 # Subtype composite type for a prediction simulation
 """
-    mutable struct FunctionalInversion{CACHE} <: Simulation
+    mutable struct FunctionalInversion{MODEL, CACHE, GLACIER} <: Simulation
 
 An object representing a functional inversion simulation (i.e. the inversion of a function using some data-driven regressor).
 
@@ -12,10 +12,10 @@ An object representing a functional inversion simulation (i.e. the inversion of 
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
 - `results::Vector{Results}`: A vector to store the results of the simulation.
 """
-mutable struct FunctionalInversion{CACHE} <: Simulation
-    model::Sleipnir.Model
+mutable struct FunctionalInversion{MODEL, CACHE, GLACIER} <: Simulation
+    model::MODEL
     cache::Union{CACHE, Nothing}
-    glaciers::Vector{<: Sleipnir.AbstractGlacier}
+    glaciers::Vector{GLACIER}
     parameters::Sleipnir.Parameters
     results::Vector{<: Results}
     stats::TrainingStats
@@ -48,7 +48,7 @@ function FunctionalInversion(
     @assert targetType(model.machine_learning.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
 
     # Build the results struct based on input values
-    functional_inversion = FunctionalInversion{cache_type(model)}(model, nothing,
+    functional_inversion = FunctionalInversion{M, cache_type(model), G}(model, nothing,
                             glaciers,
                             parameters,
                             Vector{Results{Sleipnir.Float, Sleipnir.Int}}([]),
@@ -61,5 +61,6 @@ end
 ################### UTILS #####################
 ###############################################
 
+include("sciml_utils.jl")
 include("functional_inversion_utils.jl")
 include("callback_utils.jl")
