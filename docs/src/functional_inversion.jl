@@ -82,7 +82,6 @@ functional_inversion = FunctionalInversion(model, glaciers, params)
 ## And finally, we just run the simulation
 run!(functional_inversion)
 
-
 # ## Step-by-step explanation of the tutorial
 
 # Here we will cover in detail each one of the steps that lead us to run the
@@ -92,7 +91,6 @@ run!(functional_inversion)
 # temperature `T` through a neural network `A=NN(T, θ)` and we optimize `θ` so that
 # the generated solution matches some ice thickness reference.
 # This reference is generated using the relation of the book from Cuffey and Paterson (2010).
-
 
 # ### Step 1: Parameter and glacier initialization
 
@@ -142,15 +140,14 @@ params = Parameters(
 # Then, we initialize those glaciers based on those RGI IDs and the parameters we previously specified.
 glaciers = initialize_glaciers(rgi_ids, params)
 
-
 # ### Step 2: Defining a forward simulation as a synthetic ground truth
 
-## The next step is to generate a synthetic dataset using a forward simulation.
-## This will generate a dataset with the ice thickness and surface velocities for
-## each glacier at each time step. The dataset will be used to train the machine
-## learning model. We define a synthetic law to generate the synthetic dataset.
-## For this, we use some tabular data from Cuffey and Paterson (2010). The REPL
-## shows that it maps the long term air temperature `T` to the creep coefficient `A`.
+# The next step is to generate a synthetic dataset using a forward simulation. 
+# This will generate a dataset with the ice thickness and surface velocities for
+# each glacier at each time step. The dataset will be used to train the machine
+# learning model. We define a synthetic law to generate the synthetic dataset.
+# For this, we use some tabular data from Cuffey and Paterson (2010). The REPL
+# shows that it maps the long term air temperature `T` to the creep coefficient `A`.
 A_law = CuffeyPaterson()
 
 # The model is initialized using the `Model` constructor:
@@ -172,35 +169,30 @@ generate_ground_truth!(glaciers, params, model, tstops)
 
 # The results of this simulation are stored in the `thicknessData` field of each glacier.
 
-
 # ### Step 3: Model specification to perform a functional inversion
 
-## After this forward simulation, we define a new iceflow model to be ready for the
-## inversions. The first step is to define a simple neural network that takes as
-## input a scalar and returns a scalar.
+# After this forward simulation, we define a new iceflow model to be ready for the
+# inversions. The first step is to define a simple neural network that takes as
+# input a scalar and returns a scalar.
 nn_model = NeuralNetwork(params)
 
 # Then we define a law that uses this neural network to map the long term air temperature `T` to the creep coefficient `A`.
 # ODINN comes with a set of already defined laws. Only a few of them support functional inversion as the computation of the gradient needs to be carefully handled.
 # More information about these laws can be found in the laws tutorial.
-
 A_law = LawA(nn_model, params)
 
 # Then we define an iceflow and ODINN tells us how the law is used in the iceflow equation.
-
 iceflow = SIA2Dmodel(params; A=A_law)
 
 # Finally we define the model which needs to know the iceflow and mass balance models, and in comparison to Huginn, there is a third argument `regressors`.
 # This `regressors` argument tells how each regressor relates into the SIA. Although we already defined this in the iceflow model, this definition is mandatory for technical reasons.
 # This argument will probably disappear in the future once the code becomes more mature.
 # It must match how the laws are defined in the iceflow model.
-
 model = Model(
     iceflow = iceflow,
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
     regressors = (; A=nn_model)
 )
-
 
 # ### Step 4: Train a Universal Differential Equation via a functional inversion
 
@@ -209,6 +201,5 @@ functional_inversion = FunctionalInversion(model, glaciers, params)
 
 # And finally, we just run the simulation. This will run the adjoint method to compute the gradients and then use the ADAM optimizer
 # to train the UDE model.
-
 run!(functional_inversion)
 

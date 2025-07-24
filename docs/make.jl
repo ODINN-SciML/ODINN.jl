@@ -24,6 +24,7 @@ tutorial_files = [
     "./src/forward_simulation.jl",
     "./src/functional_inversion.jl",
     "./src/laws.jl",
+    "./src/quick_start.jl"
 ]
 
 # Generate independent Markdown files for each tutorial
@@ -47,13 +48,20 @@ makedocs(
     ),
     pages=[
         "Home" => "index.md",
+        "Quick start" => "quick_start.md",
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
         ],
-        "Types and functions" => "funcs_types.md",
-        "API" => "api.md"
+        "Parameters" => "parameters.md",
+        "Glaciers" => "glaciers.md",
+        "Models" => "models.md",
+        "Results and plotting" => "results_plotting.md",
+        "API" => "api.md",
+        "Differentiability" => "differentiability.md",
+        "Code style and recommendations" => "style_recommendations.md",
+        "Ongoing changes and future plans" => "changes_plans.md",
     ],
     checkdocs=:none
 )

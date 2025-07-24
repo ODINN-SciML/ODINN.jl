@@ -2,6 +2,16 @@
 
 Welcome to the `ODINN.jl` documentation, a large-scale scientific machine learning (SciML) glacier model, leveraging differentiable programming in Julia. This documentation provides the necessary information to understand the ecosystem built around ``ODINN.jl`, its APIs, workflows and some examples of the main usage types of the model(s).
 
+## Quick install
+
+`ODINN.jl` is a registered Julia package, so installing it is as easy as:
+
+```julia
+julia> using Pkg
+
+julia> Pkg.add("ODINN")
+```
+
 ## Vision
 
 Rather than focusing on global-scale simulations and sea-level rise contributions, `ODINN.jl` has, for now, a regional and catchment-scale focus, aiming to exploit the latest remote sensing and in situ observations to capture missing or subgrid processes of glacier processes. In order to do so, `ODINN.jl` leverages Universal Differential Equations (UDEs), combining PDEs describing ice flow dynamics with data-driven regressors, such as neural networks. For this, `ODINN.jl` relies heavily on the [SciML](https://sciml.ai/) Julia ecosytem and the native automatic differentiation (AD) support. Therefore `ODINN.jl` has a two-fold goal:
@@ -24,7 +34,7 @@ Rather than focusing on global-scale simulations and sea-level rise contribution
 
 ## Developers
 
-`ODINN.jl` is being developed by [Jordi Bolibar](https://jordibolibar.org/) (*CNRS, IGE*), [Facundo Sapienza](https://facusapienza.org/) (*Stanford University*) and [Alban Gossard](https://albangossard.github.io/) (*Université Grenoble Alpes, IGE*).
+`ODINN.jl` is being developed by [Jordi Bolibar](https://jordibolibar.org/) (*CNRS, IGE*), [Facundo Sapienza](https://facusapienza.org/) (*Stanford University*), [Alban Gossard](https://albangossard.github.io/) (*Université Grenoble Alpes, IGE*) and Mathieu Le Séac'h (*Université Grenoble Alpes, IGE*).
 
 Past developers include Lucille Gimenes (*Université Grenoble Alpes, IGE*) and Vivek Gajadhar (*TU Delft*).
 
