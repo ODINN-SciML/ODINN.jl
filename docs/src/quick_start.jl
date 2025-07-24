@@ -15,6 +15,7 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
+        multiprocessing=false,
         rgi_paths = rgi_paths
     )
 )
