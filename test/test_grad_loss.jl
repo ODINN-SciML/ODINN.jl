@@ -127,7 +127,20 @@ function test_grad_finite_diff(
     end
 
     dθ = zero(θ)
-    loss_iceflow_grad!(dθ, θ, simulation)
+    ######
+    # Computation of the gradient with SciMLSensitivity can fail with a fresh REPL
+    # Running the same code a second or third time usually works
+    # More information in https://github.com/ODINN-SciML/ODINN.jl/issues/354
+    try
+        loss_iceflow_grad!(dθ, θ, simulation)
+    catch
+        try
+            loss_iceflow_grad!(dθ, θ, simulation)
+        catch
+            loss_iceflow_grad!(dθ, θ, simulation)
+        end
+    end
+    ######
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) loss_iceflow_grad!(dθ, θ, simulation)
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) ODINN.loss_iceflow_transient(θ, simulation, map)
 
