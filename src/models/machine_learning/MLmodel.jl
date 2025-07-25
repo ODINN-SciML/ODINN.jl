@@ -186,40 +186,44 @@ end
 
 
 # Display setup
-function Base.show(io::IO, nn_model::NeuralNetwork)
+function Base.show(io::IO, type::MIME"text/plain", nn_model::NeuralNetwork)
     println("--- NeuralNetwork ---")
     println("    architecture:")
     # Retrieve the printed lines
     iotmp = IOBuffer()
-    show(iotmp, "text/plain", nn_model.architecture)
+    show(iotmp, type, nn_model.architecture)
     str = String(take!(iotmp))
     # Add prefix to each line
     prefix = "      "
     prefixed_str = join(prefix .* split(str, '\n'), '\n')
     println(prefixed_str)
-    # show(io, "text/plain", nn_model.architecture)
     print("    θ: ComponentVector of length $(length(nn_model.θ))")
 end
 
-function Base.show(io::IO, ml_model::MachineLearning)
+function Base.show(io::IO, type::MIME"text/plain", ml_model::MachineLearning)
     if !(ml_model.A isa emptyMLmodel)
         print("  A: ")
-        println(ml_model.A)
+        Base.show(io, type, ml_model.A)
+        println()
     end
     if !(ml_model.C isa emptyMLmodel)
         print("  C: ")
-        println(ml_model.C)
+        Base.show(io, type, ml_model.C)
+        println()
     end
     if !(ml_model.n isa emptyMLmodel)
         print("  n: ")
-        println(ml_model.n)
+        Base.show(io, type, ml_model.n)
+        println()
     end
     if !(ml_model.Y isa emptyMLmodel)
         print("  Y: ")
-        println(ml_model.Y)
+        Base.show(io, type, ml_model.Y)
+        println()
     end
     if !(ml_model.U isa emptyMLmodel)
         print("  U: ")
-        println(ml_model.U)
+        Base.show(io, type, ml_model.U)
+        println()
     end
 end
