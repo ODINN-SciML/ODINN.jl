@@ -1,0 +1,4 @@
+style = "sciml"
+format_markdown = true
+format_docstrings = true
+ignore = ["README.md"]
