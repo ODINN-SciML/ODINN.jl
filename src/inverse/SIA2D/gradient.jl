@@ -137,7 +137,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
 
-            @assert !(loss_function isa LossHV || loss_function isa LossV) "ContinuousAdjoint is not compatible with the ice velocity loss for the moment"
+            # @assert !(loss_function isa LossHV || loss_function isa LossV) "ContinuousAdjoint is not compatible with the ice velocity loss for the moment"
 
             # Adjoint setup
 
@@ -176,8 +176,15 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             function effect!(integrator)
                 t = - integrator.t
                 ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
-                    loss_function, H_itp(t), H_ref_itp(t),
-                    t, glacier, θ, simulation; normalization=prod(N)*normalization)
+                    loss_function,
+                    H_itp(t),
+                    H_ref_itp(t),
+                    t,
+                    glacier,
+                    θ,
+                    simulation;
+                    normalization=prod(N)*normalization
+                    )
                 integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             cb_adjoint_loss = DiscreteCallback(stop_condition, effect!)

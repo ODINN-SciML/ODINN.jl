@@ -1,5 +1,6 @@
 export AbstractLoss
-export L2Sum, LossH, LossV, LossHV
+export L2Sum, LogSum
+export LossH, LossV, LossHV
 export loss, backward_loss
 
 # Abstract type as a parent type for all losses
@@ -18,6 +19,16 @@ Struct that defines an L2 sum loss.
 """
 @kwdef struct L2Sum{I <: Integer} <: AbstractSimpleLoss
     distance::I = 3
+end
+
+"""
+    LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
+
+Struct that defines an Log sum loss functions.
+"""
+@kwdef struct LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
+    distance::I = 3
+    ϵ::F = 0.1
 end
 
 """
@@ -72,6 +83,8 @@ It also has a scaling coefficient that balances the ice velocity term in the los
     vLoss::LV = LossV()
     scaling::F = 1.0
 end
+
+### Definition of SimpleLoss functions
 
 function loss(
     lossType::L2Sum,
@@ -130,6 +143,23 @@ function backward_loss(
     return [backward_loss(lossType, ai, bi; normalization=normalization) for (ai,bi) in zip(a,b)]
 end
 
+function loss(
+    lossType::LogSum,
+    a::Matrix{F},
+    b::Matrix{F};
+    normalization::F=1.,
+) where {F <: AbstractFloat}
+    return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2)
+end
+function backward_loss(
+    lossType::LogSum,
+    a::Matrix{F},
+    b::Matrix{F};
+    normalization::F,
+) where {F <: AbstractFloat}
+    return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (b .+ lossType.ϵ)
+end
+### Definition of Loss functions
 
 function loss(
     lossType::LossH,
@@ -167,15 +197,17 @@ function loss(
     simulation;
     normalization::F=1.,
 ) where {F <: AbstractFloat}
-    @assert !isnothing(glacier.velocityData)
+    # @assert !isnothing(glacier.velocityData)
 
     # 1- Retrieve the reference velocity Vx_ref, Vy_ref, V_ref
+    # Note: This should be do just once in glacier, no in every call of the function
     Vx_ref, Vy_ref, V_ref, useVel = mapVelocity(
         simulation.parameters.simulation.mapping,
         glacier.velocityData,
         t,
     )
 
+    # @infiltrate
     if useVel
         # 2- Compute the predicted velocity Vx_pred, Vy_pred, V_pred
         if !isnothing(simulation.model.machine_learning)
@@ -212,6 +244,9 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     @assert !isnothing(glacier.velocityData)
 
+    # Need to see how to write the backward of the loss here!!!
+    @infiltrate
+
     # 1- Retrieve the reference velocity Vx_ref, Vy_ref, V_ref
     Vx_ref, Vy_ref, V_ref, useVel = mapVelocity(
         simulation.parameters.simulation.mapping,
@@ -234,7 +269,7 @@ function backward_loss(
             ∂lV∂Vx = normVref^(-1) * backward_loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
             ∂lV∂Vy = normVref^(-1) * backward_loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
         else
-            ∂lV∂V = backward_loss(lossType.Loss, V_pred, V_ref, mask; normalization=normalization)
+            ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
             ∂lV∂Vx, ∂lV∂Vy = VJP_λ_∂V∂Vxy(∂lV∂V, Vx_pred, Vy_pred)
         end
 

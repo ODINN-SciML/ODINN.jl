@@ -391,7 +391,7 @@ function batch_loss_iceflow_transient(
 
     if isa(loss_function, LossHV) || isa(loss_function, LossV)
         @assert !isnothing(glacier.velocityData) "Using $(typeof(loss_function)) but no velocityData in the glacier $(glacier.rgi_id)"
-        @assert length(glacier.velocityData.date)>0 "Using $(typeof(loss_function)) but no reference velocity in the results"
+        @assert length(glacier.velocityData.date) > 0 "Using $(typeof(loss_function)) but no reference velocity in the results"
     end
 
     β = 2.0
