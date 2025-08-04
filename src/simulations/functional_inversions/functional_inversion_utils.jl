@@ -412,20 +412,20 @@ function _batch_iceflow_UDE(
     glacier_idx::Integer,
     iceflow_prob::ODEProblem,
 )
-
     params = container.simulation.parameters
     glacier = container.simulation.glaciers[glacier_idx]
+    step = step = params.solver.step
 
     container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, params)
     container.simulation.model.machine_learning.θ = container.θ
 
     # Create mass balance callback
-    tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
+    tstops = Huginn.define_callback_steps(params.simulation.tspan, step)
     params.solver.tstops = tstops
 
     cb_MB = if params.simulation.use_MB
         # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
-        mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, step = params.solver.step
+        mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, step = step
             function (integrator)
                 if params.simulation.use_MB
                     # Compute mass balance
@@ -434,7 +434,9 @@ function _batch_iceflow_UDE(
                 end
             end
         end
-        PeriodicCallback(mb_action!, params.solver.step; initial_affect=false)
+        # A simulation period is sliced in time windows that are separated by `step`
+        # The mass balance is applied at the end of each of the windows
+        PeriodicCallback(mb_action!, step; initial_affect=false)
     else
         CallbackSet()
     end
