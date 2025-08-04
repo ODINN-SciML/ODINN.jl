@@ -9,7 +9,7 @@ function save_simulation_test!()
     params = Parameters(
         simulation = SimulationParameters(
             use_MB = false,
-            velocities = true,
+            use_velocities = true,
             tspan = tspan,
             step = δt,
             working_dir = working_dir,

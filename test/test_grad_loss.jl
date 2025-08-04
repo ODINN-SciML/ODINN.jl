@@ -34,7 +34,7 @@ function test_grad_finite_diff(
         simulation = SimulationParameters(
             working_dir=working_dir,
             use_MB=false,
-            velocities=true,
+            use_velocities=true,
             tspan=tspan,
             step=δt,
             multiprocessing=false,

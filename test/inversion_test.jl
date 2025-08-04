@@ -29,7 +29,7 @@ function inversion_test(;
         simulation = SimulationParameters(
             working_dir = working_dir,
             use_MB = use_MB,
-            velocities = false,
+            use_velocities = false,
             tspan = tspan,
             step = δt,
             multiprocessing = multiprocessing,
