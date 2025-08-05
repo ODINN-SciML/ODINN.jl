@@ -116,7 +116,7 @@ tstops = collect(2010:δt:2015)
 A_poly = Huginn.polyA_PatersonCuffey()
 
 # We generate a fake law with A and no direct dependency on H
-generate_ground_truth!(glaciers, params, model, tstops)
+glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 prediction = Huginn.Prediction(model, glaciers, params)
 

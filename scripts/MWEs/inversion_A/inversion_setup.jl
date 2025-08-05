@@ -83,7 +83,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-generate_ground_truth!(glaciers, params, model, tstops)
+glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 nn_model = NeuralNetwork(params)
 model = Model(

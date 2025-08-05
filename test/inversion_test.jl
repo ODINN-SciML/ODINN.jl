@@ -79,7 +79,7 @@ function inversion_test(;
 
     A_poly = Huginn.polyA_PatersonCuffey()
 
-    generate_ground_truth!(glaciers, params, model, tstops)
+    glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
     nn_model = NeuralNetwork(params)
     A_law = LawA(nn_model, params)

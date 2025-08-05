@@ -128,7 +128,7 @@ glacier = Glacier2D(
 glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
 # We add thickness data to Glacier object
-glaciers[1].thicknessData = Sleipnir.ThicknessData(tstops, Hs)
+glaciers[1] = Glacier2D(glaciers[1], thicknessData = Sleipnir.ThicknessData(tstops, Hs))
 
 
 """
