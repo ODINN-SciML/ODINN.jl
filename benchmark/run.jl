@@ -1,6 +1,9 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
+# Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
+Pkg.develop(url="https://github.com/albangossard/SciMLSensitivity.jl/")
+
 using ODINN
 using BenchmarkTools
 using Logging
@@ -20,7 +23,7 @@ tspan = (2010.0, 2015.0)
 params = Parameters(
     simulation = SimulationParameters(
         use_MB=false,
-        velocities=true,
+        use_velocities=true,
         tspan=tspan,
         step=δt,
         multiprocessing=false,

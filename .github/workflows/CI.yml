@@ -1,9 +1,9 @@
 name: Run Tests
 on:
   pull_request:
-    branches: []
+    branches: [ "**" ]
   push:
-    branches: []
+    branches: [ "**" ]
     tags: '*'
 env:
   PR_NUMBER: ${{ github.event.number }}

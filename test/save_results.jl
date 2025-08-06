@@ -9,7 +9,7 @@ function save_simulation_test!()
     params = Parameters(
         simulation = SimulationParameters(
             use_MB = false,
-            velocities = true,
+            use_velocities = true,
             tspan = tspan,
             step = δt,
             working_dir = working_dir,
@@ -43,7 +43,7 @@ function save_simulation_test!()
     glaciers = initialize_glaciers(rgi_ids, params)
 
     tstops = collect(tspan[1]:δt:tspan[2])
-    generate_ground_truth!(glaciers, params, model, tstops)
+    glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
     nn_model = NeuralNetwork(params)
     model = Model(
