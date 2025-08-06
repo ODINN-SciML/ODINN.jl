@@ -57,6 +57,7 @@ Struct that defines the ice velocity loss with an optional weighting coefficient
 
 # Fields
 - `loss::L`: Type of loss to use for the ice velocity. Default is `L2Sum()`
+- `component::Symbol`: Component of the velocity field used in the loss. Options include :xy for both x and y component, and :abs for the norm/magnitude of the velocity.
 - `scale_loss::Bool`: Whether to scale the loss function with the reference ice
     velocity magnitude.
 """
