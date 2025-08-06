@@ -16,6 +16,12 @@ ENV["ODINN_OVERWRITE_MULTI"] = false
 using Revise
 using Documenter, Literate
 using ODINN
+using DocumenterCitations
+
+bib = CitationBibliography(
+    joinpath(@__DIR__, "src/assets", "references.bib");
+    style=:numeric
+)
 
 DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 
@@ -36,12 +42,12 @@ end
 # Which markdown files to compile to HTML
 makedocs(
     modules=[ODINN, Huginn, Muninn, Sleipnir],
-    authors="Jordi Bolibar, Facu Sapienza, Alban Gossard",
+    authors="Jordi Bolibar, Facu Sapienza, Alban Gossard, Mathieu le Séac'h, Vivek Gajadhar",
     repo=Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
     sitename="ODINN.jl",
     format = Documenter.HTML(
         prettyurls=get(ENV, "CI", nothing)=="true",
-        ansicolor=true, collapselevel=2,
+        ansicolor=true, collapselevel=3,
         size_threshold=2000 * 1024,  # Increase size threshold to 500 KiB
         size_threshold_warn=1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
         example_size_threshold=1000 * 1024
@@ -54,14 +60,18 @@ makedocs(
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
         ],
+        "How to use ODINN" => [
         "Parameters" => "parameters.md",
         "Glaciers" => "glaciers.md",
         "Models" => "models.md",
         "Results and plotting" => "results_plotting.md",
         "API" => "api.md",
+        ],
         "Differentiability" => "differentiability.md",
         "Code style and recommendations" => "style_recommendations.md",
         "Ongoing changes and future plans" => "changes_plans.md",
+        "References" => "references.md",
     ],
-    checkdocs=:none
+    checkdocs=:none,
+    plugins=[bib]
 )
