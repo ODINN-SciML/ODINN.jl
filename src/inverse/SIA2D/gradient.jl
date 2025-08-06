@@ -92,7 +92,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     glacier,
                     θ,
                     simulation;
-                    normalization=prod(N)*normalization,
+                    normalization=prod(N) * normalization,
                 ), 1:k)
             # Unzip ∂L∂H, ∂L∂θ at each timestep
             ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
@@ -183,7 +183,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     glacier,
                     θ,
                     simulation;
-                    normalization=prod(N)*normalization
+                    normalization = prod(N) * normalization
                     )
                 integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
             end
@@ -191,12 +191,20 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
             # Final condition
             λ₁ = Enzyme.make_zero(H[end])
+
             # Include contribution of loss from last step since this is not accounted for in the discrete callback
             if simulation.parameters.simulation.tspan[2] ∈ t_ref
                 t_final = simulation.parameters.simulation.tspan[2]
                 ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
-                    loss_function, H_itp(t_final), H_ref_itp(t_final),
-                    t_final, glacier, θ, simulation; normalization=prod(N)*normalization)
+                    loss_function,
+                    H_itp(t_final),
+                    H_ref_itp(t_final),
+                    t_final,
+                    glacier,
+                    θ,
+                    simulation;
+                    normalization = prod(N) * normalization
+                    )
                 λ₁ .+= simulation.parameters.simulation.step .* ∂ℓ∂H
             end
             # Define ODE Problem with time in reverse
@@ -223,12 +231,29 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             @assert sol_rev.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(sol_rev.retcode)\""
 
             ### Numerical integration using quadrature to compute gradient
+            # Contribution of the loss function due to ∂l∂θ
+            res_backward_loss = map(t ->
+                backward_loss(
+                    loss_function,
+                    H_itp(t),
+                    H_ref_itp(t),
+                    t,
+                    glacier,
+                    θ,
+                    simulation;
+                    normalization = prod(N) * normalization,
+                    ),
+                t_nodes)
+            # Unzip ∂L∂H, ∂L∂θ at each timestep
+            _, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
+
+            # Final integration of the loss
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(-t_nodes[j])
                     _H = H_itp(t_nodes[j])
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ_sol, _H, θ, nothing, simulation, t_nodes[j])
-                    dLdθ .+= weights[j] .* λ_∂f∂θ
+                    dLdθ .+= weights[j] .* (λ_∂f∂θ .+ ∂L∂θ[j])
                 end
             else
                 throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")

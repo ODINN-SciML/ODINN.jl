@@ -16,6 +16,9 @@ abstract type AbstractLoss <: GeneralAbstractLoss end
     L2Sum{I <: Integer} <: AbstractSimpleLoss
 
 Struct that defines an L2 sum loss.
+
+# Fields
+- `distance::I`: Distance to border
 """
 @kwdef struct L2Sum{I <: Integer} <: AbstractSimpleLoss
     distance::I = 3
@@ -24,7 +27,11 @@ end
 """
     LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
 
-Struct that defines an Log sum loss functions.
+Struct that defines an Logaritmic sum loss.
+
+# Fields
+- `distance::I`: Distance to borde
+- `ϵ::F`: Epsilon used inside the loss function representing the minimum velocity
 """
 @kwdef struct LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
     distance::I = 3
@@ -55,6 +62,7 @@ Struct that defines the ice velocity loss with an optional weighting coefficient
 """
 @kwdef struct LossV{L <: AbstractSimpleLoss} <: AbstractLoss
     loss::L = L2Sum()
+    component::Symbol = :xy
     scale_loss::Bool = true
 end
 
@@ -121,7 +129,7 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     d = zero(a)
     d[mask] = a[mask] .- b[mask]
-    return 2.0.*d./normalization
+    return 2.0 .* d ./ normalization
 end
 
 function loss(
@@ -131,7 +139,17 @@ function loss(
     normalization::F=1.
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
-    return [sum(( (ai .- bi)[is_in_glacier(bi, lossType.distance)] ).^2)/normalization for (ai,bi) in zip(a,b)]
+    return [
+        loss(
+            lossType,
+            ai,
+            bi,
+            is_in_glacier(bi, lossType.distance);
+            normalization = normalization,
+            )
+        for (ai, bi) in zip(a, b)
+        ]
+    # return [sum(( (ai .- bi)[is_in_glacier(bi, lossType.distance)] ).^2)/normalization for (ai,bi) in zip(a,b)]
 end
 function backward_loss(
     lossType::L2Sum,
@@ -140,7 +158,57 @@ function backward_loss(
     normalization::F=1.,
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
-    return [backward_loss(lossType, ai, bi; normalization=normalization) for (ai,bi) in zip(a,b)]
+    return [
+        backward_loss(
+            lossType,
+            ai,
+            bi;
+            normalization=normalization,
+            )
+        for (ai, bi) in zip(a, b)
+        ]
+end
+
+### Definition of Loss functions
+
+"""
+    function loss(
+        lossType::LogSum,
+        a::Matrix{F},
+        b::Matrix{F},
+        mask::BitMatrix;
+        normalization::F=1.,
+    ) where {F <: AbstractFloat}
+
+Compute logaritmic loss function for ice velocity fields following Morlighem, M. et al.,
+"Spatial patterns of basal drag inferred using control methods from a full-Stokes and
+simpler models for Pine Island Glacier, West Antarctica". Geophys. Res. Lett. 37, (2010).
+Given a minimum velocity ϵ the absolute velocity given by a and b, it computes the sum of
+
+    log^2( (a + ϵ) / (b + ϵ) )
+
+It has been shown that this loss function enables robust estimation of drag coefficient.
+"""
+function loss(
+    lossType::LogSum,
+    a::Matrix{F},
+    b::Matrix{F},
+    mask::BitMatrix;
+    normalization::F=1.,
+) where {F <: AbstractFloat}
+    @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
+    return sum((log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2)[mask]) ./ normalization
+end
+function backward_loss(
+    lossType::LogSum,
+    a::Matrix{F},
+    b::Matrix{F},
+    mask::BitMatrix;
+    normalization::F,
+) where {F <: AbstractFloat}
+    d = zero(a)
+    d[mask] = log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)) ./ (b[mask] .+ lossType.ϵ)
+    return 2.0 .* d ./ normalization
 end
 
 function loss(
@@ -149,6 +217,7 @@ function loss(
     b::Matrix{F};
     normalization::F=1.,
 ) where {F <: AbstractFloat}
+    @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
     return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2)
 end
 function backward_loss(
@@ -159,7 +228,6 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (b .+ lossType.ϵ)
 end
-### Definition of Loss functions
 
 function loss(
     lossType::LossH,
@@ -184,7 +252,9 @@ function backward_loss(
     simulation;
     normalization::F=1.,
 ) where {F <: AbstractFloat}
-    return backward_loss(lossType.loss, H_pred, H_ref; normalization=normalization), nothing
+    ∂L∂H = backward_loss(lossType.loss, H_pred, H_ref; normalization=normalization)
+    ∂L∂θ = zero(θ)
+    return ∂L∂H, ∂L∂θ
 end
 
 function loss(
@@ -197,7 +267,7 @@ function loss(
     simulation;
     normalization::F=1.,
 ) where {F <: AbstractFloat}
-    # @assert !isnothing(glacier.velocityData)
+    @assert !isnothing(glacier.velocityData)
 
     # 1- Retrieve the reference velocity Vx_ref, Vy_ref, V_ref
     # Note: This should be do just once in glacier, no in every call of the function
@@ -207,30 +277,39 @@ function loss(
         t,
     )
 
-    # @infiltrate
-    if useVel
-        # 2- Compute the predicted velocity Vx_pred, Vy_pred, V_pred
-        if !isnothing(simulation.model.machine_learning)
-            simulation.model.machine_learning.θ = θ
-        end
-        Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
-        # TODO: in the future we should dispatch wrt the iceflow model
-
-        mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
-
-        if lossType.scale_loss
-            normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
-            vxErr = loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
-            vyErr = loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
-
-            return normVref^(-1) * (vxErr + vyErr)
-        else
-            return loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
-        end
-    else
-        # @info "Discarding reference data for t=$(t)"
+    if !useVel
+        @info "Discarding reference data for t=$(t)"
         return 0.0
     end
+
+    # 2- Compute the predicted velocity Vx_pred, Vy_pred, V_pred
+    if !isnothing(simulation.model.machine_learning)
+        simulation.model.machine_learning.θ = θ
+    end
+    Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
+    # TODO: in the future we should dispatch wrt the iceflow model
+
+    mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
+
+    ℓ = 0.0
+
+    if lossType.component == :xy
+        vxErr = loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
+        vyErr = loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
+        ℓ += vxErr + vyErr
+    elseif lossType.component == :abs
+        vabsErr = loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
+        ℓ += vabsErr
+    else
+        @error "Loss type not implemented."
+    end
+
+    if lossType.scale_loss
+        normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
+        ℓ *= normVref
+    end
+
+    return ℓ
 end
 function backward_loss(
     lossType::LossV,
@@ -244,9 +323,6 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     @assert !isnothing(glacier.velocityData)
 
-    # Need to see how to write the backward of the loss here!!!
-    @infiltrate
-
     # 1- Retrieve the reference velocity Vx_ref, Vy_ref, V_ref
     Vx_ref, Vy_ref, V_ref, useVel = mapVelocity(
         simulation.parameters.simulation.mapping,
@@ -254,33 +330,40 @@ function backward_loss(
         t,
     )
 
-    if useVel
-        # 2- Compute the predicted velocity Vx_pred, Vy_pred, V_pred
-        if !isnothing(simulation.model.machine_learning)
-            simulation.model.machine_learning.θ = θ
-        end
-        Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
-        # TODO: in the future we should dispatch wrt the iceflow model
-
-        mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
-
-        if lossType.scale_loss
-            normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
-            ∂lV∂Vx = normVref^(-1) * backward_loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
-            ∂lV∂Vy = normVref^(-1) * backward_loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
-        else
-            ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
-            ∂lV∂Vx, ∂lV∂Vy = VJP_λ_∂V∂Vxy(∂lV∂V, Vx_pred, Vy_pred)
-        end
-
-        ∂lV∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
-        ∂lV∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
-        return ∂lV∂H, ∂lV∂θ
-    else
-        # @info "Discarding reference data for t=$(t)"
+    if !useVel
+        @info "Discarding reference data for t=$(t)"
         return nothing, nothing
     end
 
+    # 2- Compute the predicted velocity Vx_pred, Vy_pred, V_pred
+    if !isnothing(simulation.model.machine_learning)
+        simulation.model.machine_learning.θ = θ
+    end
+    Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
+    # TODO: in the future we should dispatch wrt the iceflow model
+
+    mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
+
+    if lossType.component == :xy
+        ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
+        ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
+    elseif lossType.component == :abs
+        ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
+        ∂lV∂Vx, ∂lV∂Vy = zero(∂lV∂V), zero(∂lV∂V)
+        ∂lV∂Vx = ifelse.(mask, ∂lV∂V .* (Vx_pred .- Vx_ref) ./ (V_pred .- V_ref), 0.0)
+        ∂lV∂Vy = ifelse.(mask, ∂lV∂V .* (Vy_pred .- Vy_ref) ./ (V_pred .- V_ref), 0.0)
+    end
+
+    if lossType.scale_loss
+        normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
+        ∂lV∂Vx *= normVref^(-1)
+        ∂lV∂Vy *= normVref^(-1)
+    end
+
+    ∂L∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
+    ∂L∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
+
+    return ∂L∂H, ∂L∂θ
 end
 
 function loss(
