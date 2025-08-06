@@ -34,7 +34,7 @@ function test_grad_finite_diff(
         simulation = SimulationParameters(
             working_dir=working_dir,
             use_MB=false,
-            velocities=true,
+            use_velocities=true,
             tspan=tspan,
             step=δt,
             multiprocessing=false,
@@ -75,7 +75,7 @@ function test_grad_finite_diff(
     tstops = collect(tspan[1]:δt:tspan[2])
 
     nn_model = NeuralNetwork(params)
-    generate_ground_truth!(glaciers, params, model, tstops)
+    glaciers = generate_ground_truth(glaciers, params, model, tstops)
     # Do a clean restart
     model = if target==:A
         iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
@@ -361,7 +361,7 @@ function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: 
 
     fakeA(T) = A
     # TODO: add law
-    generate_ground_truth!(glaciers, parameters, model, tstops)
+    glaciers = generate_ground_truth(glaciers, parameters, model, tstops)
 
     model.iceflow = SIA2Dmodel(parameters)
 

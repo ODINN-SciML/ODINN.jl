@@ -61,7 +61,7 @@ for sensealg in sensealgs
 
         params = Parameters(simulation = SimulationParameters(working_dir=working_dir,
                                                             use_MB=false,
-                                                            velocities=true,
+                                                            use_velocities=true,
                                                             tspan=(2010.0, 2015.0),
                                                             multiprocessing=false,
                                                             workers=1,
