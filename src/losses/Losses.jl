@@ -306,7 +306,7 @@ function loss(
 
     if lossType.scale_loss
         normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
-        ℓ *= normVref
+        ℓ /= normVref
     end
 
     return ℓ
@@ -356,8 +356,8 @@ function backward_loss(
 
     if lossType.scale_loss
         normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
-        ∂lV∂Vx *= normVref^(-1)
-        ∂lV∂Vy *= normVref^(-1)
+        ∂lV∂Vx /= normVref
+        ∂lV∂Vy /= normVref
     end
 
     ∂L∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
