@@ -72,7 +72,7 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         use_MB = use_MB,
-        velocities = true,
+        use_velocities = true,
         tspan = (t₀, t₁),
         step = δt,
         multiprocessing = false,
@@ -128,7 +128,7 @@ glacier = Glacier2D(
 glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
 # We add thickness data to Glacier object
-glaciers[1].thicknessData = Sleipnir.ThicknessData(tstops, Hs)
+glaciers[1] = Glacier2D(glaciers[1], thicknessData = Sleipnir.ThicknessData(tstops, Hs))
 
 
 """

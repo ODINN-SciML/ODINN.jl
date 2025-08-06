@@ -14,7 +14,7 @@ function grad_free_test(;use_MB::Bool=false)
         simulation = SimulationParameters(
             working_dir=working_dir,
             use_MB=use_MB,
-            velocities=true,
+            use_velocities=true,
             tspan=tspan,
             step=δt,
             multiprocessing=false,
@@ -61,7 +61,7 @@ function grad_free_test(;use_MB::Bool=false)
     # Time stanpshots for transient inversion
     tstops = collect(tspan[1]:δt:tspan[2])
 
-    generate_ground_truth!(glaciers, params, model, tstops)
+    glaciers = generate_ground_truth(glaciers, params, model, tstops)
     # Do a clean restart
     A_law = LawA(nn_model, params)
     JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) LawA(nn_model, params)

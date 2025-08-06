@@ -10,7 +10,7 @@ function test_grad_Enzyme_SIAD2D()
     params = Parameters(
         simulation = SimulationParameters(
             use_MB=false,
-            velocities=true,
+            use_velocities=true,
             tspan=tspan,
             step=δt,
             multiprocessing=false,

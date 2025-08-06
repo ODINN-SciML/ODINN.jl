@@ -24,7 +24,7 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir=working_dir,
         use_MB=false,
-        velocities=true,
+        use_velocities=true,
         tspan=(2010.0, 2015.0),
         step=δt,
         multiprocessing=true,
@@ -65,7 +65,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 tstops = collect(2010:δt:2015)
 
 ## We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities for each glacier at each time step. The dataset will be used to train the machine learning model.
-generate_ground_truth!(glaciers, params, model, tstops)
+glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 ## After this forward simulation, we restart the iceflow model to be ready for the inversions
 nn_model = NeuralNetwork(params)
@@ -113,7 +113,7 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir=working_dir,
         use_MB=false,
-        velocities=true,
+        use_velocities=true,
         tspan=(2010.0, 2015.0),
         step=δt,
         multiprocessing=true,
@@ -168,7 +168,7 @@ prediction = Prediction(model, glaciers, params)
 # a dataset with the ice thickness and surface velocities for each glacier at each
 # time step. The dataset will be used to train the machine learning model. This will
 #  run under the hood a `Prediction` using `Huginn.jl`.
-generate_ground_truth!(glaciers, params, model, tstops)
+glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 # The results of this simulation are stored in the `thicknessData` field of each glacier.
 

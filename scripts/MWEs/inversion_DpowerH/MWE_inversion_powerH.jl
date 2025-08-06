@@ -44,7 +44,7 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         use_MB = false,
-        velocities = true,
+        use_velocities = true,
         tspan = (2010.0, 2015.0),
         step = δt,
         multiprocessing = false,
@@ -116,7 +116,7 @@ tstops = collect(2010:δt:2015)
 A_poly = Huginn.polyA_PatersonCuffey()
 
 # We generate a fake law with A and no direct dependency on H
-generate_ground_truth!(glaciers, params, model, tstops)
+glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 prediction = Huginn.Prediction(model, glaciers, params)
 

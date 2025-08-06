@@ -30,7 +30,7 @@ function test_adjoint_SIA2D(
         simulation = SimulationParameters(
             working_dir=working_dir,
             use_MB=false,
-            velocities=true,
+            use_velocities=true,
             tspan=tspan,
             step=δt,
             multiprocessing=false,
@@ -214,7 +214,7 @@ function test_adjoint_surface_V(
         simulation = SimulationParameters(
             working_dir=working_dir,
             use_MB=false,
-            velocities=true,
+            use_velocities=true,
             tspan=tspan,
             step=δt,
             multiprocessing=false,
