@@ -31,7 +31,7 @@ function params_constructor_specified(save_refs::Bool = false)
     simulation_params = SimulationParameters(use_MB = true,
                                             use_iceflow = true,
                                             plots = false,
-                                            velocities = false,
+                                            use_velocities = false,
                                             overwrite_climate = false,
                                             tspan = (2010.0,2015.0),
                                             multiprocessing = false,

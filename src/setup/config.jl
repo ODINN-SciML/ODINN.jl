@@ -69,16 +69,16 @@
 Configures and enables multiprocessing based on the provided simulation parameters.
 
 # Arguments
-- `params::Sleipnir.Parameters`: A parameter object containing simulation settings, 
-  including the number of workers (`params.simulation.workers`) and whether multiprocessing 
+- `params::Sleipnir.Parameters`: A parameter object containing simulation settings,
+  including the number of workers (`params.simulation.workers`) and whether multiprocessing
   is enabled (`params.simulation.multiprocessing`).
 
 # Behavior
-- If multiprocessing is enabled (`params.simulation.multiprocessing == true`) and the 
+- If multiprocessing is enabled (`params.simulation.multiprocessing == true`) and the
   specified number of workers (`params.simulation.workers`) is greater than 0:
-  - Adds the required number of worker processes if the current number of processes 
+  - Adds the required number of worker processes if the current number of processes
     (`nprocs()`) is less than the specified number of workers.
-  - Suppresses precompilation output on the worker processes and ensures the `ODINN` 
+  - Suppresses precompilation output on the worker processes and ensures the `ODINN`
     module is loaded on all workers.
   - If the specified number of workers is 1, removes all worker processes.
 
@@ -128,6 +128,13 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                 @info "Number of workers: $(nworkers())"
                 end # @eval
             end
+        end
+    else
+        if !parse(Bool, get(ENV, "CI", "false")) && !parse(Bool, get(ENV, "ODINN_OVERWRITE_MULTI", "false")) && nprocs()>1 # If the session used to work with multiprocessing but now we want to switch to single processing
+            @info "Switching back to single processing"
+            @eval begin
+            rmprocs(workers(), waitfor=0)
+            end # @eval
         end
     end
     return nworkers()
