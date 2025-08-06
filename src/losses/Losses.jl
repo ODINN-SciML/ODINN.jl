@@ -197,7 +197,7 @@ function loss(
     normalization::F=1.,
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
-    return sum((log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2)[mask]) ./ normalization
+    return sum((log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)).^2)) ./ normalization
 end
 function backward_loss(
     lossType::LogSum,
