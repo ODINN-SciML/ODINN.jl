@@ -4,6 +4,7 @@ function test_adjoint_SIA2D(
     thres = [2e-4, 2e-4, 2e-2],
     target = :A,
     C = 0.0,
+    check_method = :Enzyme,
 ) where {ADJ<:AbstractAdjointMethod}
 
     Random.seed!(1234)
@@ -124,25 +125,41 @@ function test_adjoint_SIA2D(
         θ = simulation.model.machine_learning.θ
         return _loss(H, θ, simulation, t, vecBackwardSIA2D)
     end
-    ratio = []
-    angle = []
-    relerr = []
-    eps = []
-    for k in range(3,7,step=2)
-        ϵ = 10.0^(-k)
-        push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
+    ratio, angle, relerr = if check_method == :FiniteDifferences
+        ratio = []
+        angle = []
+        relerr = []
+        eps = []
+        for k in range(3,7,step=2)
+            ϵ = 10.0^(-k)
+            push!(eps, ϵ)
+            ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
+            ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
+            push!(ratio, ratio_k)
+            push!(angle, angle_k)
+            push!(relerr, relerr_k)
+        end
+        ratio, angle, relerr
+    elseif check_method == :Enzyme
+        ∂H_num, = ODINN.VJP_λ_∂SIA∂H(
+            ODINN.EnzymeVJP(),
+            vecBackwardSIA2D,
+            H,
+            θ,
+            simulation,
+            t,
+        )
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
-        push!(ratio, ratio_k)
-        push!(angle, angle_k)
-        push!(relerr, relerr_k)
+        [ratio_k], [angle_k], [relerr_k]
     end
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
     if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt H")
-        println("eps    = ",printVecScientific(eps))
+        if check_method == :FiniteDifferences
+            println("eps    = ",printVecScientific(eps))
+        end
         printVecScientific("ratio  = ",ratio,thres_ratio)
         printVecScientific("angle  = ",angle,thres_angle)
         printVecScientific("relerr = ",relerr,thres_relerr)
@@ -156,25 +173,42 @@ function test_adjoint_SIA2D(
         H, simulation, t, vecBackwardSIA2D = args
         return _loss(H, θ, simulation, t, vecBackwardSIA2D)
     end
-    ratio = []
-    angle = []
-    relerr = []
-    eps = []
-    for k in range(3,7)
-        ϵ = 10.0^(-k)
-        push!(eps, ϵ)
-        ∂θ_num = compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ; varStr="of θ")
+    ratio, angle, relerr = if check_method == :FiniteDifferences
+        ratio = []
+        angle = []
+        relerr = []
+        eps = []
+        for k in range(3,7)
+            ϵ = 10.0^(-k)
+            push!(eps, ϵ)
+            ∂θ_num = compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ; varStr="of θ")
+            ratio_k, angle_k, relerr_k = stats_err_arrays(∂θ, ∂θ_num)
+            push!(ratio, ratio_k)
+            push!(angle, angle_k)
+            push!(relerr, relerr_k)
+        end
+        ratio, angle, relerr
+    elseif check_method == :Enzyme
+        ∂θ_num = ODINN.VJP_λ_∂SIA∂θ(
+            ODINN.EnzymeVJP(),
+            vecBackwardSIA2D,
+            H,
+            θ,
+            nothing,
+            simulation,
+            t,
+        )
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂θ, ∂θ_num)
-        push!(ratio, ratio_k)
-        push!(angle, angle_k)
-        push!(relerr, relerr_k)
+        [ratio_k], [angle_k], [relerr_k]
     end
     min_ratio = minimum(abs.(ratio))
     min_angle = minimum(abs.(angle))
     min_relerr = minimum(abs.(relerr))
     if printDebug | !( (min_ratio<thres_ratio) & (min_angle<thres_angle) & (min_relerr<thres_relerr) )
         println("Gradient wrt θ")
-        println("eps    = ",printVecScientific(eps))
+        if check_method == :FiniteDifferences
+            println("eps    = ",printVecScientific(eps))
+        end
         printVecScientific("ratio  = ",ratio,thres_ratio)
         printVecScientific("angle  = ",angle,thres_angle)
         printVecScientific("relerr = ",relerr,thres_relerr)
