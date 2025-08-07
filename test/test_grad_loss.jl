@@ -6,11 +6,13 @@ function test_grad_finite_diff(
     target = :A,
     finite_difference_method = :FiniteDifferences,
     finite_difference_order = 3,
-    velocityLoss = false,
+    loss = LossH(),
 ) where {ADJ<:AbstractAdjointMethod}
-    empirical_loss_function = velocityLoss ? LossHV() : LossH()
 
-    println("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(empirical_loss_function)).name)")
+    println("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
+
+    # Determine if we are working with a velocity loss
+    velocityLoss = typeof(loss) <: Union{LossV, LossHV}
 
     thres_ratio = thres[1]
     thres_angle = thres[2]
@@ -56,7 +58,7 @@ function test_grad_finite_diff(
             optim_autoAD=optim_autoAD,
             grad=adjointFlavor,
             optimization_method="AD+AD",
-            empirical_loss_function=empirical_loss_function,
+            empirical_loss_function=loss,
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
@@ -142,9 +144,12 @@ function test_grad_finite_diff(
     try
         loss_iceflow_grad!(dθ, θ, simulation)
     catch
+        @warn "Computation of gradient with SciMLSensitivity fail with first run due to compilation errors. Trying for a second time..."
         try
+            @warn "Computation of gradient with SciMLSensitivity succeded in a second run after compilation."
             loss_iceflow_grad!(dθ, θ, simulation)
         catch
+            @warn "Computation of gradient with SciMLSensitivity fail after second run due to compilation errors."
             loss_iceflow_grad!(dθ, θ, simulation)
         end
     end
@@ -270,7 +275,11 @@ function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, params, lossTyp
     return nothing
 end
 
-function test_grad_Halfar(adjointFlavor::ADJ; thres=[0., 0., 0.]) where {ADJ <: AbstractAdjointMethod}
+function test_grad_Halfar(
+    adjointFlavor::ADJ;
+    thres=[0., 0., 0.]
+    ) where {ADJ <: AbstractAdjointMethod}
+
     Random.seed!(1234)
 
     lossType = LossH(L2Sum(distance=15))

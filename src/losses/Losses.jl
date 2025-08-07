@@ -208,7 +208,7 @@ function backward_loss(
     normalization::F,
 ) where {F <: AbstractFloat}
     d = zero(a)
-    d[mask] = log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)) ./ (b[mask] .+ lossType.ϵ)
+    d[mask] = log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)) ./ (a[mask] .+ lossType.ϵ)
     return 2.0 .* d ./ normalization
 end
 
@@ -219,7 +219,7 @@ function loss(
     normalization::F=1.,
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
-    return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2)
+    return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2) ./ normalization
 end
 function backward_loss(
     lossType::LogSum,
@@ -227,7 +227,7 @@ function backward_loss(
     b::Matrix{F};
     normalization::F,
 ) where {F <: AbstractFloat}
-    return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (b .+ lossType.ϵ)
+    return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (a .+ lossType.ϵ) ./ normalization
 end
 
 function loss(
@@ -292,25 +292,22 @@ function loss(
 
     mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
 
-    ℓ = 0.0
-
-    if lossType.component == :xy
-        vxErr = loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
-        vyErr = loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
-        ℓ += vxErr + vyErr
+    ℓ = if lossType.component == :xy
+        loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization) + loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
     elseif lossType.component == :abs
-        vabsErr = loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
-        ℓ += vabsErr
+        loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
     else
         @error "Loss type not implemented."
     end
 
-    if lossType.scale_loss
-        normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
-        ℓ /= normVref
+    # Scale loss function 
+    ℓ_scale = if lossType.scale_loss
+        ℓ / mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
+    else
+        ℓ
     end
 
-    return ℓ
+    return ℓ_scale
 end
 function backward_loss(
     lossType::LossV,
@@ -350,19 +347,24 @@ function backward_loss(
         ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
     elseif lossType.component == :abs
         ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
-        ∂lV∂Vx, ∂lV∂Vy = zero(∂lV∂V), zero(∂lV∂V)
+        # ∂lV∂Vx, ∂lV∂Vy = zero(∂lV∂V), zero(∂lV∂V)
         ∂lV∂Vx = ifelse.(mask, ∂lV∂V .* (Vx_pred .- Vx_ref) ./ (V_pred .- V_ref), 0.0)
         ∂lV∂Vy = ifelse.(mask, ∂lV∂V .* (Vy_pred .- Vy_ref) ./ (V_pred .- V_ref), 0.0)
     end
 
-    if lossType.scale_loss
-        normVref = mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
-        ∂lV∂Vx /= normVref
-        ∂lV∂Vy /= normVref
+    ∂lV∂Vx_scale = if lossType.scale_loss
+        ∂lV∂Vx / mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
+    else
+        ∂lV∂Vx
+    end
+    ∂lV∂Vy_scale = if lossType.scale_loss
+        ∂lV∂Vy / mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
+    else
+        ∂lV∂Vy
     end
 
-    ∂L∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
-    ∂L∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
+    ∂L∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
+    ∂L∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
 
     return ∂L∂H, ∂L∂θ
 end
