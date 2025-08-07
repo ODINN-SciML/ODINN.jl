@@ -32,7 +32,7 @@ function run!(
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
         epochs = simulation.parameters.hyper.epochs
-        @assert length(optimizers) == length(optimizers) "Provide number of epochs as a vector with the same length of optimizers"
+        @assert length(optimizers) == length(epochs) "Provide number of epochs as a vector with the same length of optimizers"
         for i in 1:length(epochs)
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
@@ -78,7 +78,7 @@ BFGS Training
 """
 function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer; save_every_iter::Bool=false)
 
-    @info "Trainign with BFGS optimizer"
+    @info "Training with BFGS optimizer"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
@@ -380,19 +380,35 @@ function batch_loss_iceflow_transient(
 
     loss_function = container.simulation.parameters.UDE.empirical_loss_function
 
-    H_ref = container.simulation.glaciers[glacier_idx].thicknessData.H
+    glacier = container.simulation.glaciers[glacier_idx]
+    H_ref = glacier.thicknessData.H
     t = result.t
     Δt = diff(t)
     H = result.H
-    @assert length(H_ref) == length(H) "Reference and Prediction datasets need to be evaluated in same timestamps."
-    @assert size(H_ref[begin]) == size(H[begin])
+    @assert size(H_ref[begin]) == size(H[begin]) "Initial state of reference and predicted ice thickness do not match."
+    @assert length(H_ref) == length(H) "Size of reference and prediction datasets do not match."
+    @assert t == glacier.thicknessData.t "Reference and prediction need to be evaluated with the same timestamps."
+
+    if isa(loss_function, LossHV) || isa(loss_function, LossV)
+        @assert !isnothing(glacier.velocityData) "Using $(typeof(loss_function)) but no velocityData in the glacier $(glacier.rgi_id)"
+        @assert length(glacier.velocityData.date) > 0 "Using $(typeof(loss_function)) but no reference velocity in the results"
+    end
 
     β = 2.0
     l_H = map(2:length(H)) do τ
         normalization = 1.0
         # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
         Hr = @ignore_derivatives(H_ref[τ]) # Ignore this part of the computational graph, otherwise AD fails
-        mean_error = loss(loss_function, H[τ], Hr; normalization=prod(size(H_ref[τ]))*normalization)
+        mean_error = loss(
+                loss_function,
+                H[τ],
+                Hr,
+                t[τ],
+                glacier,
+                container.θ,
+                container.simulation;
+                normalization=prod(size(H_ref[τ]))*normalization,
+            )
         Δt[τ-1] * mean_error
     end
     return sum(l_H), result
@@ -457,7 +473,6 @@ function _batch_iceflow_UDE(
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, nothing;
         light = !container.simulation.parameters.solver.save_everystep,
-        processVelocity = Huginn.V_from_H
     )
 end
 

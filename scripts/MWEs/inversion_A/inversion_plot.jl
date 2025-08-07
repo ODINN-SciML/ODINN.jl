@@ -4,7 +4,7 @@ Pkg.activate(odinn_folder*"/scripts/")
 
 include("inversion_setup.jl")
 
-using Plots; pythonplot()
+using Plots## pythonplot()
 using JLD2
 
 res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_A/data", "simulation_result.jld2"), "res")

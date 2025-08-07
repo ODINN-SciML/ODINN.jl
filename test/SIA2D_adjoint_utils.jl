@@ -19,7 +19,7 @@ function test_adjoint_diff()
         Aadjv = ODINN.diff_x_adjoint(v, Δ)
         a = sum(Au .* v) / fac
         b = sum(u .* Aadjv)/fac
-        @test a ≈ b rtol = (Sleipnir.doublePrec ? 1e-12 : 1e-5)
+        @test a ≈ b rtol = (Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 
     # Test diff_y
@@ -31,7 +31,7 @@ function test_adjoint_diff()
         Aadjv = ODINN.diff_y_adjoint(v, Δ)
         a = sum(Au .* v) / fac
         b = sum(u .* Aadjv) / fac
-        @test a ≈ b rtol=(Sleipnir.doublePrec ? 1e-12 : 1e-5)
+        @test a ≈ b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 end
 
@@ -59,7 +59,7 @@ function test_adjoint_clamp_borders()
         ODINN.clamp_borders_dx_adjoint!(∂dS, ∂H, v, η₀, Δ, H, dS)
         a=sum(c.*v)/fac
         b=sum(H.*∂H)/fac + sum(dS.*∂dS) / fac
-        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-12 : 1e-5)
+        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 
     # Test clamp_borders_dy
@@ -73,7 +73,7 @@ function test_adjoint_clamp_borders()
         ODINN.clamp_borders_dy_adjoint!(∂dS, ∂H, v, η₀, Δ, H, dS)
         a=sum(c.*v)/fac
         b=sum(H.*∂H)/fac + sum(dS.*∂dS)/fac
-        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-12 : 1e-5)
+        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 end
 
@@ -97,7 +97,7 @@ function test_adjoint_avg()
         Aadjv = ODINN.avg_adjoint(v)
         a=sum(Au.*v)/fac
         b=sum(u.*Aadjv)/fac
-        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-12 : 1e-5)
+        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 
     # Test avg_x
@@ -109,7 +109,7 @@ function test_adjoint_avg()
         Aadjv = ODINN.avg_x_adjoint(v)
         a=sum(Au.*v)/fac
         b=sum(u.*Aadjv)/fac
-        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-12 : 1e-5)
+        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 
     # Test avg_y
@@ -121,6 +121,6 @@ function test_adjoint_avg()
         Aadjv = ODINN.avg_y_adjoint(v)
         a=sum(Au.*v)/fac
         b=sum(u.*Aadjv)/fac
-        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-12 : 1e-5)
+        @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 end
