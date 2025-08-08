@@ -11,7 +11,9 @@ Pkg.activate(".")
 Pkg.develop(PackageSpec(path=".."))
 Pkg.instantiate()
 
-ENV["ODINN_OVERWRITE_MULTI"] = get(ENV, "CI", nothing)=="true"
+ODINN_OVERWRITE_MULTI = get(ENV, "CI", nothing)=="true"
+ENV["ODINN_OVERWRITE_MULTI"] = ODINN_OVERWRITE_MULTI
+@show ODINN_OVERWRITE_MULTI
 
 using Revise
 using Documenter, Literate
