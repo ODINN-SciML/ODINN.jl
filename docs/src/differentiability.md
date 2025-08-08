@@ -1,13 +1,38 @@
-# Differentiability 
+# Differentiability
 
-In this section we aim to discuss the main choices and strategies regarding differentiability within the ODINN ecosystem. 
+In this section we aim to discuss the main choices and strategies regarding differentiability within the ODINN ecosystem.
 
-We have two main strategies regarding differentiability of hybrid models combining differential equations (e.g. SIA2D) and regressors: manual adjoints and those computed using automatic differentiation (i.e. `Enzyme.jl`).
+We have two main strategies regarding differentiability of hybrid models combining differential equations (e.g. SIA2D) and regressors: manual adjoints and [SciMLSensitivity.jl](https://docs.sciml.ai/SciMLSensitivity/).
 
 ## Manual adjoints
 
+ODINN comes with two flavors of adjoints that can be used to compute gradients: discrete adjoint and manual adjoint.
+In each of these adjoints, VJPs have to be computed for which we provide 3 implementations: discrete VJP, continuous VJP and Enzyme VJP.
+The VJP can be chosen independently of the adjoint method that is being used.
 
-## AD adjoints
+### Discrete adjoint
+
+The discrete adjoint is a very simple adjoint that uses an explicit Euler scheme to solve the adjoint ODE. The timestep is prescribed by the frequency at which the results are saved in the forward run. It is usually set to one month.
+
+### Continuous adjoint
+
+With this adjoint method, the adjoint ODE is treated and solved as a standard ODE using SciMLSensitivity. The VJP with respect to the ice thickness of the ice flow equation (e.g. `SIA2D!`) is integrated backward in time. The gradients with respect to the parameters involed in the iceflow equation are then computed using a simple Gauss Quadrature at prescribed time steps. These time steps are determined by the Gauss Quadrature method and in a general case they are different from the time steps at which results are gathered in the forward run. This is way the adjoint solution is interpolated. For the moment only linear interpolators are supported.
+
+### Enzyme VJP
+
+The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code.
+
+### Discrete VJP
+
+This is a manual implementation of what the Enzyme VJP does. Equations were derived manually by differentiating the iceflow equation.
+
+### Continuous VJP
+
+In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a continuous in space VJP can be derived by integrating by part the SIA. It is then discretized after differentiation.
+
+## SciMLSensitivity
+
+Gradients can be computed using [SciMLSensitivity.jl](https://docs.sciml.ai/SciMLSensitivity/). It relies on an adjoint method and a way to compute the VJP (Vector-Jacobian Product) which is done using `Enzyme.jl`.
 
 In order to ensure end-to-end differentiability of the whole model using `Enzyme.jl`, special attention needs to be taken in terms of code style and type stability. For this, we leverage the adjoint capabilities of `SciMLSensitivity.jl` from the SciML ecosystem. Here, we compile the main considerations and things that need to be taken into account:
 
