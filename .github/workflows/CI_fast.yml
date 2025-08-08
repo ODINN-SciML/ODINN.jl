@@ -1,10 +1,14 @@
-name: Run Tests
+name: Fast tests
 on:
   pull_request:
     branches: [ "**" ]
+    paths-ignore:
+      - 'docs/**'
   push:
     branches: [ "**" ]
     tags: '*'
+    paths-ignore:
+      - 'docs/**'
 env:
   PR_NUMBER: ${{ github.event.number }}
 permissions:
@@ -84,7 +88,7 @@ jobs:
       - name: Build Julia packages
         uses: julia-actions/julia-buildpkg@v1
       - name: Run tests
-        run: julia -p 4 --project=./ test/runtests.jl
+        run: julia --project=./ -e 'include("test/runtests.jl")'
         env:
           GROUP: ${{ matrix.group }}
       - name: Performance benchmark
@@ -109,8 +113,3 @@ jobs:
               repo: context.repo.repo,
               body: `${{steps.generate-comment.outputs.comment}}`
             })
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v5
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-          files: lcov.info

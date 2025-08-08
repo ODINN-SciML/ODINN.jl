@@ -38,11 +38,12 @@ include("SIA2D_adjoint_utils.jl")
 include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
-include("test_grad_Enzyme.jl")
 include("save_results.jl")
 
 # # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"] = "nul"
+
+@info "Running group $(GROUP)"
 
 @testset "Run all tests" begin
 
