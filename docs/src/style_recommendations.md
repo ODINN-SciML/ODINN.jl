@@ -8,7 +8,7 @@ This section contains the instructions to run the documentation locally.
 
 To generate the documentation on your local computer, in the `docs/` folder run:
 ```julia
-include("makeLocal.jl")
+include("make.jl")
 ```
 
 Then in another REPL, in the `docs/` folder, activate the docs environment and run the server:

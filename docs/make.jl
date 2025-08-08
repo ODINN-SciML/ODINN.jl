@@ -11,11 +11,17 @@ Pkg.activate(".")
 Pkg.develop(PackageSpec(path=".."))
 Pkg.instantiate()
 
-ENV["ODINN_OVERWRITE_MULTI"] = true
+ENV["ODINN_OVERWRITE_MULTI"] = get(ENV, "CI", nothing)=="true"
 
 using Revise
 using Documenter, Literate
 using ODINN
+using DocumenterCitations
+
+bib = CitationBibliography(
+    joinpath(@__DIR__, "src/assets", "references.bib");
+    style=:numeric
+)
 
 DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 
@@ -66,13 +72,16 @@ makedocs(
         "Ongoing changes and future plans" => "changes_plans.md",
         "References" => "references.md",
     ],
-    checkdocs=:none
+    checkdocs=:none,
+    plugins=[bib]
 )
 
-deploydocs(
-    repo = "github.com/ODINN-SciML/ODINN.jl",
-    branch = "gh-pages",
-    devbranch = "main",
-    push_preview = true,
-    forcepush = true,
-)
+if get(ENV, "CI", nothing)=="true"
+    deploydocs(
+        repo = "github.com/ODINN-SciML/ODINN.jl",
+        branch = "gh-pages",
+        devbranch = "main",
+        push_preview = true,
+        forcepush = true,
+    )
+end

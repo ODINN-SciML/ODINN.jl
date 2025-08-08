@@ -3,7 +3,7 @@
 To generate the documentation locally run:
 ```julia
 shell> cd docs/
-julia> include("makeLocal.jl")
+julia> include("make.jl")
 ```
 
 Then in another REPL, activate the docs environment and run the server:
