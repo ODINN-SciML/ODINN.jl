@@ -1,9 +1,9 @@
 name: Run Tests
 on:
   pull_request:
-    branches: [ "main" ]
+    branches: [ "**" ]
   push:
-    branches: [ "main" ]
+    branches: [ "**" ]
     tags: '*'
 env:
   PR_NUMBER: ${{ github.event.number }}
@@ -52,9 +52,16 @@ jobs:
           - '1.10'
         os:
           - ubuntu-latest
-          - macos-latest
         arch:
           - x64
+        group:
+          - Core1
+          - Core2
+          - Core3
+          - Core4
+          - Core5
+          - Core6
+          - Core7
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -77,7 +84,9 @@ jobs:
       - name: Build Julia packages
         uses: julia-actions/julia-buildpkg@v1
       - name: Run tests
-        uses: julia-actions/julia-runtest@v1
+        run: julia -p 4 --project=./ test/runtests.jl
+        env:
+          GROUP: ${{ matrix.group }}
       - name: Performance benchmark
         id: generate-comment
         run: |
