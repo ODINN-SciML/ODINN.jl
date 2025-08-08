@@ -1,11 +1,13 @@
 name: Fast tests
 on:
   pull_request:
-    branches: [ "**" ]
+    branches-ignore:
+      - main
     paths-ignore:
       - 'docs/**'
   push:
-    branches: [ "**" ]
+    branches-ignore:
+      - main
     tags: '*'
     paths-ignore:
       - 'docs/**'
