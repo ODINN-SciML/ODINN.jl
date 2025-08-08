@@ -46,11 +46,14 @@ function callback_plots_A(θ, l, simulation)
 end
 
 """
-    callback_diagnosis(θ, l, simulation; save::Bool = false)
+    callback_diagnosis(θ, l, simulation; save::Bool = false, tbLogger::Union{<: TBLogger, Nothing} = nothing)
 
-Callback function to track and diagose training. It includes print and updates in simulation::Simulation.
+Callback function to track and diagose training.
+It includes print and updates in simulation::Simulation.
+It also logs training statistics with tensorboard if tbLogger is provided.
 """
-function callback_diagnosis(θ, l, simulation; save::Bool = false)
+function callback_diagnosis(θ, l, simulation; save::Bool = false, tbLogger::Union{<: TBLogger, Nothing} = nothing)
+    currentDt = now()
 
     # See if we want to change this or leave it
     # update_training_state!(simulation, l)
@@ -67,6 +70,22 @@ function callback_diagnosis(θ, l, simulation; save::Bool = false)
             improvement = (l - simulation.stats.losses[end-step]) / simulation.stats.losses[end-step]
         end
         printProgressLoss(length(simulation.stats.losses), simulation.stats.niter, l, improvement)
+    end
+
+    if !isnothing(tbLogger)
+        iter = length(simulation.stats.losses) # Use this instead of θ.iter to be able to log optimizations with multiple optimizers in the same tensorboard run
+        log_value(tbLogger, "train/loss", θ.objective, step=iter)
+        if !isnothing(θ.grad)
+            log_value(tbLogger, "train/norm_grad", norm(θ.grad), step=iter)
+        end
+        if !isnothing(θ.hess)
+            log_value(tbLogger, "train/norm_hess", norm(θ.hess), step=iter)
+        end
+        if simulation.stats.lastCall != DateTime(0,1,1)
+            time_per_iter = Millisecond(currentDt - simulation.stats.lastCall).value/1000
+            log_value(tbLogger, "train/time_per_iter", time_per_iter, step=iter)
+        end
+        simulation.stats.lastCall = currentDt
     end
 
     if save

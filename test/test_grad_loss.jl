@@ -12,7 +12,7 @@ function test_grad_finite_diff(
     println("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
 
     # Determine if we are working with a velocity loss
-    velocityLoss = typeof(loss) <: Union{LossV, LossHV}
+    velocityLoss = typeof(loss) <: Union{<: LossV, <: LossHV}
 
     thres_ratio = thres[1]
     thres_angle = thres[2]

@@ -15,7 +15,7 @@ function save_simulation_test!()
             working_dir = working_dir,
             multiprocessing = false,
             workers = 1,
-            test_mode = false,
+            test_mode = true,
             rgi_paths = rgi_paths,
         ),
         hyper = Hyperparameters(
