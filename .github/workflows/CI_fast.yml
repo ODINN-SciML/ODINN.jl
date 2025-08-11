@@ -1,12 +1,12 @@
-name: Full tests
+name: Fast tests
 on:
   pull_request:
-    branches:
+    branches-ignore:
       - main
     paths-ignore:
       - 'docs/**'
   push:
-    branches:
+    branches-ignore:
       - main
     tags: '*'
     paths-ignore:
@@ -58,9 +58,16 @@ jobs:
           - '1.10'
         os:
           - ubuntu-latest
-          - macos-latest
         arch:
           - x64
+        group:
+          - Core1
+          - Core2
+          - Core3
+          - Core4
+          - Core5
+          - Core6
+          - Core7
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -83,7 +90,9 @@ jobs:
       - name: Build Julia packages
         uses: julia-actions/julia-buildpkg@v1
       - name: Run tests
-        uses: julia-actions/julia-runtest@v1
+        run: julia --project=./ -e 'include("test/runtests.jl")'
+        env:
+          GROUP: ${{ matrix.group }}
       - name: Performance benchmark
         id: generate-comment
         run: |
@@ -106,9 +115,3 @@ jobs:
               repo: context.repo.repo,
               body: `${{steps.generate-comment.outputs.comment}}`
             })
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v5
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-          files: lcov.info
-          fail_ci_if_error: true
