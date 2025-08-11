@@ -88,12 +88,10 @@ function test_adjoint_SIA2D(
     glaciers[glacier_idx].C = C
 
     simulation = FunctionalInversion(model, glaciers, params)
-
-    cache = init_cache(model, simulation, glacier_idx, params)
+    simulation.cache = init_cache(model, simulation, glacier_idx, params)
 
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
-    simulation.cache = cache
 
     vecBackwardSIA2D = randn(size(H, 1), size(H, 2))
 
@@ -119,6 +117,17 @@ function test_adjoint_SIA2D(
         t,
     )
 
+
+    adjointFlavorEnzyme, simulationEnzyme = if check_method == :Enzyme
+        adjointFlavorEnzyme = ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()) # Use the same adjoint type to avoid Enzyme recompilation for each test
+        paramsEnzyme = Parameters(params; UDE=UDEparameters(params.UDE; grad=adjointFlavorEnzyme))
+        simulationEnzyme = FunctionalInversion(model, glaciers, paramsEnzyme)
+        simulationEnzyme.cache = init_cache(model, simulationEnzyme, glacier_idx, paramsEnzyme)
+        adjointFlavorEnzyme, simulationEnzyme
+    else
+        nothing, nothing
+    end
+
     # Check gradient wrt H
     function f_H(H, args)
         simulation, t, vecBackwardSIA2D = args
@@ -142,11 +151,11 @@ function test_adjoint_SIA2D(
         ratio, angle, relerr
     elseif check_method == :Enzyme
         ∂H_num, = ODINN.VJP_λ_∂SIA∂H(
-            ODINN.EnzymeVJP(),
+            adjointFlavorEnzyme.VJP_method,
             vecBackwardSIA2D,
             H,
             θ,
-            simulation,
+            simulationEnzyme,
             t,
         )
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
@@ -190,12 +199,12 @@ function test_adjoint_SIA2D(
         ratio, angle, relerr
     elseif check_method == :Enzyme
         ∂θ_num = ODINN.VJP_λ_∂SIA∂θ(
-            ODINN.EnzymeVJP(),
+            adjointFlavorEnzyme.VJP_method,
             vecBackwardSIA2D,
             H,
             θ,
             nothing,
-            simulation,
+            simulationEnzyme,
             t,
         )
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂θ, ∂θ_num)
