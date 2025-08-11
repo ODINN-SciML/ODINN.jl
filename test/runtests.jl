@@ -60,12 +60,12 @@ end
 end
 
 if GROUP == "All" || GROUP == "Core2"
-    @testset "VJPs tests with A as target" begin
-        @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A)
-        @testset "VJP (discrete) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[5e-7, 1e-6, 5e-4], target = :A)
-        @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[3e-4, 2e-4, 2e-2], target = :A, C=7e-8)
-        @testset "VJP (continuous) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
-        @testset "VJP (continuous) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres=[6e-4, 7e-4, 4e-2], target = :A, C=7e-8)
+    @testset "VJPs tests" begin
+        @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A, check_method=:FiniteDifferences)
+        @testset "VJP (discrete) of SIA2D vs Enzyme" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[5e-7, 1e-6, 5e-4], target = :A)
+        @testset "VJP (discrete) of SIA2D with C>0 vs Enzyme" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[3e-4, 2e-4, 2e-2], target = :A, C=7e-8)
+        @testset "VJP (continuous) of SIA2D vs Enzyme" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
+        @testset "VJP (continuous) of SIA2D with C>0 vs Enzyme" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres=[6e-4, 7e-4, 4e-2], target = :A, C=7e-8)
     end
 end
 

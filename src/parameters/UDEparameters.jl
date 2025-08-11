@@ -27,7 +27,14 @@ Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
 
 
 """
-    UDEparameters(; sensealg, optim_autoAD, grad, optimization_method, empirical_loss_function, target) where {ADJ <: AbstractAdjointMethod}
+    UDEparameters(;
+        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP()),
+        optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
+        grad::ADJ = SciMLSensitivityAdjoint(),
+        optimization_method::String = "AD+AD",
+        empirical_loss_function::AbstractLoss = LossH(),
+        target::Union{Symbol, Nothing} = :A
+    ) where {ADJ <: AbstractAdjointMethod}
 
 Create a `UDEparameters` object for configuring the sensitivity analysis and optimization of a Universal Differential Equation (UDE).
 
@@ -70,6 +77,37 @@ function UDEparameters(;
     return UDE_parameters
 end
 
+"""
+    UDEparameters(
+        params::UDEparameters;
+        grad::Union{<: AbstractAdjointMethod, Nothing} = nothing,
+    )
+
+Copy a `UDEparameters` and replace its `grad` field by the provided value.
+
+# Arguments
+- `params::UDEparameters`: Object to copy.
+- `grad::Union{<: AbstractAdjointMethod, Nothing}`: Adjoint flavor to replace by in the `UDEparameters` struct.
+    Defaults to `nothing` which keeps the existing value.
+
+# Returns
+- A new `UDEparameters` object.
+"""
+function UDEparameters(
+    params::UDEparameters;
+    grad::Union{<: AbstractAdjointMethod, Nothing} = nothing,
+)
+    grad = isnothing(grad) ? params.grad : grad
+    return UDEparameters{typeof(grad)}(
+        params.sensealg,
+        params.optim_autoAD,
+        grad,
+        params.optimization_method,
+        params.empirical_loss_function,
+        params.target,
+    )
+end
+
 include("InversionParameters.jl")
 
 """
@@ -80,13 +118,13 @@ The `Parameters` mutable struct is defined in `Sleipnir.jl` using abstract types
 later on defined in the different packages of the ODINN ecosystem.
 
     Parameters(;
-            physical::PhysicalParameters = PhysicalParameters(),
-            simulation::SimulationParameters = SimulationParameters(),
-            solver::SolverParameters = SolverParameters(),
-            hyper::Hyperparameters = Hyperparameters(),
-            UDE::UDEparameters = UDEparameters()
-            inversion::InversionParameters = InversionParameters()
-            )
+        physical::PhysicalParameters = PhysicalParameters(),
+        simulation::SimulationParameters = SimulationParameters(),
+        solver::SolverParameters = SolverParameters(),
+        hyper::Hyperparameters = Hyperparameters(),
+        UDE::UDEparameters = UDEparameters(),
+        inversion::InversionParameters = InversionParameters(),
+    )
 
 
 Keyword arguments
@@ -104,9 +142,8 @@ function Parameters(;
     solver::SolverParameters = SolverParameters(),
     hyper::Hyperparameters = Hyperparameters(),
     UDE::UDEparameters = UDEparameters(),
-    inversion::InversionParameters = InversionParameters()
-    )
-
+    inversion::InversionParameters = InversionParameters(),
+)
     parameters = Sleipnir.Parameters(physical, simulation, hyper, solver, UDE, inversion)
 
     enable_multiprocessing(parameters)
@@ -114,5 +151,50 @@ function Parameters(;
     return parameters
 end
 
+"""
+    Parameters(
+        params::Sleipnir.Parameters;
+        physical::Union{<: PhysicalParameters, Nothing} = nothing,
+        simulation::Union{<: SimulationParameters, Nothing} = nothing,
+        solver::Union{<: SolverParameters, Nothing} = nothing,
+        hyper::Union{<: Hyperparameters, Nothing} = nothing,
+        UDE::Union{<: UDEparameters, Nothing} = nothing,
+        inversion::Union{<: InversionParameters, Nothing} = nothing,
+    )
 
+Copy a `Parameters` struct and replace its fields by the provided values.
 
+Arguments
+=================
+- params::Sleipnir.Parameters;
+- `physical::Union{<: PhysicalParameters, Nothing}`: New `physical` value to replace by in the copied `Parameters` struct.
+    Defaults to `nothing` which keeps the existing value.
+- `simulation::Union{<: SimulationParameters, Nothing}`: New `simulation` value to replace by in the copied `Parameters` struct.
+    Defaults to `nothing` which keeps the existing value.
+- `solver::Union{<: SolverParameters, Nothing}`: New `solver` value to replace by in the copied `Parameters` struct.
+    Defaults to `nothing` which keeps the existing value.
+- `hyper::Union{<: Hyperparameters, Nothing}`: New `hyper` value to replace by in the copied `Parameters` struct.
+    Defaults to `nothing` which keeps the existing value.
+- `UDE::Union{<: UDEparameters, Nothing}`: New `UDE` value to replace by in the copied `Parameters` struct.
+    Defaults to `nothing` which keeps the existing value.
+- `inversion::Union{<: InversionParameters, Nothing}`: New `inversion` value to replace by in the copied `Parameters` struct.
+    Defaults to `nothing` which keeps the existing value.
+"""
+function Parameters(
+    params::Sleipnir.Parameters;
+    physical::Union{<: PhysicalParameters, Nothing} = nothing,
+    simulation::Union{<: SimulationParameters, Nothing} = nothing,
+    solver::Union{<: SolverParameters, Nothing} = nothing,
+    hyper::Union{<: Hyperparameters, Nothing} = nothing,
+    UDE::Union{<: UDEparameters, Nothing} = nothing,
+    inversion::Union{<: InversionParameters, Nothing} = nothing,
+)
+    physical = isnothing(physical) ? params.physical : physical
+    simulation = isnothing(simulation) ? params.simulation : simulation
+    solver = isnothing(solver) ? params.solver : solver
+    hyper = isnothing(hyper) ? params.hyper : hyper
+    UDE = isnothing(UDE) ? params.UDE : UDE
+    inversion = isnothing(inversion) ? params.inversion : inversion
+
+    return Sleipnir.Parameters(physical, simulation, hyper, solver, UDE, inversion)
+end
