@@ -10,23 +10,24 @@ ODINN comes with two flavors of adjoints that can be used to compute gradients: 
 In each of these adjoints, VJPs have to be computed for which we provide 3 implementations: discrete VJP, continuous VJP and Enzyme VJP.
 The VJP can be chosen independently of the adjoint method that is being used.
 
-### Discrete adjoint
+#### Discrete adjoint
 
 The discrete adjoint is a very simple adjoint that uses an explicit Euler scheme to solve the adjoint ODE. The timestep is prescribed by the frequency at which the results are saved in the forward run. It is usually set to one month.
 
-### Continuous adjoint
+#### Continuous adjoint
 
 With this adjoint method, the adjoint ODE is treated and solved as a standard ODE using SciMLSensitivity. The VJP with respect to the ice thickness of the ice flow equation (e.g. `SIA2D!`) is integrated backward in time. The gradients with respect to the parameters involed in the iceflow equation are then computed using a simple Gauss Quadrature at prescribed time steps. These time steps are determined by the Gauss Quadrature method and in a general case they are different from the time steps at which results are gathered in the forward run. This is way the adjoint solution is interpolated. For the moment only linear interpolators are supported.
 
-### Enzyme VJP
+#### Enzyme VJP
 
 The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code.
+Univ. Grenoble Alpes, CNRS, IRD, G-INP, Institut des Géosciences de l’Environnement (IGE, UMR 5001)
 
-### Discrete VJP
+#### Discrete VJP
 
 This is a manual implementation of what the Enzyme VJP does. Equations were derived manually by differentiating the iceflow equation.
 
-### Continuous VJP
+#### Continuous VJP
 
 In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a continuous in space VJP can be derived by integrating by part the SIA. It is then discretized after differentiation.
 

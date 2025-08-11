@@ -1,13 +1,13 @@
 # Parameters
 
-There are different types of parameters, holding specific information for different modelling aspects. All the types of parameters are wrapped into a `Parameter` type, which is threaded throughout `ODINN.jl`.
+There are different types of parameters in ODINN, holding specific information for different modelling aspects. All the types of parameters are wrapped into a parent `Parameter` type, which is threaded throughout `ODINN.jl`.
 
 ```@docs
 Sleipnir.Parameters
 ODINN.Parameters
 ```
 
-The main types of parameters are the following ones:
+The main child types of parameters are the following ones:
 
 ## Simulation parameters
 
@@ -20,7 +20,7 @@ Sleipnir.SimulationParameters()
 
 ## Physical parameters
 
-Physical parameters are used to store physical constants used in the physical and machine learning models.
+Physical parameters are used to store physical constants and variables used in the physical and machine learning models.
 
 ```@docs
 Sleipnir.PhysicalParameters
@@ -47,7 +47,7 @@ ODINN.Hyperparameters()
 
 ## UDE parameters
 
-Universal Differential Equation (UDE) parameters are used to determine different modelling choices regarding the use of UDEs, such as wich sensitivity algorithm to use, which target (e.g. SIA parameter to target), or which optimization method to use.
+Universal Differential Equation (UDE) parameters are used to determine different modelling choices regarding the use of UDEs, such as wich sensitivity algorithm or optimization method to use.
 
 ```@docs
 ODINN.UDEparameters
