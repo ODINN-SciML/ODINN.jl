@@ -58,3 +58,11 @@ $$\begin{aligned}& \min_\theta \mathcal{D}\left(\hat S, S \right) + \mathcal{R}\
 & A=\text{NN}(\theta,T)
 \end{aligned}$$
 The functional inversion tutorial gives an exemple of how such inversion can be made in practice with `ODINN.jl`.
+
+## Logging
+
+`ODINN.jl` provides useful statistics among which the training loss history or the parameters history in the inversion objects.
+The training statistics can also be inspected with [TensorBoard](https://www.tensorflow.org/tensorboard) through VSCode or a local webserver.
+You can either use the [TensorBoard VSCode extension](https://marketplace.visualstudio.com/items?itemName=ms-toolsai.tensorboard) or simply install TensorBoard in a Python environment and then launch `tensorboard --logdir .logs/`.
+
+By default the TensorBoard logs are stored in your ODINN folder in `ODINN/.logs/` but you may have to adapt the command above if you log in a different folder.
