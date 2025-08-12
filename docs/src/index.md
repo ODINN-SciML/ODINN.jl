@@ -1,6 +1,6 @@
 # ODINN.jl documentation
 
-Welcome to the `ODINN.jl` documentation, a large-scale scientific machine learning (SciML) glacier model, leveraging differentiable programming in Julia. This documentation provides the necessary information to understand the ecosystem built around ``ODINN.jl`, its APIs, workflows and some examples of the main usage types of the model(s).
+Welcome to the `ODINN.jl` documentation, a large-scale scientific machine learning (SciML) glacier model, leveraging differentiable programming in Julia. This documentation provides the necessary information to understand the ecosystem built around `ODINN.jl`, its APIs, workflows and some examples of the main usage types of the model(s).
 
 ## Quick install
 
