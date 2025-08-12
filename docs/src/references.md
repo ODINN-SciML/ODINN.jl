@@ -36,6 +36,12 @@ In this page we provide the main references used in the ODINN project, grouped b
 
 - Machine learning improves seasonal mass balance prediction for unmonitored glaciers, Sjursen et al. (preprint) [sjursen_machine_2025](@cite).
 
+### Datasets
+
+- GlaThiDa: Glacier ice thickness database, Welty et al. (2020), ESSD [welty_worldwide_2020](@cite).
+- Ice velocity and thickness of the world’s glaciers, Millan et al. (2022), Nature Geoscience [millan_ice_2022](@cite).
+- Satellite-Derived Annual Glacier Surface Flow Velocity Products for the European Alps, 2015–2021, Rabatel et al. (2023) [rabatel_satellite-derived_2023](@cite)
+
 ## Full bibliography
 
 ```@bibliography

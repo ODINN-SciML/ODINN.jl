@@ -10,7 +10,7 @@ This can be for example the creep coefficient $A$ for the Shallow Ice Approximat
 This parameter can be constant for one glacier or vary with respect to space, in which case a spatial regularization is added to make the inversion problem well-posed.
 
 Another way to invert a parameter in an iceflow equation is to parametrize the quantity of interest, let us say $A$, by other quantities which can be in the case of [bolibar_universal_2023](@cite), the long term air temperature $T$.
-The optimized variable is not $A$ but the parameters $\theta$ and the mapping $(T,\theta)\mapsto A(\theta,T)$ defines a parametrization of the ice rheology.
+The optimized variable is not $A$ but the parameters $\theta$ and the mapping $(T,\theta)\mapsto A(\theta,T)$ defines a parametrization of the ice rheology. We refer hereafter to this kind of inversion as a *functional inversion*, where the goal is to optimize the parameters of a regressor specifying a function, rather than directly optimizing parameters or coefficients of a mechanistic model.
 
 We summarize the main differences between the two kind of inversions hereafter but first let us define the loss functions used in ODINN.
 
@@ -38,14 +38,17 @@ $$\int_{t\in\mathcal{T}} \int_{x\in\Omega} \left(\hat H(t, x)-H(t, x)\right)_2^2
 where $\Omega\subset\mathbb{R}^2$ defines the inner mask of the glacier where each pixel is at least at a given distance from the borders.
 In the formula above, $\hat H$ and $H$ are written in a continuous setting where no grid is defined.
 In practice, the iceflow equation is solved on a given grid $(x_i)_{i\leq I}$ where each $x_i\in\mathbb{R}^2$.
-However, because we have very sparse data, the ground truth ice thickness is available only at specific points in time and space.
+
+However, since we have very sparse observations, data is available only at specific points in time and space. The ground truth ice thickness, generally coming from ground penetrating radar (GPR) field work from the Glathida database [welty_worldwide_2020](@cite), displays a very strong sparsity, with observations concentrated along radar transects. Glacier ice surface velocity products , e.g. [millan_ice_2022](@cite), [rabatel_satellite-derived_2023](@cite), are notoriously less sparse, but still present many gaps in the grid due to signal-to-noise-ratio issues from the products. 
 Let $\mathcal{X}=(x_j,t_j)_{j\leq J}$ define the set of points where there are ground truth measurements.
-We assume that $\forall j\leq J,\, x_j\in(x_i)_i $, that is the ground truth measurements are aligned with the simulation grid.
+We assume that $\forall j\leq J,\, x_j\in(x_i)_i$, that is the ground truth measurements are aligned with the simulation grid.
 The data fidelity term in the discrete setting then becomes
-$$\mathcal{D}\left(\hat S, S \right) \stackrel{\mathrm{def}}{=} \sum_{j\leq J} \left( \hat H(t_j,x_j)-H(t_j,x_j) \right)^2$$
+$$\mathcal{D}\left(\hat S, S \right) \stackrel{\mathrm{def}}{=} \sum_{j \leq J} \left( \hat H(t_j,x_j)-H(t_j,x_j) \right)^2$$
 with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node of the simulation grid $x_j$.
 
 ## Classical inversions
+
+We refer to classical inversion to the inverse problem where the objective is to directly invert the parameters $p$ of the mechanistic model itself. These type of inversions are handled in ODINN via the `Inversion` subtype of `Simulation`.
 
 The optimization problem is
 $$\min_p \mathcal{D}\left(\hat S, S \right) + \mathcal{R}\left( \hat S, p \right)$$
@@ -53,15 +56,20 @@ where $p$ is the vector of parameters to invert, for example $p=[A]$.
 
 ## Functional inversions
 
-We present the concept of functional inversion in the case where we want to learn a law for the ice rheology $A$ by using a neural network as a parametrization $A=\text{NN}(\theta,T)$ with weights $\theta$.
+We refer to a functional inversion to the inverse problem where the objective is to invert the parameter $\theta$ of a regressor, in order to learn a function to parametrize a subpart of a mechanistic model with respect to one or more input variables [bolibar_universal_2023](@cite). We present the concept of a functional inversion for the case where we want to learn a law for the ice rheology $A$ in the Shallow Ice Approximation by using a neural network as a parametrization $A=\text{NN}(\theta,T)$ with weights $\theta$.
 $$\begin{aligned}& \min_\theta \mathcal{D}\left(\hat S, S \right) + \mathcal{R}\left( \hat S, p \right)\\
 & A=\text{NN}(\theta,T)
 \end{aligned}$$
-The functional inversion tutorial gives an exemple of how such inversion can be made in practice with `ODINN.jl`.
+
+Functional inversions in ODINN are handled by a `FunctionalInversion` subtype of `Simulation`. The [functional inversion tutorial](./functional_inversion.md) gives an example of how such an inversion can be run in practice with `ODINN.jl`.
+
+![Overview of ODINN.jl’s workflow to perform functional inversions of glacier physical processes using Universal Differential Equations.](assets/overview_figure.png)
+
+> **Figure:** Overview of `ODINN.jl`’s workflow to perform functional inversions of glacier physical processes using Universal Differential Equations. The parameters ($θ$) of a function determining a given physical process ($D_θ$), expressed by a neural network $NN_θ$, are optimized in order to minimize a loss function. In this example, the physical to be inferred law was constrained only by climate data, but any other proxies of interest can be used to design it. The climate data, and therefore the glacier mass balance, are downscaled (i.e. it depends on $S$), with $S$ being updated by the solver, thus dynamically updating the state of the simulation for a given timestep.
 
 ## Logging
 
-`ODINN.jl` provides useful statistics among which the training loss history or the parameters history in the inversion objects.
+`ODINN.jl` provides useful statistics, such as the training loss history or the parameters history in the inversion objects.
 The training statistics can also be inspected with [TensorBoard](https://www.tensorflow.org/tensorboard) through VSCode or a local webserver.
 You can either use the [TensorBoard VSCode extension](https://marketplace.visualstudio.com/items?itemName=ms-toolsai.tensorboard) or simply install TensorBoard in a Python environment and then launch `tensorboard --logdir .logs/`.
 

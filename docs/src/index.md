@@ -60,7 +60,7 @@ If you use `ODINN.jl` for research, teaching or other activities, please use the
 
 ## Funding
 
-The ODINN project has been funded by an ANR TRACCS early career fellowship, an IRGA fellowship from the Multidisciplinary Institute on Artificial Intelligence (Grenoble, France), the Nederlandse Organisatie voor Wetenschappelijk Onderzoek, Stichting voor de Technische Wetenschappen (Vidi grant 016.Vidi.171.063), the National Science Foundation (EarthCube programme under
+The ODINN project has been funded by an ANR TRACCS early career call, an IRGA fellowship from the Multidisciplinary Institute on Artificial Intelligence (Grenoble, France), the Nederlandse Organisatie voor Wetenschappelijk Onderzoek, Stichting voor de Technische Wetenschappen (Vidi grant 016.Vidi.171.063), the National Science Foundation (EarthCube programme under
 awards 1928406 and 1928374) and a TU Delft Climate Action grant. 
 
 

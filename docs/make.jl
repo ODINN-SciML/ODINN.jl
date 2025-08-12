@@ -71,7 +71,7 @@ makedocs(
         ],
         "Inversions" => [
             "Optimization" => "optimization.md",
-            "Differentiability" => "differentiability.md",
+            "Sensitivity analysis" => "sensitivity.md",
         ],
         "Code style and recommendations" => "style_recommendations.md",
         "Ongoing changes and future plans" => "changes_plans.md",
