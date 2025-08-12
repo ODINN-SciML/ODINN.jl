@@ -89,7 +89,7 @@ jobs:
             ${{ runner.os }}-
       - name: Build Julia packages
         uses: julia-actions/julia-buildpkg@v1
-      - name: Run tests
+      - name: Run tests [${{ matrix.group }}]
         run: julia --project=./ -e 'include("test/runtests.jl")'
         env:
           GROUP: ${{ matrix.group }}
