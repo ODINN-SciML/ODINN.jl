@@ -70,6 +70,7 @@ makedocs(
             "API" => "api.md",
         ],
         "Inversions" => [
+            "Inversion types" => "inversions.md",
             "Optimization" => "optimization.md",
             "Sensitivity analysis" => "sensitivity.md",
         ],

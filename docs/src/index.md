@@ -17,7 +17,7 @@ julia> Pkg.add("ODINN")
 
 ## Vision
 
-Rather than focusing on global-scale simulations and sea-level rise contributions, `ODINN.jl` has, for now, a regional and catchment-scale focus, aiming to exploit the latest remote sensing and in situ observations to capture missing or subgrid processes of glacier processes. In order to do so, `ODINN.jl` leverages Universal Differential Equations (UDEs), combining PDEs describing ice flow dynamics with data-driven regressors, such as neural networks. For this, `ODINN.jl` relies heavily on the [SciML](https://sciml.ai/) Julia ecosytem and the native automatic differentiation (AD) support. Therefore `ODINN.jl` has a two-fold goal:
+Rather than focusing on global-scale simulations and sea-level rise contributions, `ODINN.jl` has, for now, a regional and catchment-scale focus, aiming to exploit the latest remote sensing and in situ observations to capture missing or subgrid glacier processes. In order to do so, `ODINN.jl` leverages Universal Differential Equations (UDEs), combining PDEs describing ice flow dynamics with data-driven regressors, such as neural networks. For this, `ODINN.jl` relies heavily on the [SciML](https://sciml.ai/) Julia ecosytem and the native automatic differentiation (AD) support. Therefore `ODINN.jl` has a two-fold goal:
 
 - To advance the application of scientific machine learning and differentiable programming for large-scale geoscientific modelling.
 - To advance the inference of new parametrizations to characterize key missing or subgrid processes of glaciers to improve large-scale glacier simulations. 

@@ -1,18 +1,6 @@
 # Optimization
 
-In this section we present the main ideas behind the inversions.
-In data assimilation, one aims at calibrating a model such that the predictions match the observations.
-The observations can be either an initial state, a final state or observations over time.
-The first two are called steady state inversions while the last one corresponds to a transient inversion.
-
-In the standard settting, inversions are made with respect to some quantity of interest that is involed in the iceflow equation.
-This can be for example the creep coefficient $A$ for the Shallow Ice Approximation (SIA) like in [bolibar_universal_2023](@cite).
-This parameter can be constant for one glacier or vary with respect to space, in which case a spatial regularization is added to make the inversion problem well-posed.
-
-Another way to invert a parameter in an iceflow equation is to parametrize the quantity of interest, let us say $A$, by other quantities which can be in the case of [bolibar_universal_2023](@cite), the long term air temperature $T$.
-The optimized variable is not $A$ but the parameters $\theta$ and the mapping $(T,\theta)\mapsto A(\theta,T)$ defines a parametrization of the ice rheology. We refer hereafter to this kind of inversion as a *functional inversion*, where the goal is to optimize the parameters of a regressor specifying a function, rather than directly optimizing parameters or coefficients of a mechanistic model.
-
-We summarize the main differences between the two kind of inversions hereafter but first let us define the loss functions used in ODINN.
+In this section, we discuss the aspects of the inversions related to parameter or model state optimization and the associated loss functions.
 
 ## Loss functions
 
@@ -46,31 +34,3 @@ The data fidelity term in the discrete setting then becomes
 $$\mathcal{D}\left(\hat S, S \right) \stackrel{\mathrm{def}}{=} \sum_{j \leq J} \left( \hat H(t_j,x_j)-H(t_j,x_j) \right)^2$$
 with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node of the simulation grid $x_j$.
 
-## Classical inversions
-
-We refer to classical inversion to the inverse problem where the objective is to directly invert the parameters $p$ of the mechanistic model itself. These type of inversions are handled in ODINN via the `Inversion` subtype of `Simulation`.
-
-The optimization problem is
-$$\min_p \mathcal{D}\left(\hat S, S \right) + \mathcal{R}\left( \hat S, p \right)$$
-where $p$ is the vector of parameters to invert, for example $p=[A]$.
-
-## Functional inversions
-
-We refer to a functional inversion to the inverse problem where the objective is to invert the parameter $\theta$ of a regressor, in order to learn a function to parametrize a subpart of a mechanistic model with respect to one or more input variables [bolibar_universal_2023](@cite). We present the concept of a functional inversion for the case where we want to learn a law for the ice rheology $A$ in the Shallow Ice Approximation by using a neural network as a parametrization $A=\text{NN}(\theta,T)$ with weights $\theta$.
-$$\begin{aligned}& \min_\theta \mathcal{D}\left(\hat S, S \right) + \mathcal{R}\left( \hat S, p \right)\\
-& A=\text{NN}(\theta,T)
-\end{aligned}$$
-
-Functional inversions in ODINN are handled by a `FunctionalInversion` subtype of `Simulation`. The [functional inversion tutorial](./functional_inversion.md) gives an example of how such an inversion can be run in practice with `ODINN.jl`.
-
-![Overview of ODINN.jl’s workflow to perform functional inversions of glacier physical processes using Universal Differential Equations.](assets/overview_figure.png)
-
-> **Figure:** Overview of `ODINN.jl`’s workflow to perform functional inversions of glacier physical processes using Universal Differential Equations. The parameters ($θ$) of a function determining a given physical process ($D_θ$), expressed by a neural network $NN_θ$, are optimized in order to minimize a loss function. In this example, the physical to be inferred law was constrained only by climate data, but any other proxies of interest can be used to design it. The climate data, and therefore the glacier mass balance, are downscaled (i.e. it depends on $S$), with $S$ being updated by the solver, thus dynamically updating the state of the simulation for a given timestep.
-
-## Logging
-
-`ODINN.jl` provides useful statistics, such as the training loss history or the parameters history in the inversion objects.
-The training statistics can also be inspected with [TensorBoard](https://www.tensorflow.org/tensorboard) through VSCode or a local webserver.
-You can either use the [TensorBoard VSCode extension](https://marketplace.visualstudio.com/items?itemName=ms-toolsai.tensorboard) or simply install TensorBoard in a Python environment and then launch `tensorboard --logdir .logs/`.
-
-By default the TensorBoard logs are stored in your ODINN folder in `ODINN/.logs/` but you may have to adapt the command above if you log in a different folder.
