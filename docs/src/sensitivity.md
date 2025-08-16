@@ -12,7 +12,7 @@ In both cases, the adjoint variable is computed as the solution of a time revers
 The adjoint state variable is then used to efficiently compute the gradient of a prescribed loss function.
 
 For the SIA2D equation, the iceflow equations can be written as
-$$
+```math
     \frac{\partial H}{\partial t}
     =
     \dot b
@@ -22,27 +22,27 @@ $$
     D(H, \nabla S)
     \nabla S
     \right)
-$$
+```
 where $D$ is a diffusivity term (see [cuffey_physics_2010](@cite) for more information).
 Given a loss function $L(\theta)$ (see the [Optimization](./optimization.md) section), the adjoint variable $\lambda$ is defined as the solution of the following partial differential equation:
-$$
+```math
     \frac{\partial \lambda_i}{\partial t}
     =
     - \nabla \cdot \left( D \nabla \lambda_i \right)
     + \frac{\partial D}{\partial H} \nabla S \cdot \nabla \lambda_i
     - \nabla \cdot \left( \frac{\partial D}{\partial (\nabla H)} \nabla S \cdot \nabla \lambda_i \right)
     - \frac{\partial \ell}{\partial H}
-$$
+```
 with final condition $\lambda(x,y,t_1) = 0$ and $\lambda |_{\partial \Omega} \equiv 0$.
 The gradient of the loss function $L(\theta)$ with respect to the parameter $\theta$ then can be computed using the following expression:
-$$
+```math
     \frac{dL}{d\theta_i}
     =
     - \iint
     \frac{\partial D}{\partial \theta_i} \nabla S \cdot \nabla \lambda_i dt d\Omega
     +
     \iint \frac{\partial \ell}{\partial \theta_i} dt d\Omega
-$$
+```
 The integration of the adjoint equation can be performed using the discrete adjoint (discretize-then-differentiate) or the continuous adjoint (differentiate-then-discretize).
 Both types of adjoints are implemented as an `AbstractAdjointMethod`:
 - `DiscreteAdjoint()`: The discrete adjoint is a very simple adjoint that uses an explicit Euler scheme to solve the adjoint ODE. The timestep is prescribed by the frequency at which the results are saved in the forward run. It is usually set to one month.
