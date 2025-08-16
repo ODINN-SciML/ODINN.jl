@@ -21,9 +21,14 @@ These types which define very simple operations are used in more complex loss fu
 - `LossV`: Loss function over the ice surface velocity only.
 - `LossHV`: Loss function over both the ice thickness and ice surface velocity.
 
-In the case of the $L^2$ loss, the error for the ice thickness is mathematically defined as:
-$$\int_{t\in\mathcal{T}} \int_{x\in\Omega} \left(\hat H(t, x)-H(t, x)\right)_2^2\,\mathrm{d}t\,\mathrm{d}x$$
-where $\Omega\subset\mathbb{R}^2$ defines the inner mask of the glacier where each pixel is at least at a given distance from the borders.
+The loss function for the ice thickness is mathematically defined as:
+$$
+L(\theta)
+= \int_{t\in\mathcal{T}} \int_{x\in\Omega} \ell(H(x, t; \theta), \theta) dt d\Omega
+$$
+where $\Omega\subset\mathbb{R}^2$ defines the inner mask of the glacier where each pixel is at least at a given distance from the borders, and $\ell(\hat H(x, t), \theta)$ is the point evaluated
+loss function. 
+In the case of the $L^2$ loss, $\ell(H(x, t; \theta), \theta) = \left(\hat H(t, x) - H(t, x)\right)_2^2$.
 In the formula above, $\hat H$ and $H$ are written in a continuous setting where no grid is defined.
 In practice, the iceflow equation is solved on a given grid $(x_i)_{i\leq I}$ where each $x_i\in\mathbb{R}^2$.
 
