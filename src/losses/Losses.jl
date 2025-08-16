@@ -16,9 +16,15 @@ abstract type AbstractLoss <: GeneralAbstractLoss end
     L2Sum{I <: Integer} <: AbstractSimpleLoss
 
 Struct that defines an L2 sum loss.
+The sum is defined only on pixels inside the glacier.
+The parameter `distance` controls the pixels that should be used to compute the sum.
+In order for a pixel to be used, it should be at least at `distance` from the glacier border.
+The mask defining the glacier borders are computed using the ground truth ice thickness.
+
+``loss(a,b) = sum_{i\\in\\text{mask}} (a[i]-b[i])^2 / normalization``
 
 # Fields
-- `distance::I`: Distance to border
+- `distance::I`: Distance to border.
 """
 @kwdef struct L2Sum{I <: Integer} <: AbstractSimpleLoss
     distance::I = 3
@@ -27,11 +33,14 @@ end
 """
     LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
 
-Struct that defines an Logaritmic sum loss.
+Struct that defines a Logarithmic sum loss.
+
+``loss(a,b) = log^2( (a + ϵ) / (b + ϵ) ) / normalization``
 
 # Fields
-- `distance::I`: Distance to borde
-- `ϵ::F`: Epsilon used inside the loss function representing the minimum velocity
+- `distance::I`: Distance to border.
+- `ϵ::F`: Epsilon used inside the loss function to handle division by zero and log(0).
+    It somehow represents the minimum value the loss function should be sensible to.
 """
 @kwdef struct LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
     distance::I = 3
@@ -44,7 +53,7 @@ end
 Struct that defines the ice thickness loss.
 
 # Fields
-- `loss::L`: Type of loss to use for the ice thickness. Default is `L2Sum()`
+- `loss::L`: Type of loss to use for the ice thickness. Default is `L2Sum()`.
 """
 @kwdef struct LossH{L <: AbstractSimpleLoss} <: AbstractLoss
     loss::L = L2Sum()
@@ -53,11 +62,12 @@ end
 """
     LossV{L <: AbstractSimpleLoss} <: AbstractLoss
 
-Struct that defines the ice velocity loss with an optional weighting coefficient.
+Struct that defines the ice velocity loss.
 
 # Fields
-- `loss::L`: Type of loss to use for the ice velocity. Default is `L2Sum()`
-- `component::Symbol`: Component of the velocity field used in the loss. Options include :xy for both x and y component, and :abs for the norm/magnitude of the velocity.
+- `loss::L`: Type of loss to use for the ice velocity. Default is `L2Sum()`.
+- `component::Symbol`: Component of the velocity field used in the loss.
+    Options include :xy for both x and y component, and :abs for the norm/magnitude of the velocity.
 - `scale_loss::Bool`: Whether to scale the loss function with the reference ice
     velocity magnitude.
 """
@@ -75,12 +85,16 @@ end
     } <: AbstractLoss
 
 Struct that defines the ice thickness and ice velocity loss.
-It consists in two fields that define the ice thickness and ice velocity loss.
+It consists of two fields that define the ice thickness and ice velocity loss.
 It also has a scaling coefficient that balances the ice velocity term in the loss.
 
+``loss(\\hat H,H) = loss_H(\\hat H,H) + scaling * loss_V(\\hat V,V)``
+
+with ``\\hat V`` computed from ``\\hat H`` for the SIA.
+
 # Fields
-- `hLoss::LH`: Type of loss to use for the ice thickness. Default is `LossH()`
-- `vLoss::LV`: Type of loss to use for the ice velocity. Default is `LossV()`
+- `hLoss::LH`: Type of loss to use for the ice thickness. Default is `LossH()`.
+- `vLoss::LV`: Type of loss to use for the ice velocity. Default is `LossV()`.
 - `scaling::F`: Scaling of the ice velocity term. Default is `1`.
 """
 @kwdef struct LossHV{
@@ -93,7 +107,7 @@ It also has a scaling coefficient that balances the ice velocity term in the los
     scaling::F = 1.0
 end
 
-### Definition of SimpleLoss functions
+### Definition of simple loss functions
 
 function loss(
     lossType::L2Sum,
@@ -170,7 +184,7 @@ function backward_loss(
         ]
 end
 
-### Definition of Loss functions
+### Definition of more complete loss functions
 
 """
     function loss(
@@ -181,7 +195,7 @@ end
         normalization::F=1.,
     ) where {F <: AbstractFloat}
 
-Compute logaritmic loss function for ice velocity fields following Morlighem, M. et al.,
+Compute logarithmic loss function for ice velocity fields following Morlighem, M. et al.,
 "Spatial patterns of basal drag inferred using control methods from a full-Stokes and
 simpler models for Pine Island Glacier, West Antarctica". Geophys. Res. Lett. 37, (2010).
 Given a minimum velocity ϵ the absolute velocity given by a and b, it computes the sum of

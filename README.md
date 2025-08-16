@@ -36,51 +36,46 @@ OGGM works as a front-end of ODINN, utilizing all its tools to retrieve RGI data
 
 ## How to use ODINN
 
-ODINN's architecture makes it really straightforward to retrieve all the necessary glacier and climate data for both the initial conditions and the loss function of a problem. Here's a quick example based on a `FunctionalInversion` using Universal Differential Equations:
+ODINN's architecture makes it really straightforward to retrieve all the necessary glacier and climate data for both the initial conditions and the loss function of a problem. Here's a quick example based on a forward simulation for 4 different glaciers between 2010 and 2015. For more examples, you can check the [tutorials in the documentation](https://odinn-sciml.github.io/ODINN.jl/dev/forward_simulation/). 
 
 ```julia
 using ODINN
 
-# Data are automatically downloaded, retrieve the local paths
+# Define the working directory
+working_dir = joinpath(ODINN.root_dir, "demos")
+
+# Ensure the working directory exists
+mkpath(working_dir)
+
+# Define which glacier RGI IDs we want to work with
+rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-08.00203"]
 rgi_paths = get_rgi_paths()
 
-# We create the necessary parameters
+# Create the necessary parameters
 params = Parameters(
-	simulation = SimulationParameters(
-		working_dir=working_dir,
-		tspan=(2010.0, 2015.0),
-		workers=5,
-		rgi_paths=rgi_paths
-		),
-	hyper = Hyperparameters(
-		batch_size=4,
-		epochs=10,
-		optimizer=ODINN.ADAM(0.01)
-		),
-	UDE = UDEparameters(
-		target = :A
-		)
-	)
+    simulation = SimulationParameters(
+        working_dir = working_dir,
+        tspan = (2010.0, 2015.0),
+        multiprocessing = true,
+        workers = 5,
+        rgi_paths = rgi_paths
+    )
+)
 
-# We define which glacier RGI IDs we want to work with
-rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351"]
-
-# We specify a model based on an iceflow model, a mass balance model and a machine learning model
-
-nn_model = NeuralNetwork(params)
-model = Model(iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
-	      mass_balance = mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-	      regressors = (; A=nn_model))
+# Specify a model based on an iceflow model, a mass balance model, and a machine learning model
+model = Huginn.Model(
+    iceflow = SIA2Dmodel(params),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+)
 
 # We initialize the glaciers with all the necessary data
 glaciers = initialize_glaciers(rgi_ids, params)
 
 # We specify the type of simulation we want to perform
-functional_inversion = FunctionalInversion(model, glaciers, params)
+prediction = Prediction(model, glaciers, params)
 
-# And finally, we just run! the simulation
-run!(functional_inversion)
-
+# And finally, we just run the simulation
+Huginn.run!(prediction)
 ```
 
 ## How to cite 📖
