@@ -45,7 +45,8 @@ params = Parameters(
         optim_autoAD=ODINN.NoAD(),
         grad=ContinuousAdjoint(),
         optimization_method="AD+AD",
-        target = :A),
+        empirical_loss_function = LossH() # Loss function based on ice thickness
+    ),
     solver = Huginn.SolverParameters(
         step=δt,
         save_everystep=true,
