@@ -37,7 +37,7 @@ $$\begin{aligned}& \min_\theta \mathcal{D}\left(\hat S, S \right) + \mathcal{R}\
 
 ### Understanding the `Law`s interface
 
-In ODINN, in order to specify functional inversions, we have introduce a `Law` type which is responsible for linking a given regressor and a set of input variables to a target of a mechanistic model (for now the SIA). Here is a quick example on how this looks like:
+In ODINN, in order to specify functional inversions, we have introduced a `Law` type which is responsible for linking a given regressor and a set of input variables to a target of a mechanistic model (for now the SIA). Here is a quick example on how this looks like:
 
 ```julia
 law_inputs = (; CPDD=InpCPDD(), topo_roughness=InpTopoRough())

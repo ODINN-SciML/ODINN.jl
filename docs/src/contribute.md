@@ -7,4 +7,4 @@ We welcome all types of contributions to the ODINN ecosystem! Most of the code, 
 - **Contribute to the source code.** We welcome pull requests (PRs) to any  of the libraries in the ODINN ecosystem. In order to contribute, please make a fork of the repository you would like to contribute to, and then submit a PR to the `dev` branch (`main` is only updated from time to time when enough meaningful commits are available to perform a new release). We will review your PR it and provide feedback. If you are looking for ideas of how to contribute with code, you can check the [opened issues](https://github.com/ODINN-SciML/ODINN.jl/issues) in our repositories.
 
 !!! tip
-    If you need help navigating the word of PRs and contributing in GitHub, we encourage you to take a look to the [tutorial](https://docs.oggm.org/en/v1.5.0/contributing.html) put together by our OGGM friends. 
+    If you need help navigating the world of PRs and contributing in GitHub, we encourage you to take a look at the [tutorial](https://docs.oggm.org/en/v1.5.0/contributing.html) put together by our OGGM friends. 
