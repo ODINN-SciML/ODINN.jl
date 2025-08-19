@@ -67,8 +67,8 @@ function save_simulation_test!()
     params_load = res_load.params
 
     @test !isnothing(res_load)
-    @test θ_load ≈ functional_inversion.stats.θ
-    @test length(losses_load) == functional_inversion.stats.niter
+    @test θ_load ≈ functional_inversion.results.stats.θ
+    @test length(losses_load) == functional_inversion.results.stats.niter
     @test params_load.hyper.epochs == params.hyper.epochs
 end
 

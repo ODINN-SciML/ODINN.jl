@@ -38,7 +38,7 @@ params = res_load.params
 
 ### Figures
 
-# losses = functional_inversion.stats.losses
+# losses = functional_inversion.results.stats.losses
 
 # Smooth variable for plotting
 H_smooth = collect(1.0:1.0:maximum(only(glaciers).H₀))

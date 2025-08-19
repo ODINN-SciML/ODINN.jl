@@ -58,22 +58,22 @@ function callback_diagnosis(θ, l, simulation; save::Bool = false, tbLogger::Uni
     # See if we want to change this or leave it
     # update_training_state!(simulation, l)
 
-    push!(simulation.stats.losses, l)
-    push!(simulation.stats.θ_hist, θ.u)
-    push!(simulation.stats.∇θ_hist, θ.grad)
+    push!(simulation.results.stats.losses, l)
+    push!(simulation.results.stats.θ_hist, θ.u)
+    push!(simulation.results.stats.∇θ_hist, θ.grad)
 
     step = 1
-    if length(simulation.stats.losses) % step == 0
-        if length(simulation.stats.losses) == 1
+    if length(simulation.results.stats.losses) % step == 0
+        if length(simulation.results.stats.losses) == 1
             improvement = nothing
         else
-            improvement = (l - simulation.stats.losses[end-step]) / simulation.stats.losses[end-step]
+            improvement = (l - simulation.results.stats.losses[end-step]) / simulation.results.stats.losses[end-step]
         end
-        printProgressLoss(length(simulation.stats.losses), simulation.stats.niter, l, improvement)
+        printProgressLoss(length(simulation.results.stats.losses), simulation.results.stats.niter, l, improvement)
     end
 
     if !isnothing(tbLogger)
-        iter = length(simulation.stats.losses) # Use this instead of θ.iter to be able to log optimizations with multiple optimizers in the same tensorboard run
+        iter = length(simulation.results.stats.losses) # Use this instead of θ.iter to be able to log optimizations with multiple optimizers in the same tensorboard run
         log_value(tbLogger, "train/loss", θ.objective, step=iter)
         if !isnothing(θ.grad)
             log_value(tbLogger, "train/norm_grad", norm(θ.grad), step=iter)
@@ -81,11 +81,11 @@ function callback_diagnosis(θ, l, simulation; save::Bool = false, tbLogger::Uni
         if !isnothing(θ.hess)
             log_value(tbLogger, "train/norm_hess", norm(θ.hess), step=iter)
         end
-        if simulation.stats.lastCall != DateTime(0,1,1)
-            time_per_iter = Millisecond(currentDt - simulation.stats.lastCall).value/1000
+        if simulation.results.stats.lastCall != DateTime(0,1,1)
+            time_per_iter = Millisecond(currentDt - simulation.results.stats.lastCall).value/1000
             log_value(tbLogger, "train/time_per_iter", time_per_iter, step=iter)
         end
-        simulation.stats.lastCall = currentDt
+        simulation.results.stats.lastCall = currentDt
     end
 
     if save

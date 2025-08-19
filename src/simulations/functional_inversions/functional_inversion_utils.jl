@@ -28,7 +28,7 @@ function run!(
     println("Running training of UDE...\n")
 
     # Set expected total number of epochs from beginning for the callback
-    simulation.stats.niter = sum(simulation.parameters.hyper.epochs)
+    simulation.results.stats.niter = sum(simulation.parameters.hyper.epochs)
 
     logger = isnothing(path_tb_logger) || simulation.parameters.simulation.test_mode ? nothing : TBLogger(path_tb_logger)
     if !(typeof(simulation.parameters.hyper.optimizer) <: Vector)
@@ -52,9 +52,9 @@ function run!(
     end
 
     # Setup final results
-    simulation.stats.niter = length(simulation.stats.losses)
-    # simulation.stats.retcode = sol.
-    simulation.stats.θ = sol.u
+    simulation.results.stats.niter = length(simulation.results.stats.losses)
+    # simulation.results.stats.retcode = sol.
+    simulation.results.stats.θ = sol.u
 
     simulation.model.machine_learning.θ = sol.u
 
@@ -131,7 +131,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
         )
 
     θ_trained = iceflow_trained.u
-    simulation.results = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
 
     return iceflow_trained
 end
@@ -188,7 +188,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
         )
 
     θ_trained = iceflow_trained.u
-    simulation.results = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
 
     return iceflow_trained
 end

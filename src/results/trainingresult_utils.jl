@@ -21,9 +21,9 @@ function save_inversion_file!(
 
     res = ODINN.TrainingResult(
         θ = sol.u,
-        θ_hist = simulation.stats.θ_hist,
-        ∇θ_hist = simulation.stats.∇θ_hist,
-        losses = simulation.stats.losses,
+        θ_hist = simulation.results.stats.θ_hist,
+        ∇θ_hist = simulation.results.stats.∇θ_hist,
+        losses = simulation.results.stats.losses,
         params = simulation.parameters
     )
 

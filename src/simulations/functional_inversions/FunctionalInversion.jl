@@ -2,7 +2,7 @@ export FunctionalInversion
 
 # Subtype composite type for a prediction simulation
 """
-    mutable struct FunctionalInversion{MODEL, CACHE, GLACIER} <: Simulation
+    mutable struct FunctionalInversion{MODEL, CACHE, GLACIER, RES} <: Simulation
 
 An object representing a functional inversion simulation (i.e. the inversion of a function using some data-driven regressor).
 
@@ -10,15 +10,14 @@ An object representing a functional inversion simulation (i.e. the inversion of 
 - `model::Sleipnir.Model`: The model used for the simulation.
 - `glaciers::Vector{Sleipnir.AbstractGlacier}`: A vector of glaciers involved in the simulation.
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
-- `results::Vector{Results}`: A vector to store the results of the simulation.
+- `results::ODINN.Results`: A vector to store the results of the simulation.
 """
-mutable struct FunctionalInversion{MODEL, CACHE, GLACIER} <: Simulation
+mutable struct FunctionalInversion{MODEL, CACHE, GLACIER, RES} <: Simulation
     model::MODEL
     cache::Union{CACHE, Nothing}
     glaciers::Vector{GLACIER}
     parameters::Sleipnir.Parameters
-    results::Vector{<: Results}
-    stats::TrainingStats
+    results::ODINN.Results
 end
 
 """
@@ -48,11 +47,12 @@ function FunctionalInversion(
     @assert targetType(model.machine_learning.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
 
     # Build the results struct based on input values
-    functional_inversion = FunctionalInversion{M, cache_type(model), G}(model, nothing,
+    emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
+    emptyResults = Results(emptySimulationResults, TrainingStats())
+    functional_inversion = FunctionalInversion{M, cache_type(model), G, typeof(emptyResults)}(model, nothing,
                             glaciers,
                             parameters,
-                            Vector{Results{Sleipnir.Float, Sleipnir.Int}}([]),
-                            TrainingStats())
+                            emptyResults)
 
     return functional_inversion
 end

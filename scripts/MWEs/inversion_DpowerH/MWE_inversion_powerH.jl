@@ -151,7 +151,7 @@ run!(functional_inversion)
 
 ### Figures
 
-losses = functional_inversion.stats.losses
+losses = functional_inversion.results.stats.losses
 
 # Temps_smooth = collect(-23.0:1.0:0.0)
 T₀ = Temps[1]

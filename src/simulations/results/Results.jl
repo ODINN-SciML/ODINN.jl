@@ -1,4 +1,4 @@
-export TrainingStats
+export TrainingStats, Results
 
 """
     mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
@@ -62,4 +62,37 @@ function TrainingStats(;
     )
 
     return training_stats
+end
+
+"""
+    mutable struct Results{RES <: Sleipnir.Results, STAT <: TrainingStats}
+
+Mutable struct containing the results of a functional inversion.
+This object stores both the results of the optimization and the simulation results of the forward evaluations using the optimized variables.
+
+# Fields
+- `simulation::Vector{RES}`: Vector of `Sleipnir.Results` representing the results of a forward evaluation for each glacier.
+- `stats::STAT`: Training statistics gathered during the optimization.
+
+    function Results(
+        simulation::Vector{<: Sleipnir.Results},
+        stats::TrainingStats,
+    )
+
+Constructor for the `Results` object used to track statistics during training and the results of the forward evaluations simulated with the optimized variables.
+
+# Arguments
+- `simulation::Vector{<: Sleipnir.Results}`: Vector of `Sleipnir.Results` associated to the forward simulation of each glacier.
+- `stats::TrainingStats`: Training statistics.
+"""
+mutable struct Results{RES <: Sleipnir.Results, STAT <: TrainingStats}
+    simulation::Vector{RES}
+    stats::STAT
+
+    function Results(
+        simulation::Vector{<: Sleipnir.Results},
+        stats::TrainingStats,
+    )
+        return new{eltype(simulation), typeof(stats)}(simulation, stats)
+    end
 end
