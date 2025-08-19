@@ -43,7 +43,7 @@ prediction = Prediction(model, glaciers, params)
 Huginn.run!(prediction)
 
 ## Then we can visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier
-pdiff = plot_glacier(prediction.results.simulation[1], "evolution difference", [:H]; metrics=["difference"])
+pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
 
 # ## Step-by-step explanation of the tutorial
 
@@ -139,8 +139,8 @@ Huginn.run!(prediction)
 # ### Step 5: Visualizing the results
 
 # Finally, we can use the plotting functions of `ODINN.jl` to visualize the results of the simulation. Like the glacier ice thickness evolution
-plot_glacier(prediction.results.simulation[1], "evolution difference", [:H]; metrics=["difference"])
+plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
 
 # Or the initial glacier ice thickness and the resulting ice surface velocities
-plot_glacier(prediction.results.simulation[1], "heatmaps", [:H, :V])
+plot_glacier(prediction.results[1], "heatmaps", [:H, :V])
 
