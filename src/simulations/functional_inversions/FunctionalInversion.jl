@@ -10,7 +10,7 @@ An object representing a functional inversion simulation (i.e. the inversion of 
 - `model::Sleipnir.Model`: The model used for the simulation.
 - `glaciers::Vector{Sleipnir.AbstractGlacier}`: A vector of glaciers involved in the simulation.
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
-- `results::ODINN.Results`: A vector to store the results of the simulation.
+- `results::ODINN.Results`: A `ODINN.Results` instance to store the results of the functional inversion and of the forward simulations.
 """
 mutable struct FunctionalInversion{MODEL, CACHE, GLACIER, RES} <: Simulation
     model::MODEL

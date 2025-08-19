@@ -68,7 +68,9 @@ end
     mutable struct Results{RES <: Sleipnir.Results, STAT <: TrainingStats}
 
 Mutable struct containing the results of a functional inversion.
-This object stores both the results of the optimization and the simulation results of the forward evaluations using the optimized variables.
+This object stores both the results of the optimization through `TrainingStats` and the simulation results of the forward evaluations using the optimized variables through `Sleipnir.Results`.
+It expands the functionalities offered by `Sleipnir.Results` to allow saving the results of a functional inversion.
+Multiple dispatch is used to select either `Sleipnir.Results` or `ODINN.Results`.
 
 # Fields
 - `simulation::Vector{RES}`: Vector of `Sleipnir.Results` representing the results of a forward evaluation for each glacier.
