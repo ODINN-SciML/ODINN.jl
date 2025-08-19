@@ -18,16 +18,22 @@ function run!(
     path::Union{String, Nothing} = nothing,
     file_name::Union{String, Nothing} = nothing,
     save_every_iter::Bool = false,
+    path_tb_logger::Union{String, Nothing} = joinpath(
+        ODINN.root_dir,
+        ".log/",
+        Dates.format(now(), "yyyy-mm-dd_HH:MM:SS"),
+    ),
 )
 
     println("Running training of UDE...\n")
 
     # Set expected total number of epochs from beginning for the callback
-    simulation.stats.niter = sum(simulation.parameters.hyper.epochs)
+    simulation.results.stats.niter = sum(simulation.parameters.hyper.epochs)
 
+    logger = isnothing(path_tb_logger) || simulation.parameters.simulation.test_mode ? nothing : TBLogger(path_tb_logger)
     if !(typeof(simulation.parameters.hyper.optimizer) <: Vector)
         # One single optimizer
-        sol = train_UDE!(simulation; save_every_iter=save_every_iter)
+        sol = train_UDE!(simulation; save_every_iter=save_every_iter, logger=logger)
     else
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
@@ -41,14 +47,14 @@ function run!(
                 θ_trained = sol.u
                 simulation.model.machine_learning.θ = θ_trained
             end
-            sol = train_UDE!(simulation; save_every_iter=save_every_iter)
+            sol = train_UDE!(simulation; save_every_iter=save_every_iter, logger=logger)
         end
     end
 
     # Setup final results
-    simulation.stats.niter = length(simulation.stats.losses)
-    # simulation.stats.retcode = sol.
-    simulation.stats.θ = sol.u
+    simulation.results.stats.niter = length(simulation.results.stats.losses)
+    # simulation.results.stats.retcode = sol.
+    simulation.results.stats.θ = sol.u
 
     simulation.model.machine_learning.θ = sol.u
 
@@ -63,20 +69,20 @@ function run!(
 end
 
 """
-train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false)
+train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing)
 
 Trains UDE based on the current FunctionalInversion.
 """
-function train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false)
+function train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing)
     optimizer = simulation.parameters.hyper.optimizer
-    iceflow_trained = train_UDE!(simulation, optimizer; save_every_iter=save_every_iter)
+    iceflow_trained = train_UDE!(simulation, optimizer; save_every_iter=save_every_iter, logger=logger)
     return iceflow_trained
 end
 
 """
 BFGS Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer; save_every_iter::Bool=false)
+function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing)
 
     @info "Training with BFGS optimizer"
 
@@ -108,11 +114,12 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
     end
     optf = OptimizationFunction(loss_function, NoAD(), grad=loss_function_grad!)
 
-    # optprob = OptimizationProblem(optf, θ, (simultion_batch_ids))
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Training diagnosis callback
-    cb(θ, l) = callback_diagnosis(θ, l, simulation; save=save_every_iter)
+    cb(θ, l) = let simulation=simulation, logger=logger, save_every_iter=save_every_iter
+        callback_diagnosis(θ, l, simulation; save = save_every_iter, tbLogger = logger)
+    end
 
     iceflow_trained = solve(
         optprob,
@@ -124,7 +131,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrder
         )
 
     θ_trained = iceflow_trained.u
-    simulation.results = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
 
     return iceflow_trained
 end
@@ -132,7 +139,7 @@ end
 """
 ADAM Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_iter::Bool=false) where {AR <: Optimisers.AbstractRule}
+function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing) where {AR <: Optimisers.AbstractRule}
 
     @info "Training with ADAM optimizer"
 
@@ -168,7 +175,9 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
     # Training diagnosis callback
-    cb(θ, l) = callback_diagnosis(θ, l, simulation; save=save_every_iter)
+    cb(θ, l) = let simulation=simulation, logger=logger, save_every_iter=save_every_iter
+        callback_diagnosis(θ, l, simulation; save = save_every_iter, tbLogger = logger)
+    end
 
     iceflow_trained = solve(
         optprob,
@@ -179,7 +188,7 @@ function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_i
         )
 
     θ_trained = iceflow_trained.u
-    simulation.results = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
 
     return iceflow_trained
 end
