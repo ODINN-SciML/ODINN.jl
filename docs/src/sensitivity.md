@@ -26,11 +26,11 @@ For the SIA2D equation, the iceflow equations can be written as
 where $D$ is a diffusivity term (see [cuffey_physics_2010](@cite) for more information).
 Given a loss function $L(\theta)$ (see the [Optimization](./optimization.md) section), the adjoint variable $\lambda$ is defined as the solution of the following partial differential equation:
 ```math
-    \frac{\partial \lambda_i}{\partial t}
+    \frac{\partial \lambda}{\partial t}
     =
-    - \nabla \cdot \left( D \nabla \lambda_i \right)
-    + \frac{\partial D}{\partial H} \nabla S \cdot \nabla \lambda_i
-    - \nabla \cdot \left( \frac{\partial D}{\partial (\nabla H)} \nabla S \cdot \nabla \lambda_i \right)
+    - \nabla \cdot \left( D \nabla \lambda \right)
+    + \frac{\partial D}{\partial H} \nabla S \cdot \nabla \lambda
+    - \nabla \cdot \left( \frac{\partial D}{\partial (\nabla H)} \nabla S \cdot \nabla \lambda \right)
     - \frac{\partial \ell}{\partial H}
 ```
 with final condition $\lambda(x,y,t_1) = 0$ and $\lambda |_{\partial \Omega} \equiv 0$.
@@ -39,9 +39,9 @@ The gradient of the loss function $L(\theta)$ with respect to the parameter $\th
     \frac{dL}{d\theta_i}
     =
     - \iint
-    \frac{\partial D}{\partial \theta_i} \nabla S \cdot \nabla \lambda_i dt d\Omega
+    \frac{\partial D}{\partial \theta_i} \nabla S \cdot \nabla \lambda\, \mathrm{d}t\, \mathrm{d}\Omega
     +
-    \iint \frac{\partial \ell}{\partial \theta_i} dt d\Omega
+    \iint \frac{\partial \ell}{\partial \theta_i}\, \mathrm{d}t\, \mathrm{d}\Omega
 ```
 The integration of the adjoint equation can be performed using the discrete adjoint (discretize-then-differentiate) or the continuous adjoint (differentiate-then-discretize).
 Both types of adjoints are implemented as an `AbstractAdjointMethod`:
