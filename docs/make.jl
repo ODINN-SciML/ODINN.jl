@@ -74,7 +74,6 @@ makedocs(
             "Optimization" => "optimization.md",
             "Sensitivity analysis" => "sensitivity.md",
         ],
-        "Code style and recommendations" => "style_recommendations.md",
         "How to contribute" => "contribute.md",
         "Ongoing changes and future plans" => "changes_plans.md",
         "References" => "references.md",

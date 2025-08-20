@@ -36,7 +36,7 @@ OGGM works as a front-end of ODINN, utilizing all its tools to retrieve RGI data
 
 ## How to use ODINN
 
-ODINN's architecture makes it really straightforward to retrieve all the necessary glacier and climate data for both the initial conditions and the loss function of a problem. Here's a quick example based on a forward simulation for 4 different glaciers between 2010 and 2015. For more examples, you can check the [tutorials in the documentation](https://odinn-sciml.github.io/ODINN.jl/dev/forward_simulation/). 
+ODINN's architecture makes it really straightforward to retrieve all the necessary glacier and climate data for both the initial conditions and the loss function of a problem. Here's a quick example based on a forward simulation for 4 different glaciers between 2010 and 2015. For more examples, including functional inversions, you can check the [tutorials in the documentation](https://odinn-sciml.github.io/ODINN.jl/dev/forward_simulation/). 
 
 ```julia
 using ODINN
