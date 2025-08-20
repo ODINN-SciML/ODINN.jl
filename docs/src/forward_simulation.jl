@@ -22,7 +22,7 @@ params = Parameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
         multiprocessing = true,
-        workers = 5,
+        workers = 4,
         rgi_paths = rgi_paths
     )
 )
@@ -80,17 +80,14 @@ params = Parameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
         multiprocessing = true,
-        workers = 5,
+        workers = 4,
         rgi_paths = rgi_paths
     )
 )
 
-
 # ### Step 2: Model specification
-
 # The next step is to specify which model(s) we want to use for our simulation. In ODINN
 # we have three different types of model, which are encompassed in a `Model` structure:
-
 # - *Iceflow model*: `IceflowModel` is the ice flow dynamics model that will be used to simulate
 #                       iceflow. It defaults to a 2D Shallow Ice Approximation.
 # - *Surface mass balance model*: `MassBalanceModel` is the mass balance model that will be used for
