@@ -22,6 +22,9 @@ The optimization problem is
 $$\min_p \mathcal{D}\left(\hat S, S \right) + \mathcal{R}\left( \hat S, p \right)$$
 where $p$ is the vector of parameters to invert, for example $p=[A]$.
 
+!!! warning
+    This workflow is still under construction, since we're giving priority to functional inversions. We have an [open issue](https://github.com/ODINN-SciML/ODINN.jl/pull/317) to track this and we will update the documentation here accordingly once this feature is added. 
+
 ## Functional inversions
 
 We refer to functional inversions as the inverse problems where the objective is to invert the parameter $\theta$ of a regressor (e.g. a neural network), in order to learn a function that parametrizes a subpart of a mechanistic model (e.g. the SIA) with respect to one or more input variables (e.g. surface melt, basal slope) [bolibar_universal_2023](@cite). The methods behind functional inversions are known as **Universal Differential Equations** [rackauckas_universal_2020](@cite).
