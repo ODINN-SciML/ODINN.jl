@@ -22,7 +22,7 @@ params = Parameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
         multiprocessing = true,
-        workers = 5,
+        workers = 4,
         rgi_paths = rgi_paths
     )
 )
@@ -80,7 +80,7 @@ params = Parameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
         multiprocessing = true,
-        workers = 5,
+        workers = 4,
         rgi_paths = rgi_paths
     )
 )
