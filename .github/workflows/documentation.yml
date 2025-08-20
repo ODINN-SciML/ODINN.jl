@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Run all tutorials
-        run: julia -p 4 --project=docs/ docs/testdocs.jl
+        run: julia -p 5 --project=docs/ docs/testdocs.jl
 
   build:
     needs: tutorials-check
