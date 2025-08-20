@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Run all tutorials
-        run: julia -p 5 --project=docs/ docs/testdocs.jl
+        run: julia -p 3 --project=docs/ docs/testdocs.jl
 
   build:
     needs: tutorials-check
@@ -44,4 +44,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
-        run: julia -p 4 --project=docs/ docs/make.jl
+        run: julia -p 3 --project=docs/ docs/make.jl
