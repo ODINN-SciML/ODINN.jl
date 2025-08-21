@@ -43,7 +43,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         ) for glacier_idx in 1:length(simulation.glaciers)]
     loss_val = sum(getindex.(loss_results, 1))
     results = getindex.(loss_results, 2)
-    simulation.results = results
+    simulation.results.simulation = results
 
     # Let's compute the forward loss inside gradient
     ℓ = 0.0
@@ -55,7 +55,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         simulation.cache = init_cache(simulation.model, simulation, i, simulation.parameters)
         simulation.model.machine_learning.θ = θ
 
-        result = simulation.results[i]
+        result = simulation.results.simulation[i]
 
         # Results from forward simulation
         t = result.t

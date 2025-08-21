@@ -34,7 +34,7 @@ function inversion_test(;
             step = δt,
             multiprocessing = multiprocessing,
             workers = workers,
-            test_mode = false,
+            test_mode = true,
             rgi_paths = rgi_paths,
             gridScalingFactor = 4 # We reduce the size of glacier for simulation
             ),

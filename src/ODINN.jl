@@ -49,6 +49,8 @@ using Printf
 using Interpolations, GeoStats
 using FastGaussQuadrature
 using Zygote
+using TensorBoardLogger
+using Dates
 
 
 # ##############################################
@@ -76,7 +78,7 @@ include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
 include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
 # Simulations
-include(joinpath(root_dir, "src/simulations/training_stats/TrainingStats.jl"))
+include(joinpath(root_dir, "src/simulations/results/Results.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 # ML models

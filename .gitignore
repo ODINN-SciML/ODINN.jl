@@ -16,6 +16,7 @@ data/
 docs/build/
 docs/src/forward_simulation.md
 docs/src/functional_inversion.md
+docs/src/quick_start.md
 docs/src/laws.md
 docs/data/results/
 
