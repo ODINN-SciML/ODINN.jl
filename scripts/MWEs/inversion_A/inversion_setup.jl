@@ -59,10 +59,13 @@ params = Parameters(
         minA = 8e-21,
         maxA = 8e-17
         ),
+    inversion = InversionParameters(
+        train_initial_conditions = true
+        ),
     UDE = UDEparameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
-        optimization_method  ="AD+AD",
+        optimization_method = "AD+AD",
         target = :A
         ),
     solver = Huginn.SolverParameters(
@@ -86,10 +89,18 @@ tstops = collect(2010:δt:2015)
 glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 nn_model = NeuralNetwork(params)
+
+if params.inversion.train_initial_conditions
+    ic = InitialCondition(params, glaciers, :Farinotti2019Random)
+else
+    ic = ODINN.emptyIC()
+end
+
 model = Model(
-    iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
+    iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
     mass_balance = nothing,
-    regressors = (; A=nn_model))
+    regressors = (; A = nn_model, IC = ic)
+    )
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)

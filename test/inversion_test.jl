@@ -1,5 +1,6 @@
 function inversion_test(;
     use_MB = false,
+    train_initial_conditions = false,
     multiprocessing = false
     )
 
@@ -47,6 +48,9 @@ function inversion_test(;
             minA = 8e-21,
             maxA = 8e-17
             ),
+        inversion = InversionParameters(
+            train_initial_conditions = train_initial_conditions
+        ),
         UDE = UDEparameters(
             optim_autoAD = ODINN.NoAD(),
             grad = ContinuousAdjoint(),

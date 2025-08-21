@@ -39,7 +39,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
     loss_results = [batch_loss_iceflow_transient(
             FunctionalInversionBinder(simulation, θ),
             glacier_idx,
-            define_iceflow_prob(simulation, glacier_idx),
+            define_iceflow_prob(θ, simulation, glacier_idx),
         ) for glacier_idx in 1:length(simulation.glaciers)]
     loss_val = sum(getindex.(loss_results, 1))
     results = getindex.(loss_results, 2)
@@ -135,6 +135,14 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 dLdθ .+= Δt[j-1] .* (isnothing(∂ℓ∂θ) ? λ_∂f∂θ : λ_∂f∂θ .+ ∂ℓ∂θ)
             end
 
+            # Contribution of initial condition to loss function
+            λ₀ = λ[begin]
+            H₀ = Matrix(θ.IC)
+            λ_∂f∂H₀, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ₀, H₀, θ, simulation, t₀)
+            # This contribution will come from the regularization on the initial condition
+            ∂L∂H₀ = 0.0
+            dLdθ.IC .+= λ_∂f∂H₀ .+ ∂L∂H₀
+
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
 
             # @assert !(loss_function isa LossHV || loss_function isa LossV) "ContinuousAdjoint is not compatible with the ice velocity loss for the moment"
@@ -228,7 +236,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 abstol = simulation.parameters.UDE.grad.abstol,
                 maxiters = simulation.parameters.solver.maxiters,
                 )
-            @assert sol_rev.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(sol_rev.retcode)\""
+            @assert sol_rev.retcode == ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(sol_rev.retcode)\""
 
             ### Numerical integration using quadrature to compute gradient
             # Contribution of the loss function due to ∂l∂θ
@@ -250,7 +258,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Final integration of the loss
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 for j in 1:length(t_nodes)
-                    λ_sol = sol_rev(-t_nodes[j])
+                    λ_sol = sol_rev(- t_nodes[j])
                     _H = H_itp(t_nodes[j])
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ_sol, _H, θ, nothing, simulation, t_nodes[j])
                     dLdθ .+= weights[j] .* (λ_∂f∂θ .+ ∂L∂θ[j])
@@ -258,6 +266,14 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             else
                 throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
             end
+
+            # Contribution of initial condition to loss function
+            λ₀ = sol_rev(-t₀)
+            H₀ = Matrix(θ.IC)
+            λ_∂f∂H₀, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ₀, H₀, θ, simulation, t₀)
+            # This contribution will come from the regularization on the initial condition
+            ∂L∂H₀ = 0.0
+            dLdθ.IC .+= λ_∂f∂H₀ .+ ∂L∂H₀
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
             if isnothing(simulation.parameters.UDE.grad.grad_function)
