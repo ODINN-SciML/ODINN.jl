@@ -34,7 +34,6 @@ function test_adjoint_SIA2D(
             tspan=tspan,
             step=δt,
             multiprocessing=false,
-            workers=1,
             test_mode=true,
             rgi_paths=rgi_paths),
         physical = PhysicalParameters(
@@ -219,7 +218,6 @@ function test_adjoint_surface_V(
             tspan=tspan,
             step=δt,
             multiprocessing=false,
-            workers=1,
             test_mode=true,
             rgi_paths=rgi_paths,
             gridScalingFactor=4),

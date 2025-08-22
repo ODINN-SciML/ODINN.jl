@@ -37,6 +37,7 @@ include("grad_free_test.jl")
 include("SIA2D_adjoint_utils.jl")
 include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
+include("MB_VJP.jl")
 include("test_grad_loss.jl")
 include("save_results.jl")
 
@@ -61,6 +62,7 @@ end
 
 if GROUP == "All" || GROUP == "Core2"
     @testset "VJPs tests with A as target" begin
+        @testset "VJP (Enzyme) of MB vs finite differences" test_MB_VJP(ODINN.EnzymeVJP())
         @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A)
         @testset "VJP (discrete) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[5e-7, 1e-6, 5e-4], target = :A)
         @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[3e-4, 2e-4, 2e-2], target = :A, C=7e-8)
