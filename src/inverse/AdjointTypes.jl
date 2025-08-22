@@ -28,7 +28,8 @@ end
     ContinuousAdjoint{
         F <: AbstractFloat,
         I <: Integer,
-        VJP <: AbstractVJPMethod
+        VJP <: AbstractVJPMethod,
+        MBVJP <: AbstractVJPMethod,
     } <: AbstractAdjointMethod
 
 Continuous adjoint of SIA2D with manual implementation of the backward in the ODE
@@ -45,11 +46,14 @@ scheme.
     the computation of the adjoint. Currently only `:Linear` is supported.
 - `n_quadrature::I`: Number of nodes used in the Gauss quadrature for the numerical
     integration of the loss function.
+- `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
+    calculation.
 """
 @kwdef struct ContinuousAdjoint{
     F <: AbstractFloat,
     I <: Integer,
-    VJP <: AbstractVJPMethod
+    VJP <: AbstractVJPMethod,
+    MBVJP <: AbstractVJPMethod,
 } <: AbstractAdjointMethod
     VJP_method::VJP = DiscreteVJP()
     solver::Any = RDPK3Sp35()
@@ -58,10 +62,14 @@ scheme.
     dtmax::F = 1/12
     interpolation::Symbol = :Linear
     n_quadrature::I = 200
+    MB_VJP::MBVJP = EnzymeVJP()
 end
 
 """
-    DiscreteAdjoint{VJP <: AbstractVJPMethod} <: AbstractAdjointMethod
+    DiscreteAdjoint{
+        VJP <: AbstractVJPMethod,
+        MBVJP <: AbstractVJPMethod,
+    } <: AbstractAdjointMethod
 
 Discrete adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
@@ -69,9 +77,15 @@ scheme.
 # Fields
 - `VJP_method`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
     calculation.
+- `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
+    calculation.
 """
-@kwdef struct DiscreteAdjoint{VJP <: AbstractVJPMethod} <: AbstractAdjointMethod
+@kwdef struct DiscreteAdjoint{
+    VJP <: AbstractVJPMethod,
+    MBVJP <: AbstractVJPMethod,
+} <: AbstractAdjointMethod
     VJP_method::VJP = DiscreteVJP()
+    MB_VJP::MBVJP = EnzymeVJP()
 end
 
 """

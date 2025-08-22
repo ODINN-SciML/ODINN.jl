@@ -18,7 +18,6 @@ function grad_free_test(;use_MB::Bool=false)
             tspan=tspan,
             step=δt,
             multiprocessing=false,
-            workers=1,
             test_mode=true,
             rgi_paths=rgi_paths),
         hyper = Hyperparameters(

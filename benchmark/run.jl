@@ -27,7 +27,6 @@ params = Parameters(
         tspan=tspan,
         step=δt,
         multiprocessing=false,
-        workers=1,
         test_mode=true,
         rgi_paths=rgi_paths),
     UDE = UDEparameters(

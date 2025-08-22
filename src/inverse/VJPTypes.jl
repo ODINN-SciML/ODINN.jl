@@ -1,5 +1,5 @@
 export AbstractVJPMethod
-export DiscreteVJP, ContinuousVJP, EnzymeVJP
+export DiscreteVJP, ContinuousVJP, EnzymeVJP, NoVJP
 
 """
     AbstractVJPMethod
@@ -34,4 +34,12 @@ Enzyme implementation of VJP used inside the adjoint calculation.
 `EnzymeVJP`
 """
 @kwdef struct EnzymeVJP <: AbstractVJPMethod
+end
+
+"""
+No VJP flavor when the contribution of a given term should not be computed inside the adjoint calculation (e.g. MB).
+
+`NoVJP`
+"""
+@kwdef struct NoVJP <: AbstractVJPMethod
 end
