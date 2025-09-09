@@ -16,7 +16,6 @@ A mutable struct that holds parameters for inversion processes. This struct is a
 """
 mutable struct InversionParameters{F<:AbstractFloat} <: AbstractParameters
     initial_conditions::Vector{F}
-    train_initial_conditions::Bool
     lower_bound::Vector{F}
     upper_bound::Vector{F}
     regions_split::Vector{Int}
@@ -49,7 +48,6 @@ Initialize the parameters for the inversion process.
 """
 function InversionParameters{}(;
         initial_conditions::Vector{F} = [1.0],
-        train_initial_conditions::Bool = false,
         lower_bound::Vector{F} = [0.0],
         upper_bound::Vector{F} = [Inf],
         regions_split::Vector{Int} = [1, 1],
@@ -59,7 +57,6 @@ function InversionParameters{}(;
     ) where F <: AbstractFloat
     inversionparameters = InversionParameters{F}(
         initial_conditions,
-        train_initial_conditions,
         lower_bound,
         upper_bound,
         regions_split,
@@ -72,7 +69,6 @@ end
 
 Base.:(==)(a::InversionParameters, b::InversionParameters) =
     a.initial_conditions == b.initial_conditions &&
-    a.train_initial_conditions == b.train_initial_conditions &&
     a.lower_bound == b.lower_bound &&
     a.upper_bound == b.upper_bound &&
     a.regions_split == b.regions_split &&

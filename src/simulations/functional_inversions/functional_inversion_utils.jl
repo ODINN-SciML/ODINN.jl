@@ -52,11 +52,14 @@ function run!(
 
     # Setup final results
     simulation.results.stats.niter = length(simulation.results.stats.losses)
-    # Final parameters of the neural network
-    simulation.results.stats.θ = sol.u.θ
+    # Final parameters of the neural network for the target regressor
+    # Just one neural network is supported for now
+    reg_key = only(intersect(keys(sol.u), (:A, :C, :n, :Y, :U)))
+    simulation.results.stats.θ = sol.u[reg_key]
     # Final initial conditions for the simulation
-    if simulation.parameters.inversion.train_initial_conditions
-        simulation.results.stats.initial_conditions = sol.u.initial_conditions
+    if haskey(sol.u, :IC)
+        # TODO: change this to support multiple glaciers
+        simulation.results.stats.initial_conditions = [Matrix(sol.u.IC)]
     end
     simulation.model.machine_learning.θ = sol.u
 
@@ -162,7 +165,7 @@ function train_UDE!(
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
 
-    # The variable θ includes all variables to being optimized, included initial conditions
+    # The variable θ includes all variables to being optimized, including initial conditions
     θ = simulation.model.machine_learning.θ
 
     # Get the available workers
@@ -496,7 +499,7 @@ function define_iceflow_prob(
 )
     params = simulation.parameters
     # Define initial condition for the inverse simulation
-    if params.inversion.train_initial_conditions
+    if haskey(θ, :IC)
         H₀ = θ.IC
         @show maximum(H₀)
     else
@@ -507,7 +510,7 @@ function define_iceflow_prob(
         H₀,
         params.simulation.tspan,
         simulation;
-        tstops=params.solver.tstops,
+        tstops = params.solver.tstops,
     )
     return iceflow_prob
 end

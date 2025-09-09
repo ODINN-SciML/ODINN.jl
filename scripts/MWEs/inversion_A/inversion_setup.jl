@@ -59,9 +59,6 @@ params = Parameters(
         minA = 8e-21,
         maxA = 8e-17
         ),
-    inversion = InversionParameters(
-        train_initial_conditions = false
-        ),
     UDE = UDEparameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
@@ -91,7 +88,10 @@ glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 nn_model = NeuralNetwork(params)
 
-if params.inversion.train_initial_conditions
+# Decide if we want or not to learn initial condition
+train_initial_conditions = true
+
+if train_initial_conditions
     ic = InitialCondition(params, glaciers, :Farinotti2019Random)
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
@@ -99,7 +99,7 @@ if params.inversion.train_initial_conditions
         regressors = (; A = nn_model, IC = ic)
     )
 else
-    ic = ODINN.emptyIC()
+    # ic = ODINN.emptyIC()
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
         mass_balance = nothing,

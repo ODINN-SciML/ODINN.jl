@@ -7,6 +7,7 @@ function test_grad_finite_diff(
     finite_difference_method = :FiniteDifferences,
     finite_difference_order = 3,
     loss = LossH(),
+    train_initial_conditions = false,
 ) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
@@ -68,6 +69,10 @@ function test_grad_finite_diff(
 
     # Use a constant A for testing
     A_law = ConstantA(2.21e-18)
+    # Add neural network for regressor (what about the ContinuousAdjoint Law?)
+    # nn_model = NeuralNetwork(params)
+    # A_law = LawA(nn_model, params)
+
     model = Huginn.Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
@@ -87,26 +92,50 @@ function test_grad_finite_diff(
     nn_model = NeuralNetwork(params)
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
     # Do a clean restart
-    model = if target==:A
+
+    ic = if train_initial_conditions
+        InitialCondition(params, glaciers, :Farinotti2019)
+    else
+        nothing
+    end
+
+    # Define regressors for each test
+    regressors = if (target == :A && !train_initial_conditions)
+        (; A = nn_model)
+    elseif (target == :A && train_initial_conditions)
+        (; A = nn_model, IC = ic)
+    elseif (target == :D_hybrid && !train_initial_conditions)
+        (; Y = nn_model)
+    elseif (target == :D_hybrid && train_initial_conditions)
+        (; Y = nn_model, IC = ic)
+    elseif (target == :D && !train_initial_conditions)
+        (; U = nn_model)
+    elseif (target == :D && train_initial_conditions)
+        (; U = nn_model, IC = ic)
+    else
+        nothing
+    end
+
+    model = if target == :A
         iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
         Model(
             iceflow = iceflow_model,
             mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-            regressors = (; A=nn_model),
+            regressors = regressors,
         )
-    elseif target==:D_hybrid
+    elseif target == :D_hybrid
         iceflow_model = SIA2Dmodel(params; Y=LawY(nn_model, params))
         Model(
             iceflow = iceflow_model,
             mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-            regressors = (; Y=nn_model),
+            regressors = regressors,
         )
-    elseif target==:D
+    elseif target == :D
         iceflow_model = SIA2Dmodel(params; U=LawU(nn_model, params))
         Model(
             iceflow = iceflow_model,
             mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-            regressors = (; U=nn_model),
+            regressors = regressors,
         )
     else
         throw("Unsupported target $(target)")
@@ -119,7 +148,6 @@ function test_grad_finite_diff(
 
     glacier_idx = 1
     simulation.cache = init_cache(model, simulation, glacier_idx, params)
-
 
     θ = simulation.model.machine_learning.θ
 
@@ -160,11 +188,35 @@ function test_grad_finite_diff(
 
         ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
 
-        dθ_FD, = FiniteDifferences.grad(
-            central_fdm(finite_difference_order, 1),
-            _θ -> f(_θ, simulation),
-            θ
-        )
+        if train_initial_conditions
+            # TODO: Unify this with definition of f and mask
+            # We just evaluate in a subset to save some computation
+            N = 40
+            non_zero = Matrix(θ.IC) .> 0.0
+            idxs = rand(findall(non_zero), N)
+            θ_mask = θ .== nothing
+            # θ_mask.IC .= 0
+            θ_mask.IC[idxs] .= 1
+            function f_subset(x, simulation, mask)
+                α = copy(θ)
+                α[mask] = x
+                return f(α, simulation)
+            end
+
+            dθ_FD, = FiniteDifferences.grad(
+                central_fdm(finite_difference_order, 1),
+                α -> f_subset(α, simulation, θ_mask),
+                θ[θ_mask]
+            )
+            dθ = dθ[θ_mask]
+        else
+            dθ_FD, = FiniteDifferences.grad(
+                central_fdm(finite_difference_order, 1),
+                _θ -> f(_θ, simulation),
+                θ
+            )
+        end
+
         ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
         printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
         printVecScientific("angle  = ", [angle_FD], thres_angle)

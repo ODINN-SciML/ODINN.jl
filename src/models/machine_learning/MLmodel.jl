@@ -9,7 +9,7 @@ _inputs_U_law = (; H̄=InpH̄(), ∇S=Inp∇S())
 # Abstract type as a parent type for Machine Learning models
 abstract type MLmodel <: AbstractModel end
 
-include("./InitialConditions.jl")
+include("./InitialCondition.jl")
 
 """
     Model(;
