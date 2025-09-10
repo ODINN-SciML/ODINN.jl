@@ -1,8 +1,9 @@
 export InitialCondition
 
+include("./InitialCondition_utils.jl")
+
 # Empty initial condition
 struct emptyIC <: MLmodel end
-
 """
 
 """
@@ -27,18 +28,13 @@ mutable struct InitialCondition{
             θ = ComponentVector{ft}(θ = glaciers[1].H₀)
             # θ = ComponentVector{ft}(θ = [glacier.H₀ for glacier in glaciers])
         elseif initialization == :Farinotti2019Random
-            H₀ = glaciers[1].H₀
-            # Add some perturbation to the initial condition
-            H₀ .*= max.(0.1 .* randn(size(H₀)...) .+ 1.0, 0.0)
-            # H₀ .*= 0.90
+            stdH = 10.0
+            grid_length = 10
+            H₀ = random_matrix(glaciers[1].H₀, stdH, grid_length)
             θ = ComponentVector{ft}(θ = H₀)
         else
             @error "Strategy for initialization of ice thicknesses not found."
         end
-        # else
-        #     @error "We need to standardize how IC is specified"
-        #     θ = nothing
-        # end
 
         new{typeof(θ)}(
             θ
