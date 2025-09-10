@@ -501,7 +501,7 @@ function define_iceflow_prob(
     # Define initial condition for the inverse simulation
     if haskey(θ, :IC)
         H₀ = θ.IC
-        @show maximum(H₀)
+        # @show maximum(H₀)
     else
         H₀ = simulation.glaciers[glacier_idx].H₀
     end

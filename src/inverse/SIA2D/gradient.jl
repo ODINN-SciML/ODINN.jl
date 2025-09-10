@@ -138,11 +138,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Contribution of initial condition to loss function
             if haskey(θ, :IC)
                 λ₀ = λ[begin]
-                H₀ = Matrix(θ.IC)
-                λ_∂f∂H₀, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ₀, H₀, θ, simulation, t₀)
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
-                dLdθ.IC .+= λ_∂f∂H₀ .+ ∂L∂H₀
+                dLdθ.IC .+= λ₀ .+ ∂L∂H₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
@@ -272,11 +270,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Contribution of initial condition to loss function
             if haskey(θ, :IC)
                 λ₀ = sol_rev(-t₀)
-                H₀ = Matrix(θ.IC)
-                λ_∂f∂H₀, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ₀, H₀, θ, simulation, t₀)
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
-                dLdθ.IC .+= λ_∂f∂H₀ .+ ∂L∂H₀
+                dLdθ.IC .+= λ₀ .+ ∂L∂H₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
