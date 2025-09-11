@@ -214,6 +214,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 nSteps = Int(round((tspan[2]-tspan[1])/simulation.parameters.solver.step))
                 tstopsMB = - (tspan[1] .+ collect(1:nSteps) .* simulation.parameters.solver.step)
                 stop_condition_MB(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, tstopsMB)
+                # For the moment the time stepping used in the loss, and the one for the MB gradient computation must match
+                # The plan in the future is to be able to customize the time stepping for the MB gradient computation
+                # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/373
                 DiscreteCallback(stop_condition_MB, effect_MB!)
             else
                 CallbackSet()
