@@ -108,7 +108,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 tj = t[j]
 
                 if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
-                    λ[j] .= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP, λ[j], H[j], simulation, glacier, tj)
+                    λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP, λ[j], H[j], simulation, glacier, tj)
                 end
 
                 # β = 2.0
@@ -207,7 +207,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 function (integrator)
                     t = - integrator.t
                     λ_∂MB∂H = VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP, integrator.u, H_itp(t), simulation, glacier, t)
-                    integrator.u .= λ_∂MB∂H
+                    integrator.u .+= λ_∂MB∂H
                 end
             end
             cb_adjoint_MB = if simulation.parameters.simulation.use_MB

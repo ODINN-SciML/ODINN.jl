@@ -55,7 +55,7 @@ function test_MB_VJP(
 
     t = mean(tspan)
     λ = randn(size(H, 1), size(H, 2))
-    ∂H = ODINN.VJP_λ_∂MB∂H(VJPMode, λ, H, simulation, glacier, t)
+    ∂H = ODINN.VJP_λ_∂MB∂H(VJPMode, λ, H, simulation, glacier, t) + λ
 
     # Check gradient wrt H
     function f_H(H, args)

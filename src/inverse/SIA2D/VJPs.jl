@@ -100,9 +100,9 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
         Duplicated(simulation, _simulation),
         Duplicated(glacier, _glacier),
     )
-    return λ + λ_∂MB∂H
+    return λ_∂MB∂H
 end
 
 function VJP_λ_∂MB∂H(VJPMode::NoVJP, λ, H, simulation::Simulation, glacier, t)
-    return λ
+    return zero(λ)
 end
