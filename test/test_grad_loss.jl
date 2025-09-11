@@ -8,6 +8,7 @@ function test_grad_finite_diff(
     finite_difference_order = 3,
     loss = LossH(),
     train_initial_conditions = false,
+    multiglacier = false
 ) where {ADJ<:AbstractAdjointMethod}
 
     println("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
@@ -19,7 +20,17 @@ function test_grad_finite_diff(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    rgi_ids = velocityLoss ? ["RGI60-11.03646"] : ["RGI60-11.03638"]
+    rgi_ids = if (velocityLoss && !multiglacier)
+        ["RGI60-11.03646"]
+    elseif (!velocityLoss && !multiglacier)
+        ["RGI60-11.03638"]
+    elseif (!velocityLoss && multiglacier)
+        ["RGI60-11.03638", "RGI60-11.01450"]
+    else
+        nothing
+    end
+
+
     rgi_paths = get_rgi_paths()
 
     working_dir = joinpath(ODINN.root_dir, "test/data")

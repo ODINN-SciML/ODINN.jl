@@ -118,6 +118,7 @@ This function splits the glaciers and associated data in the `simulation` object
 - If the simulation results are empty, the function creates batches with empty results objects.
 """
 function generate_simulation_batches(simulation::FunctionalInversion)
+    # TODO: we need to change how this is done here, with a manual =1 batch size
     nbatches = 1 #simulation.parameters.hyper.batchsize
     ninstances = length(simulation.glaciers)
     @assert ninstances % nbatches == 0

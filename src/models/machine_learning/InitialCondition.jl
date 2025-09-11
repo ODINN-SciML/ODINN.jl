@@ -22,20 +22,25 @@ mutable struct InitialCondition{
     }
         # Float type
         ft = Sleipnir.Float
+        # Component Array type
+        initial_condition_type = Tuple(Symbol("$(glaciers[i].rgi_id)") for i in 1:length(glaciers))
 
-        # TODO: we do it for a single glacier now
+        # Define a series of initial conditions
         if initialization == :Farinotti2019
-            θ = ComponentVector{ft}(θ = glaciers[1].H₀)
-            # θ = ComponentVector{ft}(θ = [glacier.H₀ for glacier in glaciers])
+            initial_condition = NamedTuple{initial_condition_type}(
+                Tuple(glaciers[i].H₀ for i in 1:length(glaciers))
+                )
         elseif initialization == :Farinotti2019Random
             stdH = 10.0
             grid_length = 10
-            H₀ = random_matrix(glaciers[1].H₀, stdH, grid_length)
-            θ = ComponentVector{ft}(θ = H₀)
+            initial_condition = NamedTuple{initial_condition_type}(
+                Tuple(random_matrix(glaciers[1].H₀, stdH, grid_length) for i in 1:length(glaciers))
+                )
         else
             @error "Strategy for initialization of ice thicknesses not found."
         end
 
+        θ = ComponentVector{ft}(θ = initial_condition)
         new{typeof(θ)}(
             θ
         )

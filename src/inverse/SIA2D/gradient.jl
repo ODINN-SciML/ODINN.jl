@@ -140,7 +140,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ₀ = λ[begin]
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
-                dLdθ.IC .+= λ₀ .+ ∂L∂H₀
+                dLdθ.IC[Symbol("$(glacier.rgi_id)")] .+= λ₀ .+ ∂L∂H₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
@@ -272,7 +272,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ₀ = sol_rev(-t₀)
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
-                dLdθ.IC .+= λ₀ .+ ∂L∂H₀
+                dLdθ.IC[Symbol("$(glacier.rgi_id)")] .+= λ₀ .+ ∂L∂H₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
