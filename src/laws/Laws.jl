@@ -97,7 +97,7 @@ function LawU(
 
     U_law = let smodel = smodel, prescale = prescale, postscale = postscale
     Law{Array{Float64, 2}}(;
-        inputs = (; H̄=InpH̄(), ∇S=Inp∇S()),
+        inputs = (; H̄=iH̄(), ∇S=i∇S()),
         f! = function (cache, inp, θ)
             D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
 
@@ -182,7 +182,7 @@ function LawY(
 
     Y_law = let smodel = smodel, prescale = prescale, postscale = postscale
     Law{Array{Float64, 2}}(;
-        inputs = (; T=InpTemp(), H̄=InpH̄()),
+        inputs = (; T=iTemp(), H̄=iH̄()),
         f! = function (cache, inp, θ)
             A = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
@@ -249,7 +249,7 @@ function LawA(
 
     A_law = let smodel = smodel, params = params
         Law{Array{Float64, 0}}(;
-            inputs = (; T=InpTemp()),
+            inputs = (; T=iTemp()),
             f! = function (cache, inp, θ)
                 min_NN = params.physical.minA
                 max_NN = params.physical.maxA

@@ -23,13 +23,15 @@ rgi_ids = ["RGI60-11.03638"]
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
-law_inputs = (; CPDD=InpCPDD(), topo_roughness=InpTopoRough())
+time_window = 7
+topo_window = 200.0
+law_inputs = (; CPDD=iCPDD(window=time_window), topo_roughness=iTopoRough(window=topo_window))
 
 params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         use_MB = false,
-        velocities = false,
+        use_velocities = false,
         tspan = (2010.0, 2015.0),
         step = δt,
         multiprocessing = false,
@@ -78,3 +80,7 @@ prediction = generate_ground_truth!(glaciers, params, model, tstops)
 ### Figures
 
 plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing)
+
+plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing; idx_fixed_input=1)
+
+plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing; idx_fixed_input=2)

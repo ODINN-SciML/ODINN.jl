@@ -29,7 +29,7 @@ result = eval_law(simulation.model.iceflow.A, simulation, glacier_idx, (; T=273.
 function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, input_values::NamedTuple, θ; scalar::Bool = false)
     # Initialize the cache to be able to make an inference of the law
     params = simulation.parameters
-    @show scalar
+
     cache = init_cache(law, simulation, glacier_idx, params; scalar=scalar)
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
@@ -69,10 +69,10 @@ Evaluate the A law when it defines a mapping between the long term air temperatu
 T, A = T_A_Alaw(simulation, glacier_idx, θ, 2010.0)
 """
 function T_A_Alaw(simulation::Simulation, glacier_idx::Integer, θ, t::AbstractFloat)
-    _inputs_A_law = (; T=InpTemp())
+    _inputs_A_law = (; T=iTemp())
     @assert inputs(simulation.model.iceflow.A)==_inputs_A_law "The function T_A_Alaw can be called only when the inputs of the A law are $(_inputs_A_law)."
 
-    T = get_input(InpTemp(), simulation, glacier_idx, t)
+    T = get_input(iTemp(), simulation, glacier_idx, t)
     A = eval_law(simulation.model.iceflow.A, simulation, glacier_idx, (;T=T), θ)
 
     return T, A[]

@@ -115,7 +115,7 @@ function inversion_test(;
         functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, params)
         functional_inversion.model.machine_learning.θ = θ
 
-        T = get_input(InpTemp(), functional_inversion, i, t)
+        T = get_input(iTemp(), functional_inversion, i, t)
         apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
         push!(Temps, T)
         push!(As_pred, functional_inversion.cache.iceflow.A[1])
