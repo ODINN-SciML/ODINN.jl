@@ -34,6 +34,7 @@ function test_MB_VJP(
             optim_autoAD=ODINN.NoAD(),
             grad=DiscreteAdjoint(VJP_method=VJPMode)),
         solver = Huginn.SolverParameters(step=δt),
+        physical = PhysicalParameters(minA=0.0, maxA=0.0), # Disable creeping by multiplying by zero the NN output that predicts A
     )
 
     nn_model = NeuralNetwork(params)
