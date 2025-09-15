@@ -63,6 +63,7 @@ end
 if GROUP == "All" || GROUP == "Core2"
     @testset "VJPs tests with A as target" begin
         @testset "VJP (Enzyme) of MB vs finite differences" test_MB_VJP(ODINN.EnzymeVJP())
+        @testset "VJP (discrete) of MB vs finite differences" test_MB_VJP(DiscreteVJP())
         @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A)
         @testset "VJP (discrete) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[5e-7, 1e-6, 5e-4], target = :A)
         @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[3e-4, 2e-4, 2e-2], target = :A, C=7e-8)
@@ -76,7 +77,8 @@ if GROUP == "All" || GROUP == "Core3"
         @testset "Manual implementation of the discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
         @testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
-        @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences w/ MB" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 2e-5, 1e-2], use_MB = true)
+        @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = EnzymeVJP()); thres = [2e-3, 2e-5, 2e-3], use_MB = true)
+        @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP()); thres = [2e-2, 2e-5, 2e-2], use_MB = true)
         @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
         @testset "Manual implementation of the continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [5e-4, 2e-8, 5e-4])
         @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ODINN.SciMLSensitivityAdjoint(); thres = [5e-4, 5e-8, 5e-4])
