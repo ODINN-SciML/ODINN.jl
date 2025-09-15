@@ -34,7 +34,7 @@ mutable struct InitialCondition{
             stdH = 10.0
             grid_length = 10
             initial_condition = NamedTuple{initial_condition_type}(
-                Tuple(random_matrix(glaciers[1].H₀, stdH, grid_length) for i in 1:length(glaciers))
+                Tuple(random_matrix(glaciers[i].H₀, stdH, grid_length) for i in 1:length(glaciers))
                 )
         else
             @error "Strategy for initialization of ice thicknesses not found."

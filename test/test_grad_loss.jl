@@ -20,16 +20,11 @@ function test_grad_finite_diff(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    rgi_ids = if (velocityLoss && !multiglacier)
-        ["RGI60-11.03646"]
-    elseif (!velocityLoss && !multiglacier)
-        ["RGI60-11.03638"]
-    elseif (!velocityLoss && multiglacier)
-        ["RGI60-11.03638", "RGI60-11.01450"]
-    else
-        nothing
+    rgi_ids = @match (velocityLoss, multiglacier) begin
+        (true, false) => ["RGI60-11.03646"]
+        (false, false) => ["RGI60-11.03638"]
+        (false, true) => ["RGI60-11.03638", "RGI60-11.01450"]
     end
-
 
     rgi_paths = get_rgi_paths()
 
@@ -48,50 +43,52 @@ function test_grad_finite_diff(
 
     params = Parameters(
         simulation = SimulationParameters(
-            working_dir=working_dir,
-            use_MB=false,
-            use_velocities=true,
-            tspan=tspan,
-            step=δt,
-            multiprocessing=false,
-            workers=1,
-            test_mode=true,
-            rgi_paths=rgi_paths,
-            gridScalingFactor=4),
+            working_dir = working_dir,
+            use_MB = false,
+            use_velocities = true,
+            tspan = tspan,
+            step = δt,
+            multiprocessing = false,
+            workers = 1,
+            test_mode = true,
+            rgi_paths = rgi_paths,
+            gridScalingFactor = 4
+            ),
         hyper = Hyperparameters(
-            batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-            epochs=100,
-            optimizer=ODINN.ADAM(0.005)),
+            batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
+            epochs = 100,
+            optimizer = ODINN.ADAM(0.005)
+            ),
         physical = PhysicalParameters(
             minA = 8e-21,
-            maxA = 8e-18),
+            maxA = 8e-18
+            ),
         UDE = UDEparameters(
-            sensealg=sensealg,
-            optim_autoAD=optim_autoAD,
-            grad=adjointFlavor,
-            optimization_method="AD+AD",
-            empirical_loss_function=loss,
-            target = target),
+            sensealg = sensealg,
+            optim_autoAD = optim_autoAD,
+            grad = adjointFlavor,
+            optimization_method = "AD+AD",
+            empirical_loss_function = loss,
+            target = target
+            ),
         solver = Huginn.SolverParameters(
-            step=δt,
-            save_everystep=true,
-            progress=true)
+            step = δt,
+            save_everystep = true,
+            progress = true
+            )
     )
 
     # Use a constant A for testing
     A_law = ConstantA(2.21e-18)
-    # Add neural network for regressor (what about the ContinuousAdjoint Law?)
-    # nn_model = NeuralNetwork(params)
-    # A_law = LawA(nn_model, params)
 
     model = Huginn.Model(
-        iceflow = SIA2Dmodel(params; A=A_law),
-        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+        iceflow = SIA2Dmodel(params; A = A_law),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
     )
 
     # We retrieve some glaciers for the simulation
     kwargs = velocityLoss ? (;
-        velocityDatacubes=Dict(
+        velocityDatacubes = Dict(
             rgi_ids[1] => Sleipnir.fake_multi_datacube()
         )
     ) : NamedTuple()
@@ -102,7 +99,6 @@ function test_grad_finite_diff(
 
     nn_model = NeuralNetwork(params)
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
-    # Do a clean restart
 
     ic = if train_initial_conditions
         InitialCondition(params, glaciers, :Farinotti2019)
@@ -111,47 +107,32 @@ function test_grad_finite_diff(
     end
 
     # Define regressors for each test
-    regressors = if (target == :A && !train_initial_conditions)
-        (; A = nn_model)
-    elseif (target == :A && train_initial_conditions)
-        (; A = nn_model, IC = ic)
-    elseif (target == :D_hybrid && !train_initial_conditions)
-        (; Y = nn_model)
-    elseif (target == :D_hybrid && train_initial_conditions)
-        (; Y = nn_model, IC = ic)
-    elseif (target == :D && !train_initial_conditions)
-        (; U = nn_model)
-    elseif (target == :D && train_initial_conditions)
-        (; U = nn_model, IC = ic)
-    else
-        nothing
+    regressors = @match (target, train_initial_conditions) begin
+        (:A, false) => (; A = nn_model)
+        (:A, true) => (; A = nn_model, IC = ic)
+        (:D_hybrid, false) =>  (; Y = nn_model)
+        (:D_hybrid, true) => (; Y = nn_model, IC = ic)
+        (:D, false) => (; U = nn_model)
+        (:D, true) => (; U = nn_model, IC = ic)
     end
 
-    model = if target == :A
-        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
-        Model(
-            iceflow = iceflow_model,
-            mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    model = @match target begin
+        :A => Model(
+            iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
+            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
             regressors = regressors,
         )
-    elseif target == :D_hybrid
-        iceflow_model = SIA2Dmodel(params; Y=LawY(nn_model, params))
-        Model(
-            iceflow = iceflow_model,
-            mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+        :D_hybrid => Model(
+            iceflow = SIA2Dmodel(params; Y = LawY(nn_model, params)),
+            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor= 1.2/1000.0),
             regressors = regressors,
         )
-    elseif target == :D
-        iceflow_model = SIA2Dmodel(params; U=LawU(nn_model, params))
-        Model(
-            iceflow = iceflow_model,
-            mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+        :D => Model(
+            iceflow = SIA2Dmodel(params; U = LawU(nn_model, params)),
+            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
             regressors = regressors,
         )
-    else
-        throw("Unsupported target $(target)")
     end
-
 
     # We create an ODINN prediction
     functional_inversion = FunctionalInversion(model, glaciers, params)
@@ -203,11 +184,17 @@ function test_grad_finite_diff(
             # TODO: Unify this with definition of f and mask
             # We just evaluate in a subset to save some computation
             N = 40
-            non_zero = Matrix(θ.IC) .> 0.0
-            idxs = rand(findall(non_zero), N)
+            # Component array with binary entry
             θ_mask = θ .== nothing
-            # θ_mask.IC .= 0
-            θ_mask.IC[idxs] .= 1
+            for key in keys(θ.IC)
+                M = Matrix(θ.IC[key])
+                non_zero = M .> 0.0
+                idxs = rand(findall(non_zero), N)
+                mask = falses(size(M)...)
+                mask[idxs] .= 1
+                θ_mask.IC[key] .= mask
+            end
+
             function f_subset(x, simulation, mask)
                 α = copy(θ)
                 α[mask] = x
@@ -279,7 +266,6 @@ function test_grad_loss_term()
         return nothing
     end
 
-
     lossType = L2Sum(distance=2)
     nx = 9
     ny = 10
@@ -311,7 +297,6 @@ function test_grad_loss_term()
     end
     @test (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres)
 end
-
 
 function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, params, lossType, glacier, θ)
     normalization = 1.0

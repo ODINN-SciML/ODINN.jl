@@ -17,8 +17,8 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
-rgi_ids = ["RGI60-11.03638"]
-# rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+# rgi_ids = ["RGI60-11.03638"]
+rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
 # rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
 # rgi_ids = ["RGI60-11.03638",
 #             "RGI60-11.01450",
@@ -52,7 +52,7 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [100,50],
+        epochs = [100,100],
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
@@ -92,7 +92,7 @@ nn_model = NeuralNetwork(params)
 train_initial_conditions = true
 
 if train_initial_conditions
-    ic = InitialCondition(params, glaciers, :Farinotti2019Random)
+    ic = InitialCondition(params, glaciers, :Farinotti2019)
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
         mass_balance = nothing,

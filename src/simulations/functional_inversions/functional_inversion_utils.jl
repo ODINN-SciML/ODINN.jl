@@ -47,6 +47,10 @@ function run!(
                 simulation.model.machine_learning.θ = θ_trained
             end
             sol = train_UDE!(simulation; save_every_iter=save_every_iter, logger=logger)
+            # Clear results of previous simulation for fresh start
+            if i < length(epochs)
+                simulation.results.simulation = Sleipnir.Results{Float64, Int64}[]
+            end
         end
     end
 
@@ -324,9 +328,11 @@ This function calls `batch_loss_iceflow_transient` which returns both the loss a
 """
 function parallel_loss_iceflow_transient(θ, simulation::FunctionalInversion)
     return [
-        batch_loss_iceflow_transient(FunctionalInversionBinder(simulation, θ),
-        glacier_idx,
-        define_iceflow_prob(θ, simulation, glacier_idx))[1]
+        batch_loss_iceflow_transient(
+            FunctionalInversionBinder(simulation, θ),
+            glacier_idx,
+            define_iceflow_prob(θ, simulation, glacier_idx)
+            )[1]
         for glacier_idx in 1:length(simulation.glaciers)
         ]
 end
@@ -466,7 +472,7 @@ function simulate_iceflow_UDE!(
     iceflow_prob::ODEProblem,
 )
     params = container.simulation.parameters
-    iceflow_prob_remake = remake(iceflow_prob; p=container)
+    iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
         params.solver.solver,
@@ -501,6 +507,7 @@ function define_iceflow_prob(
     # Define initial condition for the inverse simulation
     if haskey(θ, :IC)
         H₀ = θ.IC[Symbol("$(simulation.glaciers[glacier_idx].rgi_id)")]
+        @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
     else
         H₀ = simulation.glaciers[glacier_idx].H₀
     end

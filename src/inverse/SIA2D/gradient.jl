@@ -36,11 +36,12 @@ Compute gradient glacier per glacier
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     # Run forward simulation to build the results
+    container = FunctionalInversionBinder(simulation, θ)
     loss_results = [batch_loss_iceflow_transient(
-            FunctionalInversionBinder(simulation, θ),
+            container,
             glacier_idx,
             define_iceflow_prob(θ, simulation, glacier_idx),
-        ) for glacier_idx in 1:length(simulation.glaciers)]
+        ) for glacier_idx in 1:length(container.simulation.glaciers)]
     loss_val = sum(getindex.(loss_results, 1))
     results = getindex.(loss_results, 2)
     simulation.results.simulation = results

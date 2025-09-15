@@ -30,6 +30,7 @@ using Printf
 using Lux
 using FiniteDifferences
 using JET
+using MLStyle
 
 include("test_utils.jl")
 include("params_construction.jl")
@@ -129,8 +130,8 @@ end
 
 if GROUP == "All" || GROUP == "Core9"
 @testset "Save results" begin
-    @testset "Single glacier" save_simulation_test!()
-    @testset "Multiple glaciers" save_simulation_test!()
+    @testset "Single glacier" save_simulation_test!(multiglacier = false)
+    @testset "Multiple glaciers" save_simulation_test!(multiglacier = true)
 end
 end
 end

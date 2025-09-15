@@ -52,7 +52,7 @@ using FastGaussQuadrature
 using Zygote
 using TensorBoardLogger
 using Dates
-
+using MLStyle
 
 # ##############################################
 # ############    PARAMETERS     ###############
