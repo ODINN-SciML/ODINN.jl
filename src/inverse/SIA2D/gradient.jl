@@ -44,6 +44,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
     loss_val = sum(getindex.(loss_results, 1))
     results = getindex.(loss_results, 2)
     simulation.results.simulation = results
+    tspan = simulation.parameters.simulation.tspan
 
     # Let's compute the forward loss inside gradient
     ℓ = 0.0
@@ -74,11 +75,17 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         # Dimensions
         N = size(result.B)
         k = length(H)
-        t₀ = simulation.parameters.simulation.tspan[1]
         normalization = 1.0
         dLdθ = Enzyme.make_zero(θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
+
+            tstopsMB = if simulation.parameters.simulation.use_MB
+                nSteps = Int(round((tspan[2]-tspan[1])/simulation.parameters.solver.step))
+                tstopsMB = (tspan[1] .+ collect(1:nSteps) .* simulation.parameters.solver.step)
+                @assert all(map(ti -> ti in t, tstopsMB)) "When using the DiscreteAdjoint the tstops of the MB callback must all be included in the tstops from the results."
+                tstopsMB
+            else [] end
 
             # Adjoint setup
             # Define empty object to store adjoint in reverse mode
@@ -98,6 +105,11 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
 
             for j in reverse(2:k)
+                tj = t[j]
+
+                if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
+                    λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP, λ[j], H[j], simulation, glacier, tj)
+                end
 
                 # β = 2.0
                 # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
@@ -120,13 +132,13 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 ℓ += Δt[j-1]*ℓi
 
                 ### Custom VJP to compute the adjoint
-                λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, t₀)
+                λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, tj)
 
                 ### Update adjoint
                 λ[j-1] .= λ[j] .+ Δt[j-1] .* (λ_∂f∂H .+ ∂ℓ∂H)
 
                 ### Custom VJP for grad of loss function
-                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, simulation, t₀)
+                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, simulation, tj)
 
                 ### Update gradient
                 # @assert ℓ ≈ loss_val "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_val)"
@@ -157,44 +169,66 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             end
 
             # Nodes and weights for numerical quadrature
-            t_nodes, weights = GaussQuadrature(simulation.parameters.simulation.tspan..., simulation.parameters.UDE.grad.n_quadrature)
+            t_nodes, weights = GaussQuadrature(tspan..., simulation.parameters.UDE.grad.n_quadrature)
 
             ### Define the reverse ODE problem
-            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
-                function f_adjoint_rev(dλ, λ, p, τ)
+            if !( (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP) )
+                throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
+            end
+            f_adjoint_rev = let simulation=simulation, H_itp=H_itp, θ=θ
+                function (dλ, λ, p, τ)
                     t = -τ
                     λ_∂f∂H, _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ, H_itp(t), θ, simulation, t)
                     dλ .= λ_∂f∂H
                 end
-            else
-                throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
             end
 
             ### Definition of callback to introduce contribution of loss function to adjoint
             t_ref_inv = .-reverse(t_ref)
-            stop_condition(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
-            function effect!(integrator)
-                t = - integrator.t
-                ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
-                    loss_function,
-                    H_itp(t),
-                    H_ref_itp(t),
-                    t,
-                    glacier,
-                    θ,
-                    simulation;
-                    normalization = prod(N) * normalization
+            stop_condition_loss(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
+            effect_loss! = let loss_function=loss_function, H_itp=H_itp, H_ref_itp=H_ref_itp, glacier=glacier, θ=θ, simulation=simulation, normalization=normalization, N=N
+                function (integrator)
+                    t = - integrator.t
+                    ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
+                        loss_function,
+                        H_itp(t),
+                        H_ref_itp(t),
+                        t,
+                        glacier,
+                        θ,
+                        simulation;
+                        normalization = prod(N) * normalization
                     )
-                integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
+                    integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
+                end
             end
-            cb_adjoint_loss = DiscreteCallback(stop_condition, effect!)
+            cb_adjoint_loss = DiscreteCallback(stop_condition_loss, effect_loss!)
+            effect_MB! = let simulation=simulation, glacier=glacier, H_itp=H_itp
+                function (integrator)
+                    t = - integrator.t
+                    λ_∂MB∂H = VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP, integrator.u, H_itp(t), simulation, glacier, t)
+                    integrator.u .+= λ_∂MB∂H
+                end
+            end
+            cb_adjoint_MB = if simulation.parameters.simulation.use_MB
+                nSteps = Int(round((tspan[2]-tspan[1])/simulation.parameters.solver.step))
+                tstopsMB = - (tspan[1] .+ collect(1:nSteps) .* simulation.parameters.solver.step)
+                stop_condition_MB(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, tstopsMB)
+                # For the moment the time stepping used in the loss, and the one for the MB gradient computation must match
+                # The plan in the future is to be able to customize the time stepping for the MB gradient computation
+                # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/373
+                DiscreteCallback(stop_condition_MB, effect_MB!)
+            else
+                CallbackSet()
+            end
+            cb = CallbackSet(cb_adjoint_MB, cb_adjoint_loss)
 
             # Final condition
             λ₁ = Enzyme.make_zero(H[end])
 
             # Include contribution of loss from last step since this is not accounted for in the discrete callback
-            if simulation.parameters.simulation.tspan[2] ∈ t_ref
-                t_final = simulation.parameters.simulation.tspan[2]
+            if tspan[2] ∈ t_ref
+                t_final = tspan[2]
                 ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
                     loss_function,
                     H_itp(t_final),
@@ -211,13 +245,13 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             adjoint_PDE_rev = ODEProblem(
                 f_adjoint_rev,
                 λ₁,
-                .-reverse(simulation.parameters.simulation.tspan)
+                .-reverse(tspan)
                 )
 
             # Solve reverse adjoint PDE with dense output
             sol_rev = solve(
                 adjoint_PDE_rev,
-                callback = cb_adjoint_loss,
+                callback = cb,
                 # saveat=t_nodes_rev, # dont use this!
                 dense = true,
                 save_everystep = true,

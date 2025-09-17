@@ -7,9 +7,11 @@ function test_grad_finite_diff(
     finite_difference_method = :FiniteDifferences,
     finite_difference_order = 3,
     loss = LossH(),
+    use_MB = false,
 ) where {ADJ<:AbstractAdjointMethod}
 
-    println("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
+    print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
+    println(use_MB ? " and with MB" : "")
 
     # Determine if we are working with a velocity loss
     velocityLoss = typeof(loss) <: Union{<: LossV, <: LossHV}
@@ -24,7 +26,7 @@ function test_grad_finite_diff(
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
-    tspan = (2010.0, 2012.0)
+    tspan = use_MB ? (1980.0, 2019.0) : (2010.0, 2012.0)
 
     if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         optim_autoAD = Optimization.AutoEnzyme()
@@ -37,12 +39,11 @@ function test_grad_finite_diff(
     params = Parameters(
         simulation = SimulationParameters(
             working_dir=working_dir,
-            use_MB=false,
+            use_MB=use_MB,
             use_velocities=true,
             tspan=tspan,
             step=δt,
             multiprocessing=false,
-            workers=1,
             test_mode=true,
             rgi_paths=rgi_paths,
             gridScalingFactor=4),
@@ -51,8 +52,9 @@ function test_grad_finite_diff(
             epochs=100,
             optimizer=ODINN.ADAM(0.005)),
         physical = PhysicalParameters(
-            minA = 8e-21,
-            maxA = 8e-18),
+            # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
+            minA = use_MB ? 1e-21 : 8e-21,
+            maxA = use_MB ? 2e-21 : 8e-18),
         UDE = UDEparameters(
             sensealg=sensealg,
             optim_autoAD=optim_autoAD,
@@ -137,20 +139,23 @@ function test_grad_finite_diff(
     end
 
     dθ = zero(θ)
-    ######
-    # Computation of the gradient with SciMLSensitivity can fail with a fresh REPL
-    # Running the same code a second or third time usually works
-    # More information in https://github.com/ODINN-SciML/ODINN.jl/issues/354
-    try
+    if !isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         loss_iceflow_grad!(dθ, θ, simulation)
-    catch
-        @warn "Computation of gradient with SciMLSensitivity fail with first run due to compilation errors. Trying for a second time..."
+    else
+        # Computation of the gradient with SciMLSensitivity can fail with a fresh REPL
+        # Running the same code a second or third time usually works
+        # More information in https://github.com/ODINN-SciML/ODINN.jl/issues/354
         try
-            @warn "Computation of gradient with SciMLSensitivity succeded in a second run after compilation."
             loss_iceflow_grad!(dθ, θ, simulation)
         catch
-            @warn "Computation of gradient with SciMLSensitivity fail after second run due to compilation errors."
-            loss_iceflow_grad!(dθ, θ, simulation)
+            @warn "Computation of gradient with SciMLSensitivity fail with first run due to compilation errors. Trying for a second time..."
+            try
+                loss_iceflow_grad!(dθ, θ, simulation)
+                @warn "Computation of gradient with SciMLSensitivity succeded in a second run after compilation."
+            catch
+                @warn "Computation of gradient with SciMLSensitivity fail after second run due to compilation errors. Trying one last time..."
+                loss_iceflow_grad!(dθ, θ, simulation)
+            end
         end
     end
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) loss_iceflow_grad!(dθ, θ, simulation)

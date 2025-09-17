@@ -10,6 +10,7 @@ on:
 jobs:
   tutorials-check:
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
     env:
       ODINN_OVERWRITE_MULTI: true
     steps:
@@ -31,7 +32,6 @@ jobs:
       pull-requests: read
       statuses: write
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
