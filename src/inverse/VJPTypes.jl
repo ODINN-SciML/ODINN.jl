@@ -1,5 +1,5 @@
 export AbstractVJPMethod
-export DiscreteVJP, ContinuousVJP, EnzymeVJP
+export DiscreteVJP, ContinuousVJP, EnzymeVJP, NoVJP
 
 """
     AbstractVJPMethod
@@ -21,7 +21,7 @@ end
 """
 Continuous manual implementation of the VJP required inside the adjoint calculation.
 It relies in the continuous expresion for the adjoint operation based on the functional
-for of the forward PDE.
+formula of the forward PDE.
 
 `ContinuousVJP`
 """
@@ -34,4 +34,12 @@ Enzyme implementation of VJP used inside the adjoint calculation.
 `EnzymeVJP`
 """
 @kwdef struct EnzymeVJP <: AbstractVJPMethod
+end
+
+"""
+No VJP flavor when the contribution of a given term should not be computed inside the adjoint calculation (e.g. MB).
+
+`NoVJP`
+"""
+@kwdef struct NoVJP <: AbstractVJPMethod
 end

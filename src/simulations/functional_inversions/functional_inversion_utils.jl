@@ -293,6 +293,10 @@ Compute the gradient with respect to θ for all the glaciers and return the resu
 See the in-place implementation for more information.
 """
 function grad_loss_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
+    if simulation.parameters.simulation.use_MB
+        @assert simulation.parameters.UDE.optim_autoAD isa NoAD "Differentiation of callbacks with SciMLStruct is not supported by SciMLSensitivity yet. You get this error because you are using MB + gradient computation with SciMLSensitivity."
+    end
+
     simulations = generate_simulation_batches(simulation)
     grads = mappingFct(simulations) do simulation
         [grad_parallel_loss_iceflow!(θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
@@ -409,7 +413,7 @@ function _batch_iceflow_UDE(
 )
     params = container.simulation.parameters
     glacier = container.simulation.glaciers[glacier_idx]
-    step = step = params.solver.step
+    step = params.solver.step
 
     container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, params)
     container.simulation.model.machine_learning.θ = container.θ
@@ -422,11 +426,10 @@ function _batch_iceflow_UDE(
         # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
         mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, step = step
             function (integrator)
-                if params.simulation.use_MB
-                    # Compute mass balance
-                    MB_timestep!(cache, model, glacier, step, integrator.t)
-                    apply_MB_mask!(integrator.u, cache.iceflow)
-                end
+                # Compute mass balance
+                glacier.S .= glacier.B .+ integrator.u
+                MB_timestep!(cache, model, glacier, step, integrator.t)
+                apply_MB_mask!(integrator.u, cache.iceflow)
             end
         end
         # A simulation period is sliced in time windows that are separated by `step`
