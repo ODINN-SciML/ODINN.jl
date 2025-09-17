@@ -69,7 +69,8 @@ function test_grad_finite_diff(
             grad = adjointFlavor,
             optimization_method = "AD+AD",
             empirical_loss_function = loss,
-            target = target
+            target = target,
+            initial_condition_filter = :Zang1980
             ),
         solver = Huginn.SolverParameters(
             step = δt,
@@ -187,8 +188,8 @@ function test_grad_finite_diff(
             # Component array with binary entry
             θ_mask = θ .== nothing
             for key in keys(θ.IC)
-                M = Matrix(θ.IC[key])
-                non_zero = M .> 0.0
+                M = Matrix(ODINN.evaluate_H₀(θ, key, params.UDE.initial_condition_filter))
+                non_zero = M .> 1.0
                 idxs = rand(findall(non_zero), N)
                 mask = falses(size(M)...)
                 mask[idxs] .= 1
@@ -326,8 +327,6 @@ function test_grad_Halfar(
     adjointFlavor::ADJ;
     thres=[0., 0., 0.]
     ) where {ADJ <: AbstractAdjointMethod}
-
-    Random.seed!(1234)
 
     lossType = LossH(L2Sum(distance=15))
     A = 8e-19

@@ -93,7 +93,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     glacier,
                     θ,
                     simulation;
-                    normalization=prod(N) * normalization,
+                    normalization = prod(N) * normalization,
                 ), 1:k)
             # Unzip ∂L∂H, ∂L∂θ at each timestep
             ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
@@ -116,7 +116,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     glacier,
                     θ,
                     simulation;
-                    normalization=prod(N)*normalization,
+                    normalization = prod(N) * normalization,
                 )
                 ℓ += Δt[j-1]*ℓi
 
@@ -141,7 +141,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ₀ = λ[begin]
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
-                dLdθ.IC[Symbol("$(glacier.rgi_id)")] .+= λ₀ .+ ∂L∂H₀
+                glacier_id = Symbol("$(glacier.rgi_id)")
+                s₀ = evaluate_∂H₀(θ, glacier_id, simulation.parameters.UDE.initial_condition_filter)
+                dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
@@ -273,7 +275,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ₀ = sol_rev(-t₀)
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
-                dLdθ.IC[Symbol("$(glacier.rgi_id)")] .+= λ₀ .+ ∂L∂H₀
+                glacier_id = Symbol("$(glacier.rgi_id)")
+                s₀ = evaluate_∂H₀(θ, glacier_id, simulation.parameters.UDE.initial_condition_filter)
+                dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint

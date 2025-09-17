@@ -22,7 +22,6 @@ using Infiltrator
 using OrdinaryDiffEq
 using Optim
 using SciMLSensitivity
-using Random
 using Statistics
 using Zygote
 using ProgressMeter
@@ -40,6 +39,10 @@ include("inversion_test.jl")
 include("SIA2D_adjoint.jl")
 include("test_grad_loss.jl")
 include("save_results.jl")
+
+# Set random seed
+using Random
+Random.seed!(1234)
 
 # # Activate to avoid GKS backend Plot issues in the JupyterHub
 ENV["GKSwstype"] = "nul"

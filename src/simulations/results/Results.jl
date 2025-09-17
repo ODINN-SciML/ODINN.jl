@@ -22,7 +22,7 @@ mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
     θ::Union{<: ComponentVector, Nothing}
     θ_hist::Vector{<: ComponentVector}
     ∇θ_hist::Vector{<: ComponentVector}
-    initial_conditions::Union{Vector{Matrix{F}}, Nothing}
+    initial_conditions::Union{ComponentVector, Nothing}
     lastCall::DateTime
 end
 
@@ -53,7 +53,7 @@ function TrainingStats(;
     θ::Union{ComponentVector, Nothing} = nothing,
     θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[],
     ∇θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[],
-    initial_conditions::Union{Vector{Matrix{F}}, Nothing} = nothing,
+    initial_conditions::Union{ComponentVector, Nothing} = nothing,
 ) where {F <: AbstractFloat, I <: Integer}
 
     @assert length(losses) == niter

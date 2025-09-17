@@ -62,8 +62,7 @@ function run!(
     simulation.results.stats.θ = sol.u[reg_key]
     # Final initial conditions for the simulation
     if haskey(sol.u, :IC)
-        # TODO: change this to support multiple glaciers
-        simulation.results.stats.initial_conditions = [Matrix(sol.u.IC)]
+        simulation.results.stats.initial_conditions = sol.u.IC
     end
     simulation.model.machine_learning.θ = sol.u
 
@@ -506,7 +505,8 @@ function define_iceflow_prob(
     params = simulation.parameters
     # Define initial condition for the inverse simulation
     if haskey(θ, :IC)
-        H₀ = θ.IC[Symbol("$(simulation.glaciers[glacier_idx].rgi_id)")]
+        glacier_id = Symbol("$(simulation.glaciers[glacier_idx].rgi_id)")
+        H₀ = evaluate_H₀(θ, glacier_id, simulation.parameters.UDE.initial_condition_filter)
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
     else
         H₀ = simulation.glaciers[glacier_idx].H₀

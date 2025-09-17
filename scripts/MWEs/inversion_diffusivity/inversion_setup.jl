@@ -50,8 +50,10 @@ nx, ny = 100, 100
 R₀ = 2000.0
 H₀ = 200.0
 H_max = 1.2 * H₀
+A₀ = 2e-18
+n₀ = 3.0
 
-halfar_params = HalfarParameters(λ = λ, R₀ = R₀, H₀ = H₀, A = 2e-16, n = 3.0)
+halfar_params = HalfarParameters(λ = λ, R₀ = R₀, H₀ = H₀, A = A₀, n = n₀)
 halfar, t₀ = Halfar(halfar_params)
 
 Δt = 30.0
@@ -81,6 +83,7 @@ params = Parameters(
         workers = 1,
         test_mode = false,
         rgi_paths = rgi_paths,
+        gridScalingFactor = 4,
         ),
     hyper = Hyperparameters(
         batch_size = 1,
@@ -182,8 +185,9 @@ all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
 X_samples = hcat(first.(all_combinations), last.(all_combinations))
 function template_diffusivity(h, ∇s)
     (; ρ, g) = params.physical
-    n = 3.0
-    A = 2e-16
+    n = 1.01 * n₀
+    A = 0.80 * A₀
+    # This one has one less H than the actual diffusivity
     return 2 * A * (ρ * g)^n * h^(n+1) * ∇s^(n-1) / (n + 2)
 end
 Y_samples = map(x -> template_diffusivity(x[1], x[2]), eachrow(X_samples))
