@@ -8,7 +8,7 @@ function test_grad_finite_diff(
     finite_difference_order = 3,
     loss = LossH(),
     train_initial_conditions = false,
-    multiglacier = false
+    multiglacier = false,
     use_MB = false,
 ) where {ADJ<:AbstractAdjointMethod}
 
