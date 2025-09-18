@@ -78,7 +78,12 @@ end
 
 const rng_seed() = MersenneTwister(666)   # Random seed
 
-function build_simulation_batch(simulation::FunctionalInversion, i::I, nbatches::I=1) where {I <: Integer}
+function build_simulation_batch(
+    simulation::FunctionalInversion,
+    i::I,
+    nbatches::I = 1
+    ) where {I <: Integer}
+
     iceflow = simulation.model.iceflow
     massbalance = simulation.model.mass_balance
     ml = simulation.model.machine_learning
@@ -93,7 +98,9 @@ function build_simulation_batch(simulation::FunctionalInversion, i::I, nbatches:
     if length(simulation.results.simulation) < 1
         return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, simulation.results)
     else
-        results = Results([simulation.results.simulation[i]], simulation.results.stats)
+        # TODO: Notice this assumes there is just one vector in results! Probably needs a fix
+        # results = Results([simulation.results.simulation[i]], simulation.results.stats)
+        results = Results([only(simulation.results.simulation)], simulation.results.stats)
         return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, results)
     end
 end
@@ -118,6 +125,7 @@ This function splits the glaciers and associated data in the `simulation` object
 - If the simulation results are empty, the function creates batches with empty results objects.
 """
 function generate_simulation_batches(simulation::FunctionalInversion)
+    # TODO: we need to change how this is done here, with a manual =1 batch size
     nbatches = 1 #simulation.parameters.hyper.batchsize
     ninstances = length(simulation.glaciers)
     @assert ninstances % nbatches == 0

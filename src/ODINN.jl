@@ -22,7 +22,8 @@ module ODINN
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
-using Statistics, LinearAlgebra, Random
+using Statistics, LinearAlgebra
+using Random, Distributions
 using EnzymeCore
 using Enzyme
 using JLD2
@@ -51,7 +52,7 @@ using FastGaussQuadrature
 using Zygote
 using TensorBoardLogger
 using Dates
-
+using MLStyle
 
 # ##############################################
 # ############    PARAMETERS     ###############

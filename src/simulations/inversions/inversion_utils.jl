@@ -61,15 +61,17 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
         #simulation.model.iceflow.n[]=x[2]
 
         iceflow_prob = ODEProblem{false}(Huginn.SIA2D, model.iceflow.H, params.simulation.tspan, tstops=params.solver.tstops, simulation)
-        iceflow_sol = solve(iceflow_prob,
-                        params.solver.solver,
-                        callback=cb_MB,
-                        tstops=params.solver.tstops,
-                        reltol=params.solver.reltol,
-                        abstol=params.solver.reltol,
-                        save_everystep=params.solver.save_everystep,
-                        progress=params.solver.progress,
-                        progress_steps=params.solver.progress_steps)
+        iceflow_sol = solve(
+            iceflow_prob,
+            params.solver.solver,
+            callback = cb_MB,
+            tstops = params.solver.tstops,
+            reltol = params.solver.reltol,
+            abstol = params.solver.reltol,
+            save_everystep = params.solver.save_everystep,
+            progress = params.solver.progress,
+            progress_steps = params.solver.progress_steps
+            )
 
         H_obs = realsol[1]
         V_obs = realsol[2]
@@ -129,15 +131,17 @@ function invert_iceflow_transient(glacier_idx::Int, simulation::Inversion)
     
     # Determine H and V with optimized values
     iceflow_prob = ODEProblem{false}(Huginn.SIA2D, simulation.model.iceflow.H, simulation.parameters.simulation.tspan, simulation)
-    iceflow_sol = solve(iceflow_prob, 
-                        params.solver.solver, 
-                        callback=cb_MB, 
-                        tstops=params.solver.tstops, 
-                        reltol=params.solver.reltol, 
-                        abstol=params.solver.reltol,
-                        save_everystep=params.solver.save_everystep, 
-                        progress=params.solver.progress, 
-                        progress_steps=params.solver.progress_steps)
+    iceflow_sol = solve(
+        iceflow_prob,
+        params.solver.solver,
+        callback = cb_MB,
+        tstops = params.solver.tstops,
+        reltol = params.solver.reltol,
+        abstol = params.solver.reltol,
+        save_everystep = params.solver.save_everystep,
+        progress = params.solver.progress,
+        progress_steps = params.solver.progress_steps
+        )
 
     H_pred = iceflow_sol.u[end]
     map!(x -> ifelse(x>0.0,x,0.0), H_pred, H_pred)

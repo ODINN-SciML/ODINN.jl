@@ -1,5 +1,6 @@
 function inversion_test(;
     use_MB = false,
+    train_initial_conditions = false,
     multiprocessing = false
     )
 

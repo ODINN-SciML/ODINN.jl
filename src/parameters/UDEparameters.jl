@@ -17,13 +17,15 @@ mutable struct UDEparameters{ADJ<:AbstractAdjointMethod} <: AbstractParameters
     optimization_method::String
     empirical_loss_function::AbstractLoss
     target::Union{Symbol, Nothing}
+    initial_condition_filter::Union{Symbol, Nothing}
 end
 
 Base.:(==)(a::UDEparameters, b::UDEparameters) = a.sensealg == b.sensealg &&
     a.optim_autoAD == b.optim_autoAD && a.grad == b.grad &&
     a.optimization_method == b.optimization_method &&
     a.empirical_loss_function == b.empirical_loss_function &&
-    a.target == b.target
+    a.target == b.target &&
+    a.initial_condition_filter == b.initial_condition_filter
 
 
 """
@@ -55,7 +57,8 @@ function UDEparameters(;
         grad::ADJ = SciMLSensitivityAdjoint(),
         optimization_method::String = "AD+AD",
         empirical_loss_function::AbstractLoss = LossH(),
-        target::Union{Symbol, Nothing} = :A
+        target::Union{Symbol, Nothing} = :A,
+        initial_condition_filter::Union{Symbol, Nothing} = :identity
     ) where {ADJ <: AbstractAdjointMethod}
 
     # Verify that the optimization method is correct
@@ -64,7 +67,7 @@ function UDEparameters(;
     # Build the solver parameters based on input values
     UDE_parameters = UDEparameters{typeof(grad)}(
         sensealg, optim_autoAD, grad, optimization_method,
-        empirical_loss_function, target
+        empirical_loss_function, target, initial_condition_filter
     )
 
     return UDE_parameters
