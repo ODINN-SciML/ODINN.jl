@@ -38,7 +38,7 @@ using Base: @kwdef
 using Lux
 using Tullio
 using Infiltrator
-using Plots, PlotThemes
+using Plots, PlotThemes, PlotlyJS
 Plots.theme(:wong2) # sets overall theme for Plots
 import Pkg
 using Distributed

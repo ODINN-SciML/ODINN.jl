@@ -34,13 +34,14 @@ function plot_law(
 
     if n_inputs == 1
         fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names)
+        save_law_plot(fig, n_inputs, input_names, law, simulation, idx_fixed_input)
     elseif n_inputs == 2
         fig = plot_law_2d(law, simulation, inputs, glacier_idx, θ, input_names, idx_fixed_input)
+        display(fig)
     else
         error("Only 1D or 2D input plotting is supported.")
     end
 
-    save_law_plot(fig, n_inputs, input_names, law, simulation, idx_fixed_input)
     return fig
 end
 
@@ -107,7 +108,7 @@ function plot_law_2d_fixed(
     zs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
     println("plotting 2D scatter with fixed input $(fixed_input_name) at mean value $(fixed_mean)")
 
-    return scatter(non_fixed_vals, zs; xlabel=string(non_fixed_name), ylabel=string(law.name), title="Law Function 2D Plot (Fixed $(fixed_input_name))")
+    return Plots.scatter(non_fixed_vals, zs; xlabel=string(non_fixed_name), ylabel=string(law.name), title="Law Function 2D Plot (Fixed $(fixed_input_name))")
 end
 
 function plot_law_2d_surface(
@@ -128,5 +129,35 @@ function plot_law_2d_surface(
         yvals = inn1(yvals)
     end
 
-    return surface(xvals, yvals, zs; xlabel=string(xname), ylabel=string(yname), zlabel=string(law.name), title="Law Function Surface")
+    # Ensure xvals, yvals, zs are vectors of equal length for scatter3d
+    xv = vec(xvals)
+    yv = vec(yvals)
+    zv = vec(zs)
+
+    cmin = minimum(zv)
+    cmax = maximum(zv)
+    return PlotlyJS.plot(
+        PlotlyJS.scatter3d(
+            x = xv,
+            y = yv,
+            z = zv,
+            mode = "markers",
+            marker = attr(
+                size = 8,  
+                color = zv,
+                colorscale = "Viridis",
+                colorbar = attr(title = string(law.name)),
+                cmin = cmin,
+                cmax = cmax
+            )
+        ),
+        PlotlyJS.Layout(
+            title = "Law Function Surface",
+            scene = attr(
+                xaxis = attr(title = string(xname)),
+                yaxis = attr(title = string(yname)),
+                zaxis = attr(title = string(law.name))
+            )
+        )
+    )
 end
