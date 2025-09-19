@@ -25,7 +25,9 @@ rgi_ids = ["RGI60-11.03638"]
 δt = 1/12
 time_window = 7
 topo_window = 200.0
-law_inputs = (; CPDD=iCPDD(window=time_window), topo_roughness=iTopoRough(window=topo_window))
+# curvature_type = :scalar
+curvature_type = :variability
+law_inputs = (; CPDD=iCPDD(window=time_window), topo_roughness=iTopoRough(window=topo_window, curvature_type=curvature_type))
 
 params = Parameters(
     simulation = SimulationParameters(
