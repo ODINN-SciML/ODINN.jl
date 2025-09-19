@@ -13,6 +13,28 @@ We will review your PR it and provide feedback. If you are looking for ideas of 
 !!! tip
     If you need help navigating the world of PRs and contributing in GitHub, we encourage you to take a look at the [tutorial](https://docs.oggm.org/en/stable/contributing.html) put together by our OGGM friends.
 
+## Coding style
+
+We use [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl) to ensure consistent coding style.
+If you open a PR, your changes must follow the SciML coding style.
+One way to ensure that each of your commits always follow the SciML style is to install a commit hook in the packages you are developing.
+
+First you need to install [pre-commit](https://pre-commit.com/) which allows you to easily install a commit hook:
+```bash
+pip install pre-commit
+```
+Installing the commit hook defined in the `.pre-commit-config.yaml` file at the root of the repository can be done by running:
+```bash
+pre-commit install
+```
+Then once you have staged your changes, when running the `git commit` command, the hook will trigger and `JuliaFormatter` will ask you to confirm the formatting that have been applied (if changes to the code format were necessary).
+
+!!! tip
+    You need to install this commit hook in each of the repositories you are editing.
+
+!!! tip "Continous integration"
+    A github action checks within the CI that each commit follows the SciML style and you will get an error if by any chance you pushed changes that need to be formatted.
+
 ## Contributing to the documentation
 
 Here we show the basics around building the docs locally and making contributions.
