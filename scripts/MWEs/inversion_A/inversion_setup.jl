@@ -52,7 +52,7 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [100,100],
+        epochs = [2, 2],
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
@@ -64,7 +64,8 @@ params = Parameters(
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
         empirical_loss_function = LossH(),
-        target = :A
+        target = :A,
+        initial_condition_filter = :Zang1980
         ),
     solver = Huginn.SolverParameters(
         step = δt,
@@ -92,7 +93,7 @@ nn_model = NeuralNetwork(params)
 train_initial_conditions = true
 
 if train_initial_conditions
-    ic = InitialCondition(params, glaciers, :Farinotti2019)
+    ic = InitialCondition(params, glaciers, :Farinotti2019Random)
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
         mass_balance = nothing,
