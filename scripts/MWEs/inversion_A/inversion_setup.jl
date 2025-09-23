@@ -90,10 +90,10 @@ glaciers = generate_ground_truth(glaciers, params, model, tstops)
 nn_model = NeuralNetwork(params)
 
 # Decide if we want or not to learn initial condition
-train_initial_conditions = true
+train_initial_conditions = false
 
 if train_initial_conditions
-    ic = InitialCondition(params, glaciers, :Farinotti2019Random)
+    ic = InitialCondition(params, glaciers, :Farinotti2019)
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
         mass_balance = nothing,
