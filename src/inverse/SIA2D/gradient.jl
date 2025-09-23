@@ -112,9 +112,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP, λ[j], H[j], simulation, glacier, tj)
                 end
 
-                # β = 2.0
-                # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
-
                 # Compute derivative of local contribution to loss function
                 ∂ℓ∂H = ∂L∂H[j]
                 ∂ℓ∂θ = ∂L∂θ[j]
@@ -159,11 +156,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
-
-            # @assert !(loss_function isa LossHV || loss_function isa LossV) "ContinuousAdjoint is not compatible with the ice velocity loss for the moment"
-
-            # Adjoint setup
-
             """
             Construct continuous interpolator for solution of forward PDE
             TODO: For now we do linear, but of course we can use something more sophisticated (although I don't think will make a huge difference for ice)
@@ -306,7 +298,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
             # Contribution of initial condition to loss function
             if haskey(θ, :IC)
-                λ₀ = sol_rev(-t₀)
+                λ₀ = sol_rev(-tspan[1])
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
                 glacier_id = Symbol("$(glacier.rgi_id)")
