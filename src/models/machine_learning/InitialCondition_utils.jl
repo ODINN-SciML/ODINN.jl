@@ -1,3 +1,5 @@
+export evaluate_H₀
+
 """
     evaluate_H₀(θ::ComponentArray, glacier_id::Symbol, filter::Symbol)
 
@@ -15,15 +17,19 @@ Evaluate the initial ice thickness `H₀` for a given glacier, optionally applyi
 """
 function evaluate_H₀(
     θ::ComponentArray,
-    glacier_id::Symbol,
+    glacier::Glacier2D,
     filter::Symbol
     )
-    _H₀ = θ.IC[glacier_id]
-    return @match filter begin
-        :identity => _H₀
-        :softplus => log.(1 .+ exp.(_H₀))
-        :Zang1980 => σ_zang.(_H₀)
+    glacier_id = Symbol("$(glacier.rgi_id)")
+    H₀ = θ.IC[glacier_id]
+    H₀ = @match filter begin
+        :identity => H₀
+        :softplus => log.(1 .+ exp.(H₀))
+        :Zang1980 => σ_zang.(H₀)
     end
+    # Apply mask
+    H₀[glacier.mask] .= 0.0
+    return H₀
 end
 
 """
@@ -43,15 +49,19 @@ Evaluate the derivative of the initial ice thickness `H₀` for a given glacier,
 """
 function evaluate_∂H₀(
     θ::ComponentArray,
-    glacier_id::Symbol,
+    glacier::Glacier2D,
     filter::Symbol
     )
-    _H₀ = θ.IC[glacier_id]
-    return @match filter begin
+    glacier_id = Symbol("$(glacier.rgi_id)")
+    ∂H₀ = θ.IC[glacier_id]
+    ∂H₀ = @match filter begin
         :identity => 1.0
-        :softplus => 1 ./ (1 .+ exp.(-_H₀))
-        :Zang1980 => ∂σ_zang.(_H₀)
+        :softplus => 1 ./ (1 .+ exp.(-∂H₀))
+        :Zang1980 => ∂σ_zang.(∂H₀)
     end
+    # Apply mask
+    ∂H₀[glacier.mask] .= 0.0
+    return ∂H₀
 end
 
 """
