@@ -150,7 +150,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 λ₀ = λ[begin]
                 # This contribution will come from the regularization on the initial condition
                 ∂L∂H₀ = 0.0
-                # glacier_id = Symbol("$(glacier.rgi_id)")
+                glacier_id = Symbol("$(glacier.rgi_id)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
