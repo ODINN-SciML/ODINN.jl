@@ -55,6 +55,8 @@ function run!(
     end
 
     # Setup final results
+    simulation.model.machine_learning.θ = sol.u
+
     simulation.results.stats.niter = length(simulation.results.stats.losses)
     # Final parameters of the neural network for the target regressor
     # Just one neural network is supported for now
@@ -62,9 +64,15 @@ function run!(
     simulation.results.stats.θ = sol.u[reg_key]
     # Final initial conditions for the simulation
     if haskey(sol.u, :IC)
-        simulation.results.stats.initial_conditions = sol.u.IC
+        simulation.results.stats.initial_conditions = Dict()
+        for glacier in simulation.glaciers
+            simulation.results.stats.initial_conditions[String(glacier.rgi_id)] = evaluate_H₀(
+                simulation.model.machine_learning.θ,
+                glacier,
+                simulation.parameters.UDE.initial_condition_filter
+            )
+        end
     end
-    simulation.model.machine_learning.θ = sol.u
 
     # TODO: Save when optimization is working
     # Save results in path is provided
@@ -508,8 +516,11 @@ function define_iceflow_prob(
     params = simulation.parameters
     # Define initial condition for the inverse simulation
     if haskey(θ, :IC)
-        glacier_id = Symbol("$(simulation.glaciers[glacier_idx].rgi_id)")
-        H₀ = evaluate_H₀(θ, glacier_id, simulation.parameters.UDE.initial_condition_filter)
+        H₀ = evaluate_H₀(
+            θ,
+            simulation.glaciers[glacier_idx],
+            simulation.parameters.UDE.initial_condition_filter
+            )
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
     else
         H₀ = simulation.glaciers[glacier_idx].H₀

@@ -193,12 +193,13 @@ function test_grad_finite_diff(
             N = 40
             # Component array with binary entry
             θ_mask = θ .== nothing
-            for key in keys(θ.IC)
-                M = Matrix(ODINN.evaluate_H₀(θ, key, params.UDE.initial_condition_filter))
+            for glacier in glaciers
+                M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter)
                 non_zero = M .> 1.0
                 idxs = rand(findall(non_zero), N)
                 mask = falses(size(M)...)
                 mask[idxs] .= 1
+                key = Symbol("$(glacier.rgi_id)")
                 θ_mask.IC[key] .= mask
             end
 
