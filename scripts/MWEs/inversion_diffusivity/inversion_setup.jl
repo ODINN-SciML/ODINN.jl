@@ -28,12 +28,14 @@ Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use
 using Revise
 using ODINN
 using Sleipnir: DummyClimate2D
-using SciMLSensitivity
-using Lux, ComponentArrays
-using Statistics
-using Plots
-using JLD2
-using Random, Distributions
+# using SciMLSensitivity
+# using Lux, ComponentArrays
+# using Statistics
+# using Plots
+# using JLD2
+# using Random, Distributions
+using ODINN: MersenneTwister, ZygoteAdjoint, ComponentVector
+using ODINN: Lux, sigmoid, gelu, softplus
 
 rng = MersenneTwister(616)
 
@@ -48,8 +50,10 @@ nx, ny = 100, 100
 R₀ = 2000.0
 H₀ = 200.0
 H_max = 1.2 * H₀
+A₀ = 2e-18
+n₀ = 3.0
 
-halfar_params = HalfarParameters(λ = λ, R₀ = R₀, H₀ = H₀, A = 2e-16, n = 3.0)
+halfar_params = HalfarParameters(λ = λ, R₀ = R₀, H₀ = H₀, A = A₀, n = n₀)
 halfar, t₀ = Halfar(halfar_params)
 
 Δt = 30.0
@@ -79,6 +83,7 @@ params = Parameters(
         workers = 1,
         test_mode = false,
         rgi_paths = rgi_paths,
+        gridScalingFactor = 4,
         ),
     hyper = Hyperparameters(
         batch_size = 1,
@@ -97,7 +102,7 @@ params = Parameters(
                 ]
         ),
     UDE = UDEparameters(
-        sensealg = SciMLSensitivity.ZygoteAdjoint(),
+        sensealg = ZygoteAdjoint(),
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
@@ -158,17 +163,17 @@ end
 # end
 
 architecture = Lux.Chain(
-    WrappedFunction(x -> LuxFunction(inv_normalize, x)),
+    Lux.WrappedFunction(x -> LuxFunction(inv_normalize, x)),
     # WrappedFunction(x -> inv_fourier_feature(x)),
     # WrappedFunction(x -> [fourier_feature(x[1], n_fourier_feautures); fourier_feature(x[2], n_fourier_feautures)]),
-    Dense(2, 5, x -> gelu.(x)),
-    Dense(5, 8, x -> gelu.(x)),
-    Dense(8, 20, x -> gelu.(x)),
+    Lux.Dense(2, 5, x -> gelu.(x)),
+    Lux.Dense(5, 8, x -> gelu.(x)),
+    Lux.Dense(8, 20, x -> gelu.(x)),
     # Dense(4 * n_fourier_feautures, 20, x -> softplus.(x)),
-    Dense(20, 30, x -> softplus.(x)),
-    Dense(30, 10, x -> softplus.(x)),
-    Dense(10, 1, sigmoid),
-    WrappedFunction(y -> 1e5 .* exp.((y .- 1.0) ./ y))
+    Lux.Dense(20, 30, x -> softplus.(x)),
+    Lux.Dense(30, 10, x -> softplus.(x)),
+    Lux.Dense(10, 1, sigmoid),
+    Lux.WrappedFunction(y -> 1e5 .* exp.((y .- 1.0) ./ y))
     # WrappedFunction(y -> 10.0.^( 3.0 .* (y .- 1.0) .+ 1.0 .* (y .+ 1.0) ))
 )
 
@@ -180,8 +185,9 @@ all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
 X_samples = hcat(first.(all_combinations), last.(all_combinations))
 function template_diffusivity(h, ∇s)
     (; ρ, g) = params.physical
-    n = 3.0
-    A = 2e-16
+    n = 1.01 * n₀
+    A = 0.80 * A₀
+    # This one has one less H than the actual diffusivity
     return 2 * A * (ρ * g)^n * h^(n+1) * ∇s^(n-1) / (n + 2)
 end
 Y_samples = map(x -> template_diffusivity(x[1], x[2]), eachrow(X_samples))

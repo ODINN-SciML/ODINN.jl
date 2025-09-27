@@ -24,7 +24,6 @@ function run!(
         Dates.format(now(), "yyyy-mm-dd_HH:MM:SS"),
     ),
 )
-
     println("Running training of UDE...\n")
 
     # Set expected total number of epochs from beginning for the callback
@@ -48,15 +47,32 @@ function run!(
                 simulation.model.machine_learning.θ = θ_trained
             end
             sol = train_UDE!(simulation; save_every_iter=save_every_iter, logger=logger)
+            # Clear results of previous simulation for fresh start
+            if i < length(epochs)
+                simulation.results.simulation = Sleipnir.Results{Float64, Int64}[]
+            end
         end
     end
 
     # Setup final results
-    simulation.results.stats.niter = length(simulation.results.stats.losses)
-    # simulation.results.stats.retcode = sol.
-    simulation.results.stats.θ = sol.u
-
     simulation.model.machine_learning.θ = sol.u
+
+    simulation.results.stats.niter = length(simulation.results.stats.losses)
+    # Final parameters of the neural network for the target regressor
+    # Just one neural network is supported for now
+    reg_key = only(intersect(keys(sol.u), (:A, :C, :n, :Y, :U)))
+    simulation.results.stats.θ = sol.u[reg_key]
+    # Final initial conditions for the simulation
+    if haskey(sol.u, :IC)
+        simulation.results.stats.initial_conditions = Dict()
+        for glacier in simulation.glaciers
+            simulation.results.stats.initial_conditions[String(glacier.rgi_id)] = evaluate_H₀(
+                simulation.model.machine_learning.θ,
+                glacier,
+                simulation.parameters.UDE.initial_condition_filter
+            )
+        end
+    end
 
     # TODO: Save when optimization is working
     # Save results in path is provided
@@ -73,7 +89,11 @@ train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false, logger:
 
 Trains UDE based on the current FunctionalInversion.
 """
-function train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing)
+function train_UDE!(
+    simulation::FunctionalInversion;
+    save_every_iter::Bool = false,
+    logger::Union{<: TBLogger, Nothing} = nothing
+    )
     optimizer = simulation.parameters.hyper.optimizer
     iceflow_trained = train_UDE!(simulation, optimizer; save_every_iter=save_every_iter, logger=logger)
     return iceflow_trained
@@ -82,7 +102,12 @@ end
 """
 BFGS Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::Optim.FirstOrderOptimizer; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing)
+function train_UDE!(
+    simulation::FunctionalInversion,
+    optimizer::Optim.FirstOrderOptimizer;
+    save_every_iter::Bool = false,
+    logger::Union{<: TBLogger, Nothing} = nothing
+    )
 
     @info "Training with BFGS optimizer"
 
@@ -139,13 +164,19 @@ end
 """
 ADAM Training
 """
-function train_UDE!(simulation::FunctionalInversion, optimizer::AR; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing) where {AR <: Optimisers.AbstractRule}
+function train_UDE!(
+    simulation::FunctionalInversion,
+    optimizer::AR;
+    save_every_iter::Bool = false,
+    logger::Union{<: TBLogger, Nothing} = nothing
+    ) where {AR <: Optimisers.AbstractRule}
 
     @info "Training with ADAM optimizer"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
 
+    # The variable θ includes all variables to being optimized, including initial conditions
     θ = simulation.model.machine_learning.θ
 
     # Get the available workers
@@ -213,7 +244,7 @@ function create_results(θ, simulation::FunctionalInversion, mappingFct)
         container = FunctionalInversionBinder(simulation, θ)
         [_batch_iceflow_UDE(
             container, glacier_idx,
-            define_iceflow_prob(simulation, glacier_idx)
+            define_iceflow_prob(θ, simulation, glacier_idx)
         ) for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
@@ -247,66 +278,6 @@ function loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
     l_H = sum(losses)
     return l_H
 end
-
-# TODO: This function is not longer use in the new version of the code with transient
-# inversions. We may want just to remove it.
-# function loss_iceflow(θ, simulation::FunctionalInversion)
-
-#     # simulation.model.machine_learning.θ = θ # update model parameters
-#     predict_iceflow!(θ, simulation)
-
-#     loss = simulation.parameters.UDE.empirical_loss_function
-
-#     # Compute loss function for the full batch
-#     let l_V = 0.0, l_H =  0.0
-#     for result in simulation.results
-#         # Get ice thickness from the reference dataset
-#         H_ref = result.H_glathida
-#         # isnothing(H_ref) ? continue : nothing
-#         # Get ice velocities for the reference dataset
-#         Vx_ref = result.Vx_ref
-#         Vy_ref = result.Vy_ref
-#         # Get ice thickness from the UDE predictions
-#         H = result.H
-#         # Get ice velocities prediction from the UDE
-#         Vx_pred = result.Vx
-#         Vy_pred = result.Vy
-
-#         if simulation.parameters.UDE.scale_loss
-#             # Ice thickness
-#             if !isnothing(H_ref)
-#                 normHref = mean(H_ref.^2)^0.5
-#                 l_H_loc = loss(H, H_ref)
-#                 l_H += normHref^(-1) * l_H_loc
-#             end
-#             # Ice surface velocities
-#             normVref = mean(Vx_ref.^2 .+ Vy_ref.^2)^0.5
-#             # l_V_loc = loss(Vx_pred, inn1(Vx_ref)) + loss(Vy_pred, inn1(Vy_ref))
-#             l_V_loc = loss(Vx_pred, Vx_ref) + loss(Vy_pred, Vy_ref)
-#             l_V += normVref^(-1) * l_V_loc
-#         else
-#             # Ice thickness
-#             if !isnothing(H_ref)
-#                 l_H += loss(H[H_ref .!= 0.0], H_ref[H_ref.!= 0.0])
-#             end
-#             # Ice surface velocities
-#             l_V += loss(V_pred[V_ref .!= 0.0], V_ref[V_ref.!= 0.0])
-#         end
-#     end # for
-
-#     loss_type = simulation.parameters.UDE.loss_type
-#     @assert (loss_type == "H" || loss_type == "V" || loss_type == "HV") "Invalid `loss_type`. Needs to be 'H', 'V' or 'HV'"
-#     if loss_type == "H"
-#         l_tot = l_H/length(simulation.results)
-#     elseif loss_type == "V"
-#         l_tot = l_V/length(simulation.results)
-#     elseif loss_type == "HV"
-#         l_tot = (l_V + l_H)/length(simulation.results)
-#     end
-
-#     return l_tot
-#     end # let
-# end
 
 """
     grad_loss_iceflow!(dθ, θ, simulation::FunctionalInversion, mappingFct)
@@ -349,7 +320,7 @@ This function defines the iceflow problem and then calls Zygote to differentiate
 It uses the SciMLSensitivity implementation under the hood to compute the adjoint of the ODE.
 """
 function grad_parallel_loss_iceflow!(θ, simulation::FunctionalInversion, glacier_idx::Integer)
-    iceflow_prob = define_iceflow_prob(simulation, glacier_idx)
+    iceflow_prob = define_iceflow_prob(θ, simulation, glacier_idx)
     ret, = Zygote.gradient(
         _θ -> batch_loss_iceflow_transient(
             FunctionalInversionBinder(simulation, _θ),
@@ -367,7 +338,14 @@ When multiprocessing is enabled, each call of this function has a dedicated proc
 This function calls `batch_loss_iceflow_transient` which returns both the loss and the result structure. The function keeps only the loss.
 """
 function parallel_loss_iceflow_transient(θ, simulation::FunctionalInversion)
-    return [batch_loss_iceflow_transient(FunctionalInversionBinder(simulation, θ), glacier_idx, define_iceflow_prob(simulation, glacier_idx))[1] for glacier_idx in 1:length(simulation.glaciers)]
+    return [
+        batch_loss_iceflow_transient(
+            FunctionalInversionBinder(simulation, θ),
+            glacier_idx,
+            define_iceflow_prob(θ, simulation, glacier_idx)
+            )[1]
+        for glacier_idx in 1:length(simulation.glaciers)
+        ]
 end
 
 """
@@ -504,16 +482,16 @@ function simulate_iceflow_UDE!(
     iceflow_prob::ODEProblem,
 )
     params = container.simulation.parameters
-    iceflow_prob_remake = remake(iceflow_prob; p=container)
+    iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
         params.solver.solver,
-        callback=cb,
-        sensealg=params.UDE.sensealg,
-        reltol=params.solver.reltol,
-        progress=false,
-        maxiters=params.solver.maxiters,
-        tstops=params.solver.tstops,
+        callback = cb,
+        sensealg = params.UDE.sensealg,
+        reltol = params.solver.reltol,
+        progress = false,
+        maxiters = params.solver.maxiters,
+        tstops = params.solver.tstops,
     )
     @assert iceflow_sol.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
 
@@ -531,17 +509,28 @@ In practice, the returned iceflow problem is used inside `simulate_iceflow_UDE!`
 The definition of the iceflow problem has to be done outside of the gradient computation, otherwise Zygote fails at differentiating it.
 """
 function define_iceflow_prob(
+    θ,
     simulation::FunctionalInversion,
     glacier_idx::Integer,
 )
     params = simulation.parameters
-    H₀ = simulation.glaciers[glacier_idx].H₀
+    # Define initial condition for the inverse simulation
+    if haskey(θ, :IC)
+        H₀ = evaluate_H₀(
+            θ,
+            simulation.glaciers[glacier_idx],
+            simulation.parameters.UDE.initial_condition_filter
+            )
+        @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
+    else
+        H₀ = simulation.glaciers[glacier_idx].H₀
+    end
     iceflow_prob = ODEProblem(
         SIA2D_UDE!,
         H₀,
         params.simulation.tspan,
         simulation;
-        tstops=params.solver.tstops,
+        tstops = params.solver.tstops,
     )
     return iceflow_prob
 end

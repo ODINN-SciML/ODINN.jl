@@ -36,11 +36,12 @@ Compute gradient glacier per glacier
 function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     # Run forward simulation to build the results
+    container = FunctionalInversionBinder(simulation, θ)
     loss_results = [batch_loss_iceflow_transient(
-            FunctionalInversionBinder(simulation, θ),
+            container,
             glacier_idx,
-            define_iceflow_prob(simulation, glacier_idx),
-        ) for glacier_idx in 1:length(simulation.glaciers)]
+            define_iceflow_prob(θ, simulation, glacier_idx),
+        ) for glacier_idx in 1:length(container.simulation.glaciers)]
     loss_val = sum(getindex.(loss_results, 1))
     results = getindex.(loss_results, 2)
     simulation.results.simulation = results
@@ -99,7 +100,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     glacier,
                     θ,
                     simulation;
-                    normalization=prod(N) * normalization,
+                    normalization = prod(N) * normalization,
                 ), 1:k)
             # Unzip ∂L∂H, ∂L∂θ at each timestep
             ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
@@ -110,9 +111,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
                     λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP, λ[j], H[j], simulation, glacier, tj)
                 end
-
-                # β = 2.0
-                # normalization = std(H_ref[j][H_ref[j] .> 0.0])^β
 
                 # Compute derivative of local contribution to loss function
                 ∂ℓ∂H = ∂L∂H[j]
@@ -127,7 +125,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     glacier,
                     θ,
                     simulation;
-                    normalization=prod(N)*normalization,
+                    normalization = prod(N) * normalization,
                 )
                 ℓ += Δt[j-1]*ℓi
 
@@ -147,12 +145,21 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 dLdθ .+= Δt[j-1] .* (isnothing(∂ℓ∂θ) ? λ_∂f∂θ : λ_∂f∂θ .+ ∂ℓ∂θ)
             end
 
+            # Contribution of initial condition to loss function
+            if haskey(θ, :IC)
+                λ₀ = λ[begin]
+                # This contribution will come from the regularization on the initial condition
+                ∂L∂H₀ = 0.0
+                glacier_id = Symbol("$(glacier.rgi_id)")
+                s₀ = evaluate_∂H₀(
+                    θ,
+                    glacier,
+                    simulation.parameters.UDE.initial_condition_filter
+                    )
+                dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
+            end
+
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
-
-            # @assert !(loss_function isa LossHV || loss_function isa LossV) "ContinuousAdjoint is not compatible with the ice velocity loss for the moment"
-
-            # Adjoint setup
-
             """
             Construct continuous interpolator for solution of forward PDE
             TODO: For now we do linear, but of course we can use something more sophisticated (although I don't think will make a huge difference for ice)
@@ -262,7 +269,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                 abstol = simulation.parameters.UDE.grad.abstol,
                 maxiters = simulation.parameters.solver.maxiters,
                 )
-            @assert sol_rev.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(sol_rev.retcode)\""
+            @assert sol_rev.retcode == ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(sol_rev.retcode)\""
 
             ### Numerical integration using quadrature to compute gradient
             # Contribution of the loss function due to ∂l∂θ
@@ -284,13 +291,27 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Final integration of the loss
             if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
                 for j in 1:length(t_nodes)
-                    λ_sol = sol_rev(-t_nodes[j])
+                    λ_sol = sol_rev(- t_nodes[j])
                     _H = H_itp(t_nodes[j])
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ_sol, _H, θ, nothing, simulation, t_nodes[j])
                     dLdθ .+= weights[j] .* (λ_∂f∂θ .+ ∂L∂θ[j])
                 end
             else
                 throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
+            end
+
+            # Contribution of initial condition to loss function
+            if haskey(θ, :IC)
+                λ₀ = sol_rev(-tspan[1])
+                # This contribution will come from the regularization on the initial condition
+                ∂L∂H₀ = 0.0
+                glacier_id = Symbol("$(glacier.rgi_id)")
+                s₀ = evaluate_∂H₀(
+                    θ,
+                    glacier,
+                    simulation.parameters.UDE.initial_condition_filter
+                    )
+                dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
