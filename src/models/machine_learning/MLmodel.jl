@@ -192,8 +192,8 @@ end
 
 # Display setup
 function Base.show(io::IO, nn_model::NeuralNetwork)
-    println("--- NeuralNetwork ---")
-    println("    architecture:")
+    println(io, "--- NeuralNetwork ---")
+    println(io, "    architecture:")
     # Retrieve the printed lines
     iotmp = IOBuffer()
     show(iotmp, "text/plain", nn_model.architecture)
@@ -201,34 +201,34 @@ function Base.show(io::IO, nn_model::NeuralNetwork)
     # Add prefix to each line
     prefix = "      "
     prefixed_str = join(prefix .* split(str, '\n'), '\n')
-    println(prefixed_str)
+    println(io, prefixed_str)
     # show(io, "text/plain", nn_model.architecture)
-    print("    θ: ComponentVector of length $(length(nn_model.θ))")
+    print(io, "    θ: ComponentVector of length $(length(nn_model.θ))")
 end
 
 function Base.show(io::IO, ml_model::MachineLearning)
     if !(ml_model.A isa emptyMLmodel)
-        print("  A: ")
-        println(ml_model.A)
+        print(io, "  A: ")
+        println(io, ml_model.A)
     end
     if !(ml_model.C isa emptyMLmodel)
-        print("  C: ")
-        println(ml_model.C)
+        print(io, "  C: ")
+        println(io, ml_model.C)
     end
     if !(ml_model.n isa emptyMLmodel)
-        print("  n: ")
-        println(ml_model.n)
+        print(io, "  n: ")
+        println(io, ml_model.n)
     end
     if !(ml_model.Y isa emptyMLmodel)
-        print("  Y: ")
-        println(ml_model.Y)
+        print(io, "  Y: ")
+        println(io, ml_model.Y)
     end
     if !(ml_model.U isa emptyMLmodel)
-        print("  U: ")
-        println(ml_model.U)
+        print(io, "  U: ")
+        println(io, ml_model.U)
     end
     if !(ml_model.IC isa emptyIC)
-        print("  IC: ")
-        println("Initial condition of glaciers is a free parameter to optimize.")
+        print(io, "  IC: ")
+        println(io, "Initial condition of glaciers is a free parameter to optimize.")
     end
 end
