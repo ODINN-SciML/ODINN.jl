@@ -24,7 +24,7 @@ function run!(
         Dates.format(now(), "yyyy-mm-dd_HH:MM:SS"),
     ),
 )
-    println("Running training of UDE...\n")
+    println("Training UDE...\n")
 
     # Set expected total number of epochs from beginning for the callback
     simulation.results.stats.niter = sum(simulation.parameters.hyper.epochs)
