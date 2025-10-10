@@ -23,7 +23,7 @@ rgi_ids = ["RGI60-11.03638"]
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
-time_window = 7
+time_window = Week(1)
 topo_window = 200.0
 # curvature_type = :scalar
 curvature_type = :variability
@@ -77,7 +77,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-prediction = generate_ground_truth!(glaciers, params, model, tstops)
+prediction = generate_ground_truth(glaciers, params, model, tstops)
 
 ### Figures
 
