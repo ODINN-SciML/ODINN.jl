@@ -1,6 +1,6 @@
 export AbstractRegularization
 export TikhonovRegularization
-export VelocityRegularization, DiffusivityRegularization
+export InitialThicknessRegularization, VelocityRegularization, DiffusivityRegularization
 export loss, backward_loss
 
 # Abstract regularization type as subtype of loss
@@ -12,8 +12,14 @@ abstract type AbstractSimpleRegularization <: AbstractLoss end
 """
 Also known as Ridge regression.
 """
-@kwdef struct TikhonovRegularization{F <: AbstractFloat} <: AbstractSimpleRegularization
-    power::F = 2.0
+@kwdef struct TikhonovRegularization{I<:Integer} <: AbstractSimpleRegularization
+# @kwdef struct pLaplacianRegularization{F<:AbstractFloat, I<:Integer} <: AbstractSimpleRegularization
+    # power::F = 2.0
+    distance::I = 3
+end
+
+@kwdef struct InitialThicknessRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
+    reg::R = TikhonovRegularization()
 end
 
 @kwdef struct VelocityRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
@@ -31,7 +37,7 @@ function loss(
     Δx::F,
     Δy::F,
 ) where {F <: AbstractFloat}
-    return sum(∇²(a, Δx, Δy).^regType.power)
+    return sum(∇²(a, Δx, Δy).^2.0)
 end
 function backward_loss(
     regType::TikhonovRegularization,
@@ -39,14 +45,51 @@ function backward_loss(
     Δx::F,
     Δy::F,
 ) where {F <: AbstractFloat}
-    ∂L∂∇²a = regType.power .* ∇²(a, Δx, Δy).^(regType.power .- 1.0)
+    ∂L∂∇²a = 2.0 .* abs.(∇²(a, Δx, Δy))
     return VJP_λ_∂∇²a_∂a(∂L∂∇²a, a, Δx, Δy)
+end
+
+function loss(
+    lossType::InitialThicknessRegularization,
+    H_pred::Matrix{F},
+    H_ref::Matrix{F},
+    t::F,
+    glacier,
+    θ,
+    simulation;
+    normalization::F=1.,
+) where {F <: AbstractFloat}
+    @assert haskey(θ, :IC) """
+    Regularization with respect to initial condition requires to set initial condition
+    as a trainable parameter. If you want to calibrate the initial condition of the
+    glacier, set the initial condition as parameter in the definition of the regressor.
+    """
+    # TODO: This is obtained from the initial condition, add assert
+    H₀ =Matrix(θ.IC)
+    regH = loss(lossType.loss, H₀, nothing; normalization=normalization)
+    return regH
+end
+function backward_loss(
+    lossType::InitialThicknessRegularization,
+    H_pred::Matrix{F},
+    H_ref::Matrix{F},
+    t::F,
+    glacier,
+    θ,
+    simulation;
+    normalization::F=1.,
+) where {F <: AbstractFloat}
+    # TODO: Change this again!
+    H₀ = H
+    ∂L∂H = backward_loss(lossType.loss, H₀; normalization=normalization)
+    ∂L∂θ = zero(θ)
+    return ∂L∂H, ∂L∂θ
 end
 
 function loss(
     regType::VelocityRegularization,
     H::Matrix{F},
-    H_ref, # Shoudl remove this! 
+    H_ref,
     t::F,
     glacier,
     θ,
@@ -65,13 +108,13 @@ function loss(
     if regType.components == :abs
         return loss(regType.reg, V, Δx, Δy)
     else
-        @error "Reg type not implemented."
+        @error "Regularization $(regType) not implemented."
     end
 end
 function backward_loss(
     regType::VelocityRegularization,
     H::Matrix{F},
-    H_ref, # Shoudl remove this! 
+    H_ref,
     t::F,
     glacier,
     θ,
@@ -87,7 +130,7 @@ function backward_loss(
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
 
-    mask = is_in_glacier(H, 3) .& (V .> 0.0)
+    mask = is_in_glacier(H, lossType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
         ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy)
@@ -95,7 +138,7 @@ function backward_loss(
         ∂Reg∂Vx = ifelse.(mask, ∂Reg∂V .* Vx ./ V, 0.0)
         ∂Reg∂Vy = ifelse.(mask, ∂Reg∂V .* Vy ./ V, 0.0)
     else
-        @error "Reg type not implemented."
+        @error "Regularization $(regType) not implemented."
     end
 
     ∂Reg∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
