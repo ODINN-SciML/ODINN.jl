@@ -33,7 +33,8 @@ function loss(
     regType::TikhonovRegularization,
     a::Matrix{F},
     Δx::F,
-    Δy::F,
+    Δy::F;
+    normalization::F=1.
 ) where {F <: AbstractFloat}
     return sum(∇²(a, Δx, Δy).^2.0)
 end
@@ -41,7 +42,8 @@ function backward_loss(
     regType::TikhonovRegularization,
     a::Matrix{F},
     Δx::F,
-    Δy::F,
+    Δy::F;
+    normalization::F=1.
 ) where {F <: AbstractFloat}
     ∂L∂∇²a = 2.0 .* abs.(∇²(a, Δx, Δy))
     return VJP_λ_∂∇²a_∂a(∂L∂∇²a, a, Δx, Δy)
@@ -62,9 +64,12 @@ function loss(
     as a trainable parameter. If you want to calibrate the initial condition of the
     glacier, set the initial condition as parameter in the definition of the regressor.
     """
-    # TODO: This is obtained from the initial condition, add assert
-    H₀ =Matrix(θ.IC)
-    regH = loss(lossType.loss, H₀, nothing; normalization=normalization)
+    # TODO: This should be evaluated just when t = t₀, not in general. However, Currently
+    # this are evaluated at the points of the quadrature, which usually don't include the
+    # extreme values of the time interval.
+    Δx, Δy = glacier.Δx, glacier.Δy
+    H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter)
+    regH = loss(lossType.reg, H₀, Δx, Δy; normalization = normalization)
     return regH
 end
 function backward_loss(
@@ -77,10 +82,13 @@ function backward_loss(
     simulation;
     normalization::F=1.,
 ) where {F <: AbstractFloat}
-    # TODO: Change this again!
-    H₀ = H
-    ∂L∂H = backward_loss(lossType.loss, H₀; normalization=normalization)
+    Δx, Δy = glacier.Δx, glacier.Δy
+    H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter)
+    ∂L∂H = zero(H₀)
     ∂L∂θ = zero(θ)
+    # Regularization is only evaluated for the first time step of the simulation.
+    # However, we save the value of the gradient for every single value of t
+    ∂L∂θ.IC[glacier.rgi_id] = backward_loss(lossType.reg, H₀, Δx, Δy; normalization = normalization)
     return ∂L∂H, ∂L∂θ
 end
 
@@ -95,8 +103,7 @@ function loss(
     normalization::F=1.,
 ) where {F <: AbstractFloat}
 
-    # TODO: extract this from glacier
-    Δx, Δy = 1.0, 1.0
+    Δx, Δy = glacier.Δx, glacier.Δy
 
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
@@ -120,8 +127,7 @@ function backward_loss(
     normalization::F=1.,
 ) where {F <: AbstractFloat}
 
-    # TODO: extract this from glacier
-    Δx, Δy = 1.0, 1.0
+    Δx, Δy = glacier.Δx, glacier.Δy
 
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
