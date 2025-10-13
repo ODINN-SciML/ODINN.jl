@@ -13,8 +13,6 @@ abstract type AbstractSimpleRegularization <: AbstractLoss end
 Also known as Ridge regression.
 """
 @kwdef struct TikhonovRegularization{I<:Integer} <: AbstractSimpleRegularization
-# @kwdef struct pLaplacianRegularization{F<:AbstractFloat, I<:Integer} <: AbstractSimpleRegularization
-    # power::F = 2.0
     distance::I = 3
 end
 
