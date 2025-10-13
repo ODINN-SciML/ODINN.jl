@@ -9,6 +9,8 @@ _inputs_U_law = (; H̄=iH̄(), ∇S=i∇S())
 # Abstract type as a parent type for Machine Learning models
 abstract type MLmodel <: AbstractModel end
 
+include("./InitialCondition.jl")
+
 """
     Model(;
         iceflow::Union{IFM, Nothing},
@@ -146,7 +148,7 @@ mutable struct NeuralNetwork{
 end
 # Note: we could define any other kind of regressor as a subtype of MLmodel
 
-
+# Empty Machine Learning model
 struct emptyMLmodel <: MLmodel end
 
 mutable struct MachineLearning{
@@ -155,6 +157,7 @@ mutable struct MachineLearning{
     MLmodelnType <: MLmodel,
     MLmodelYType <: MLmodel,
     MLmodelUType <: MLmodel,
+    MLmodelICType <: MLmodel,
     TAR <: AbstractTarget,
     ComponentArrayType <: ComponentArray,
 } <: AbstractModel
@@ -163,6 +166,7 @@ mutable struct MachineLearning{
     n::Union{MLmodelnType, Nothing}
     Y::Union{MLmodelYType, Nothing}
     U::Union{MLmodelUType, Nothing}
+    IC::Union{MLmodelICType, Nothing}
     target::TAR
     θ::Union{ComponentArrayType, Nothing}
 
@@ -170,8 +174,8 @@ mutable struct MachineLearning{
         target,
         regressors::NamedTuple = (;)
     )
-        θ = ComponentVector(; (k => r.θ.θ for (k,r) in pairs(regressors))...)
-        if length(θ)==0
+        θ = ComponentVector(; (k => r.θ.θ for (k, r) in pairs(regressors))...)
+        if length(θ) == 0
             θ = nothing
         end
         A = haskey(regressors, :A) ? regressors.A : emptyMLmodel()
@@ -179,11 +183,12 @@ mutable struct MachineLearning{
         n = haskey(regressors, :n) ? regressors.n : emptyMLmodel()
         Y = haskey(regressors, :Y) ? regressors.Y : emptyMLmodel()
         U = haskey(regressors, :U) ? regressors.U : emptyMLmodel()
+        # Dedicated regressor for initial condition
+        IC = haskey(regressors, :IC) ? regressors.IC : emptyIC()
 
-        new{typeof(A), typeof(C), typeof(n), typeof(Y), typeof(U), typeof(target), typeof(θ)}(A, C, n, Y, U, target, θ)
+        new{typeof(A), typeof(C), typeof(n), typeof(Y), typeof(U), typeof(IC), typeof(target), typeof(θ)}(A, C, n, Y, U, IC, target, θ)
     end
 end
-
 
 # Display setup
 function Base.show(io::IO, nn_model::NeuralNetwork)
@@ -221,5 +226,9 @@ function Base.show(io::IO, ml_model::MachineLearning)
     if !(ml_model.U isa emptyMLmodel)
         print("  U: ")
         println(ml_model.U)
+    end
+    if !(ml_model.IC isa emptyIC)
+        print("  IC: ")
+        println("Initial condition of glaciers is a free parameter to optimize.")
     end
 end

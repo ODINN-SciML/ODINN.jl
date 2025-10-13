@@ -21,7 +21,7 @@ mutable struct InversionParameters{F<:AbstractFloat} <: AbstractParameters
     regions_split::Vector{Int}
     x_tol::F
     f_tol::F
-    solver::Any  
+    solver::Any
 end
 
 """
@@ -55,12 +55,19 @@ function InversionParameters{}(;
         f_tol::F = 1.0e-3,
         solver = BFGS()
     ) where F <: AbstractFloat
-    inversionparameters = InversionParameters{F}(initial_conditions, lower_bound, upper_bound, regions_split, x_tol, f_tol, solver)
-    
+    inversionparameters = InversionParameters{F}(
+        initial_conditions,
+        lower_bound,
+        upper_bound,
+        regions_split,
+        x_tol,
+        f_tol,
+        solver
+        )
     return inversionparameters
 end
 
-Base.:(==)(a::InversionParameters, b::InversionParameters) = 
+Base.:(==)(a::InversionParameters, b::InversionParameters) =
     a.initial_conditions == b.initial_conditions &&
     a.lower_bound == b.lower_bound &&
     a.upper_bound == b.upper_bound &&
