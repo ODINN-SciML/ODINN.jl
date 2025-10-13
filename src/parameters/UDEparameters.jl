@@ -54,7 +54,7 @@ function UDEparameters(;
         optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
         grad::ADJ = SciMLSensitivityAdjoint(),
         optimization_method::String = "AD+AD",
-        empirical_loss_function::AbstractLoss = LossH(),
+        empirical_loss_function::AbstractLoss = MultiLoss(losses = (LossH(),), λs = (1.0,)),
         target::Union{Symbol, Nothing} = :A
     ) where {ADJ <: AbstractAdjointMethod}
 

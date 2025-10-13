@@ -63,6 +63,10 @@ params = Parameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method  ="AD+AD",
+        empirical_loss_function = MultiLoss(
+            losses = (LossH(), InitialThicknessRegularization()),
+            λs = (1.0, 1e-4)
+            ),
         target = :A
         ),
     solver = Huginn.SolverParameters(
