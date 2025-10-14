@@ -306,14 +306,16 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Contribution of initial condition to loss function
             if haskey(θ, :IC)
                 λ₀ = sol_rev(-tspan[1])
-                # This contribution will come from the regularization on the initial condition
-                ∂L∂H₀ = 0.0
                 glacier_id = Symbol("$(glacier.rgi_id)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
                     simulation.parameters.UDE.initial_condition_filter
                     )
+                # This contribution comes from the regularization on the initial condition
+                # The partial with respec to the initial condition is stored in θ.IC for
+                # every single time-step, even when this just corresponds to t = t₀
+                ∂L∂H₀ = ∂L∂θ[begin].IC[glacier_id]
                 dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
             end
 
