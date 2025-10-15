@@ -1,5 +1,3 @@
-import Sleipnir: get_input, default_name
-
 export LawA, LawY, LawU
 
 """
@@ -96,19 +94,19 @@ function LawU(
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
     U_law = let smodel = smodel, prescale = prescale, postscale = postscale
-    Law{Array{Float64, 2}}(;
+    Law{MatrixCache}(;
         inputs = (; H̄=iH̄(), ∇S=i∇S()),
         f! = function (cache, inp, θ)
             D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
 
             # Flag the in-place assignment as non differented and return D instead in
             # order to be able to compute ∂D∂θ with Zygote
-            Zygote.@ignore cache .= D
+            Zygote.@ignore cache.value .= D
             return D
         end,
         init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
-            return zeros(nx-1, ny-1)
+            return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
         end,
     )
     end
@@ -181,19 +179,19 @@ function LawY(
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
     Y_law = let smodel = smodel, prescale = prescale, postscale = postscale
-    Law{Array{Float64, 2}}(;
+    Law{MatrixCache}(;
         inputs = (; T=iTemp(), H̄=iH̄()),
         f! = function (cache, inp, θ)
             A = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
             # Flag the in-place assignment as non differented and return A instead in
             # order to be able to compute ∂A∂θ with Zygote
-            Zygote.@ignore cache .= A
+            Zygote.@ignore cache.value .= A
             return A
         end,
         init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
-            return zeros(nx-1, ny-1)
+            return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
         end,
     )
     end
@@ -201,10 +199,10 @@ function LawY(
 end
 
 """
-
-    LawA(
+    function LawA(
         nn_model::NeuralNetwork,
-        params::Sleipnir.Parameters,
+        params::Sleipnir.Parameters;
+        precompute_VJPs::Bool = true,
     )
 
 Constructs a law object for the creep coefficient `A` in the SIA based on a neural
@@ -217,57 +215,71 @@ See also `SIA2D_A_target`.
     `archi` and state `st` used for evaluation of the law.
 - `params::Sleipnir.Parameters`: Parameters struct used to retrieve the minimum and
     maximum values of A for scaling of the neural network output.
+- `precompute_VJPs::Bool`: If `true`, enables precomputation of vector-Jacobian
+    products before solving the adjoint PDE for efficient autodiff.
 
 # Returns
-- `A_law`: A `Law{Array{Float64, 0}}` instance that computes the creep coefficient `A`
+- `A_law`: A `Law{FloatCache}` instance that computes the creep coefficient `A`
     based on an input temperature using the neural network. The law scales the
     output to the physical bounds defined by `params`.
 
 # Notes
-- The computation is compatible with Zygote for automatic differentiation.
+- The VJP is computed automatically using DifferentiationInterface.
 
 # Details
 - The function wraps the architecture and state of the neural network in a`StatefulLuxLayer`.
 - The resulting law takes input variables, applies the neural network, and scales its output
     to be between `params.physical.minA` and `params.physical.maxA`.
 - The in-place assignment to `cache` is ignored in differentiation to allow gradient
-    computation with Zygote.
-- The `init_cache` function initializes the cache with a scalar zero.
+    computation with Zygote when using DifferentiationInterface.
+- The `init_cache` function initializes the cache with a scalar zero for the forward
+    placeholder, and with a vector of zeros for the VJP placeholder.
 
 # Example
 ```julia
 nn_model = NeuralNetwork(params)
-A_law = LawA(nn_model, params)
+A_law = LawA(nn_model, params; precompute_VJPs=false)
 """
 function LawA(
     nn_model::NeuralNetwork,
-    params::Sleipnir.Parameters,
+    params::Sleipnir.Parameters;
+    precompute_VJPs::Bool = true,
 )
     archi = nn_model.architecture
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
-    A_law = let smodel = smodel, params = params
-        Law{Array{Float64, 0}}(;
+    min_NN = params.physical.minA
+    max_NN = params.physical.maxA
+    callback_freq = if isa(params.UDE.grad, SciMLSensitivityAdjoint) || isa(params.UDE.grad, DummyAdjoint) || isa(params.UDE.grad.VJP_method, EnzymeVJP)
+        # For an unknown reason SciMLSensitivity does not support our implementation of the laws with only one call at the beginning
+        # Enzyme needs to differentiate all the laws
+        nothing
+    else
+        0 # Apply this law only once at the beginning of the simulation
+    end
+    A_law = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
+        Law{FloatCache}(;
             inputs = (; T=iTemp()),
             f! = function (cache, inp, θ)
-                min_NN = params.physical.minA
-                max_NN = params.physical.maxA
                 inp = collect(values(inp))
                 A = only(scale(smodel(inp, θ.A), (min_NN, max_NN)))
 
                 # Flag the in-place assignment as non differented and return A instead in
                 # order to be able to compute ∂A∂θ with Zygote
-                Zygote.@ignore cache .= A
+                Zygote.@ignore cache.value .= A
                 return A
             end,
             init_cache = function (simulation, glacier_idx, θ; scalar::Bool = false)
-                return zeros()
+                return FloatCache(zeros(), zeros(), zero(θ))
             end,
+            p_VJP! = precompute_VJPs ? DIVJP() : nothing,
+            callback_freq = callback_freq,
         )
     end
     return A_law
 end
 
+include("auto_VJP.jl")
 include("laws_utils.jl")
 include("laws_plots.jl")
