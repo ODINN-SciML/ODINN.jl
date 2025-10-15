@@ -1,10 +1,10 @@
 export ComponentVector2Vector, Vector2ComponentVector
 
 function Γ(model, model_cache, params; include_A::Bool = true)
-    n = model_cache.n
+    n = model_cache.n.value
     (; ρ, g) = params.physical
     if include_A
-        A = model_cache.A
+        A = model_cache.A.value
         return 2.0 .* A .* (ρ * g).^n ./ (n.+2)
     else
         return 2.0 .* (ρ * g).^n ./ (n.+2)
@@ -14,14 +14,14 @@ end
 function S(model, model_cache, params)
     (; C, n) = model_cache
     (; ρ, g) = params.physical
-    return C .* (ρ * g).^n
+    return C.value .* (ρ * g).^n.value
 end
 
 function Γꜛ(model, model_cache, params; include_A::Bool = true)
-    n = model_cache.n
+    n = model_cache.n.value
     (; ρ, g) = params.physical
     if include_A
-        A = model_cache.A
+        A = model_cache.A.value
         return 2.0 .* A .* (ρ * g).^n ./ (n.+1)
     else
         return 2.0 .* (ρ * g).^n ./ (n.+1)
@@ -31,7 +31,7 @@ end
 function Sꜛ(model, model_cache, params)
     (; C, n) = model_cache
     (; ρ, g) = params.physical
-    return (n.+2) .* C .* (ρ * g).^n
+    return (n.value.+2) .* C.value .* (ρ * g).^n.value
 end
 
 """

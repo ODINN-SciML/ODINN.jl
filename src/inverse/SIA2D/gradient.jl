@@ -54,7 +54,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     for i in 1:length(simulation.glaciers)
 
-        simulation.cache = init_cache(simulation.model, simulation, i, simulation.parameters)
+        simulation.cache = init_cache(simulation.model, simulation, i, θ)
         simulation.model.machine_learning.θ = θ
 
         result = simulation.results.simulation[i]
@@ -77,7 +77,10 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         N = size(result.B)
         k = length(H)
         normalization = 1.0
-        dLdθ = Enzyme.make_zero(θ)
+        dLdθ = zero(θ)
+
+        apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
+        precompute_all_VJPs_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
 
@@ -90,7 +93,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
             # Adjoint setup
             # Define empty object to store adjoint in reverse mode
-            λ  = [Enzyme.make_zero(result.B) for _ in 1:k]
+            λ  = [zero(result.B) for _ in 1:k]
 
             res_backward_loss = map(j -> backward_loss(
                     loss_function,
@@ -231,7 +234,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             cb = CallbackSet(cb_adjoint_MB, cb_adjoint_loss)
 
             # Final condition
-            λ₁ = Enzyme.make_zero(H[end])
+            λ₁ = zero(H[end])
 
             # Include contribution of loss from last step since this is not accounted for in the discrete callback
             if tspan[2] ∈ t_ref
