@@ -142,10 +142,10 @@ function test_grad_finite_diff(
     functional_inversion = FunctionalInversion(model, glaciers, params)
     simulation = functional_inversion
 
-    glacier_idx = 1
-    simulation.cache = init_cache(model, simulation, glacier_idx, params)
-
     θ = simulation.model.machine_learning.θ
+
+    glacier_idx = 1
+    simulation.cache = init_cache(model, simulation, glacier_idx, θ)
 
     loss_iceflow_grad!(dθ, _θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         ret = ODINN.grad_loss_iceflow!(_θ, simulation, map)

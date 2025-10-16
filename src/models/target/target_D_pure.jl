@@ -71,7 +71,7 @@ function Diffusivity(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_cache = simulation.cache.iceflow
-    U = iceflow_cache.U
+    U = iceflow_cache.U.value
     if size(U) == size(H̄)
         return H̄ .* U
     elseif (size(U) .+ 1) == size(H̄)
@@ -89,17 +89,17 @@ function ∂Diffusivity∂H(
     iceflow_cache = simulation.cache.iceflow
 
     # Neural network has already been evaluated in VJPs
-    ∂D∂H_no_NN = iceflow_cache.U
+    ∂D∂H_no_NN = iceflow_cache.U.value
     ∂H∂H = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
     ∂D∂H_no_NN .= ∂H∂H .* ∂D∂H_no_NN
 
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄+δH, ∇S=∇S), θ)
-    a = iceflow_cache.∂U∂H .* (H̄+δH)
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.∂U∂H .* H̄
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄+δH, ∇S=∇S), θ)
+    a = iceflow_cache.U.value .* (H̄+δH)
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    b = iceflow_cache.U.value .* H̄
     ∂D∂H_NN = (a .- b) ./ δH
 
     return ∂D∂H_no_NN + ∂D∂H_NN
@@ -115,10 +115,10 @@ function ∂Diffusivity∂∇H(
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
-    a = iceflow_cache.∂U∂H .* H̄
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.∂U∂H .* H̄
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
+    a = iceflow_cache.U.value .* H̄
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    b = iceflow_cache.U.value .* H̄
     ∂D∂∇S = (a .- b) ./ δ∇H
 
     return ∂D∂∇S
@@ -145,6 +145,7 @@ function ∂Diffusivity∂θ(
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
     @assert size(H̄) == size(∇S)
 
+    backend = simulation.parameters.UDE.grad.VJP_method.regressorADBackend
     if interpolation == :None
         """
         Computes derivative at each pixel using the exact numerical value of H̄ at each
@@ -154,12 +155,8 @@ function ∂Diffusivity∂θ(
             if H̄[i, j] == 0.0
                 continue
             end
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.U.f.f(
-                iceflow_cache.∂U∂θ,
-                (; H̄=H̄[i, j], ∇S=∇S[i, j]), _θ
-                )*H̄[i, j], θ)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * ComponentVector2Vector(∇θ_point)
+            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=H̄[i, j], ∇S=∇S[i, j]), θ)
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ * H̄[i, j]
         end
 
     elseif interpolation == :Linear
@@ -184,12 +181,8 @@ function ∂Diffusivity∂θ(
 
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for (i, h) in enumerate(H_interp), (j, ∇s) in enumerate(∇S_interp)
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.U.f.f(
-                iceflow_cache.∂U∂θ,
-                (; H̄=h, ∇S=∇s), _θ
-                )*h, θ)
-            grads[i, j] .= ComponentVector2Vector(∇θ_point)
+            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
+            grads[i, j] .= iceflow_cache.U.vjp_θ * h
         end
         # Create interpolation for gradient
         grad_itp = interpolate((H_interp, ∇S_interp), grads, Gridded(Linear()))
@@ -211,7 +204,7 @@ function Diffusivityꜛ(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_cache = simulation.cache.iceflow
-    U = iceflow_cache.U
+    U = iceflow_cache.U.value
     return U
 end
 
@@ -225,10 +218,10 @@ function ∂Diffusivityꜛ∂H(
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄+δH, ∇S=∇S), θ)
-    a = iceflow_cache.∂U∂H .* (H̄+δH)
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.∂U∂H .* H̄
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄+δH, ∇S=∇S), θ)
+    a = iceflow_cache.U.value .* (H̄+δH)
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    b = iceflow_cache.U.value .* H̄
     ∂D∂H_NN = (a .- b) ./ δH
 
     return ∂D∂H_NN
@@ -244,10 +237,10 @@ function ∂Diffusivityꜛ∂∇H(
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
-    a = iceflow_cache.∂U∂H .* H̄
-    iceflow_model.U.f.f(iceflow_cache.∂U∂H, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.∂U∂H .* H̄
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
+    a = iceflow_cache.U.value .* H̄
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    b = iceflow_cache.U.value .* H̄
     ∂D∂∇S = (a .- b) ./ δ∇H
 
     return ∂D∂∇S
@@ -274,6 +267,7 @@ function ∂Diffusivityꜛ∂θ(
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
     @assert size(H̄) == size(∇S)
 
+    backend = simulation.parameters.UDE.grad.VJP_method.regressorADBackend
     if interpolation == :None
         """
         Computes derivative at each pixel using the exact numerical value of H̄ at each
@@ -283,12 +277,8 @@ function ∂Diffusivityꜛ∂θ(
             if H̄[i, j] == 0.0
                 continue
             end
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.U.f.f(
-                iceflow_cache.∂U∂θ,
-                (; H̄=H̄[i, j], ∇S=∇S[i, j]), _θ
-                ), θ)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * ComponentVector2Vector(∇θ_point)
+            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=H̄[i, j], ∇S=∇S[i, j]), θ)
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ
         end
 
     elseif interpolation == :Linear
@@ -313,12 +303,8 @@ function ∂Diffusivityꜛ∂θ(
 
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for (i, h) in enumerate(H_interp), (j, ∇s) in enumerate(∇S_interp)
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.U.f.f(
-                iceflow_cache.∂U∂θ,
-                (; H̄=h, ∇S=∇s), _θ
-                ), θ)
-            grads[i, j] .= ComponentVector2Vector(∇θ_point)
+            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
+            grads[i, j] .= iceflow_cache.U.vjp_θ
         end
         # Create interpolation for gradient
         grad_itp = interpolate((H_interp, ∇S_interp), grads, Gridded(Linear()))

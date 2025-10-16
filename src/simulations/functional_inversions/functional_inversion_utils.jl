@@ -1,3 +1,5 @@
+import Huginn.precompute_all_VJPs_laws!
+
 """
     run!(simulation::FunctionalInversion)
 
@@ -423,7 +425,7 @@ function _batch_iceflow_UDE(
     glacier = container.simulation.glaciers[glacier_idx]
     step = params.solver.step
 
-    container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, params)
+    container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, container.θ)
     container.simulation.model.machine_learning.θ = container.θ
 
     # Create mass balance callback
@@ -452,7 +454,9 @@ function _batch_iceflow_UDE(
         container.simulation.model.iceflow,
         container.simulation.cache.iceflow,
         container.simulation.cache.iceflow.glacier_idx,
-        container.θ)
+        container.θ,
+        params.simulation.tspan,
+    )
 
     cb = CallbackSet(cb_MB, cb_iceflow)
 
@@ -533,6 +537,74 @@ function define_iceflow_prob(
         tstops = params.solver.tstops,
     )
     return iceflow_prob
+end
+
+"""
+    precompute_all_VJPs_laws!(
+        SIA2D_model::SIA2Dmodel,
+        SIA2D_cache::SIA2DCache,
+        simulation::FunctionalInversion,
+        glacier_idx::Integer,
+        t::Real,
+        θ,
+    )
+
+Precomputes the vector-Jacobian products (VJPs) for all laws used in
+the SIA2D ice flow model for a given glacier, time, and model parameters.
+
+Depending on which target (`U`, `Y`, or neither) is provided in
+`SIA2D_model`, this function checks if the corresponding law supports
+VJP precomputation and, if so, triggers the appropriate precompute
+routine for that law. If neither `U` nor `Y` is provided, precomputes
+VJPs for the `A`, `C`, and `n` laws.
+
+# Arguments
+- `SIA2D_model::SIA2Dmodel`: The model containing the configuration and
+    laws used for SIA2D ice flow.
+- `SIA2D_cache::SIA2DCache`: A cache object holding intermediate values
+    and storage relevant for precomputations.
+- `simulation::FunctionalInversion`: Simulation object containing global simulation parameters.
+- `glacier_idx::Integer`: Index of the glacier being simulated.
+- `t::Real`: Current time in the simulation.
+- `θ`: Model parameters or state variables for the simulation step.
+
+# Notes
+- This routine is intended as a preparatory step for manual adjoint.
+- Only laws supporting VJP precomputation are processed.
+"""
+function precompute_all_VJPs_laws!(
+    SIA2D_model::SIA2Dmodel,
+    SIA2D_cache::SIA2DCache,
+    simulation::FunctionalInversion,
+    glacier_idx::Integer,
+    t::Real,
+    θ,
+)
+    if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint) || isa(simulation.parameters.UDE.grad, DummyAdjoint)
+        return nothing
+    end
+    if isa(simulation.parameters.UDE.grad.VJP_method, EnzymeVJP)
+        return nothing
+    end
+    if SIA2D_model.U_is_provided
+        if is_precomputable_law_VJP(SIA2D_model.U)
+            precompute_law_VJP(SIA2D_model.U, SIA2D_cache.U, SIA2D_cache.U_prep_vjps, simulation, glacier_idx, t, θ)
+        end
+    elseif SIA2D_model.Y_is_provided
+        if is_precomputable_law_VJP(SIA2D_model.Y)
+            precompute_law_VJP(SIA2D_model.Y, SIA2D_cache.Y, SIA2D_cache.Y_prep_vjps, simulation, glacier_idx, t, θ)
+        end
+    else
+        if is_precomputable_law_VJP(SIA2D_model.A)
+            precompute_law_VJP(SIA2D_model.A, SIA2D_cache.A, SIA2D_cache.A_prep_vjps, simulation, glacier_idx, t, θ)
+        end
+        if is_precomputable_law_VJP(SIA2D_model.C)
+            precompute_law_VJP(SIA2D_model.C, SIA2D_cache.C, SIA2D_cache.C_prep_vjps, simulation, glacier_idx, t, θ)
+        end
+        if is_precomputable_law_VJP(SIA2D_model.n)
+            precompute_law_VJP(SIA2D_model.n, SIA2D_cache.n, SIA2D_cache.n_prep_vjps, simulation, glacier_idx, t, θ)
+        end
+    end
 end
 
 """
