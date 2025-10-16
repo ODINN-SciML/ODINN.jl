@@ -1,10 +1,10 @@
 export NeuralNetwork
 
-_inputs_A_law = (; T=InpTemp())
+_inputs_A_law = (; T=iTemp())
 _inputs_C_law = (; )
 _inputs_n_law = (; )
-_inputs_Y_law = (; T=InpTemp(), H̄=InpH̄())
-_inputs_U_law = (; H̄=InpH̄(), ∇S=Inp∇S())
+_inputs_Y_law = (; T=iTemp(), H̄=iH̄())
+_inputs_U_law = (; H̄=iH̄(), ∇S=i∇S())
 
 # Abstract type as a parent type for Machine Learning models
 abstract type MLmodel <: AbstractModel end
