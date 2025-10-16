@@ -219,7 +219,7 @@ See also `SIA2D_A_target`.
     products before solving the adjoint PDE for efficient autodiff.
 
 # Returns
-- `A_law`: A `Law{FloatCache}` instance that computes the creep coefficient `A`
+- `A_law`: A `Law{ScalarCache}` instance that computes the creep coefficient `A`
     based on an input temperature using the neural network. The law scales the
     output to the physical bounds defined by `params`.
 
@@ -259,7 +259,7 @@ function LawA(
         0 # Apply this law only once at the beginning of the simulation
     end
     A_law = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
-        Law{FloatCache}(;
+        Law{ScalarCache}(;
             inputs = (; T=iTemp()),
             f! = function (cache, inp, θ)
                 inp = collect(values(inp))
@@ -271,7 +271,7 @@ function LawA(
                 return A
             end,
             init_cache = function (simulation, glacier_idx, θ; scalar::Bool = false)
-                return FloatCache(zeros(), zeros(), zero(θ))
+                return ScalarCache(zeros(), zeros(), zero(θ))
             end,
             p_VJP! = precompute_VJPs ? DIVJP() : nothing,
             callback_freq = callback_freq,
