@@ -240,7 +240,7 @@ function test_adjoint_surface_V(
 
     model = if target==:A
         iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
-        ODINN.Model(
+        Model(
             iceflow = iceflow_model,
             mass_balance = nothing,
             regressors = (; A=nn_model),

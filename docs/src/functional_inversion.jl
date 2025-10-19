@@ -56,7 +56,7 @@ params = Parameters(
 ## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
 A_law = CuffeyPaterson()
 
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
@@ -154,7 +154,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 A_law = CuffeyPaterson()
 
 # The model is initialized using the `Model` constructor:
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
