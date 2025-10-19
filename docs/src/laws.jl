@@ -55,6 +55,7 @@ model = Model(
 
 using ODINN
 using Plots
+using Dates
 
 rgi_paths = get_rgi_paths()
 
@@ -72,12 +73,10 @@ law_inputs = (; CPDD=iCPDD(window=Week(1)), topo_roughness=iTopoRough(window=200
 
 params = Parameters(
     simulation = SimulationParameters(
-        working_dir = working_dir,
         use_MB = false,
         use_velocities = false,
         tspan = (2010.0, 2015.0),
         step = δt,
-        test_mode = false,
         rgi_paths = rgi_paths,
         gridScalingFactor = 4 # We reduce the size of glacier for simulation
         ),
@@ -101,10 +100,10 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-# Then, we can run the `generate_ground_truth` function to simulate the glacier evolution using the defined law.
+# Then, we can run the `generate_ground_truth_prediction` function to simulate the glacier evolution using the defined law.
 
-prediction = generate_ground_truth(glaciers, params, model, tstops)
+prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
-# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D. This is especially useful when exploring the behaviour of laws with respecto to different proxies, and to better understand learnable laws and their drivers.
+# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D. This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.
 
 plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing)
