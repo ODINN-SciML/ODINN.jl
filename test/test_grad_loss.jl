@@ -85,7 +85,7 @@ function test_grad_finite_diff(
     # Use a constant A for testing
     A_law = ConstantA(2.21e-18)
 
-    model = Huginn.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params; A = A_law),
         mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
     )

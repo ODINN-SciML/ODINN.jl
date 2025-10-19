@@ -44,7 +44,7 @@ In ODINN, in order to specify functional inversions, we have introduced a `Law` 
 
 ```julia
 law_inputs = (; CPDD=InpCPDD(), topo_roughness=InpTopoRough())
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
     mass_balance = nothing
 )

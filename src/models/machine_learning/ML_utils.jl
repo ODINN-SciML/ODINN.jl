@@ -90,7 +90,7 @@ function build_simulation_batch(
 
     # TODO: in the future we could avoid a copy of model since it is stateless
     # but we need to pay attention that there is no side effect with multiprocessing
-    model = Sleipnir.Model{typeof(iceflow), typeof(massbalance), typeof(ml)}(iceflow, massbalance, ml)
+    model = Sleipnir.Model(iceflow, massbalance, ml)
 
     # Each element of the batch has access only to the current glacier, so glacier_idx=1
     cache = init_cache(model, simulation, 1, simulation.parameters)

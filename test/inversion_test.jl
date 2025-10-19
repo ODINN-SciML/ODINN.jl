@@ -67,7 +67,7 @@ function inversion_test(;
         MB_model = nothing
     end
 
-    model = Huginn.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
         mass_balance = MB_model,
     )

@@ -37,7 +37,7 @@ function save_simulation_test!(;
             )
     )
 
-    model = Huginn.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params, A=CuffeyPaterson()),
         mass_balance = TImodel1(params),
     )

@@ -2,7 +2,7 @@
 
 # This tutorial provides a simple example on how to perform a functional inversion using Universal Differential Equations (UDEs) in ODINN.jl. For this, we will generate a synthetic dataset using a forward simulation, and then we will use this dataset to perform the functional inversion. The goal of this functional inversion will be to learn a synthetic law that maps `A`, i.e. the ice rigidity, to long-term changes in atmospheric surface temperature.
 
-# For more details on the functional inversion concept, please refer to the [Functional Inversion section in the Optimization page](./optimization.md).
+# For more details on the functional inversion concept, please refer to the [Functional Inversion section in the Inversion types page](./inversions.md#Functional-inversions).
 
 # ## Running the whole code
 
@@ -56,7 +56,7 @@ params = Parameters(
 ## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
 A_law = CuffeyPaterson()
 
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
@@ -154,7 +154,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 A_law = CuffeyPaterson()
 
 # The model is initialized using the `Model` constructor:
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
     mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
