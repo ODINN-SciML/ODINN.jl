@@ -37,6 +37,7 @@ tutorial_files = [
     "./src/forward_simulation.jl",
     "./src/functional_inversion.jl",
     "./src/laws.jl",
+    "./src/vjp_laws.jl",
     "./src/quick_start.jl"
 ]
 
@@ -66,6 +67,7 @@ makedocs(
             "Forward simulation" => "forward_simulation.md",
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
+            "VJP law customization" => "vjp_laws.md",
         ],
         "How to use ODINN" => [
             "Parameters" => "parameters.md",

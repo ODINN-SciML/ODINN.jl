@@ -32,7 +32,10 @@ prepare_vjp_law(
 ) = nothing
 function prepare_vjp_law(
     simulation::FunctionalInversion,
-    law::Union{Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP}, Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Sleipnir.GenInputsAndApply{<:Any, DIVJP}, <:Any}},
+    law::Union{
+        Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP},
+        Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Sleipnir.GenInputsAndApply{<:Any, DIVJP}, <:Any},
+    },
     law_cache,
     θ,
     glacier_idx,
@@ -90,14 +93,14 @@ function ∂law∂θ!(backend::DI.AutoMooncake, vjpsPrepLaw::AbstractPrepVJP, in
     DI.gradient(vjpsPrepLaw.f_θ_first, vjpsPrepLaw.prep_θ, backend, θ, DI.Constant(inp)).fields.data
 end
 
-function ∂law∂inp!(backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP}, law_cache, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
+function ∂law∂inp!(backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP}, law_cache, vjpsPrepLaw, inp, θ)
     law.f_VJP_input.f(law_cache, inp, θ)
 end
 function ∂law∂inp!(backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP}, law_cache, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
     law_cache.vjp_inp .= ∂law∂inp!(backend, vjpsPrepLaw, inp, θ)
 end
 
-function ∂law∂θ!(backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP}, law_cache, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
+function ∂law∂θ!(backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP}, law_cache, vjpsPrepLaw, inp, θ)
     law.f_VJP_θ.f(law_cache, inp, θ)
 end
 function ∂law∂θ!(backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP}, law_cache, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
