@@ -1,4 +1,4 @@
-export NeuralNetwork
+export NeuralNetwork, Model
 
 _inputs_A_law = (; T=iTemp())
 _inputs_C_law = (; )
@@ -28,6 +28,18 @@ Creates a new model instance using the provided iceflow, mass balance, and machi
 # Returns
 - `model`: A new instance of `Sleipnir.Model` initialized with the provided components.
 """
+function Model(;
+    iceflow::Union{IFM, Nothing} = nothing,
+    mass_balance::Union{MBM, Nothing} = nothing,
+    regressors::Union{NamedTuple, Nothing} = nothing,
+    target::Union{TAR, Nothing} = nothing,
+) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
+    if isnothing(regressors)
+        Sleipnir.Model(iceflow, mass_balance, nothing)
+    else
+        Model(iceflow, mass_balance, regressors; target=target)
+    end
+end
 function Model(
     iceflow::Union{IFM, Nothing},
     mass_balance::Union{MBM, Nothing},
@@ -68,18 +80,6 @@ function Model(
 
     machine_learning = MachineLearning(target, regressors)
     return Sleipnir.Model(iceflow, mass_balance, machine_learning)
-end
-function Model(;
-    iceflow::Union{IFM, Nothing} = nothing,
-    mass_balance::Union{MBM, Nothing} = nothing,
-    regressors::Union{NamedTuple, Nothing} = nothing,
-    target::Union{TAR, Nothing} = nothing,
-) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
-    if isnothing(regressors)
-        Sleipnir.Model(iceflow, mass_balance, nothing)
-    else
-        Model(iceflow, mass_balance, regressors; target=target)
-    end
 end
 
 """

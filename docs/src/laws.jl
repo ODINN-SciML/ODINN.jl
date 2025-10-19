@@ -63,9 +63,7 @@ rgi_paths = get_rgi_paths()
 rgi_ids = ["RGI60-11.03638"]
 δt = 1/12
 
-# The key part here is the definition of the law inputs, which are the variables that will be used to compute the basal sliding coefficient `C`. In this case, we use the CPDD and the topographical roughness as inputs. 
-# As you can see, there are different options to customize the way the inputs are computed. For exampe, for the CPDD, we can specify a time window over which the CPDD is integrated. 
-# For the topographical roughness, we can specify a spatial window and the type of curvature to be used.
+# The key part here is the definition of the law inputs, which are the variables that will be used to compute the basal sliding coefficient `C`. In this case, we use the CPDD and the topographical roughness as inputs. As you can see, there are different options to customize the way the inputs are computed. For exampe, for the CPDD, we can specify a time window over which the CPDD is integrated. For the topographical roughness, we can specify a spatial window and the type of curvature to be used.
 
 law_inputs = (; CPDD=iCPDD(window=Week(1)), topo_roughness=iTopoRough(window=200.0, curvature_type=:variability))
 

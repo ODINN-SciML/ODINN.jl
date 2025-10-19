@@ -20,6 +20,8 @@ using Documenter, Literate
 using ODINN
 using DocumenterCitations
 
+cd(dirname(Base.active_project()))
+
 bib = CitationBibliography(
     joinpath(@__DIR__, "src/assets", "references.bib");
     style=:numeric
