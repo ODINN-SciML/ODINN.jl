@@ -13,9 +13,9 @@ include("./InitialCondition.jl")
 
 """
     Model(;
-        iceflow::Union{IFM, Nothing},
-        mass_balance::Union{MBM, Nothing},
-        regressors::NamedTuple = (;),
+        iceflow::Union{IFM, Nothing} = nothing,
+        mass_balance::Union{MBM, Nothing} = nothing,
+        regressors::Union{NamedTuple, Nothing} = nothing,
         target::Union{TAR, Nothing} = nothing,
     ) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
 
@@ -24,25 +24,25 @@ Creates a new model instance using the provided iceflow, mass balance, and machi
 # Arguments
 - `iceflow::Union{IFM, Nothing}`: The iceflow model to be used. Can be a single model or `nothing`.
 - `mass_balance::Union{MBM, Nothing}`: The mass balance model to be used. Can be a single model or `nothing`.
-- `machine_learning::Union{MLM, Nothing}`: The machine learning model to be used. Can be a single model or `nothing`.
+- `regressors::Union{NamedTuple, Nothing}`: The regressors to be used in the laws.
 # Returns
 - `model`: A new instance of `Sleipnir.Model` initialized with the provided components.
 """
-function Model(;
+function Model(
     iceflow::Union{IFM, Nothing},
     mass_balance::Union{MBM, Nothing},
-    regressors::NamedTuple = (;),
+    regressors::NamedTuple;
     target::Union{TAR, Nothing} = nothing,
 ) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
 
     if iceflow.U_is_provided
-        @assert inputs(iceflow.U)==_inputs_U_law "Inputs of U law must be $(_inputs_U_law) in ODINN."
+        @assert inputs(iceflow.U)==_inputs_U_law "Inputs of U law must be $(_inputs_U_law) in ODINN but the ones provided are $(inputs(iceflow.U))."
     elseif iceflow.Y_is_provided
-        @assert inputs(iceflow.Y)==_inputs_Y_law "Inputs of Y law must be $(_inputs_Y_law) in ODINN."
+        @assert inputs(iceflow.Y)==_inputs_Y_law "Inputs of Y law must be $(_inputs_Y_law) in ODINN but the ones provided are $(inputs(iceflow.Y))."
     else
-        @assert inputs(iceflow.A)==_inputs_A_law "Inputs of A law must be $(_inputs_A_law) in ODINN."
-        @assert inputs(iceflow.C)==_inputs_C_law "Inputs of C law must be $(_inputs_C_law) in ODINN."
-        @assert inputs(iceflow.n)==_inputs_n_law "Inputs of n law must be $(_inputs_n_law) in ODINN."
+        @assert inputs(iceflow.A)==_inputs_A_law "Inputs of A law must be $(_inputs_A_law) in ODINN but the ones provided are $(inputs(iceflow.A))."
+        @assert inputs(iceflow.C)==_inputs_C_law "Inputs of C law must be $(_inputs_C_law) in ODINN but the ones provided are $(inputs(iceflow.C))."
+        @assert inputs(iceflow.n)==_inputs_n_law "Inputs of n law must be $(_inputs_n_law) in ODINN but the ones provided are $(inputs(iceflow.n))."
     end
 
     # Build target based on parameters
@@ -67,12 +67,19 @@ function Model(;
     end
 
     machine_learning = MachineLearning(target, regressors)
-
-    iceflowType = typeof(iceflow)
-    massbalanceType = typeof(mass_balance)
-    model = Sleipnir.Model{iceflowType, massbalanceType, typeof(machine_learning)}(iceflow, mass_balance, machine_learning)
-
-    return model
+    return Sleipnir.Model(iceflow, mass_balance, machine_learning)
+end
+function Model(;
+    iceflow::Union{IFM, Nothing} = nothing,
+    mass_balance::Union{MBM, Nothing} = nothing,
+    regressors::Union{NamedTuple, Nothing} = nothing,
+    target::Union{TAR, Nothing} = nothing,
+) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
+    if isnothing(regressors)
+        Sleipnir.Model(iceflow, mass_balance, nothing)
+    else
+        Model(iceflow, mass_balance, regressors; target=target)
+    end
 end
 
 """

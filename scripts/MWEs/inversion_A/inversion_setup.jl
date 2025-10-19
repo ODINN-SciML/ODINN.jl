@@ -74,7 +74,7 @@ params = Parameters(
         )
     )
 
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
     mass_balance = nothing, #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )

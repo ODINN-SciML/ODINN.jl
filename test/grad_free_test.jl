@@ -45,11 +45,11 @@ function grad_free_test(;use_MB::Bool=false)
     # Use a constant A for testing
     A_law = ConstantA(2.21e-18)
     JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) ConstantA(2.21e-18)
-    model = Huginn.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
     )
-    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.Model(
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
     )
@@ -65,12 +65,12 @@ function grad_free_test(;use_MB::Bool=false)
     A_law = LawA(nn_model, params)
     JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) LawA(nn_model, params)
 
-    model = ODINN.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
         regressors = (; A=nn_model)
     )
-    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) ODINN.Model(
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
         regressors = (; A=nn_model)
