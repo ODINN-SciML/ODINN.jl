@@ -37,7 +37,6 @@ function plot_law(
         save_law_plot(fig, n_inputs, input_names, law, simulation, idx_fixed_input)
     elseif n_inputs == 2
         fig = plot_law_2d(law, simulation, inputs, glacier_idx, θ, input_names, idx_fixed_input)
-        # display(fig)
     else
         error("Only 1D or 2D input plotting is supported.")
     end
