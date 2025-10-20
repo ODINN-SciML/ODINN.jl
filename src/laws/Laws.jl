@@ -101,7 +101,7 @@ function LawU(
 
             # Flag the in-place assignment as non differented and return D instead in
             # order to be able to compute ∂D∂θ with Zygote
-            Zygote.@ignore cache.value .= D
+            Zygote.@ignore_derivatives cache.value .= D
             return D
         end,
         init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
@@ -186,7 +186,7 @@ function LawY(
 
             # Flag the in-place assignment as non differented and return A instead in
             # order to be able to compute ∂A∂θ with Zygote
-            Zygote.@ignore cache.value .= A
+            Zygote.@ignore_derivatives cache.value .= A
             return A
         end,
         init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
@@ -267,7 +267,7 @@ function LawA(
 
                 # Flag the in-place assignment as non differented and return A instead in
                 # order to be able to compute ∂A∂θ with Zygote
-                Zygote.@ignore cache.value .= A
+                Zygote.@ignore_derivatives cache.value .= A
                 return A
             end,
             init_cache = function (simulation, glacier_idx, θ; scalar::Bool = false)

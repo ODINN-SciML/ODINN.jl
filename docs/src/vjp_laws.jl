@@ -138,7 +138,7 @@ f! = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
     function (cache, inp, θ)
         inp = collect(values(inp))
         A = only(scale(smodel(inp, θ.A), (min_NN, max_NN)))
-        ODINN.Zygote.@ignore cache.value .= A # We ignore this in-place affectation in order to be able to differentiate it with Zygote hereafter
+        ODINN.Zygote.@ignore_derivatives cache.value .= A # We ignore this in-place affectation in order to be able to differentiate it with Zygote hereafter
         return A
     end
 end

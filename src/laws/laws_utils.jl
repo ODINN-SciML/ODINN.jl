@@ -36,7 +36,7 @@ function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer
     end
 
     law.f.f(cache, input_values, θ)
-    return cache
+    return cache.value
 end
 
 
