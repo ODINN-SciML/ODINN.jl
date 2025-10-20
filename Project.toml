@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
-authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 version = "0.3.0"
+authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
@@ -72,7 +72,7 @@ IJulia = "1.2"
 ImageFiltering = "0.7"
 Infiltrator = "1.2"
 Interpolations = "0.15.1"
-JET = "0.9.18"
+JET = "0.9.18, 0.10"
 JLD2 = "0.4, 0.5, 0.6"
 LineSearches = "7"
 Lux = "1.8"
