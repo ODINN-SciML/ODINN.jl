@@ -4,7 +4,7 @@ There are different types of parameters in ODINN, holding specific information f
 
 ```@docs
 Sleipnir.Parameters
-ODINN.Parameters
+ODINN.Parameters()
 ```
 
 The main child types of parameters are the following ones:

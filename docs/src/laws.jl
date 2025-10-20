@@ -32,6 +32,8 @@ model = Model(
 
 # Non learnable laws are laws that are not trained using a regressor. They are used to map input variables to a target variable in the iceflow model, but they do not have any learnable parameters.
 
+# ### Example 1: Cuffey and Paterson (2010) 1-dimensional law
+
 # Here is a quick example also drawn from the Functional Inversions tutorial. We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
 
 using ODINN
@@ -46,3 +48,60 @@ model = Model(
 )
 
 # In this ice flow model, the ice rigidity `A` is defined by the `CuffeyPaterson` law, which is a non-learnable law that maps the long term air temperature `T` to the creep coefficient `A`. 
+
+# ### Example 2: Synthetic C (sliding) 2-dimensional law
+
+# In this example, we present a synthetic non-learnable law, that maps the basal sliding coefficient `C` to the surface topographical roughness and cumulative positive degree days (CPDDs).
+
+using ODINN
+using Plots
+using Dates
+
+rgi_paths = get_rgi_paths()
+
+## Retrieving simulation data for the following glaciers
+rgi_ids = ["RGI60-11.03638"]
+δt = 1/12
+
+# The key part here is the definition of the law inputs, which are the variables that will be used to compute the basal sliding coefficient `C`. In this case, we use the CPDD and the topographical roughness as inputs. As you can see, there are different options to customize the way the inputs are computed. For exampe, for the CPDD, we can specify a time window over which the CPDD is integrated. For the topographical roughness, we can specify a spatial window and the type of curvature to be used.
+
+law_inputs = (; CPDD=iCPDD(window=Week(1)), topo_roughness=iTopoRough(window=200.0, curvature_type=:variability))
+
+# Then, we define the parameters as for any other simulation.
+
+params = Parameters(
+    simulation = SimulationParameters(
+        use_MB = false,
+        use_velocities = false,
+        tspan = (2010.0, 2015.0),
+        step = δt,
+        rgi_paths = rgi_paths,
+        gridScalingFactor = 4 # We reduce the size of glacier for simulation
+        ),
+    solver = Huginn.SolverParameters(
+        step = δt,
+        save_everystep = true,
+        progress = true
+        )
+    )
+
+# When declaring the model, we will indicate that the basal sliding coefficient `C` will be simulated by the `SyntheticC` law, which takes as input the parameters and the law inputs we defined before.
+
+model = Huginn.Model(
+    iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
+    mass_balance = nothing, 
+)
+
+# We retrieve some glaciers for the simulation
+glaciers = initialize_glaciers(rgi_ids, params)
+
+# Time snapshots for transient inversion
+tstops = collect(2010:δt:2015)
+
+# Then, we can run the `generate_ground_truth_prediction` function to simulate the glacier evolution using the defined law.
+
+prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
+
+# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D. This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.
+
+plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing)

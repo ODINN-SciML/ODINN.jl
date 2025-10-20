@@ -40,7 +40,7 @@ using Base: @kwdef
 using Lux
 using Tullio
 using Infiltrator
-using Plots, PlotThemes
+using Plots, PlotThemes, PlotlyJS
 Plots.theme(:wong2) # sets overall theme for Plots
 import Pkg
 using Distributed
@@ -88,7 +88,6 @@ include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))
 include(joinpath(root_dir, "src/models/target/Target.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
-
 # Parameterizations
 include(joinpath(root_dir, "src/laws/Laws.jl"))
 
