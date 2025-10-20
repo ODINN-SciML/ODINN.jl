@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
-authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 version = "0.3.0"
+authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
@@ -84,7 +84,7 @@ Optimization = "4"
 OptimizationOptimJL = "0.4"
 OptimizationOptimisers = "0.3"
 OrdinaryDiffEq = "6.90.1"
-OrdinaryDiffEqSymplecticRK = "=1.1.0"
+OrdinaryDiffEqSymplecticRK = "=1.1.0, 1"
 PlotThemes = "3.1"
 Plots = "1.2"
 ProgressMeter = "1"
