@@ -127,7 +127,7 @@ st = nn_model.st
 smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
 min_NN = params.physical.minA
 max_NN = params.physical.maxA
-inputs = (; T=InpTemp())
+inputs = (; T=iTemp())
 
 # We will also need `θ` in order to call the VJPs of the law manually although in practice we do not have to worry about retrieving this:
 

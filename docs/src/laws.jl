@@ -6,6 +6,9 @@
 # Let's say we have followed the classical workflow from ODINN, shown in the [Forward simulation](./forward_simulation.md) and [Functional inversion](./functional_inversion.md) tutorials. When we declare the `Model` type, we can specify the laws that we want to use in the iceflow model. Here we will briefly show how to do it. For more details you can check the [Understanding the Law interface section](./inversions.md).
 
 using ODINN
+using Plots
+using Dates
+using PlotlyJS
 
 ## Dummy parameters, only specifying the type of loss function to be used
 params = Parameters(UDE = UDEparameters(empirical_loss_function=LossH()))
@@ -61,11 +64,6 @@ model = Model(
 # ### Example 2: Synthetic C (sliding) 2-dimensional law
 
 # In this example, we present a synthetic non-learnable law, that maps the basal sliding coefficient `C` to the surface topographical roughness and cumulative positive degree days (CPDDs).
-
-using ODINN
-using Plots
-using Dates
-using PlotlyJS
 
 rgi_paths = get_rgi_paths()
 

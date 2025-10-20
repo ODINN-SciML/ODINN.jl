@@ -22,7 +22,6 @@ module ODINN
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
-import Sleipnir: Parameters, Model
 using Statistics, LinearAlgebra
 using Random, Distributions
 using EnzymeCore
