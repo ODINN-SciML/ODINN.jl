@@ -97,7 +97,7 @@ function LawU(
 
     U_law = let smodel = smodel, prescale = prescale, postscale = postscale
     Law{Array{Float64, 2}}(;
-        inputs = (; H̄=InpH̄(), ∇S=Inp∇S()),
+        inputs = (; H̄=iH̄(), ∇S=i∇S()),
         f! = function (cache, inp, θ)
             D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
 
@@ -106,7 +106,7 @@ function LawU(
             Zygote.@ignore cache .= D
             return D
         end,
-        init_cache = function (simulation, glacier_idx, θ)
+        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return zeros(nx-1, ny-1)
         end,
@@ -182,7 +182,7 @@ function LawY(
 
     Y_law = let smodel = smodel, prescale = prescale, postscale = postscale
     Law{Array{Float64, 2}}(;
-        inputs = (; T=InpTemp(), H̄=InpH̄()),
+        inputs = (; T=iTemp(), H̄=iH̄()),
         f! = function (cache, inp, θ)
             A = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
@@ -191,7 +191,7 @@ function LawY(
             Zygote.@ignore cache .= A
             return A
         end,
-        init_cache = function (simulation, glacier_idx, θ)
+        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return zeros(nx-1, ny-1)
         end,
@@ -249,7 +249,7 @@ function LawA(
 
     A_law = let smodel = smodel, params = params
         Law{Array{Float64, 0}}(;
-            inputs = (; T=InpTemp()),
+            inputs = (; T=iTemp()),
             f! = function (cache, inp, θ)
                 min_NN = params.physical.minA
                 max_NN = params.physical.maxA
@@ -261,7 +261,7 @@ function LawA(
                 Zygote.@ignore cache .= A
                 return A
             end,
-            init_cache = function (simulation, glacier_idx, θ)
+            init_cache = function (simulation, glacier_idx, θ; scalar::Bool = false)
                 return zeros()
             end,
         )
@@ -270,3 +270,4 @@ function LawA(
 end
 
 include("laws_utils.jl")
+include("laws_plots.jl")
