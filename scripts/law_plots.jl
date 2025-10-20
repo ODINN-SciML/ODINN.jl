@@ -1,12 +1,12 @@
 using Pkg
 # Activate the "scripts" environment, this works both if the user is in "ODINN/", in "ODINN/scripts/" or in any subfolder
-# odinn_folder = split(Base.source_dir(), "scripts")[1]
-# Pkg.activate(odinn_folder*"/scripts/")
-# Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use local version, you might do as well for Huginn, Muninn and Sleipnir
+odinn_folder = split(Base.source_dir(), "scripts")[1]
+Pkg.activate(odinn_folder*"/scripts/")
+Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use local version, you might do as well for Huginn, Muninn and Sleipnir
 
 using Revise
 using ODINN
-using Plots
+using Dates
 
 rgi_paths = get_rgi_paths()
 
@@ -77,7 +77,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # Time snapshots for transient inversion
 tstops = collect(2010:δt:2015)
 
-prediction = generate_ground_truth(glaciers, params, model, tstops)
+prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
 ### Figures
 

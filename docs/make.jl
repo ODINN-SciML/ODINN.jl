@@ -15,6 +15,9 @@ ODINN_OVERWRITE_MULTI = get(ENV, "CI", nothing)=="true"
 ENV["ODINN_OVERWRITE_MULTI"] = ODINN_OVERWRITE_MULTI
 @show ODINN_OVERWRITE_MULTI
 
+# # Disable the Blink hack when the target output is for notebooks
+# ENV["ODINN_PLOTLYJS_NB"] = "true"
+
 using Revise
 using Documenter, Literate
 using ODINN

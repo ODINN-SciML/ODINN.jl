@@ -56,6 +56,7 @@ model = Model(
 using ODINN
 using Plots
 using Dates
+using PlotlyJS
 
 rgi_paths = get_rgi_paths()
 
@@ -89,19 +90,33 @@ params = Parameters(
 
 model = Huginn.Model(
     iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
-    mass_balance = nothing, 
+    mass_balance = nothing,
 )
 
 # We retrieve some glaciers for the simulation
+
 glaciers = initialize_glaciers(rgi_ids, params)
 
 # Time snapshots for transient inversion
+
 tstops = collect(2010:δt:2015)
 
 # Then, we can run the `generate_ground_truth_prediction` function to simulate the glacier evolution using the defined law.
 
 prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
-# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D. This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.
+# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D.
+# This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.
 
-plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing)
+fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing);
+
+# Since we are in the documentation it is not possible to have an interactive plot but if you reproduce this example locally, you can run the line above without ";" and you can skip the lines hereafter. This will open an interactive window with a 3D plot that you can rotate.
+
+folder = "laws_plots"
+mkpath(folder)
+filepath = joinpath(folder, "3d_plot.png")
+PlotlyJS.savefig(fig, filepath);
+
+# ```@raw html
+# <img src="./laws_plots/3d_plot.png" width="500"/>
+# ```
