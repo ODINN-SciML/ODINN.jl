@@ -198,8 +198,13 @@ Function to create an intepolation for AD computation combining uniform and quan
 """
 function create_interpolation(A::Matrix; n_interp_half::Int)
     A_interp_unif = LinRange(0.0, maximum(A), n_interp_half) |> collect
-    A_interp_quantiles = quantile!(A[A .> 0.0], LinRange(0.0, 1.0, n_interp_half))
-    A_interp = vcat(A_interp_unif, A_interp_quantiles)
+    pos_values = A[A .> 0.0]
+    if length(pos_values) > 0
+        A_interp_quantiles = quantile!(A[A .> 0.0], LinRange(0.0, 1.0, n_interp_half))
+        A_interp = vcat(A_interp_unif, A_interp_quantiles)
+    else
+        A_interp = A_interp_unif
+    end
     A_interp = unique(A_interp)
     A_interp = sort(A_interp)
     return A_interp

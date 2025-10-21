@@ -40,33 +40,30 @@ function prepare_vjp_law(
     θ,
     glacier_idx,
 )
+    # Don't prepare the VJPs with DI if it's not necessary
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint) || isa(simulation.parameters.UDE.grad, DummyAdjoint)
         return nothing
     end
     if isa(simulation.parameters.UDE.grad.VJP_method, EnzymeVJP)
         return nothing
     end
+
+    # Define wrapper function that depends only on θ and inp
     f_θ_first = let law=law, law_cache=law_cache
         # We don't use apply_law! because we want to evaluate with custom inputs
         function (_θ, _inp)
-            packed_inputs = _inp
-            law.f.f(
-                law_cache,
-                packed_inputs, _θ
-            )
+            law.f.f(law_cache, _inp, _θ)
         end
     end
     # It seems that with DI when Constant is being used, it must be at the last position
     f_inp_first(θ, inp) = f_θ_first(inp, θ)
 
-    inputs = law.f.inputs
-    values_inputs = map(inputs) do input
+    # Initialize inputs with zeros
+    values_inputs = map(law.f.inputs) do input
         zero(input, simulation, glacier_idx)
     end
-    # inp = NamedTuple{keys(inputs)}(values_inputs)
-    # values_inputs = values(inputs)
-    # inp = generate_inputs(law.f.inputs, simulation, glacier_idx, t)
 
+    # Transform inputs to scalar inputs
     packed_inputs = map(values_inputs) do val
         only(similar(val,()))
     end

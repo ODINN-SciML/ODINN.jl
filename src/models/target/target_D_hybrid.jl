@@ -269,6 +269,7 @@ function ∂Diffusivityꜛ∂θ(
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
 
+    backend = simulation.parameters.UDE.grad.VJP_method.regressorADBackend
     if interpolation == :None
         """
         Computes derivative at each pixel using the exact numerical value of H̄ at each

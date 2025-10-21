@@ -29,7 +29,7 @@ A_law = LawA(nn_model, params)
 # As explained in the [Sensitivity analysis](./sensitivity.md) section, ODINN needs to compute the vector-Jacobian products (VJPs).
 # The part of the VJP concerning the law can be computed from different ways and it is possible to customize this, or use a default automatic differentiation backend.
 # For this specific law the VJPs are already customized to have an efficient implementation and the user does not have to worry about this.
-# The [VJP law customization](./vjp_laws.md) section provides a complete description of how this VJP computation can be customized.
+# The [VJP law customization](./vjp_laws.md) tutorial provides a complete description of how this VJP computation can be customized.
 
 # The ouput above shows that the law is applied at each iteration of the iceflow PDE.
 # Additionally it says that custom VJPs are used to compute the gradient and that these VJPs are precomputed as the inputs of the law do not depend on the glacier state.

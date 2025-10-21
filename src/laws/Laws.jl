@@ -182,12 +182,12 @@ function LawY(
     Law{MatrixCache}(;
         inputs = (; T=iTemp(), H̄=iH̄()),
         f! = function (cache, inp, θ)
-            A = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
+            Y = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
-            # Flag the in-place assignment as non differented and return A instead in
-            # order to be able to compute ∂A∂θ with Zygote
-            Zygote.@ignore_derivatives cache.value .= A
-            return A
+            # Flag the in-place assignment as non differented and return Y instead in
+            # order to be able to compute ∂Y∂θ with Zygote
+            Zygote.@ignore_derivatives cache.value .= Y
+            return Y
         end,
         init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
