@@ -26,11 +26,11 @@ Evaluates a law on the specified glacier within a simulation context and for a u
 result = eval_law(simulation.model.iceflow.A, simulation, glacier_idx, (; T=273.15), θ)
 ````
 """
-function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, input_values::NamedTuple, θ; scalar::Bool = false)
+function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, input_values::NamedTuple, θ)
     # Initialize the cache to be able to make an inference of the law
     params = simulation.parameters
 
-    cache = init_cache(law, simulation, glacier_idx, params; scalar=scalar)
+    cache = init_cache(law, simulation, glacier_idx, params)
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
     end

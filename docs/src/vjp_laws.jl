@@ -143,7 +143,7 @@ f! = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
         return A
     end
 end
-function init_cache(simulation, glacier_idx, θ; scalar=false)
+function init_cache(simulation, glacier_idx, θ)
     return ScalarCache(zeros(), zeros(), zero(θ))
 end
 
@@ -281,7 +281,7 @@ end
 # !!! warning
 #     The `cache` must of concrete type.
 
-function init_cache_interp(simulation, glacier_idx, θ; scalar::Bool = true)
+function init_cache_interp(simulation, glacier_idx, θ)
     glacier = simulation.glaciers[glacier_idx]
     (; nx, ny) = glacier
     H_interp = ODINN.create_interpolation(glacier.H₀; n_interp_half = simulation.model.machine_learning.target.n_interp_half)

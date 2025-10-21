@@ -104,7 +104,7 @@ function LawU(
             Zygote.@ignore_derivatives cache.value .= D
             return D
         end,
-        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
+        init_cache = function (simulation, glacier_idx, θ)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
         end,
@@ -189,7 +189,7 @@ function LawY(
             Zygote.@ignore_derivatives cache.value .= Y
             return Y
         end,
-        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
+        init_cache = function (simulation, glacier_idx, θ)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
         end,
@@ -270,7 +270,7 @@ function LawA(
                 Zygote.@ignore_derivatives cache.value .= A
                 return A
             end,
-            init_cache = function (simulation, glacier_idx, θ; scalar::Bool = false)
+            init_cache = function (simulation, glacier_idx, θ)
                 return ScalarCache(zeros(), zeros(), zero(θ))
             end,
             p_VJP! = precompute_VJPs ? DIVJP() : nothing,
