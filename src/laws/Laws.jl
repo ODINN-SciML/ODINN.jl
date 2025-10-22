@@ -258,25 +258,30 @@ function LawA(
     else
         0 # Apply this law only once at the beginning of the simulation
     end
-    A_law = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
-        Law{ScalarCache}(;
-            inputs = (; T=iTemp()),
-            f! = function (cache, inp, θ)
-                inp = collect(values(inp))
-                A = only(scale(smodel(inp, θ.A), (min_NN, max_NN)))
+    f! = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
+        function (cache, inp, θ)
+            inp = collect(values(inp))
+            A = only(scale(smodel(inp, θ.A), (min_NN, max_NN)))
 
-                # Flag the in-place assignment as non differented and return A instead in
-                # order to be able to compute ∂A∂θ with Zygote
-                Zygote.@ignore_derivatives cache.value .= A
-                return A
-            end,
-            init_cache = function (simulation, glacier_idx, θ)
-                return ScalarCache(zeros(), zeros(), zero(θ))
-            end,
-            p_VJP! = precompute_VJPs ? DIVJP() : nothing,
-            callback_freq = callback_freq,
-        )
+            # Flag the in-place assignment as non differented and return A instead in
+            # order to be able to compute ∂A∂θ with Zygote
+            Zygote.@ignore_derivatives cache.value .= A
+            return A
+        end
     end
+    p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+        ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
+        cache.vjp_θ .= ret
+    end
+    A_law = Law{ScalarCache}(;
+        inputs = (; T=iTemp()),
+        f! = f!,
+        init_cache = function (simulation, glacier_idx, θ)
+            return ScalarCache(zeros(), zeros(), zero(θ))
+        end,
+        p_VJP! = precompute_VJPs ? p_VJP! : nothing,
+        callback_freq = callback_freq,
+    )
     return A_law
 end
 
