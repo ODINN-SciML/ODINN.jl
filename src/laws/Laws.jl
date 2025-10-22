@@ -104,7 +104,7 @@ function LawU(
             Zygote.@ignore_derivatives cache.value .= D
             return D
         end,
-        init_cache = function (simulation, glacier_idx, θ)
+        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
         end,
@@ -189,7 +189,7 @@ function LawY(
             Zygote.@ignore_derivatives cache.value .= Y
             return Y
         end,
-        init_cache = function (simulation, glacier_idx, θ)
+        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
         end,
