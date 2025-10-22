@@ -1,4 +1,4 @@
-import Huginn.precompute_all_VJPs_laws!
+import Huginn.precompute_all_VJPs_laws!, Huginn.run!
 
 """
     run!(simulation::FunctionalInversion)
