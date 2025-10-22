@@ -24,7 +24,7 @@ nn_model = NeuralNetwork(params)
 # - `f_VJP_θ!(...)` — VJP w.r.t. parameters θ
 # - You may also implement your own precompute function to cache expensive computations which is the purpose of `p_VJP!(...)`. This function is called before solving the adjoint iceflow PDE.
 
-# Internally when the user does NOT provide VJPs, ODINN uses a default AD backend (via [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl)).
+# Internally when the user does NOT provide VJPs, ODINN uses a default AD backend (via [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl)) to compute the VJPs of the laws.
 # To support efficient reverse-mode execution, ODINN will:
 #   - compile and precompute adjoint-related helper functions and
 #   - store preparation objects that are used later during the in adjoint PDE.
@@ -47,11 +47,11 @@ nn_model = NeuralNetwork(params)
 #     - This is an internal routine. It is NOT intended to be called by users directly.
 #     - It is invoked when ODINN must fall back to the AD backend (with [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl)) because the law did not supply explicit VJP functions (`f_VJP_input!`/`f_VJP_θ!` or because `p_VJP!` is set to `DIVJP()`).
 #     - Its job is to precompile and prepare the AD-based VJP code for a given law and to produce *preparation* objects that store [preparation](https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/explanation/operators/#Preparation) results.
-#     - `prepare_vjp_law` is typically called just after the iceflow model / law objects have been instantiated — i.e., early in setup — so that preparations are ready before solving or adjoint runs.
+#     - `prepare_vjp_law` is typically called just after the iceflow model / law objects have been instantiated — i.e., early in the setup — so that preparations are ready before solving or adjoint runs.
 
 # - `precompute_law_VJP` (used before solving the adjoint PDE)
 
-#   We have overloads in the codebase:
+#   The typical signature in the codebase is:
 #   ```
 #   precompute_law_VJP(
 #     law::AbstractLaw,
@@ -83,12 +83,21 @@ nn_model = NeuralNetwork(params)
 #     - They therefore carry the runtime context (simulation, glacier index, time, θ) which is necessary for adjoint calculations.
 
 # ### Workflow
-# How the pieces compose in practice?
+# For the wide audience we do not recommend to play with the VJPs.
+# ODINN comes with default parameters and the average user does not need to customize the VJPs.
+# Keeping the default values will work fine.
+
+# Advanced users seeking maximum performance can customize the VJPs which can significantly speed-up the code.
+
+# How do the pieces compose in practice?
 # - If you, as a user, provide custom VJP functions (through `f_VJP_input!`/`f_VJP_θ!`, or through `p_VJP!`), ODINN will use them directly at adjoint time and will skip the AD fallback path. You can also provide your own precompute wrapper and cache to optimize expensive computations.
 # - If you do NOT provide VJP functions, ODINN runs the AD fallback:
 #   1. `prepare_vjp_law` runs early (post-instantiation) to compile/prepare AD-based helpers and returns some `AbstractPrepVJP` object.
 #   2. `precompute_law_VJP` is skipped.
 #   3. During the adjoint solve, `law_VJP_input` and `law_VJP_θ` use the preparation objects precompiled in `prepare_vjp_law` to automatically differentiate `f!` with [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) and obtain the VJPs of the law with respect to the inputs and to the parameters `θ`.
+
+# !!! info
+#     You can change the default AD backend for laws that do not have custom VJPs in the VJP type, for example by setting `VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote())` when you define the adjoint method.
 
 # ### User level customization
 # What is user-visible and can be customized?
@@ -98,11 +107,11 @@ nn_model = NeuralNetwork(params)
 #   - custom cache implementations (described below)
 
 # ### Notes on cache definition
-# The `cache` parameter that flows through `p_VJP!`/`f_VJP_*` calls is the place to store artifacts useful for efficient computation as well as the results of the VJPs computation.
+# The `cache` parameter that is threaded through `p_VJP!`/`f_VJP_*` calls is the place to store artifacts useful for efficient computation as well as the results of the VJPs computation.
 # The following fields are mandatory:
 # - `value`: a placeholder to store the result of the forward evaluation, can be of any type
 # - `vjp_θ`: a placeholder to store the result of the VJP with respect to `θ`, depending on the type of law that is defined, it can be a vector or a 3 dimensional array
-# - `vjp_inp`: a placeholder to store the result of the VJP with respect to the inputs, must be of a type that matches the one the inputs are defined in
+# - `vjp_inp`: a placeholder to store the result of the VJP with respect to the inputs, must be of a type that matches the one of the inputs
 # In order to know the type of the inputs, simply run `generate_inputs(law.f.inputs, simulation, glacier_idx, t)`.
 
 # ### Using the preparation object
@@ -241,7 +250,9 @@ law = Law{ScalarCache}(;
 
 # In this last section we illustrate how we can define our own cache to store additional information.
 # Our use case is the interpolation of the VJP on a coarse grid.
-# The VJPs on the coarse grid are precomputed and the evaluation at the exact points in the adjoint PDE are made using an interpolator that is stored inside the cache object.
+# By coarse grid we mean that in order to evaluate the VJP we do not need the differentiate the law for every value of ice thickness we have on the 2D grid at each time step.
+# We only need to pre-evaluate the VJP for a few values of H (this set of values corresponds to the coarse grid), and then we can interpolate the precomputed VJP at the required values of H.
+# The VJPs on the coarse grid are precomputed before solving the adjoint PDE and the evaluation at the exact points in the adjoint PDE are made using an interpolator that is stored inside the cache object.
 
 params = Parameters(
     simulation = SimulationParameters(rgi_paths=rgi_paths),

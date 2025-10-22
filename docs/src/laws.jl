@@ -33,6 +33,7 @@ A_law = LawA(nn_model, params)
 
 # The ouput above shows that the law is applied at each iteration of the iceflow PDE.
 # Additionally it says that custom VJPs are used to compute the gradient and that these VJPs are precomputed as the inputs of the law do not depend on the glacier state.
+# By precomputed we mean that they are computed before solving the adjoint iceflow PDE, refer to the [VJP law customization](./vjp_laws.md) tutorial for more information.
 
 # It is then possible to visualize how the law integrates into the iceflow PDE:
 
