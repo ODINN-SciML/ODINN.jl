@@ -38,6 +38,7 @@ tutorial_files = [
     "./src/functional_inversion.jl",
     "./src/laws.jl",
     "./src/vjp_laws.jl",
+    "./src/input_laws.jl",
     "./src/quick_start.jl"
 ]
 
@@ -68,6 +69,7 @@ makedocs(
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
             "VJP law customization" => "vjp_laws.md",
+            "Laws inputs" => "input_laws.md",
         ],
         "How to use ODINN" => [
             "Parameters" => "parameters.md",
