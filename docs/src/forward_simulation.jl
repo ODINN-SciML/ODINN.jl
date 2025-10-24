@@ -40,7 +40,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 prediction = Prediction(model, glaciers, params)
 
 ## And finally, we just run the simulation
-Huginn.run!(prediction)
+run!(prediction)
 
 ## Then we can visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier
 pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
@@ -127,8 +127,8 @@ glaciers = initialize_glaciers(rgi_ids, params)
 
 prediction = Prediction(model, glaciers, params)
 
-# And once we have the `Prediction` object, we can run it using `Huginn.run!`:
-Huginn.run!(prediction)
+# And once we have the `Prediction` object, we can run it using `run!`:
+run!(prediction)
 
 # There we go, we have successfully simulated the evolution of 3 glaciers for 5 years in around 1-2 seconds!
 

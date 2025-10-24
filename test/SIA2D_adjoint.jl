@@ -12,8 +12,9 @@ function test_adjoint_SIA2D(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    function _loss(H, θ, simulation, t, vecBackwardSIA2D)
+    function _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
         dH = zero(H)
+        apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, glacier_idx, t, θ)
         Huginn.SIA2D!(dH, H, simulation, t, θ)
         return sum(dH.*vecBackwardSIA2D)
     end
@@ -54,7 +55,7 @@ function test_adjoint_SIA2D(
     nn_model = NeuralNetwork(params)
 
     model = if target==:A
-        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
+        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params; precompute_VJPs=false))
         Model(
             iceflow = iceflow_model,
             mass_balance = nothing,
@@ -87,14 +88,15 @@ function test_adjoint_SIA2D(
 
     simulation = FunctionalInversion(model, glaciers, params)
 
-    cache = init_cache(model, simulation, glacier_idx, params)
-
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
+    cache = init_cache(model, simulation, glacier_idx, θ)
     simulation.cache = cache
 
     vecBackwardSIA2D = randn(size(H, 1), size(H, 2))
 
+    # If the law being tested is a callback law, we need to apply it first
+    apply_all_callback_laws!(model.iceflow, cache.iceflow, simulation, glacier_idx, t, θ)
     dH = zero(H)
     Huginn.SIA2D!(dH, H, simulation, t, θ)
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(dH, H, simulation, t, θ)
@@ -119,9 +121,9 @@ function test_adjoint_SIA2D(
 
     # Check gradient wrt H
     function f_H(H, args)
-        simulation, t, vecBackwardSIA2D = args
+        simulation, t, vecBackwardSIA2D, glacier_idx = args
         θ = simulation.model.machine_learning.θ
-        return _loss(H, θ, simulation, t, vecBackwardSIA2D)
+        return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []
     angle = []
@@ -130,7 +132,7 @@ function test_adjoint_SIA2D(
     for k in range(3,7,step=2)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
+        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D, glacier_idx), f_H, ϵ; varStr="of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)
@@ -152,8 +154,8 @@ function test_adjoint_SIA2D(
 
     # Check gradient wrt θ
     function f_θ(θ, args)
-        H, simulation, t, vecBackwardSIA2D = args
-        return _loss(H, θ, simulation, t, vecBackwardSIA2D)
+        H, simulation, t, vecBackwardSIA2D, glacier_idx = args
+        return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []
     angle = []
@@ -162,7 +164,7 @@ function test_adjoint_SIA2D(
     for k in range(3,7)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂θ_num = compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ; varStr="of θ")
+        ∂θ_num = compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D, glacier_idx), f_θ, ϵ; varStr="of θ")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂θ, ∂θ_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)
@@ -196,8 +198,9 @@ function test_adjoint_surface_V(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    function _loss(H, θ, simulation, t, vecBackwardSIA2D)
+    function _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
         simulation.model.machine_learning.θ = θ
+        apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, glacier_idx, t, θ)
         Vx, Vy = Huginn.surface_V(H, simulation, t, θ)
         return sum(Vx.*inn1(vecBackwardSIA2D[1])+Vy.*inn1(vecBackwardSIA2D[2]))
     end
@@ -239,7 +242,7 @@ function test_adjoint_surface_V(
     nn_model = NeuralNetwork(params)
 
     model = if target==:A
-        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params))
+        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params; precompute_VJPs=false))
         Model(
             iceflow = iceflow_model,
             mass_balance = nothing,
@@ -256,16 +259,16 @@ function test_adjoint_surface_V(
     H = glaciers[glacier_idx].H₀
     simulation = FunctionalInversion(model, glaciers, params)
 
-    cache = init_cache(model, simulation, glacier_idx, params)
-
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
+    cache = init_cache(model, simulation, glacier_idx, θ)
     simulation.cache = cache
 
     vecBackwardSIA2D = [
         randn(size(H, 1), size(H, 2)),
         randn(size(H, 1), size(H, 2))]
 
+    apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, glacier_idx, t, θ)
     Vx, Vy = Huginn.surface_V(H, simulation, t, θ)
 
     ∂H, = ODINN.VJP_λ_∂surface_V∂H(
@@ -289,9 +292,9 @@ function test_adjoint_surface_V(
 
     # Check gradient wrt H
     function f_H(H, args)
-        simulation, t, vecBackwardSIA2D = args
+        simulation, t, vecBackwardSIA2D, glacier_idx = args
         θ = simulation.model.machine_learning.θ
-        return _loss(H, θ, simulation, t, vecBackwardSIA2D)
+        return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []
     angle = []
@@ -300,7 +303,7 @@ function test_adjoint_surface_V(
     for k in range(3,8)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D), f_H, ϵ; varStr="of H")
+        ∂H_num = compute_numerical_gradient(H, (simulation, t, vecBackwardSIA2D, glacier_idx), f_H, ϵ; varStr="of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)
@@ -322,8 +325,8 @@ function test_adjoint_surface_V(
 
     # Check gradient wrt θ
     function f_θ(θ, args)
-        H, simulation, t, vecBackwardSIA2D = args
-        return _loss(H, θ, simulation, t, vecBackwardSIA2D)
+        H, simulation, t, vecBackwardSIA2D, glacier_idx = args
+        return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []
     angle = []
@@ -332,7 +335,7 @@ function test_adjoint_surface_V(
     for k in range(5,7)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂θ_num = compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D), f_θ, ϵ; varStr="of θ")
+        ∂θ_num = compute_numerical_gradient(θ, (H, simulation, t, vecBackwardSIA2D, glacier_idx), f_θ, ϵ; varStr="of θ")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂θ, ∂θ_num)
         push!(ratio, ratio_k)
         push!(angle, angle_k)

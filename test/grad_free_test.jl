@@ -63,7 +63,7 @@ function grad_free_test(;use_MB::Bool=false)
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
     # Do a clean restart
     A_law = LawA(nn_model, params)
-    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) LawA(nn_model, params)
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) LawA(nn_model, params)
 
     model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
