@@ -41,11 +41,11 @@ function ∂Diffusivity∂H(
     # Allow different n for power in inversion of diffusivity
     # TODO: n is also inside Γ, so probably we want to grab this one too
     (; n, Y) = iceflow_cache
-    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
-    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n.value
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n.value
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
-    ∂D∂H_no_NN = ( (n_H .+ 1) .* S(iceflow_model, iceflow_cache, params) .+ (n_H .+ 2) .* Y .* Γ_no_A .* H̄ ) .* H̄.^n_H .* ∇S.^(n_∇S .- 1)
+    ∂D∂H_no_NN = ( (n_H .+ 1) .* S(iceflow_model, iceflow_cache, params) .+ (n_H .+ 2) .* Y.value .* Γ_no_A .* H̄ ) .* H̄.^n_H .* ∇S.^(n_∇S .- 1)
 
     # Derivative of the output of the NN with respect to input layer
     # TODO: Change this to be done with AD or have this as an extra parameter.
@@ -53,14 +53,14 @@ function ∂Diffusivity∂H(
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
     temp = get_input(iTemp(), simulation, glacier_idx, t)
-    iceflow_model.Y.f.f(iceflow_cache.∂Y∂H, (; T=temp, H̄=H̄+δH), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
     a = compute_D(
-        target, iceflow_cache.∂Y∂H;
+        target, iceflow_cache.Y.value;
         H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
-    iceflow_model.Y.f.f(iceflow_cache.∂Y∂H, (; T=temp, H̄=H̄), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
     b = compute_D(
-        target, iceflow_cache.∂Y∂H;
+        target, iceflow_cache.Y.value;
         H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     ∂D∂H_NN = (a .- b) ./ δH
@@ -76,10 +76,10 @@ function ∂Diffusivity∂∇H(
     iceflow_cache = simulation.cache.iceflow
 
     (; n, Y) = iceflow_cache
-    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
-    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n.value
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n.value
 
-    ∂D∂∇S_no_NN = (S(iceflow_model, iceflow_cache, params) .+ Γ(iceflow_model, iceflow_cache, params; include_A = false) .* Y .* H̄) .* (n_∇S .- 1) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 3)
+    ∂D∂∇S_no_NN = (S(iceflow_model, iceflow_cache, params) .+ Γ(iceflow_model, iceflow_cache, params; include_A = false) .* Y.value .* H̄) .* (n_∇S .- 1) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 3)
 
     return ∂D∂∇S_no_NN
 end
@@ -100,8 +100,8 @@ function ∂Diffusivity∂θ(
     interpolation = target.interpolation
     n_interp_half = target.n_interp_half
 
-    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
-    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n.value
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n.value
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 1)
@@ -110,18 +110,15 @@ function ∂Diffusivity∂θ(
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
 
+    backend = simulation.parameters.UDE.grad.VJP_method.regressorADBackend
     if interpolation == :None
         """
         Computes derivative at each pixel using the exact numerical value of H̄ at each
         point in the glacier. Slower but more precise.
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.Y.f.f(
-                iceflow_cache.∂Y∂θ,
-                (; T=temp, H̄=H̄[i,j]), _θ
-            ), θ)
-            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * ComponentVector2Vector(∇θ_point)
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=H̄[i,j]), θ)
+            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * iceflow_cache.Y.vjp_θ
         end
     elseif interpolation == :Linear
         """
@@ -136,12 +133,8 @@ function ∂Diffusivity∂θ(
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.Y.f.f(
-                iceflow_cache.∂Y∂θ,
-                (; T=temp, H̄=h), _θ
-            ), θ)
-            push!(grads, ComponentVector2Vector(∇θ_point))
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=h), θ)
+            push!(grads, deepcopy(iceflow_cache.Y.vjp_θ)) # Copy cache otherwise it points to the same place in memory
         end
         # Create interpolation for gradient
         grad_itp = interpolate((H_interp,), grads, Gridded(Linear()))
@@ -164,12 +157,12 @@ function compute_D(
     # Use the value of Y in the cache
 
     (; n, Y) = iceflow_cache
-    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
-    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n.value
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n.value
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
-    D = (S(iceflow_model, iceflow_cache, params) .+ Y .* Γ_no_A .* H̄) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
+    D = (S(iceflow_model, iceflow_cache, params) .+ Y.value .* Γ_no_A .* H̄) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
     return D
 end
 
@@ -180,8 +173,8 @@ function compute_D(
     # Use the value of Y provided as an argument
 
     n = iceflow_cache.n
-    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n
-    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n
+    n_H = iceflow_model.n_H_is_provided ? iceflow_cache.n_H : n.value
+    n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n.value
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
@@ -209,24 +202,24 @@ function ∂Diffusivityꜛ∂H(
     iceflow_cache = simulation.cache.iceflow
 
     (; C, n, Y) = iceflow_cache
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = isnothing(iceflow_model.n_H) ? n.value : iceflow_model.n_H
+    n_∇S = isnothing(iceflow_model.n_∇S) ? n.value : iceflow_model.n_∇S
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
-    S_surf = (n_H.+2) .* C .* (ρ * g).^n
-    ∂D∂H_no_NN = (n_H .+ 1) .* (S_surf .+ Y .* Γ_no_A) .* H̄.^n_H .* ∇S.^(n_∇S .- 1)
+    S_surf = (n_H.+2) .* C.value .* (ρ * g).^n.value
+    ∂D∂H_no_NN = (n_H .+ 1) .* (S_surf .+ Y.value .* Γ_no_A) .* H̄.^n_H .* ∇S.^(n_∇S .- 1)
 
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
     temp = get_input(iTemp(), simulation, glacier_idx, t)
-    iceflow_model.Y.f.f(iceflow_cache.∂Y∂H, (; T=temp, H̄=H̄+δH), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
     a = compute_D(
-        target, iceflow_cache.∂Y∂H;
+        target, iceflow_cache.Y.value;
         H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
-    iceflow_model.Y.f.f(iceflow_cache.∂Y∂H, (; T=temp, H̄=H̄), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
     b = compute_D(
-        target, iceflow_cache.∂Y∂H;
+        target, iceflow_cache.Y.value;
         H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     ∂D∂H_NN = (a .- b) ./ δH
@@ -242,10 +235,10 @@ function ∂Diffusivityꜛ∂∇H(
     iceflow_cache = simulation.cache.iceflow
 
     (; n, Y) = iceflow_cache
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = isnothing(iceflow_model.n_H) ? n.value : iceflow_model.n_H
+    n_∇S = isnothing(iceflow_model.n_∇S) ? n.value : iceflow_model.n_∇S
 
-    ∂D∂∇S_no_NN = (Sꜛ(iceflow_model, iceflow_cache, params) .+ Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .* Y .* H̄) .* (n_∇S .- 1) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 3)
+    ∂D∂∇S_no_NN = (Sꜛ(iceflow_model, iceflow_cache, params) .+ Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .* Y.value .* H̄) .* (n_∇S .- 1) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 3)
 
     return ∂D∂∇S_no_NN
 end
@@ -266,8 +259,8 @@ function ∂Diffusivityꜛ∂θ(
     interpolation = target.interpolation
     n_interp_half = target.n_interp_half
 
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = isnothing(iceflow_model.n_H) ? n.value : iceflow_model.n_H
+    n_∇S = isnothing(iceflow_model.n_∇S) ? n.value : iceflow_model.n_∇S
 
     Γ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
@@ -276,18 +269,15 @@ function ∂Diffusivityꜛ∂θ(
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
 
+    backend = simulation.parameters.UDE.grad.VJP_method.regressorADBackend
     if interpolation == :None
         """
         Computes derivative at each pixel using the exact numerical value of H̄ at each
         point in the glacier. Slower but more precise.
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.Y.f.f(
-                iceflow_cache.∂Y∂θ,
-                (; T=temp, H̄=H̄[i,j]), _θ
-            ), θ)
-            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * ComponentVector2Vector(∇θ_point)
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=H̄[i,j]), θ)
+            ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * iceflow_cache.Y.vjp_θ
         end
     elseif interpolation == :Linear
         """
@@ -302,12 +292,8 @@ function ∂Diffusivityꜛ∂θ(
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            # We don't use apply_law! because we want to evaluate with custom inputs
-            ∇θ_point, = Zygote.gradient(_θ -> iceflow_model.Y.f.f(
-                iceflow_cache.∂Y∂θ,
-                (; T=temp, H̄=h), _θ
-            ), θ)
-            push!(grads, ComponentVector2Vector(∇θ_point))
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=h), θ)
+            push!(grads, deepcopy(iceflow_cache.Y.vjp_θ)) # Copy cache otherwise it points to the same place in memory
         end
         # Create interpolation for gradient
         grad_itp = interpolate((H_interp,), grads, Gridded(Linear()))
@@ -330,11 +316,11 @@ function compute_Dꜛ(
     # Use the value of Y in the cache
 
     (; n, Y) = iceflow_cache
-    n_H = isnothing(iceflow_model.n_H) ? n : iceflow_model.n_H
-    n_∇S = isnothing(iceflow_model.n_∇S) ? n : iceflow_model.n_∇S
+    n_H = isnothing(iceflow_model.n_H) ? n.value : iceflow_model.n_H
+    n_∇S = isnothing(iceflow_model.n_∇S) ? n.value : iceflow_model.n_∇S
 
     Γꜛ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
-    D = (Sꜛ(iceflow_model, iceflow_cache, params) .+ Y .* Γꜛ_no_A) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
+    D = (Sꜛ(iceflow_model, iceflow_cache, params) .+ Y.value .* Γꜛ_no_A) .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
     return D
 end

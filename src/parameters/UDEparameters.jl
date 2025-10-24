@@ -1,4 +1,4 @@
-export UDEparameters
+export UDEparameters, Parameters
 
 """
 A mutable struct that holds parameters for a UDE (Universal Differential Equation).

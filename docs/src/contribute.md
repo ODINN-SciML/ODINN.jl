@@ -39,3 +39,6 @@ serve()
 ```
 
 This will print a localhost URL that you can open in your browser to visualize the documentation.
+
+!!! note "What to do when it freezes?
+    If the building of the documentation freezes, there can be several reasons that cause this. First try to run `include("testdocs.jl")` which will run the tutorial examples. If there is an error during the execution, this will be easier to spot it as [Literate.jl](https://github.com/fredrikekre/Literate.jl) does not always report the error. If after making sure that the code runs smoothly this still freezes, inspect the generated `.md` files (see the list of files at the beginning of `make.jl`) and check that the markdown file was generated properly (code in `@example` sections).

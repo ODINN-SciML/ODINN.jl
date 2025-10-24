@@ -27,7 +27,7 @@ model = Model(
 
 glaciers = initialize_glaciers(rgi_ids, params)
 prediction = Prediction(model, glaciers, params)
-Huginn.run!(prediction)
+run!(prediction)
 
 # This code will run a forward simulation for the glaciers defined in `rgi_ids` from 2010 to 2015, 
 # using the specified ice flow and mass balance models. The results will be stored in the `working_dir` directory.

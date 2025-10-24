@@ -54,9 +54,9 @@ glacier_idx = 1
 batch_idx = 1
 H = glaciers[glacier_idx].H₀
 simulation = FunctionalInversion(model, glaciers, params)
-simulation.cache = init_cache(model, simulation, glacier_idx, params)
-t = tspan[1]
 θ = simulation.model.machine_learning.θ
+simulation.cache = init_cache(model, simulation, glacier_idx, θ)
+t = tspan[1]
 λ = rand(size(H)...)
 
 for VJPMode in (ODINN.EnzymeVJP(), ODINN.DiscreteVJP(), ODINN.ContinuousVJP())

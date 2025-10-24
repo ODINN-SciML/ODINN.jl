@@ -1,7 +1,8 @@
 function inversion_test(;
     use_MB = false,
     train_initial_conditions = false,
-    multiprocessing = false
+    multiprocessing = false,
+    grad = ContinuousAdjoint(),
     )
 
     rgi_paths = get_rgi_paths()
@@ -50,7 +51,7 @@ function inversion_test(;
             ),
         UDE = UDEparameters(
             optim_autoAD = ODINN.NoAD(),
-            grad = ContinuousAdjoint(),
+            grad = grad,
             optimization_method  ="AD+AD",
             target = :A
             ),
@@ -113,13 +114,13 @@ function inversion_test(;
     t = tstops[end]
     for (i, glacier) in enumerate(glaciers)
         # Initialize the cache to make predictions with the law
-        functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, params)
+        functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, θ)
         functional_inversion.model.machine_learning.θ = θ
 
         T = get_input(iTemp(), functional_inversion, i, t)
         apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
         push!(Temps, T)
-        push!(As_pred, functional_inversion.cache.iceflow.A[1])
+        push!(As_pred, functional_inversion.cache.iceflow.A.value[1])
     end
 
     if !multiprocessing
