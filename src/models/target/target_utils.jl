@@ -1,10 +1,10 @@
 export ComponentVector2Vector, Vector2ComponentVector
 
 function Γ(model, model_cache, params; include_A::Bool = true)
-    n = model_cache.n
+    n = model_cache.n.value
     (; ρ, g) = params.physical
     if include_A
-        A = model_cache.A
+        A = model_cache.A.value
         return 2.0 .* A .* (ρ * g).^n ./ (n.+2)
     else
         return 2.0 .* (ρ * g).^n ./ (n.+2)
@@ -14,14 +14,14 @@ end
 function S(model, model_cache, params)
     (; C, n) = model_cache
     (; ρ, g) = params.physical
-    return C .* (ρ * g).^n
+    return C.value .* (ρ * g).^n.value
 end
 
 function Γꜛ(model, model_cache, params; include_A::Bool = true)
-    n = model_cache.n
+    n = model_cache.n.value
     (; ρ, g) = params.physical
     if include_A
-        A = model_cache.A
+        A = model_cache.A.value
         return 2.0 .* A .* (ρ * g).^n ./ (n.+1)
     else
         return 2.0 .* (ρ * g).^n ./ (n.+1)
@@ -31,7 +31,7 @@ end
 function Sꜛ(model, model_cache, params)
     (; C, n) = model_cache
     (; ρ, g) = params.physical
-    return (n.+2) .* C .* (ρ * g).^n
+    return (n.value.+2) .* C.value .* (ρ * g).^n.value
 end
 
 """
@@ -198,8 +198,13 @@ Function to create an intepolation for AD computation combining uniform and quan
 """
 function create_interpolation(A::Matrix; n_interp_half::Int)
     A_interp_unif = LinRange(0.0, maximum(A), n_interp_half) |> collect
-    A_interp_quantiles = quantile!(A[A .> 0.0], LinRange(0.0, 1.0, n_interp_half))
-    A_interp = vcat(A_interp_unif, A_interp_quantiles)
+    pos_values = A[A .> 0.0]
+    if length(pos_values) > 0
+        A_interp_quantiles = quantile!(A[A .> 0.0], LinRange(0.0, 1.0, n_interp_half))
+        A_interp = vcat(A_interp_unif, A_interp_quantiles)
+    else
+        A_interp = A_interp_unif
+    end
     A_interp = unique(A_interp)
     A_interp = sort(A_interp)
     return A_interp

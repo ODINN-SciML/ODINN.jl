@@ -17,8 +17,8 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
-rgi_ids = ["RGI60-11.03638"]
-# rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+# rgi_ids = ["RGI60-11.03638"]
+rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
 # rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
 # rgi_ids = ["RGI60-11.03638",
 #             "RGI60-11.01450",
@@ -52,7 +52,7 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
-        epochs = [100,50],
+        epochs = [2, 2],
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
         ),
     physical = PhysicalParameters(
@@ -62,8 +62,10 @@ params = Parameters(
     UDE = UDEparameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
-        optimization_method  ="AD+AD",
-        target = :A
+        optimization_method = "AD+AD",
+        empirical_loss_function = LossH(),
+        target = :A,
+        initial_condition_filter = :Zang1980
         ),
     solver = Huginn.SolverParameters(
         step = δt,
@@ -72,7 +74,7 @@ params = Parameters(
         )
     )
 
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
     mass_balance = nothing, #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
@@ -86,10 +88,27 @@ tstops = collect(2010:δt:2015)
 glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 nn_model = NeuralNetwork(params)
-model = Model(
-    iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
-    mass_balance = nothing,
-    regressors = (; A=nn_model))
+
+# Decide if we want or not to learn initial condition
+train_initial_conditions = false
+
+if train_initial_conditions
+    ic = InitialCondition(params, glaciers, :Farinotti2019)
+    model = Model(
+        iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
+        mass_balance = nothing,
+        regressors = (; A = nn_model, IC = ic)
+    )
+else
+    # ic = ODINN.emptyIC()
+    model = Model(
+        iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
+        mass_balance = nothing,
+        regressors = (; A = nn_model)
+    )
+end
+
+
 
 # We create an ODINN prediction
 functional_inversion = FunctionalInversion(model, glaciers, params)

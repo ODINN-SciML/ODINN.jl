@@ -1,6 +1,8 @@
-function save_simulation_test!()
+function save_simulation_test!(;
+    multiglacier = false
+)
 
-    rgi_ids = ["RGI60-11.03638"]
+    rgi_ids = multiglacier ? ["RGI60-11.03638", "RGI60-11.01450"] : ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
     working_dir = joinpath(ODINN.root_dir, "test/data")
     δt = 1/12
@@ -35,7 +37,7 @@ function save_simulation_test!()
             )
     )
 
-    model = Huginn.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params, A=CuffeyPaterson()),
         mass_balance = TImodel1(params),
     )

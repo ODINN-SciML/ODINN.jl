@@ -22,7 +22,8 @@ module ODINN
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
-using Statistics, LinearAlgebra, Random
+using Statistics, LinearAlgebra
+using Random, Distributions
 using EnzymeCore
 using Enzyme
 using JLD2
@@ -38,7 +39,7 @@ using Base: @kwdef
 using Lux
 using Tullio
 using Infiltrator
-using Plots, PlotThemes
+using Plots, PlotThemes, PlotlyJS
 Plots.theme(:wong2) # sets overall theme for Plots
 import Pkg
 using Distributed
@@ -51,7 +52,9 @@ using FastGaussQuadrature
 using Zygote
 using TensorBoardLogger
 using Dates
-
+using MLStyle
+import DifferentiationInterface as DI
+import Mooncake
 
 # ##############################################
 # ############    PARAMETERS     ###############
@@ -86,7 +89,6 @@ include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))
 include(joinpath(root_dir, "src/models/target/Target.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
-
 # Parameterizations
 include(joinpath(root_dir, "src/laws/Laws.jl"))
 

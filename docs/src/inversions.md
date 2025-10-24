@@ -44,7 +44,7 @@ In ODINN, in order to specify functional inversions, we have introduced a `Law` 
 
 ```julia
 law_inputs = (; CPDD=InpCPDD(), topo_roughness=InpTopoRough())
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
     mass_balance = nothing
 )
@@ -100,9 +100,8 @@ function SyntheticC(params::Sleipnir.Parameters; inputs = (; CPDD=InpCPDD()))
             # If the provided C values are a matrix, reduce matrix size to match operations
             cache .= Cmin .+ (Cmax - Cmin) .* (isa(sigmoid, Matrix) ? inn1(sigmoid) : sigmoid)
         end,
-        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = false)
-            # Initialize cache as a scalar or vector depending on the required output
-            scalar ? zeros() : zeros(size(simulation.glaciers[glacier_idx].S) .- 1)
+        init_cache = function (simulation, glacier_idx, θ)
+            zeros(size(simulation.glaciers[glacier_idx].S) .- 1)
         end,
         callback_freq = 1/52,  # weekly frequency
     )

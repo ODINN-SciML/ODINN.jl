@@ -105,7 +105,7 @@ min_temp, max_temp = - 25.0, 0.0
 min_H, max_H = 0.0, H_max
 
 # We define the prescale and postscale of quantities.
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
 )
@@ -118,7 +118,7 @@ A_poly = Huginn.polyA_PatersonCuffey()
 # We generate a fake law with A and no direct dependency on H
 glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
-prediction = Huginn.Prediction(model, glaciers, params)
+prediction = Prediction(model, glaciers, params)
 
 Temps = Float64[]
 As_fake = Float64[]
