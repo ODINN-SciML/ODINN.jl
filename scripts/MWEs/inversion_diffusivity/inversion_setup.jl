@@ -46,7 +46,8 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 use_MB = false
 λ = use_MB ? 5.0 : 0.0
-nx, ny = 100, 100
+# nx, ny = 100, 100
+nx, ny = 20, 20
 R₀ = 2000.0
 H₀ = 200.0
 H_max = 1.2 * H₀
@@ -83,13 +84,13 @@ params = Parameters(
         workers = 1,
         test_mode = false,
         rgi_paths = rgi_paths,
-        gridScalingFactor = 4,
+        gridScalingFactor = 1,
         ),
     hyper = Hyperparameters(
         batch_size = 1,
         epochs = [100, 30],
         optimizer = [
-            ODINN.ADAM(0.001),
+            ODINN.ADAM(0.005),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
                 )
@@ -116,6 +117,7 @@ params = Parameters(
     )
 
 # We are going to create a glacier using the Halfar solution
+# TODO: Downscalling of glacier grid does not seem to be working
 glacier = Glacier2D(
     rgi_id = "Halfar",
     climate = DummyClimate2D(),
@@ -147,20 +149,9 @@ function inv_normalize(v::Union{Vector,SubArray})
     return [ODINN.normalize(v[1]; lims = (0.0, H_max)), ODINN.normalize(v[2]; lims = (0.0, 0.6))]
 end
 
-# function inv_normalize(V::Matrix)
-#     @assert size(V)[1] == 2
-#     M = reduce(hcat, map(v -> inv_normalize(v), eachcol(V)))
-#     return M
-# end
-
 function inv_fourier_feature(v::Union{Vector,SubArray})
     return [fourier_feature(v[1], n_fourier_feautures); fourier_feature(v[2], n_fourier_feautures)]
 end
-
-# function inv_fourier_feature(V::Matrix)
-#     M = reduce(hcat, map(v -> inv_fourier_feature(v), eachcol(V)))
-#     return M
-# end
 
 architecture = Lux.Chain(
     Lux.WrappedFunction(x -> LuxFunction(inv_normalize, x)),
@@ -179,28 +170,34 @@ architecture = Lux.Chain(
 
 ### Pretraining
 
-H_samples = 0.0:2.0:H_max
-∇S_samples = 0.0:0.02:0.4
-all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
-X_samples = hcat(first.(all_combinations), last.(all_combinations))
-function template_diffusivity(h, ∇s)
-    (; ρ, g) = params.physical
-    n = 1.01 * n₀
-    A = 0.80 * A₀
-    # This one has one less H than the actual diffusivity
-    return 2 * A * (ρ * g)^n * h^(n+1) * ∇s^(n-1) / (n + 2)
-end
-Y_samples = map(x -> template_diffusivity(x[1], x[2]), eachrow(X_samples))
-# Set matrices in right format
-X_samples = transpose(X_samples)
-X_samples = Matrix(X_samples)
-Y_samples = reshape(Y_samples, (1, :))
+pretrain = true
 
-architecture, θ_pretrain, st_pretrain, losses = pretraining(
-    architecture;
-    X = X_samples, Y = Y_samples,
-    nepochs = 5000, rng = rng
-)
+if pretrain
+    H_samples = 0.0:2.0:H_max
+    ∇S_samples = 0.0:0.02:0.4
+    all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
+    X_samples = hcat(first.(all_combinations), last.(all_combinations))
+    function template_diffusivity(h, ∇s)
+        (; ρ, g) = params.physical
+        n = 1.01 * n₀
+        A = 0.80 * A₀
+        # This one has one less H than the actual diffusivity
+        return 2 * A * (ρ * g)^n * h^(n+1) * ∇s^(n-1) / (n + 2)
+    end
+    Y_samples = map(x -> template_diffusivity(x[1], x[2]), eachrow(X_samples))
+    # Set matrices in right format
+    X_samples = transpose(X_samples)
+    X_samples = Matrix(X_samples)
+    Y_samples = reshape(Y_samples, (1, :))
+
+    architecture, θ_pretrain, st_pretrain, losses = pretraining(
+        architecture;
+        X = X_samples, Y = Y_samples,
+        nepochs = 5000, rng = rng
+    )
+else
+    θ_pretrain, st_pretrain = Lux.setup(rng, architecture)
+end
 
 # We define the prescale and postscale of quantities.
 nn_model = NeuralNetwork(
@@ -209,8 +206,20 @@ nn_model = NeuralNetwork(
     θ = ComponentVector(θ = θ_pretrain), # We should give the actual solution!!!
     seed = rng
 )
+
+# Define the law
+law = LawU(
+    nn_model,
+    params;
+    prescale_bounds = nothing,
+    # max_NN = nothing,
+    precompute_VJPs = true,
+    precompute_interpolation = true
+    )
+
+
 model = Model(
-    iceflow = SIA2Dmodel(params; U=LawU(nn_model, params; prescale_bounds=nothing, max_NN=nothing)),
+    iceflow = SIA2Dmodel(params; U = law),
     mass_balance = TImodel1(
         params; DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0

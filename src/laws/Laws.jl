@@ -84,6 +84,8 @@ function LawU(
     params::Sleipnir.Parameters;
     max_NN::Union{F, Nothing} = 50.0,
     prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing} = [(0.0, 300.0), (0.0, 0.5)],
+    precompute_interpolation::Bool = true,
+    precompute_VJPs::Bool = true,
 ) where {F <: AbstractFloat}
     prescale = !isnothing(prescale_bounds) ? X -> _ml_model_prescale(X, prescale_bounds) : identity
     # The value of max_NN should correspond to maximum of Umax * dSdx
@@ -93,21 +95,67 @@ function LawU(
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
-    U_law = let smodel = smodel, prescale = prescale, postscale = postscale
-    Law{MatrixCache}(;
-        inputs = (; H̄=iH̄(), ∇S=i∇S()),
-        f! = function (cache, inp, θ)
-            D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
+    f! = function (cache, inp, θ)
+        D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
 
-            # Flag the in-place assignment as non differented and return D instead in
-            # order to be able to compute ∂D∂θ with Zygote
-            Zygote.@ignore_derivatives cache.value .= D
-            return D
-        end,
-        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
-            (; nx, ny) = simulation.glaciers[glacier_idx]
-            return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
-        end,
+        # Flag the in-place assignment as non differented and return D instead in
+        # order to be able to compute ∂D∂θ with Zygote
+        Zygote.@ignore_derivatives cache.value .= D
+        return D
+    end
+
+    init_cache = function (simulation, glacier_idx, θ)
+        glacier = simulation.glaciers[glacier_idx]
+        # Correct for griding factor!!!
+        (; nx, ny) = glacier
+        # TODO: for now, we do ∇S_intep same as H_nodes
+        # TODO: Hardcoded for now!!!
+        H_nodes = LinRange(0.0, 100, 9) |> collect
+        ∇S_nodes = LinRange(0.0, 0.2, 9) |> collect
+        θvec = ODINN.ComponentVector2Vector(θ)
+        grads = [zero(θvec) for i = 1:length(H_nodes), j = 1:length(∇S_nodes)]
+        # This has to change to be the interpolation with both H and ∇S
+        grad_itp = interpolate((H_nodes, H_nodes), grads, Gridded(Linear()))
+        # Return cache for a custom interpolation
+        return MatrixCacheInterp(
+            zeros(nx - 1, ny - 1),
+            zeros(nx - 1, ny - 1),
+            zeros(nx - 1, ny - 1, length(θ)),
+            H_nodes,
+            H_nodes,
+            grad_itp
+            )
+    end
+
+    p_VJP! = let nn_model = nn_model
+        function (cache, vjpsPrepLaw, inputs, θ)
+            (; nodes_H, nodes_∇S) = cache
+            # Compute exact gradient in certain values of H̄ and ∇S
+            grads = [zeros(only(size(θ))) for i = 1:length(nodes_H), j = 1:length(nodes_∇S)]
+            # Evaluate gradiends in nodes
+            for (i, h) in enumerate(nodes_H), (j, ∇s) in enumerate(nodes_∇S)
+                # We don't do this with f! since this evaluates a matrix
+                # ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
+                # Notice the extra ×h in the gradient calculation
+                grad, = Zygote.gradient(_θ -> h * _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
+                # ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
+                # ∂law∂θ!(backend, nn_model, cache, true, (; H̄=h, ∇S=∇s), θ)
+                # grads[i, j] .= iceflow_cache.U.vjp_θ * h
+                grads[i, j] .= ODINN.ComponentVector2Vector(grad)
+            end
+            cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
+        end
+    end
+
+    # Determine right type of cache depending of interpolation or not
+    LawCache = precompute_interpolation ? MatrixCacheInterp : MatrixCache
+
+    U_law = let smodel = smodel, prescale = prescale, postscale = postscale
+    Law{LawCache}(;
+        inputs = (; H̄ = iH̄(), ∇S = i∇S()),
+        f! = f!,
+        init_cache = precompute_interpolation ? init_cache : nothing,
+        p_VJP! = precompute_VJPs ? p_VJP! : nothing,
     )
     end
     return U_law

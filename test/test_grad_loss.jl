@@ -135,6 +135,10 @@ function test_grad_finite_diff(
             iceflow = SIA2Dmodel(params; U = LawU(nn_model, params)),
             mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
             regressors = regressors,
+            target = SIA2D_D_target(
+                interpolation = :Linear,
+                n_interp_half = 10,
+            ),
         )
     end
 

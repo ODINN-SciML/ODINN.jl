@@ -196,7 +196,7 @@ end
 
 Function to create an intepolation for AD computation combining uniform and quantiles.
 """
-function create_interpolation(A::Matrix; n_interp_half::Int)
+function create_interpolation(A::Vector; n_interp_half::Int)
     A_interp_unif = LinRange(0.0, maximum(A), n_interp_half) |> collect
     pos_values = A[A .> 0.0]
     if length(pos_values) > 0
@@ -208,4 +208,8 @@ function create_interpolation(A::Matrix; n_interp_half::Int)
     A_interp = unique(A_interp)
     A_interp = sort(A_interp)
     return A_interp
+end
+
+function create_interpolation(A::Matrix; n_interp_half::Int)
+    create_interpolation(collect(Iterators.flatten(A)); n_interp_half = n_interp_half)
 end
