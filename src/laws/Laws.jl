@@ -108,14 +108,16 @@ function LawU(
         glacier = simulation.glaciers[glacier_idx]
         # Correct for griding factor!!!
         (; nx, ny) = glacier
-        # TODO: for now, we do ∇S_intep same as H_nodes
-        # TODO: Hardcoded for now!!!
-        H_nodes = LinRange(0.0, 100, 9) |> collect
-        ∇S_nodes = LinRange(0.0, 0.2, 9) |> collect
+
+        # Create template interpolation based on half-interpolation range
+        n_nodes = 2 * simulation.model.machine_learning.target.n_interp_half
+        H_nodes = LinRange(0.0, 100, n_nodes) |> collect
+        ∇S_nodes = LinRange(0.0, 0.2, n_nodes) |> collect
+
         θvec = ODINN.ComponentVector2Vector(θ)
         grads = [zero(θvec) for i = 1:length(H_nodes), j = 1:length(∇S_nodes)]
-        # This has to change to be the interpolation with both H and ∇S
         grad_itp = interpolate((H_nodes, H_nodes), grads, Gridded(Linear()))
+
         # Return cache for a custom interpolation
         return MatrixCacheInterp(
             zeros(nx - 1, ny - 1),
@@ -135,13 +137,11 @@ function LawU(
             # Evaluate gradiends in nodes
             for (i, h) in enumerate(nodes_H), (j, ∇s) in enumerate(nodes_∇S)
                 # We don't do this with f! since this evaluates a matrix
-                # ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
-                # Notice the extra ×h in the gradient calculation
-                grad, = Zygote.gradient(_θ -> h * _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
+                grad, = Zygote.gradient(_θ -> _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
                 # ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
                 # ∂law∂θ!(backend, nn_model, cache, true, (; H̄=h, ∇S=∇s), θ)
-                # grads[i, j] .= iceflow_cache.U.vjp_θ * h
-                grads[i, j] .= ODINN.ComponentVector2Vector(grad)
+                # Notice the extra ×h in the gradient calculation
+                grads[i, j] .= h .* ODINN.ComponentVector2Vector(grad)
             end
             cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
         end

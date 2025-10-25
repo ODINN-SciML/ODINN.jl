@@ -166,27 +166,6 @@ function ∂Diffusivity∂θ(
         the decired level of precision for the gradients.
         We construct an interpolator with quantiles and equal-spaced points.
         """
-
-        # Interpolation for H̄
-        # H_interp = create_interpolation(H̄; n_interp_half = n_interp_half)
-        # Interpolation for ∇S
-        # ∇S_interp = create_interpolation(∇S; n_interp_half = n_interp_half)
-
-        # if sum(H̄ .> 0.0) < 2.0 * length(H_interp) * length(∇S_interp)
-        #     @warn "The total number of AD evaluations using interpolations is comparable to the total number of AD operations required to compute the derivative purely with AD with no interpolation. Recomendation is to switch to interpolation = :None"
-        # end
-
-        # Compute exact gradient in certain values of H̄ and ∇S
-        # grads = [zeros(only(size(θ))) for i = 1:length(H_interp), j = 1:length(∇S_interp)]
-
-        # TODO: Check if all these gradients cannot be computed at once withing Lux
-        # for (i, h) in enumerate(H_interp), (j, ∇s) in enumerate(∇S_interp)
-        #     ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
-        #     grads[i, j] .= iceflow_cache.U.vjp_θ * h
-        # end
-        # # Create interpolation for gradient
-        # grad_itp = interpolate((H_interp, ∇S_interp), grads, Gridded(Linear()))
-        
         # Unpack gradient interpolation
         grad_itp = iceflow_cache.U.interp_θ
         # Compute spatial distributed gradient

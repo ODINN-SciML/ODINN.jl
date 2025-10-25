@@ -28,12 +28,6 @@ Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use
 using Revise
 using ODINN
 using Sleipnir: DummyClimate2D
-# using SciMLSensitivity
-# using Lux, ComponentArrays
-# using Statistics
-# using Plots
-# using JLD2
-# using Random, Distributions
 using ODINN: MersenneTwister, ZygoteAdjoint, ComponentVector
 using ODINN: Lux, sigmoid, gelu, softplus
 
@@ -46,8 +40,8 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 use_MB = false
 λ = use_MB ? 5.0 : 0.0
-# nx, ny = 100, 100
-nx, ny = 20, 20
+nx, ny = 100, 100
+# nx, ny = 20, 20
 R₀ = 2000.0
 H₀ = 200.0
 H_max = 1.2 * H₀
@@ -88,9 +82,9 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = 1,
-        epochs = [100, 30],
+        epochs = [10, 10],
         optimizer = [
-            ODINN.ADAM(0.005),
+            ODINN.ADAM(0.001),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
                 )
@@ -179,10 +173,11 @@ if pretrain
     X_samples = hcat(first.(all_combinations), last.(all_combinations))
     function template_diffusivity(h, ∇s)
         (; ρ, g) = params.physical
+        # Change parameters a little bit so we don't cheat that much
         n = 1.01 * n₀
         A = 0.80 * A₀
         # This one has one less H than the actual diffusivity
-        return 2 * A * (ρ * g)^n * h^(n+1) * ∇s^(n-1) / (n + 2)
+        return 2 * A * (ρ * g)^n * h^(n + 1) * ∇s^(n - 1) / (n + 2)
     end
     Y_samples = map(x -> template_diffusivity(x[1], x[2]), eachrow(X_samples))
     # Set matrices in right format
@@ -193,7 +188,7 @@ if pretrain
     architecture, θ_pretrain, st_pretrain, losses = pretraining(
         architecture;
         X = X_samples, Y = Y_samples,
-        nepochs = 5000, rng = rng
+        nepochs = 3000, rng = rng
     )
 else
     θ_pretrain, st_pretrain = Lux.setup(rng, architecture)
@@ -212,7 +207,7 @@ law = LawU(
     nn_model,
     params;
     prescale_bounds = nothing,
-    # max_NN = nothing,
+    max_NN = nothing,
     precompute_VJPs = true,
     precompute_interpolation = true
     )

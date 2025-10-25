@@ -196,11 +196,14 @@ end
 
 Function to create an intepolation for AD computation combining uniform and quantiles.
 """
-function create_interpolation(A::Vector; n_interp_half::Int)
-    A_interp_unif = LinRange(0.0, maximum(A), n_interp_half) |> collect
+function create_interpolation(A::Vector; n_interp_half::Int, dilation_factor = 1.0)
+    A_interp_unif = LinRange(0.0, dilation_factor * maximum(A), n_interp_half) |> collect
     pos_values = A[A .> 0.0]
     if length(pos_values) > 0
-        A_interp_quantiles = quantile!(A[A .> 0.0], LinRange(0.0, 1.0, n_interp_half))
+        # We remove the 0.0 and 1.0 quantile since these are included already in the
+        # uniform interpolation
+        quantile_range = LinRange(0.0, 1.0, n_interp_half + 2)[begin + 1: end - 1]
+        A_interp_quantiles = quantile!(A[A .> 0.0], quantile_range)
         A_interp = vcat(A_interp_unif, A_interp_quantiles)
     else
         A_interp = A_interp_unif

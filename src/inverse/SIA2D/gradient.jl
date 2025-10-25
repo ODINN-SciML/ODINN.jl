@@ -81,31 +81,6 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         dLdθ = zero(θ)
 
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
-        # Here is where we run p_VJP! based on the cache! 
-        # Introduce
-        """
-        Docs
-        """
-        feed_input_cache! = function (
-            SIA2D_model::SIA2Dmodel,
-            SIA2D_cache::SIA2DCache,
-            simulation,
-            glacier_idx::Integer,
-            θ,
-            result
-            )
-            if SIA2D_model.U_is_provided
-                SIA2D_cache.U.nodes_H = create_interpolation(
-                    collect(Iterators.flatten(result.H));
-                    n_interp_half = simulation.model.machine_learning.target.n_interp_half
-                )
-                ∇S = Huginn.∇slope.([H .+ glacier.B for H in result.H], Ref(glacier.Δx), Ref(glacier.Δy))
-                SIA2D_cache.U.nodes_∇S = create_interpolation(
-                    collect(Iterators.flatten(∇S));
-                    n_interp_half = simulation.model.machine_learning.target.n_interp_half
-                )
-            end
-        end
         feed_input_cache!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, θ, result)
         precompute_all_VJPs_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
