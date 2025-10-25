@@ -55,6 +55,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
     for i in 1:length(simulation.glaciers)
 
         simulation.cache = init_cache(simulation.model, simulation, i, θ)
+        simulation.cache = init_cache(simulation.model, simulation, i, θ)
         simulation.model.machine_learning.θ = θ
 
         result = simulation.results.simulation[i]
@@ -80,6 +81,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         dLdθ = zero(θ)
 
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
+        feed_input_cache!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, θ, result)
         precompute_all_VJPs_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
