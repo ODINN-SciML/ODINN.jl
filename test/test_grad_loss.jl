@@ -85,7 +85,7 @@ function test_grad_finite_diff(
     # Use a constant A for testing
     A_law = ConstantA(2.21e-18)
 
-    model = Huginn.Model(
+    model = Model(
         iceflow = SIA2Dmodel(params; A = A_law),
         mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
     )
@@ -142,10 +142,10 @@ function test_grad_finite_diff(
     functional_inversion = FunctionalInversion(model, glaciers, params)
     simulation = functional_inversion
 
-    glacier_idx = 1
-    simulation.cache = init_cache(model, simulation, glacier_idx, params)
-
     θ = simulation.model.machine_learning.θ
+
+    glacier_idx = 1
+    simulation.cache = init_cache(model, simulation, glacier_idx, θ)
 
     loss_iceflow_grad!(dθ, _θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         ret = ODINN.grad_loss_iceflow!(_θ, simulation, map)

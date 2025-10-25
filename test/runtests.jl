@@ -30,6 +30,7 @@ using Lux
 using FiniteDifferences
 using JET
 using MLStyle
+import DifferentiationInterface as DI
 
 include("test_utils.jl")
 include("params_construction.jl")
@@ -83,7 +84,7 @@ if GROUP == "All" || GROUP == "Core3"
         @testset "Manual implementation of the discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],  train_initial_conditions = true)
-        @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = ODINN.EnzymeVJP()); thres = [2e-3, 2e-5, 2e-3], use_MB = true)
+        @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()), MB_VJP = ODINN.EnzymeVJP()); thres = [2e-3, 2e-5, 2e-3], use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP()); thres = [2e-2, 2e-5, 2e-2], use_MB = true)
         @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
         @testset "Manual implementation of the continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [5e-4, 2e-8, 5e-4])
@@ -124,7 +125,7 @@ end
 if GROUP == "All" || GROUP == "Core7"
 @testset "Inversion test" begin
     @testset "Inversion Tests w/o MB" inversion_test(use_MB = false, multiprocessing = false)
-    @testset "Inversion Tests w/ MB" inversion_test(use_MB = true, multiprocessing = false)
+    @testset "Inversion Tests w/ MB" inversion_test(use_MB = true, multiprocessing = false, grad = ContinuousAdjoint(VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote())))
     @testset "Inversion Tests w/o MB w/ multiprocessing" inversion_test(use_MB = false, multiprocessing = true)
 end
 end
@@ -142,4 +143,5 @@ if GROUP == "All" || GROUP == "Core9"
     @testset "Multiple glaciers" save_simulation_test!(multiglacier = true)
 end
 end
+
 end

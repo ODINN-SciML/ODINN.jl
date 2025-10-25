@@ -15,10 +15,15 @@ ODINN_OVERWRITE_MULTI = get(ENV, "CI", nothing)=="true"
 ENV["ODINN_OVERWRITE_MULTI"] = ODINN_OVERWRITE_MULTI
 @show ODINN_OVERWRITE_MULTI
 
+# # Disable the Blink hack when the target output is for notebooks
+# ENV["ODINN_PLOTLYJS_NB"] = "true"
+
 using Revise
 using Documenter, Literate
 using ODINN
 using DocumenterCitations
+
+cd(dirname(Base.active_project()))
 
 bib = CitationBibliography(
     joinpath(@__DIR__, "src/assets", "references.bib");
@@ -32,6 +37,8 @@ tutorial_files = [
     "./src/forward_simulation.jl",
     "./src/functional_inversion.jl",
     "./src/laws.jl",
+    "./src/vjp_laws.jl",
+    "./src/input_laws.jl",
     "./src/quick_start.jl"
 ]
 
@@ -61,6 +68,8 @@ makedocs(
             "Forward simulation" => "forward_simulation.md",
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
+            "VJP law customization" => "vjp_laws.md",
+            "Laws inputs" => "input_laws.md",
         ],
         "How to use ODINN" => [
             "Parameters" => "parameters.md",

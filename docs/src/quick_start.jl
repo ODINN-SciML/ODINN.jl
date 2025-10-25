@@ -20,14 +20,14 @@ params = Parameters(
     )
 )
 
-model = Huginn.Model(
+model = Model(
     iceflow = SIA2Dmodel(params),
     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
 )
 
 glaciers = initialize_glaciers(rgi_ids, params)
 prediction = Prediction(model, glaciers, params)
-Huginn.run!(prediction)
+run!(prediction)
 
 # This code will run a forward simulation for the glaciers defined in `rgi_ids` from 2010 to 2015, 
 # using the specified ice flow and mass balance models. The results will be stored in the `working_dir` directory.
