@@ -95,7 +95,8 @@ function LawU(
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
-    f! = function (cache, inp, θ)
+    f! = let smodel = smodel, prescale = prescale, postscale = postscale
+        function (cache, inp, θ)
         D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
 
         # Flag the in-place assignment as non differented and return D instead in
