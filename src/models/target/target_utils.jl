@@ -214,5 +214,5 @@ function create_interpolation(A::Vector; n_interp_half::Int, dilation_factor = 1
 end
 
 function create_interpolation(A::Matrix; n_interp_half::Int)
-    create_interpolation(collect(Iterators.flatten(A)); n_interp_half = n_interp_half)
+    create_interpolation(vec(A); n_interp_half = n_interp_half)
 end
