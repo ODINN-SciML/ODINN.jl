@@ -97,12 +97,13 @@ function LawU(
 
     f! = let smodel = smodel, prescale = prescale, postscale = postscale
         function (cache, inp, θ)
-        D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
+            D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
 
-        # Flag the in-place assignment as non differented and return D instead in
-        # order to be able to compute ∂D∂θ with Zygote
-        Zygote.@ignore_derivatives cache.value .= D
-        return D
+            # Flag the in-place assignment as non differented and return D instead in
+            # order to be able to compute ∂D∂θ with Zygote
+            Zygote.@ignore_derivatives cache.value .= D
+            return D
+        end
     end
 
     init_cache = function (simulation, glacier_idx, θ)

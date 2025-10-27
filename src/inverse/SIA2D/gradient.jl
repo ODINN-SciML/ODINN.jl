@@ -80,6 +80,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
         dLdθ = zero(θ)
 
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
+        # This next line we should remove
         feed_input_cache!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, θ, result)
         precompute_all_VJPs_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
