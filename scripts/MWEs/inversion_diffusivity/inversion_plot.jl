@@ -27,6 +27,7 @@ using LaTeXStrings
 using JLD2
 using ForwardDiff
 using LinearAlgebra
+using Random, Distributions
 
 res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_Halfar.jld2"), "res")
 # res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity", "_inversion_result_working.jld2"), "res")
