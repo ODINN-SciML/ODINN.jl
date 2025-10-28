@@ -86,6 +86,7 @@ function LawU(
     prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing} = [(0.0, 300.0), (0.0, 0.5)],
     precompute_interpolation::Bool = true,
     precompute_VJPs::Bool = true,
+    dummy_float::F = 1.0,
 ) where {F <: AbstractFloat}
     prescale = !isnothing(prescale_bounds) ? X -> _ml_model_prescale(X, prescale_bounds) : identity
     # The value of max_NN should correspond to maximum of Umax * dSdx
@@ -97,12 +98,12 @@ function LawU(
 
     f! = let smodel = smodel, prescale = prescale, postscale = postscale
         function (cache, inp, θ)
-            D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
-
+            U = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
             # Flag the in-place assignment as non differented and return D instead in
             # order to be able to compute ∂D∂θ with Zygote
-            Zygote.@ignore_derivatives cache.value .= D
-            return D
+            # We introduce the extra dependency w.r.t H
+            Zygote.@ignore_derivatives cache.value .= U
+            return U
         end
     end
 
@@ -143,7 +144,8 @@ function LawU(
                 # ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
                 # ∂law∂θ!(backend, nn_model, cache, true, (; H̄=h, ∇S=∇s), θ)
                 # Notice the extra ×h in the gradient calculation
-                grads[i, j] .= h .* ODINN.ComponentVector2Vector(grad)
+                # grads[i, j] .= h .* ODINN.ComponentVector2Vector(grad)
+                grads[i, j] .= ODINN.ComponentVector2Vector(grad)
             end
             cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
         end

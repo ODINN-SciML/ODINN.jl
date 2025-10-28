@@ -40,18 +40,18 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 use_MB = false
 λ = use_MB ? 5.0 : 0.0
-nx, ny = 100, 100
+nx, ny = 20, 20
 # nx, ny = 20, 20
 R₀ = 2000.0
 H₀ = 200.0
 H_max = 1.2 * H₀
-A₀ = 2e-18
+A₀ = 1.1e-17 # associated to ice at T ≈ -10C
 n₀ = 3.0
 
 halfar_params = HalfarParameters(λ = λ, R₀ = R₀, H₀ = H₀, A = A₀, n = n₀)
 halfar, t₀ = Halfar(halfar_params)
 
-Δt = 30.0
+Δt = 100.0
 t₁ = t₀ + Δt
 δt = Δt / 200
 tstops = Huginn.define_callback_steps((t₀, t₁), δt) |> collect
@@ -66,6 +66,15 @@ ys = [(j - ny / 2) * Δy for j in 1:ny]
 
 # Construct analytical time series
 Hs = [[halfar(x, y, t) for x in xs, y in ys] for t in tstops]
+
+Hs_dome = map(x -> maximum(x), Hs)
+# Reduction in ice thickness during simulation
+frac_H = 100.0 * (Hs_dome[begin] - Hs_dome[end]) / Hs_dome[begin]
+println("Maximum ice thickness has been reduce by $(frac_H) after $(Δt) years of forward simulation.%")
+Rs_extent =  map(x -> sum(x .> 0.0), Hs)
+frac_R = 100.0 * (Rs_extent[end] - Rs_extent[begin]) / Rs_extent[begin]
+println("Glacier extent has increased by $(frac_R)% after $(Δt) years of forward simulation.%")
+
 
 params = Parameters(
     simulation = SimulationParameters(
@@ -101,7 +110,8 @@ params = Parameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
-        target = :D
+        target = :D,
+        # empirical_loss_function = LossV(), # TODO
         ),
     solver = Huginn.SolverParameters(
         step = δt,
@@ -129,7 +139,10 @@ glacier = Glacier2D(
 glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
 # We add thickness data to Glacier object
-glaciers[1] = Glacier2D(glaciers[1], thicknessData = Sleipnir.ThicknessData(tstops, Hs))
+glaciers[1] = Glacier2D(
+    glaciers[1],
+    thicknessData = Sleipnir.ThicknessData(tstops, Hs)
+    )
 
 
 """
@@ -147,6 +160,9 @@ function inv_fourier_feature(v::Union{Vector,SubArray})
     return [fourier_feature(v[1], n_fourier_feautures); fourier_feature(v[2], n_fourier_feautures)]
 end
 
+# Maximum value of U velocity for neural network
+U₀ = 1e4
+
 architecture = Lux.Chain(
     Lux.WrappedFunction(x -> LuxFunction(inv_normalize, x)),
     # WrappedFunction(x -> inv_fourier_feature(x)),
@@ -154,11 +170,10 @@ architecture = Lux.Chain(
     Lux.Dense(2, 5, x -> gelu.(x)),
     Lux.Dense(5, 8, x -> gelu.(x)),
     Lux.Dense(8, 20, x -> gelu.(x)),
-    # Dense(4 * n_fourier_feautures, 20, x -> softplus.(x)),
     Lux.Dense(20, 30, x -> softplus.(x)),
     Lux.Dense(30, 10, x -> softplus.(x)),
     Lux.Dense(10, 1, sigmoid),
-    Lux.WrappedFunction(y -> 1e5 .* exp.((y .- 1.0) ./ y))
+    Lux.WrappedFunction(y -> U₀ .* exp.((y .- 1.0) ./ y))
     # WrappedFunction(y -> 10.0.^( 3.0 .* (y .- 1.0) .+ 1.0 .* (y .+ 1.0) ))
 )
 
@@ -171,24 +186,29 @@ if pretrain
     ∇S_samples = 0.0:0.02:0.4
     all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
     X_samples = hcat(first.(all_combinations), last.(all_combinations))
-    function template_diffusivity(h, ∇s)
+    function template_U(h, ∇s)
         (; ρ, g) = params.physical
         # Change parameters a little bit so we don't cheat that much
-        n = 1.01 * n₀
+        n = 1.11 * n₀
         A = 0.80 * A₀
         # This one has one less H than the actual diffusivity
         return 2 * A * (ρ * g)^n * h^(n + 1) * ∇s^(n - 1) / (n + 2)
     end
-    Y_samples = map(x -> template_diffusivity(x[1], x[2]), eachrow(X_samples))
+    Y_samples = map(x -> template_U(x[1], x[2]), eachrow(X_samples))
     # Set matrices in right format
     X_samples = transpose(X_samples)
+
+    # We will cap values that go above the maximum of the NN: 
+    X_samples = X_samples[:, vec(Y_samples .< U₀)]
+    Y_samples = Y_samples[Y_samples .< U₀]
+
     X_samples = Matrix(X_samples)
     Y_samples = reshape(Y_samples, (1, :))
 
     architecture, θ_pretrain, st_pretrain, losses = pretraining(
         architecture;
         X = X_samples, Y = Y_samples,
-        nepochs = 3000, rng = rng
+        nepochs = 5000, rng = rng
     )
 else
     θ_pretrain, st_pretrain = Lux.setup(rng, architecture)
@@ -198,11 +218,12 @@ end
 nn_model = NeuralNetwork(
     params;
     architecture = architecture,
-    θ = ComponentVector(θ = θ_pretrain), # We should give the actual solution!!!
+    θ = ComponentVector(θ = θ_pretrain),
     seed = rng
 )
 
-# Define the law
+# Define the law without pre and postscale.
+# However, this means we need to specify the float type!
 law = LawU(
     nn_model,
     params;
@@ -222,7 +243,7 @@ model = Model(
     regressors = (; U=nn_model),
     target = SIA2D_D_target(
         interpolation = :Linear,
-        n_interp_half = 5, # Notice we use a very low value for this!
+        n_interp_half = 20,
     ),
 )
 

@@ -10,6 +10,7 @@ function test_grad_finite_diff(
     train_initial_conditions = false,
     multiglacier = false,
     use_MB = false,
+    custom_NN = false
 ) where {ADJ<:AbstractAdjointMethod}
 
     print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
@@ -82,27 +83,37 @@ function test_grad_finite_diff(
             )
     )
 
-    # Use a constant A for testing
-    A_law = ConstantA(2.21e-18)
-
-    model = Model(
-        iceflow = SIA2Dmodel(params; A = A_law),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
-    )
-
     # We retrieve some glaciers for the simulation
+    # Time stanpshots for transient inversion
+    tstops = collect(tspan[1]:δt:tspan[2])
     kwargs = velocityLoss ? (;
         velocityDatacubes = Dict(
             rgi_ids[1] => Sleipnir.fake_multi_datacube()
         )
     ) : NamedTuple()
+    model = Model(
+        iceflow = SIA2Dmodel(params; A = ConstantA(2.21e-18)),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+    )
     glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
-
-    # Time stanpshots for transient inversion
-    tstops = collect(tspan[1]:δt:tspan[2])
-
-    nn_model = NeuralNetwork(params)
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
+
+    # Neural network model
+    if custom_NN
+        function inv_normalize(v::Union{Vector,SubArray})
+            @assert length(v) == 2
+            return [ODINN.normalize(v[1]; lims = (0.0, 200.0)), ODINN.normalize(v[2]; lims = (0.0, 0.6))]
+        end
+        architecture = Lux.Chain(
+            Lux.WrappedFunction(x -> LuxFunction(inv_normalize, x)),
+            Lux.Dense(2, 5, x -> gelu.(x)),
+            Lux.Dense(5, 1, sigmoid),
+            Lux.WrappedFunction(y -> 1e4 .* exp.((y .- 1.0) ./ y))
+        )
+        nn_model = NeuralNetwork(params; architecture = architecture)
+    else
+        nn_model = NeuralNetwork(params)
+    end
 
     ic = if train_initial_conditions
         InitialCondition(params, glaciers, :Farinotti2019)

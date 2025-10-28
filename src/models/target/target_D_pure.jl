@@ -170,7 +170,8 @@ function ∂Diffusivity∂θ(
         grad_itp = iceflow_cache.U.interp_θ
         # Compute spatial distributed gradient
         for i in axes(H̄, 1), j in axes(H̄, 2)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j])
+            # Include extra contribution of ice thickness H
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j]) * H̄[i, j]
         end
     else
         throw("Method to spatially compute gradient with respect to H̄ not specified.")
