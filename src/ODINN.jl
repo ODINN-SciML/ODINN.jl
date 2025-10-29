@@ -85,7 +85,6 @@ include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
 # Simulations
 include(joinpath(root_dir, "src/simulations/results/Results.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
-include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 # ML models
 include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))

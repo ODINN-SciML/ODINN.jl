@@ -10,7 +10,12 @@ function test_grad_finite_diff(
     train_initial_conditions = false,
     multiglacier = false,
     use_MB = false,
+    functional_inv = true,
 ) where {ADJ<:AbstractAdjointMethod}
+
+    if !functional_inv
+        @assert target == :A "When testing classical inversion, only target A is supported"
+    end
 
     print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
     println(use_MB ? " and with MB" : "")
@@ -101,51 +106,49 @@ function test_grad_finite_diff(
     # Time stanpshots for transient inversion
     tstops = collect(tspan[1]:δt:tspan[2])
 
-    nn_model = NeuralNetwork(params)
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
-    ic = if train_initial_conditions
-        InitialCondition(params, glaciers, :Farinotti2019)
-    else
-        nothing
-    end
+    ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti2019) : nothing
+    trainable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, target)
 
     # Define regressors for each test
     regressors = @match (target, train_initial_conditions) begin
-        (:A, false) => (; A = nn_model)
-        (:A, true) => (; A = nn_model, IC = ic)
-        (:D_hybrid, false) =>  (; Y = nn_model)
-        (:D_hybrid, true) => (; Y = nn_model, IC = ic)
-        (:D, false) => (; U = nn_model)
-        (:D, true) => (; U = nn_model, IC = ic)
+        (:A, false) => (; A = trainable_model)
+        (:A, true) => (; A = trainable_model, IC = ic)
+        (:D_hybrid, false) =>  (; Y = trainable_model)
+        (:D_hybrid, true) => (; Y = trainable_model, IC = ic)
+        (:D, false) => (; U = trainable_model)
+        (:D, true) => (; U = trainable_model, IC = ic)
+    end
+
+    law = @match (target, functional_inv) begin
+        (:A, true) => LawA(trainable_model, params)
+        (:A, false) => LawA(params)
+        (:D_hybrid, true) => LawY(trainable_model, params)
+        (:D, true) => LawU(trainable_model, params)
     end
 
     model = @match target begin
         :A => Model(
-            iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
+            iceflow = SIA2Dmodel(params; A = law),
             mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
             regressors = regressors,
         )
         :D_hybrid => Model(
-            iceflow = SIA2Dmodel(params; Y = LawY(nn_model, params)),
+            iceflow = SIA2Dmodel(params; Y = law),
             mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor= 1.2/1000.0),
             regressors = regressors,
         )
         :D => Model(
-            iceflow = SIA2Dmodel(params; U = LawU(nn_model, params)),
+            iceflow = SIA2Dmodel(params; U = law),
             mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
             regressors = regressors,
         )
     end
 
     # We create an ODINN prediction
-    functional_inversion = FunctionalInversion(model, glaciers, params)
-    simulation = functional_inversion
-
+    simulation = Inversion(model, glaciers, params)
     θ = simulation.model.machine_learning.θ
-
-    glacier_idx = 1
-    simulation.cache = init_cache(model, simulation, glacier_idx, θ)
 
     loss_iceflow_grad!(dθ, _θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         ret = ODINN.grad_loss_iceflow!(_θ, simulation, map)
@@ -193,13 +196,14 @@ function test_grad_finite_diff(
             N = 40
             # Component array with binary entry
             θ_mask = θ .== nothing
-            for glacier in glaciers
-                M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter)
+            for i in 1:length(glaciers)
+                glacier = glaciers[i]
+                M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter, i)
                 non_zero = M .> 1.0
                 idxs = rand(findall(non_zero), N)
                 mask = falses(size(M)...)
                 mask[idxs] .= 1
-                key = Symbol("$(glacier.rgi_id)")
+                key = Symbol("$(i)")
                 θ_mask.IC[key] .= mask
             end
 
@@ -459,7 +463,7 @@ function test_grad_Halfar(
     model.iceflow = SIA2Dmodel(parameters)
 
     # We create an ODINN prediction
-    simulation = FunctionalInversion(model, glaciers, parameters)
+    simulation = Inversion(model, glaciers, parameters)
 
     # Compute gradient of with Halfar solution wrt A
     A_θ = [A_θ]

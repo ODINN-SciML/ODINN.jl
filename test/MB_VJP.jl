@@ -51,7 +51,7 @@ function test_MB_VJP(
 
     H = glaciers[glacier_idx].H₀
 
-    simulation = FunctionalInversion(model, glaciers, params)
+    simulation = Inversion(model, glaciers, params)
     θ = simulation.model.machine_learning.θ
     simulation.cache = init_cache(model, simulation, glacier_idx, θ)
 

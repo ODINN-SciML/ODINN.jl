@@ -3,12 +3,13 @@ export SIA2D_grad!
 """
 Inverse with batch
 """
-function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
+function SIA2D_grad!(dθ, θ, simulation::Inversion)
 
     @assert simulation.parameters.solver.save_everystep "Forward solution needs to be stored in dense mode (ie save_everystep should be set to true), for gradient computation."
 
+    simulation.model.machine_learning.θ = θ
     simulations = generate_simulation_batches(simulation)
-    loss_grad = pmap(simulation -> SIA2D_grad_batch!(θ, simulation), simulations)
+    loss_grad = pmap(simulation -> SIA2D_grad_batch!(simulation.model.machine_learning.θ, simulation), simulations)
 
     # Retrieve loss function
     losses = getindex.(loss_grad, 1)
@@ -20,23 +21,24 @@ function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
     if maximum(norm.(dθs)) > 1e7
         glacier_ids = findall(>(1e7), norm.(dθs))
         for id in glacier_ids
-            @warn "Potential unstable gradient for glacier $(simulation.glaciers[id].rgi_id): ‖dθ‖=$(norm(dθs)[id]) \n Try reducing the temporal stepsize Δt used for reverse simulation."
+            @warn "Potential unstable gradient for glacier $(simulation.glaciers[id].rgi_id): ‖dθ‖=$(norm(dθs[id])) \n Try reducing the temporal stepsize Δt used for reverse simulation."
         end
     end
+    dθs = aggregate∇θ(dθs, θ, simulation.model.machine_learning)
 
-    @assert typeof(θ) == typeof(sum(dθs))
+    @assert typeof(θ) == typeof(dθs)
     # @assert norm(sum(dθs)) > 0.0 "‖∑dθs‖=$(norm(sum(dθs))) but should be greater than 0"
 
-    dθ .= sum(dθs)
+    dθ .= dθs
 end
 
 """
 Compute gradient glacier per glacier
 """
-function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
+function SIA2D_grad_batch!(θ, simulation::Inversion)
 
     # Run forward simulation to build the results
-    container = FunctionalInversionBinder(simulation, θ)
+    container = InversionBinder(simulation, θ)
     loss_results = [batch_loss_iceflow_transient(
             container,
             glacier_idx,
@@ -49,7 +51,7 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
 
     # Let's compute the forward loss inside gradient
     ℓ = 0.0
-    dLdθs_vector = []
+    dLdθs_vector = Vector{typeof(θ)}()
     loss_function = simulation.parameters.UDE.empirical_loss_function
 
     for i in 1:length(simulation.glaciers)
@@ -151,13 +153,13 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Contribution of initial condition to loss function
             if haskey(θ, :IC)
                 λ₀ = λ[begin]
-                # This contribution will come from the regularization on the initial condition
-                glacier_id = Symbol("$(glacier.rgi_id)")
+                glacier_id = Symbol("$(i)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
-                    simulation.parameters.UDE.initial_condition_filter
-                    )
+                    simulation.parameters.UDE.initial_condition_filter,
+                    i,
+                )
                 # This contribution comes from the regularization on the initial condition
                 # The partial with respect to the initial condition is stored in θ.IC for
                 # every single time-step, even when this just corresponds to t = t₀
@@ -309,12 +311,13 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Contribution of initial condition to loss function
             if haskey(θ, :IC)
                 λ₀ = sol_rev(-tspan[1])
-                glacier_id = Symbol("$(glacier.rgi_id)")
+                glacier_id = Symbol("$(i)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
-                    simulation.parameters.UDE.initial_condition_filter
-                    )
+                    simulation.parameters.UDE.initial_condition_filter,
+                    i,
+                )
                 # This contribution comes from the regularization on the initial condition
                 # The partial with respect to the initial condition is stored in θ.IC for
                 # every single time-step, even when this just corresponds to t = t₀

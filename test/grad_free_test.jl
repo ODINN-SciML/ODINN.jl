@@ -77,8 +77,8 @@ function grad_free_test(;use_MB::Bool=false)
     )
 
     # We create an ODINN prediction
-    functional_inversion = FunctionalInversion(model, glaciers, params)
-    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) FunctionalInversion(model, glaciers, params)
+    functional_inversion = Inversion(model, glaciers, params)
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Inversion(model, glaciers, params)
 
     # Run simulation
     run!(functional_inversion)

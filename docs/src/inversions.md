@@ -15,16 +15,13 @@ We summarize the main differences between the two kind of inversions hereafter, 
 
 ## Classical inversions
 
-We refer to classical inversions as the inverse problems where the objective is to directly invert the parameters $p$ of a mechanistic model itself (e.g. the SIA equation). These type of inversions are handled in ODINN via the `Inversion` subtype of `Simulation`.  
+We refer to classical inversions as the inverse problems where the objective is to directly invert the parameters $p$ of a mechanistic model itself (e.g. the SIA equation). These type of inversions are handled in ODINN via the `Inversion` subtype of `Simulation`.
 
 The optimization problem is
 ```math
 \min_\theta L \left(\hat S, S \right) + R\left( \hat S, p \right)
 ```
 where $\theta$ is the vector of parameters to invert, for example $\theta=[A]$; $L(\hat S, S)$ is the empirical loss function between a predicted state $\hat S$ and observations $S$ (for example, the ice thickness or the ice surface velocity); and $R(\hat S, p)$ is a regularization term.
-
-!!! warning
-    This workflow is still under construction, since we're giving priority to functional inversions. We have an [open issue](https://github.com/ODINN-SciML/ODINN.jl/pull/317) to track this and we will update the documentation here accordingly once this feature is added. 
 
 ## Functional inversions
 
@@ -112,9 +109,10 @@ function SyntheticC(params::Sleipnir.Parameters; inputs = (; CPDD=InpCPDD()))
 end
 ```
 
-Declaring a `Law` implies creating a function which returns a specific type for that law. That custom type needs to specify (1) any necessary fields to be used (e.g. the `inputs`, its `name`...), (2) its associated function `f!`, i.e. what does the law do, (3) how the cache needs to be initialized for the law to interact with the simulation, and (4) the callback frequency `callback_freq`, which determines the time frequency on which the law will be called during the simulation (e.g. weekly). 
+Declaring a `Law` implies creating a function which returns a specific type for that law. That custom type needs to specify (1) any necessary fields to be used (e.g. the `inputs`, its `name`...), (2) its associated function `f!`, i.e. what does the law do, (3) how the cache needs to be initialized for the law to interact with the simulation, and (4) the callback frequency `callback_freq`, which determines the time frequency on which the law will be called during the simulation (e.g. weekly).
 
-Functional inversions in ODINN are handled by a `FunctionalInversion` subtype of `Simulation`.
+Functional inversions in ODINN are also handled by the `Inversion` subtype of `Simulation`.
+Whether a classical or a functional inversion should be made with respect to some of the components of the PDE depends on how the law is defined.
 
 ### Functional inversion tutorial
 

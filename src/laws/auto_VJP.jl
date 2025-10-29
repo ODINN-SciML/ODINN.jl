@@ -24,14 +24,14 @@ mutable struct VJPsPrepLaw <: AbstractPrepVJP
 end
 
 prepare_vjp_law(
-    simulation::FunctionalInversion,
+    simulation::Inversion,
     law::Union{Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Sleipnir.GenInputsAndApply{<:Any, <:Function}, CustomVJP}, Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Function, CustomVJP}},
     law_cache,
     θ,
     glacier_idx,
 ) = nothing
 function prepare_vjp_law(
-    simulation::FunctionalInversion,
+    simulation::Inversion,
     law::Union{
         Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP},
         Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Sleipnir.GenInputsAndApply{<:Any, DIVJP}, <:Any},
