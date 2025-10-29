@@ -5,40 +5,40 @@
 import SciMLStructures as SS
 
 import Base # Overload zero and copyto!
-export FunctionalInversionBinder
+export InversionBinder
 
 """
-    FunctionalInversionBinder{FI <: FunctionalInversion, CA <: ComponentArray}
+    InversionBinder{FI <: Inversion, CA <: ComponentArray}
 
 Struct used for the binding with SciMLSensitivity.
-It is defined as a SciMLStructure and it contains the functional inversion structure and the vector of parameters to differentiate.
+It is defined as a SciMLStructure and it contains the inversion structure and the vector of parameters to differentiate.
 
 # Fields
-- `simulation::FI`: Functional inversion instance.
+- `simulation::FI`: Inversion instance.
 - `θ::CA`: ComponentArray that contains the parameters used to differentiate the iceflow.
 """
-mutable struct FunctionalInversionBinder{FI <: FunctionalInversion, CA <: ComponentArray} <: Container
+mutable struct InversionBinder{FI <: Inversion, CA <: ComponentArray} <: Container
     simulation::FI
     θ::CA
 end
 
 
 # Mark the struct as a SciMLStructure
-SS.isscimlstructure(::FunctionalInversionBinder) = true
+SS.isscimlstructure(::InversionBinder) = true
 # It is mutable
-SS.ismutablescimlstructure(::FunctionalInversionBinder) = true
+SS.ismutablescimlstructure(::InversionBinder) = true
 
 # Only contains `Tunable` portion
 # We could also add a `Constants` portion to contain the values that are
 # not tunable. The implementation would be similar to this one.
-SS.hasportion(::SS.Tunable, ::FunctionalInversionBinder) = true
+SS.hasportion(::SS.Tunable, ::InversionBinder) = true
 
-function SS.canonicalize(::SS.Tunable, p::FunctionalInversionBinder)
+function SS.canonicalize(::SS.Tunable, p::InversionBinder)
     # concatenate all tunable values into a single vector
     buffer = ComponentVector2Vector(p.θ)
 
     # repack takes a new vector of the same length as `buffer`, and constructs
-    # a new `FunctionalInversionBinder` object using the values from the new vector for tunables
+    # a new `InversionBinder` object using the values from the new vector for tunables
     # and retaining old values for other parameters. This is exactly what replace does,
     # so we can use that instead.
     repack = let p = p
@@ -51,16 +51,16 @@ function SS.canonicalize(::SS.Tunable, p::FunctionalInversionBinder)
     return buffer, repack, false
 end
 
-function SS.replace(::SS.Tunable, p::FunctionalInversionBinder, newbuffer)
+function SS.replace(::SS.Tunable, p::InversionBinder, newbuffer)
     N = length(p.θ)
     @assert length(newbuffer) == N
     sim = deepcopy(p.simulation)
     Enzyme.make_zero!(sim)
     θ = Vector2ComponentVector(newbuffer, p.θ)
-    return FunctionalInversionBinder{typeof(sim), typeof(θ)}(sim, θ)
+    return InversionBinder{typeof(sim), typeof(θ)}(sim, θ)
 end
 
-function SS.replace!(::SS.Tunable, p::FunctionalInversionBinder, newbuffer)
+function SS.replace!(::SS.Tunable, p::InversionBinder, newbuffer)
     N = length(p.θ)
     @assert length(newbuffer) == N
     p.θ .= newbuffer
@@ -70,30 +70,30 @@ end
 
 """
     Base.zero(
-        p::FunctionalInversionBinder{FI, CA},
-    ) where {FI <: FunctionalInversion, CA <: ComponentArray}
+        p::InversionBinder{FI, CA},
+    ) where {FI <: Inversion, CA <: ComponentArray}
 
 Overload Base.zero as we need a way to copy the SciMLStructure.
 It is used in SciMLSensitivity to differentiate the callbacks.
 """
 function Base.zero(
-    p::FunctionalInversionBinder{FI, CA},
-) where {FI <: FunctionalInversion, CA <: ComponentArray}
-    return FunctionalInversionBinder(p.simulation, zero(p.θ))
+    p::InversionBinder{FI, CA},
+) where {FI <: Inversion, CA <: ComponentArray}
+    return InversionBinder(p.simulation, zero(p.θ))
 end
 
 """
     Base.copyto!(
-        dest::FunctionalInversionBinder{FI, CA},
-        src::FunctionalInversionBinder{FI, CA},
-    ) where {FI <: FunctionalInversion, CA <: ComponentArray}
+        dest::InversionBinder{FI, CA},
+        src::InversionBinder{FI, CA},
+    ) where {FI <: Inversion, CA <: ComponentArray}
 
 Overload Base.copyto! as we need a way to copy the SciMLStructure.
 It is used in SciMLSensitivity to differentiate the callbacks.
 """
 function Base.copyto!(
-    dest::FunctionalInversionBinder{FI, CA},
-    src::FunctionalInversionBinder{FI, CA},
-) where {FI <: FunctionalInversion, CA <: ComponentArray}
+    dest::InversionBinder{FI, CA},
+    src::InversionBinder{FI, CA},
+) where {FI <: Inversion, CA <: ComponentArray}
     dest.θ .= src.θ
 end

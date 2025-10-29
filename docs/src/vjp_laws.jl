@@ -190,7 +190,7 @@ model = Model(
     mass_balance = nothing,
     regressors = (; A=nn_model)
 )
-simulation = FunctionalInversion(model, glaciers, params)
+simulation = Inversion(model, glaciers, params)
 
 # We will also need `θ` in order to call the VJPs of the law manually although in practice we do not have to worry about retrieving this:
 
@@ -349,7 +349,7 @@ model = Model(
     mass_balance = nothing,
     regressors = (; Y=nn_model)
 )
-simulation = FunctionalInversion(model, glaciers, params)
+simulation = Inversion(model, glaciers, params)
 θ = simulation.model.machine_learning.θ
 glacier_idx = 1
 t = simulation.parameters.simulation.tspan[1]

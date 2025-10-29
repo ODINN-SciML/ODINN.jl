@@ -147,8 +147,7 @@ function test_grad_finite_diff(
     end
 
     # We create an ODINN prediction
-    functional_inversion = FunctionalInversion(model, glaciers, params)
-    simulation = functional_inversion
+    simulation = Inversion(model, glaciers, params)
     θ = simulation.model.machine_learning.θ
 
     loss_iceflow_grad!(dθ, _θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
@@ -464,7 +463,7 @@ function test_grad_Halfar(
     model.iceflow = SIA2Dmodel(parameters)
 
     # We create an ODINN prediction
-    simulation = FunctionalInversion(model, glaciers, parameters)
+    simulation = Inversion(model, glaciers, parameters)
 
     # Compute gradient of with Halfar solution wrt A
     A_θ = [A_θ]
