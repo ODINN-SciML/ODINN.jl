@@ -91,7 +91,7 @@ function inversion_test(;
         regressors = (; A=optimizable_model))
 
     # We create an ODINN prediction
-    functional_inversion = FunctionalInversion(model, glaciers, params)
+    functional_inversion = Inversion(model, glaciers, params)
 
     # We run the simulation
     path = mktempdir()

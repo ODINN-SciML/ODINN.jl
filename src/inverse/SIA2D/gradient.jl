@@ -3,7 +3,7 @@ export SIA2D_grad!
 """
 Inverse with batch
 """
-function SIA2D_grad!(dθ, θ, simulation::FunctionalInversion)
+function SIA2D_grad!(dθ, θ, simulation::Inversion)
 
     @assert simulation.parameters.solver.save_everystep "Forward solution needs to be stored in dense mode (ie save_everystep should be set to true), for gradient computation."
 
@@ -35,10 +35,10 @@ end
 """
 Compute gradient glacier per glacier
 """
-function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
+function SIA2D_grad_batch!(θ, simulation::Inversion)
 
     # Run forward simulation to build the results
-    container = FunctionalInversionBinder(simulation, θ)
+    container = InversionBinder(simulation, θ)
     loss_results = [batch_loss_iceflow_transient(
             container,
             glacier_idx,

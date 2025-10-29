@@ -86,7 +86,7 @@ function test_adjoint_SIA2D(
     H = glaciers[glacier_idx].H₀
     glaciers[glacier_idx].C = C
 
-    simulation = FunctionalInversion(model, glaciers, params)
+    simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
@@ -257,7 +257,7 @@ function test_adjoint_surface_V(
     glacier_idx = 1
 
     H = glaciers[glacier_idx].H₀
-    simulation = FunctionalInversion(model, glaciers, params)
+    simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
