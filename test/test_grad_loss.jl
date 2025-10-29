@@ -107,7 +107,7 @@ function test_grad_finite_diff(
         end
         function scale(v::Union{Vector,SubArray})
             @assert length(v) == 1
-            return 1e4 .* v
+            return 1e2 .* v
         end
         architecture = Lux.Chain(
             Lux.WrappedFunction(x -> LuxFunction(normalize, x)),
