@@ -71,55 +71,74 @@ function Diffusivity(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_cache = simulation.cache.iceflow
-    U = iceflow_cache.U.value
+    iceflow_model = simulation.model.iceflow
+
+    # TODO: this can be replace by interpolation too!
+    U = iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
+
+    # Include extra dependency in H for U law:
     if size(U) == size(H̄)
-        return H̄ .* U
+        D = H̄ .* U
     elseif (size(U) .+ 1) == size(H̄)
-        return Huginn.avg(H̄) .* U
+        D = Huginn.avg(H̄) .* U
     else
         throw("Not matching dimensions between U (∇S) and H̄. size(U)=$(size(U)) but size(H̄)=$(size(H̄))")
     end
+    return D
 end
 
 function ∂Diffusivity∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_model = simulation.model.iceflow
-    iceflow_cache = simulation.cache.iceflow
+    # iceflow_model = simulation.model.iceflow
+    # iceflow_cache = simulation.cache.iceflow
 
     # Neural network has already been evaluated in VJPs
-    ∂D∂H_no_NN = iceflow_cache.U.value
+    # TODO: What is this doing here?
+    # This is residual from previous version, we can compute the gradient directly with
+    # evaluations of the diffusivity and the law:
+    # ∂D∂H_no_NN = iceflow_cache.U.value
+
     ∂H∂H = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
-    ∂D∂H_no_NN .= ∂H∂H .* ∂D∂H_no_NN
+    # ∂D∂H_no_NN .= ∂H∂H .* ∂D∂H_no_NN
 
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H̄))
-    # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄+δH, ∇S=∇S), θ)
-    a = iceflow_cache.U.value .* (H̄+δH)
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.U.value .* H̄
-    ∂D∂H_NN = (a .- b) ./ δH
 
-    return ∂D∂H_no_NN + ∂D∂H_NN
+    D₊ = Diffusivity(target; H̄ = H̄ + δH, ∇S = ∇S, θ, simulation, glacier_idx, t, glacier, params)
+    D₀ = Diffusivity(target; H̄ = H̄ - δH, ∇S = ∇S, θ, simulation, glacier_idx, t, glacier, params)
+    # We don't use apply_law! because we want to evaluate with custom inputs
+    # TODO: This can be replace by interpolation
+    # D₊ = iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄ + δH, ∇S = ∇S), θ) .* (H̄ + δH)
+    # a = iceflow_cache.U.value .* (H̄ + δH)
+    # iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
+    # b = iceflow_cache.U.value .* H̄
+    ∂D∂H_NN = (D₊ .- D₀) ./ (2.0 .* δH)
+
+    return ∂H∂H .* ∂D∂H_NN
 end
 
 function ∂Diffusivity∂∇H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_model = simulation.model.iceflow
-    iceflow_cache = simulation.cache.iceflow
+    # iceflow_model = simulation.model.iceflow
+    # iceflow_cache = simulation.cache.iceflow
 
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
+
+    D₊ = Diffusivity(target; H̄ = H̄, ∇S = ∇S + δ∇H, θ, simulation, glacier_idx, t, glacier, params)
+    D₀ = Diffusivity(target; H̄ = H̄, ∇S = ∇S - δ∇H, θ, simulation, glacier_idx, t, glacier, params)
+
     # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
-    a = iceflow_cache.U.value .* H̄
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.U.value .* H̄
-    ∂D∂∇S = (a .- b) ./ δ∇H
+    # TODO: This can be replaced by interpolation!!!
+    # iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S + δ∇H), θ)
+    # a = iceflow_cache.U.value .* H̄
+    # iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
+    # b = iceflow_cache.U.value .* H̄
+    ∂D∂∇S = (D₊ .- D₀) ./ (2.0 .* δ∇H)
 
     return ∂D∂∇S
 end
@@ -200,9 +219,9 @@ function ∂Diffusivityꜛ∂H(
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄+δH, ∇S=∇S), θ)
-    a = iceflow_cache.U.value .* (H̄+δH)
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄ + δH, ∇S = ∇S), θ)
+    a = iceflow_cache.U.value .* (H̄ + δH)
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
     b = iceflow_cache.U.value .* H̄
     ∂D∂H_NN = (a .- b) ./ δH
 
@@ -219,9 +238,9 @@ function ∂Diffusivityꜛ∂∇H(
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S + δ∇H), θ)
     a = iceflow_cache.U.value .* H̄
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
     b = iceflow_cache.U.value .* H̄
     ∂D∂∇S = (a .- b) ./ δ∇H
 

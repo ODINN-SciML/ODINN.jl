@@ -156,12 +156,17 @@ function inv_normalize(v::Union{Vector,SubArray})
     return [ODINN.normalize(v[1]; lims = (0.0, H_max)), ODINN.normalize(v[2]; lims = (0.0, 0.6))]
 end
 
-function inv_fourier_feature(v::Union{Vector,SubArray})
-    return [fourier_feature(v[1], n_fourier_feautures); fourier_feature(v[2], n_fourier_feautures)]
-end
+# function fourier_feature(v::Union{Vector,SubArray})
+#     return [fourier_feature(v[1], n_fourier_feautures); fourier_feature(v[2], n_fourier_feautures)]
+# end
 
 # Maximum value of U velocity for neural network
-U₀ = 1e4
+U₀ = 1e2
+function post_scale(v::Union{Vector,SubArray})
+    @assert length(v) == 1
+    @assert 0.0 <= v[1] <= 1.0
+    return [U₀ .* exp.((v[1] .- 1.0) ./ v[1])]
+end
 
 architecture = Lux.Chain(
     Lux.WrappedFunction(x -> LuxFunction(inv_normalize, x)),
@@ -173,7 +178,8 @@ architecture = Lux.Chain(
     Lux.Dense(20, 30, x -> softplus.(x)),
     Lux.Dense(30, 10, x -> softplus.(x)),
     Lux.Dense(10, 1, sigmoid),
-    Lux.WrappedFunction(y -> U₀ .* exp.((y .- 1.0) ./ y))
+    # Lux.WrappedFunction(y -> U₀ .* exp.((y .- 1.0) ./ y))
+    Lux.WrappedFunction(x -> LuxFunction(post_scale, x))
     # WrappedFunction(y -> 10.0.^( 3.0 .* (y .- 1.0) .+ 1.0 .* (y .+ 1.0) ))
 )
 

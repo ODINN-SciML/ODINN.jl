@@ -10,7 +10,8 @@ function test_grad_finite_diff(
     train_initial_conditions = false,
     multiglacier = false,
     use_MB = false,
-    custom_NN = false
+    custom_NN = false,
+    max_params = 10,
 ) where {ADJ<:AbstractAdjointMethod}
 
     print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
@@ -100,15 +101,25 @@ function test_grad_finite_diff(
 
     # Neural network model
     if custom_NN
-        function inv_normalize(v::Union{Vector,SubArray})
+        function normalize(v::Union{Vector,SubArray})
             @assert length(v) == 2
             return [ODINN.normalize(v[1]; lims = (0.0, 200.0)), ODINN.normalize(v[2]; lims = (0.0, 0.6))]
         end
+        function scale(v::Union{Vector,SubArray})
+            @assert length(v) == 1
+            # return [1e4 .* exp.((v[1] .- 1.0) ./ v[1])]
+            # return [1e4 * v[1]]
+            return 1e2 .* v
+        end
         architecture = Lux.Chain(
-            Lux.WrappedFunction(x -> LuxFunction(inv_normalize, x)),
+            Lux.WrappedFunction(x -> LuxFunction(normalize, x)),
+            # Lux.WrappedFunction(x -> x),
             Lux.Dense(2, 5, x -> gelu.(x)),
+            Lux.Dense(5, 10, x -> gelu.(x)),
+            Lux.Dense(10, 5, x -> gelu.(x)),
             Lux.Dense(5, 1, sigmoid),
-            Lux.WrappedFunction(y -> 1e4 .* exp.((y .- 1.0) ./ y))
+            Lux.WrappedFunction(x -> LuxFunction(scale, x))
+            # Lux.WrappedFunction(x -> 2.0 .* x)
         )
         nn_model = NeuralNetwork(params; architecture = architecture)
     else
@@ -148,7 +159,7 @@ function test_grad_finite_diff(
             regressors = regressors,
             target = SIA2D_D_target(
                 interpolation = :Linear,
-                n_interp_half = 10,
+                n_interp_half = 20,
             ),
         )
     end
@@ -158,6 +169,7 @@ function test_grad_finite_diff(
     simulation = functional_inversion
 
     θ = simulation.model.machine_learning.θ
+    n_params = length(θ)
 
     glacier_idx = 1
     simulation.cache = init_cache(model, simulation, glacier_idx, θ)
@@ -202,20 +214,30 @@ function test_grad_finite_diff(
 
         ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
 
-        if train_initial_conditions
-            # TODO: Unify this with definition of f and mask
+        if n_params > max_params
+            # Evaluate gradient on subset of parameters
             # We just evaluate in a subset to save some computation
-            N = 40
+
             # Component array with binary entry
             θ_mask = θ .== nothing
-            for glacier in glaciers
-                M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter)
-                non_zero = M .> 1.0
-                idxs = rand(findall(non_zero), N)
-                mask = falses(size(M)...)
-                mask[idxs] .= 1
-                key = Symbol("$(glacier.rgi_id)")
-                θ_mask.IC[key] .= mask
+
+            for key in keys(θ)
+                if key == :IC
+                    # Initial condition
+                    for glacier in glaciers
+                        M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter)
+                        non_zero = M .> 1.0
+                        idxs = rand(findall(non_zero), max_params)
+                        mask = falses(size(M)...)
+                        mask[idxs] .= 1
+                        key = Symbol("$(glacier.rgi_id)")
+                        θ_mask.IC[key] .= mask
+                    end
+                else
+                    # Mask parameter vector
+                    indx = ODINN.sample(1:length(θ.U), max_params; replace = false)
+                    view(θ_mask, key)[indx] .= true
+                end
             end
 
             function f_subset(x, simulation, mask)
@@ -231,6 +253,7 @@ function test_grad_finite_diff(
             )
             dθ = dθ[θ_mask]
         else
+            # Compute gradient with all parameters
             dθ_FD, = FiniteDifferences.grad(
                 central_fdm(finite_difference_order, 1),
                 _θ -> f(_θ, simulation),

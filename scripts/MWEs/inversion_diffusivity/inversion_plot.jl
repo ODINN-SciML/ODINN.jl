@@ -136,29 +136,29 @@ Plots.savefig(plot_cont, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversi
 
 ### Figure: Same plot but now for the whole history during training
 
-for (i, _θ) in enumerate(θ_hist)
+# for (i, _θ) in enumerate(θ_hist)
 
-    D_true, D_pred = diffusivity_generate(functional_inversion, _θ, H_smooth, ∇S_smooth)
-    D_pred[D_pred .< 0.1 .* minimum(D_true)] .= NaN
+#     D_true, D_pred = diffusivity_generate(functional_inversion, _θ, H_smooth, ∇S_smooth)
+#     D_pred[D_pred .< 0.1 .* minimum(D_true)] .= NaN
 
-    plot_cont = Plots.contourf(
-        H_smooth, ∇S_smooth, log10.(D_pred'),
-        color=:plasma, alpha = 0.5,
-        levels = levels, lw = 1, grid = false,
-        clabels=true, cbar=true
-        )
-    Plots.contour!(
-        H_smooth, ∇S_smooth, log10.(D_true'),
-        color=[:black],
-        levels = levels, lw = 0.4,
-        clabels=true, cbar=true
-        )
-    title!(L"Plot of $\log_{10}(D)$")
-    xlabel!(L"Ice thickness $H$ [m]")
-    ylabel!(L"Surface slope $\| \nabla S \|$")
-    Plots.scatter!(H_flat, ∇S_flat, ms=0.2, color=:black, label=false)
-    Plots.savefig(plot_cont, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_contour_epoch_$(i).pdf")
-end
+#     plot_cont = Plots.contourf(
+#         H_smooth, ∇S_smooth, log10.(D_pred'),
+#         color=:plasma, alpha = 0.5,
+#         levels = levels, lw = 1, grid = false,
+#         clabels=true, cbar=true
+#         )
+#     Plots.contour!(
+#         H_smooth, ∇S_smooth, log10.(D_true'),
+#         color=[:black],
+#         levels = levels, lw = 0.4,
+#         clabels=true, cbar=true
+#         )
+#     title!(L"Plot of $\log_{10}(D)$")
+#     xlabel!(L"Ice thickness $H$ [m]")
+#     ylabel!(L"Surface slope $\| \nabla S \|$")
+#     Plots.scatter!(H_flat, ∇S_flat, ms=0.2, color=:black, label=false)
+#     Plots.savefig(plot_cont, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_contour_epoch_$(i).pdf")
+# end
 
 ### Figure: Along the trajectory
 # The single Halfar solution has a very specific function for ∇S as a function of H.
