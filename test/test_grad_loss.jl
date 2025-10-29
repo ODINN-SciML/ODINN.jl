@@ -11,7 +11,7 @@ function test_grad_finite_diff(
     multiglacier = false,
     use_MB = false,
     custom_NN = false,
-    max_params = 10,
+    max_params = 40,
 ) where {ADJ<:AbstractAdjointMethod}
 
     print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
@@ -107,19 +107,15 @@ function test_grad_finite_diff(
         end
         function scale(v::Union{Vector,SubArray})
             @assert length(v) == 1
-            # return [1e4 .* exp.((v[1] .- 1.0) ./ v[1])]
-            # return [1e4 * v[1]]
-            return 1e2 .* v
+            return 1e4 .* v
         end
         architecture = Lux.Chain(
             Lux.WrappedFunction(x -> LuxFunction(normalize, x)),
-            # Lux.WrappedFunction(x -> x),
             Lux.Dense(2, 5, x -> gelu.(x)),
             Lux.Dense(5, 10, x -> gelu.(x)),
             Lux.Dense(10, 5, x -> gelu.(x)),
             Lux.Dense(5, 1, sigmoid),
             Lux.WrappedFunction(x -> LuxFunction(scale, x))
-            # Lux.WrappedFunction(x -> 2.0 .* x)
         )
         nn_model = NeuralNetwork(params; architecture = architecture)
     else
@@ -159,7 +155,7 @@ function test_grad_finite_diff(
             regressors = regressors,
             target = SIA2D_D_target(
                 interpolation = :Linear,
-                n_interp_half = 20,
+                n_interp_half = 200,
             ),
         )
     end
@@ -217,6 +213,7 @@ function test_grad_finite_diff(
         if n_params > max_params
             # Evaluate gradient on subset of parameters
             # We just evaluate in a subset to save some computation
+            @info "Testing gradient with a subset of parameters since the original parameter vector θ is of dimension $(n_params)."
 
             # Component array with binary entry
             θ_mask = θ .== nothing

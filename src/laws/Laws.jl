@@ -134,6 +134,7 @@ function LawU(
 
     p_VJP! = let nn_model = nn_model
         function (cache, vjpsPrepLaw, inputs, θ)
+            # Check that nodes are correct!
             (; nodes_H, nodes_∇S) = cache
             # Compute exact gradient in certain values of H̄ and ∇S
             grads = [zeros(only(size(θ))) for i = 1:length(nodes_H), j = 1:length(nodes_∇S)]

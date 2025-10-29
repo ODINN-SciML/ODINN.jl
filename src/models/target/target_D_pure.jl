@@ -29,7 +29,7 @@ learnign the velocity field assuming that this is parallel to the gradient in su
 """
 @kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
     interpolation::Symbol = :None
-    n_interp_half::Int = 20
+    n_interp_half::Int = 100
     prescale_provided::Bool = false
     postscale_provided::Bool = false
 end
@@ -175,7 +175,7 @@ function ∂Diffusivity∂θ(
                 continue
             end
             ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=H̄[i, j], ∇S=∇S[i, j]), θ)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ * H̄[i, j]
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ[i, j, :] * H̄[i, j]
         end
 
     elseif interpolation == :Linear
