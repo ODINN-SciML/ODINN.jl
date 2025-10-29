@@ -84,17 +84,17 @@ function build_simulation_batch(
     nbatches::I = 1
     ) where {I <: Integer}
 
+    θi = splitθ(simulation.model.machine_learning.θ, i, simulation.model.machine_learning)
+
     iceflow = simulation.model.iceflow
     massbalance = simulation.model.mass_balance
-    ml = simulation.model.machine_learning
+    ml = MachineLearning(simulation.model.machine_learning, θi)
 
     # TODO: in the future we could avoid a copy of model since it is stateless
     # but we need to pay attention that there is no side effect with multiprocessing
     model = Sleipnir.Model(iceflow, massbalance, ml)
 
-    # Each element of the batch has access only to the current glacier, so glacier_idx=1
-    θ = simulation.model.machine_learning.θ
-    cache = init_cache(model, simulation, 1, θ)
+    cache = init_cache(model, simulation, i, θi)
     glacier = simulation.glaciers[i]
     if length(simulation.results.simulation) < 1
         return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, simulation.results)

@@ -1,26 +1,31 @@
 function inversion_test(;
     use_MB = false,
-    train_initial_conditions = false,
     multiprocessing = false,
     grad = ContinuousAdjoint(),
-    )
+    functional_inv = true,
+)
 
     rgi_paths = get_rgi_paths()
     # The value of this does not really matter, it is hardcoded in Sleipnir right now.
     working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
     ## Retrieving simulation data for the following glaciers
-    if multiprocessing
+    if multiprocessing && functional_inv
         workers = 3 # Two processes for the two glaciers + one for main
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
         # Multiprocessing is especially slow in the CI, so we perform a very short optimization
         epochs = 3
         optimizer = ODINN.ADAM(0.01)
-    else
+    elseif functional_inv
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
         epochs = [20,20]
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
+    else
+        workers = 1
+        rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+        epochs = [5,7]
+        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
     end
 
     # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
@@ -62,12 +67,7 @@ function inversion_test(;
             )
         )
 
-    if use_MB
-        MB_model = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
-    else
-        MB_model = nothing
-    end
-
+    MB_model = use_MB ? TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0) : nothing
     model = Model(
         iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
         mass_balance = MB_model,
@@ -83,25 +83,26 @@ function inversion_test(;
 
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
-    nn_model = NeuralNetwork(params)
-    A_law = LawA(nn_model, params)
+    optimizable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, :A)
+    A_law = functional_inv ? LawA(optimizable_model, params) : LawA(params)
     model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = MB_model,
-        regressors = (; A=nn_model))
+        regressors = (; A=optimizable_model))
 
     # We create an ODINN prediction
     functional_inversion = FunctionalInversion(model, glaciers, params)
 
     # We run the simulation
     path = mktempdir()
+    file_name = functional_inv ? "functional_inversion_test.jld2" : "classical_inversion_test.jld2"
     run!(
         functional_inversion;
         path = path,
-        file_name = "inversion_test.jld2"
+        file_name = file_name
     )
 
-    res_load = load(joinpath(path, "inversion_test.jld2"), "res")
+    res_load = load(joinpath(path, file_name), "res")
 
     losses = res_load.losses
     θ = res_load.θ
@@ -109,7 +110,7 @@ function inversion_test(;
     # Compute estimated values of A
 
     Temps = Float64[]
-    As_pred = Float64[]
+    As_optim = Float64[]
 
     t = tstops[end]
     for (i, glacier) in enumerate(glaciers)
@@ -120,21 +121,21 @@ function inversion_test(;
         T = get_input(iTemp(), functional_inversion, i, t)
         apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
         push!(Temps, T)
-        push!(As_pred, functional_inversion.cache.iceflow.A.value[1])
+        push!(As_optim, functional_inversion.cache.iceflow.A.value[1])
     end
 
-    if !multiprocessing
+    if !multiprocessing || !functional_inv
         # Reference value of A
         As_fake = A_poly.(Temps)
         @show As_fake
-        @show As_pred
+        @show As_optim
 
         # Loss did not decrease enough during inversion training
         @test losses[end] < 1e-6
         # Loss did not decrease enough during inversion training
         @test losses[end] < 1e-6 * losses[begin]
 
-        rel_error = abs.(As_pred .- As_fake) ./ As_fake
+        rel_error = abs.(As_optim .- As_fake) ./ As_fake
 
         # Worse case inversion error is not small enough
         @test maximum(rel_error) < 1e-3

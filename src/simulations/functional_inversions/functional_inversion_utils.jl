@@ -60,18 +60,18 @@ function run!(
     simulation.model.machine_learning.θ = sol.u
 
     simulation.results.stats.niter = length(simulation.results.stats.losses)
-    # Final parameters of the neural network for the target regressor
-    # Just one neural network is supported for now
-    reg_key = only(intersect(keys(sol.u), (:A, :C, :n, :Y, :U)))
-    simulation.results.stats.θ = sol.u[reg_key]
+    # Final parameters of the optimization
+    simulation.results.stats.θ = sol.u
     # Final initial conditions for the simulation
     if haskey(sol.u, :IC)
         simulation.results.stats.initial_conditions = Dict()
-        for glacier in simulation.glaciers
+        for glacier_id in 1:length(simulation.glaciers)
+            glacier = simulation.glaciers[glacier_id]
             simulation.results.stats.initial_conditions[String(glacier.rgi_id)] = evaluate_H₀(
                 simulation.model.machine_learning.θ,
                 glacier,
-                simulation.parameters.UDE.initial_condition_filter
+                simulation.parameters.UDE.initial_condition_filter,
+                glacier_id,
             )
         end
     end
@@ -87,7 +87,11 @@ function run!(
 end
 
 """
-train_UDE!(simulation::FunctionalInversion; save_every_iter::Bool=false, logger::Union{<: TBLogger, Nothing}=nothing)
+    train_UDE!(
+        simulation::FunctionalInversion;
+        save_every_iter::Bool = false,
+        logger::Union{<: TBLogger, Nothing} = nothing
+    )
 
 Trains UDE based on the current FunctionalInversion.
 """
@@ -95,7 +99,7 @@ function train_UDE!(
     simulation::FunctionalInversion;
     save_every_iter::Bool = false,
     logger::Union{<: TBLogger, Nothing} = nothing
-    )
+)
     optimizer = simulation.parameters.hyper.optimizer
     iceflow_trained = train_UDE!(simulation, optimizer; save_every_iter=save_every_iter, logger=logger)
     return iceflow_trained
@@ -241,12 +245,13 @@ Arguments:
 - `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
 """
 function create_results(θ, simulation::FunctionalInversion, mappingFct)
+    simulation.model.machine_learning.θ = θ
     simulations = generate_simulation_batches(simulation)
     results = mappingFct(simulations) do simulation
-        container = FunctionalInversionBinder(simulation, θ)
+        container = FunctionalInversionBinder(simulation, simulation.model.machine_learning.θ)
         [_batch_iceflow_UDE(
             container, glacier_idx,
-            define_iceflow_prob(θ, simulation, glacier_idx)
+            define_iceflow_prob(simulation.model.machine_learning.θ, simulation, glacier_idx)
         ) for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
@@ -270,10 +275,11 @@ Arguments:
 - `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
 """
 function loss_iceflow_transient(θ, simulation::FunctionalInversion, mappingFct)
+    simulation.model.machine_learning.θ = θ
     simulations = generate_simulation_batches(simulation)
     losses = mappingFct(
         simulation -> parallel_loss_iceflow_transient(
-            θ, simulation,
+            simulation.model.machine_learning.θ, simulation,
         ), simulations)
     losses = merge_batches(losses)
 
@@ -307,9 +313,10 @@ function grad_loss_iceflow!(θ, simulation::FunctionalInversion, mappingFct)
         @assert simulation.parameters.UDE.optim_autoAD isa NoAD "Differentiation of callbacks with SciMLStruct is not supported by SciMLSensitivity yet. You get this error because you are using MB + gradient computation with SciMLSensitivity."
     end
 
+    simulation.model.machine_learning.θ = θ
     simulations = generate_simulation_batches(simulation)
     grads = mappingFct(simulations) do simulation
-        [grad_parallel_loss_iceflow!(θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
+        [grad_parallel_loss_iceflow!(simulation.model.machine_learning.θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
     end
     return sum(merge_batches(grads))
 end
@@ -523,8 +530,9 @@ function define_iceflow_prob(
         H₀ = evaluate_H₀(
             θ,
             simulation.glaciers[glacier_idx],
-            simulation.parameters.UDE.initial_condition_filter
-            )
+            simulation.parameters.UDE.initial_condition_filter,
+            glacier_idx,
+        )
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
     else
         H₀ = simulation.glaciers[glacier_idx].H₀
