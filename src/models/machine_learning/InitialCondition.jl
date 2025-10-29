@@ -1,29 +1,50 @@
 export InitialCondition
 
-include("./InitialCondition_utils.jl")
-
 # Empty initial condition
-struct emptyIC <: MLmodel end
-"""
+struct emptyIC <: PerGlacierModel end
 
+"""
+    InitialCondition{
+        ComponentVectorType <: ComponentVector
+    } <: PerGlacierModel
+
+Per glacier initial condition container.
+`InitialCondition` wraps a ComponentVector (θ) that stores one matrix per glacier and implements the `InitialCondition` interface used by the inversion machinery.
+
+# Fields
+- `θ::ComponentVectorType`: The per glacier matrix of initial condition.
+
+# Constructor
+
+    InitialCondition(
+        params::Sleipnir.Parameters,
+        glaciers::Vector{<: AbstractGlacier},
+        initialization::Symbol = :Farinotti2019,
+    )
+
+# Arguments
+- `params::Sleipnir.Parameters`: Parameters struct.
+- `glaciers::Vector{<: AbstractGlacier}`: Vector of AbstractGlacier. The i-th entry in θ corresponds to glaciers[i].
+- `initialization::Symbol`: Symbol providing the way the initial condition should be initialized.
+
+# Example
+```julia
+InitialCondition(params, glaciers, :Farinotti2019)
 """
 mutable struct InitialCondition{
     ComponentVectorType <: ComponentVector
-    } <: MLmodel
+} <: PerGlacierModel
     θ::ComponentVectorType
 
     function InitialCondition(
-        params::P,
-        glaciers::Vector{G},
+        params::Sleipnir.Parameters,
+        glaciers::Vector{<: AbstractGlacier},
         initialization::Symbol = :Farinotti2019,
-    ) where {
-        P<:Sleipnir.Parameters,
-        G<:AbstractGlacier
-    }
+    )
         # Float type
         ft = Sleipnir.Float
         # Component Array type
-        initial_condition_type = Tuple(Symbol("$(glaciers[i].rgi_id)") for i in 1:length(glaciers))
+        initial_condition_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
 
         # Define a series of initial conditions
         if initialization == :Farinotti2019
@@ -41,9 +62,15 @@ mutable struct InitialCondition{
         end
 
         θ = ComponentVector{ft}(θ = initial_condition)
-        new{typeof(θ)}(
-            θ
-        )
+        new{typeof(θ)}(θ)
     end
-
 end
+
+# Display setup
+function Base.show(io::IO, invertible_model::InitialCondition)
+    println(io, "--- Initial condition to invert ---")
+    println(io, "    Matrix per glacier")
+    print(io, "    θ: ComponentVector of length $(length(invertible_model.θ))")
+end
+
+include("./InitialCondition_utils.jl")
