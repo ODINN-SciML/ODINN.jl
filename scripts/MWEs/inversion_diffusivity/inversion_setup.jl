@@ -30,6 +30,7 @@ using ODINN
 using Sleipnir: DummyClimate2D
 using ODINN: MersenneTwister, ZygoteAdjoint, ComponentVector
 using ODINN: Lux, sigmoid, gelu, softplus
+using JLD2
 
 rng = MersenneTwister(616)
 
@@ -40,7 +41,7 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 use_MB = false
 λ = use_MB ? 5.0 : 0.0
-nx, ny = 20, 20
+nx, ny = 80, 80
 # nx, ny = 20, 20
 R₀ = 2000.0
 H₀ = 200.0
@@ -50,8 +51,9 @@ n₀ = 3.0
 
 halfar_params = HalfarParameters(λ = λ, R₀ = R₀, H₀ = H₀, A = A₀, n = n₀)
 halfar, t₀ = Halfar(halfar_params)
+halfar_velocity = Huginn.Halfar_velocity(halfar_params)
 
-Δt = 100.0
+Δt = 40.0
 t₁ = t₀ + Δt
 δt = Δt / 200
 tstops = Huginn.define_callback_steps((t₀, t₁), δt) |> collect
@@ -64,8 +66,23 @@ B = zeros((nx,ny))
 xs = [(i - nx / 2) * Δx for i in 1:nx]
 ys = [(j - ny / 2) * Δy for j in 1:ny]
 
-# Construct analytical time series
+# Construct analytical ice thickness time series
 Hs = [[halfar(x, y, t) for x in xs, y in ys] for t in tstops]
+thicknessData = Sleipnir.ThicknessData(tstops, Hs)
+
+# Construct analytical ice surface velocity time series
+# For this, we use a shorter time threshold
+tstops_vel = Huginn.define_callback_steps((t₀, t₁), 0.1) |> collect
+Vs = [[halfar_velocity(x, y, t) for x in xs, y in ys] for t in tstops]
+velocityData = Sleipnir.SurfaceVelocityData(
+    x = xs, y = ys,
+    vx = map(X -> getindex.(X, 1), Vs),
+    vy = map(X -> getindex.(X, 1), Vs),
+    vabs = map(X -> ODINN.norm.(X, 1), Vs),
+    date = map(t -> Sleipnir.Dates.DateTime.(Sleipnir.partial_year(Sleipnir.Dates.Day, t)), tstops),
+    isGridGlacierAligned = true
+)
+
 
 Hs_dome = map(x -> maximum(x), Hs)
 # Reduction in ice thickness during simulation
@@ -91,9 +108,10 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = 1,
-        epochs = [10, 10],
-        optimizer = [
-            ODINN.ADAM(0.001),
+        # epochs = [50, 30],
+        epochs = 100,
+        optimizer = #[
+            # ODINN.ADAM(0.001),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
                 )
@@ -103,7 +121,7 @@ params = Parameters(
                 #     delta = 0.01,
                 #     sigma = 0.1)
                 #     )
-                ]
+                # ]
         ),
     UDE = UDEparameters(
         sensealg = ZygoteAdjoint(),
@@ -141,7 +159,8 @@ glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 # We add thickness data to Glacier object
 glaciers[1] = Glacier2D(
     glaciers[1],
-    thicknessData = Sleipnir.ThicknessData(tstops, Hs)
+    thicknessData = thicknessData,
+    velocityData = velocityData,
     )
 
 
@@ -161,7 +180,7 @@ end
 # end
 
 # Maximum value of U velocity for neural network
-U₀ = 1e2
+U₀ = 1e4
 function post_scale(v::Union{Vector,SubArray})
     @assert length(v) == 1
     @assert 0.0 <= v[1] <= 1.0
@@ -186,8 +205,9 @@ architecture = Lux.Chain(
 ### Pretraining
 
 pretrain = true
+saved_nn_pretrain = false
 
-if pretrain
+if pretrain & !saved_nn_pretrain
     H_samples = 0.0:2.0:H_max
     ∇S_samples = 0.0:0.02:0.4
     all_combinations = vec(collect(Iterators.product(H_samples, ∇S_samples)))
@@ -195,8 +215,8 @@ if pretrain
     function template_U(h, ∇s)
         (; ρ, g) = params.physical
         # Change parameters a little bit so we don't cheat that much
-        n = 1.11 * n₀
-        A = 0.80 * A₀
+        n = 0.95 * n₀
+        A = 1.2 * A₀
         # This one has one less H than the actual diffusivity
         return 2 * A * (ρ * g)^n * h^(n + 1) * ∇s^(n - 1) / (n + 2)
     end
@@ -214,8 +234,12 @@ if pretrain
     architecture, θ_pretrain, st_pretrain, losses = pretraining(
         architecture;
         X = X_samples, Y = Y_samples,
-        nepochs = 5000, rng = rng
+        nepochs = 500, rng = rng
     )
+    jldsave("./scripts/MWEs/inversion_diffusivity/data/pretrained.jld2"; θ = θ_pretrain)
+elseif pretrain & saved_nn_pretrain
+    # We read pretrained parameters of NN from memory
+    θ_pretrain = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "pretrained.jld2"), "θ")
 else
     θ_pretrain, st_pretrain = Lux.setup(rng, architecture)
 end
@@ -246,10 +270,10 @@ model = Model(
         params; DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0
         ),
-    regressors = (; U=nn_model),
+    regressors = (; U = nn_model),
     target = SIA2D_D_target(
         interpolation = :Linear,
-        n_interp_half = 20,
+        n_interp_half = 60,
     ),
 )
 
