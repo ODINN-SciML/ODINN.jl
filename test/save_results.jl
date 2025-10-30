@@ -54,7 +54,7 @@ function save_simulation_test!(;
         regressors = (; A=nn_model)
     )
 
-    functional_inversion = FunctionalInversion(model, glaciers, params)
+    functional_inversion = Inversion(model, glaciers, params)
 
     path = mktempdir()
     file_name = "simulation_results.jld2"
