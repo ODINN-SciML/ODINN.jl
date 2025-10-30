@@ -83,7 +83,7 @@ if GROUP == "All" || GROUP == "Core2"
 end
 
 if GROUP == "All" || GROUP == "Core3"
-    @testset "Adjoints tests of SIA equation with A as target" begin
+    @testset "Manual adjoint methods of SIA equation with A as target" begin
         @testset "Discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
         @testset "Discrete adjoint with discrete VJP vs finite differences for classical inversions" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); functional_inv = false, thres = [1e-2, 1e-5, 1e-2])
         @testset "Discrete adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [3e-2, 8e-5, 3e-2], train_initial_conditions = true)
@@ -102,7 +102,7 @@ if GROUP == "All" || GROUP == "Core3"
 end
 
 if GROUP == "All" || GROUP == "Core4"
-@testset "Adjoint method of SIA equation with A as target and ice velocity loss" begin
+@testset "Manual adjoint methods of SIA equation with A as target and ice velocity loss" begin
     @testset "VJP (discrete) of surface_V vs finite differences" test_adjoint_surface_V(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[1e-6, 1e-13, 1e-6], target = :A)
     @testset "Discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-7, 5e-4], loss=LossV())
     # @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
@@ -114,14 +114,14 @@ end
 end
 
 if GROUP == "All" || GROUP == "Core5"
-@testset "Adjoint method of SIA equation with hybrid D as target" begin
+@testset "Manual adjoint methods of SIA equation with hybrid D as target" begin
     @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D_hybrid)
     @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [7e-2, 1e-4, 6e-2], target = :D_hybrid)
 end
 end
 
 if GROUP == "All" || GROUP == "Core6"
-@testset "Adjoint method of SIA equation with pure D as target" begin
+@testset "Manual adjoint methods of SIA equation with pure D as target" begin
     @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-4, 1e-2], target = :D)
     @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-4, 2e-2], target = :D)
 end

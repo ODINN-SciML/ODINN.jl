@@ -299,7 +299,8 @@ It also stores the glacier ID as an integer.
 This is typically used to invert a single scalar per glacier.
 Fields:
 - `value::Array{Float64, 0}`: The cached scalar value.
-- `vjp_inp::Array{Float64, 0}`: VJP with respect to inputs.
+- `vjp_inp::Array{Float64, 0}`: VJP with respect to inputs. Must be defined but never used in
+    practice since this cache is used for classical inversions and the law does not have inputs.
 - `vjp_θ::Vector{Float64}`: VJP with respect to parameters.
 - `glacier_id::Int64`: Glacier ID in the list of simulated glaciers.
 """
@@ -315,15 +316,20 @@ fill(c::ScalarCacheGlacierId, s) = typeof(c)(fill(c.value, s), fill(c.vjp_inp, s
 Base.:(==)(a::ScalarCacheGlacierId, b::ScalarCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
 
 """
-    LawA(params::Sleipnir.Parameters)
+    LawA(params::Sleipnir.Parameters; scalar::Bool=true)
 
-Construct a law that defines a constant A per glacier to invert.
+Construct a law that defines an ice rheology A per glacier to invert.
+This can be either a spatially varying A or a scalar value per glacier based on the
+value of `scalar`.
 
 # Arguments
 - `params::Sleipnir.Parameters`: Parameters struct used to retrieve the minimum and
     maximum values of A for scaling the parameter to invert.
+- `scalar::Bool`: Whether the ice rheology to invert is a scalar per glacier, or a
+    spatially varying `A` per glacier (matrix to invert).
 """
-function LawA(params::Sleipnir.Parameters)
+function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
+    @assert scalar "Spatially varying inversion of A is not implemented yet."
     min_NN = params.physical.minA
     max_NN = params.physical.maxA
     f! = let min_NN = min_NN, max_NN = max_NN

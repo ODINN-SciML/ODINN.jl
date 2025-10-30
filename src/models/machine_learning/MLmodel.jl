@@ -6,9 +6,29 @@ _inputs_n_law = (; )
 _inputs_Y_law = (; T=iTemp(), H̄=iH̄())
 _inputs_U_law = (; H̄=iH̄(), ∇S=i∇S())
 
-# Abstract type as a parent type for Machine Learning models
+"""
+    OptimizableModel <: AbstractModel
+
+Optimizable components of the model.
+"""
+
 abstract type OptimizableModel <: AbstractModel end
+"""
+    PerGlacierModel <: OptimizableModel
+
+Abstract type representing per glacier optimizable components of the model.
+This is a subtype of `OptimizableModel`.
+Typically used for classical inversions.
+"""
 abstract type PerGlacierModel <: OptimizableModel end
+
+"""
+    ParameterizationModel <: OptimizableModel
+
+Abstract type representing parameterizable components of the model.
+This is a subtype of `OptimizableModel`.
+Typically used for functional inversions.
+"""
 abstract type ParameterizationModel <: OptimizableModel end
 
 include("./InitialCondition.jl")
