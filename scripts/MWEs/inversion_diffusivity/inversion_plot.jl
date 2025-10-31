@@ -29,8 +29,8 @@ using ForwardDiff
 using LinearAlgebra
 using Random, Distributions
 
-res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_Halfar.jld2"), "res")
-# res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity", "_inversion_result_working.jld2"), "res")
+# res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_Halfar.jld2"), "res")
+res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_Halfar_gridsize20.jld2"), "res")
 
 # Load parameters of the trained neural network
 θ = res_load.θ
@@ -186,7 +186,8 @@ Plots.savefig(plot_analytical, "scripts/MWEs/inversion_diffusivity/figures/MWE_i
 
 ### Figure: Value of D along specific values of H and ∇S
 
-idx_∇S = 10
+idx_∇S = Int(size(D_true)[2] / 2)
+
 
 plot = Plots.scatter(
     H_smooth, D_pred[:, idx_∇S],
@@ -201,7 +202,7 @@ Plots.plot!(
     );
 Plots.savefig(plot, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_test_H.pdf")
 
-idx_H = 20
+idx_H = Int(size(D_true)[1] / 2)
 
 plot = Plots.scatter(∇S_smooth, D_pred[idx_H, :], label="Neural network prediction", c=:lightsteelblue2);
 Plots.plot!(

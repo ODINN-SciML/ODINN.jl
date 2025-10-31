@@ -204,7 +204,7 @@ architecture = Lux.Chain(
 
 ### Pretraining
 
-pretrain = true
+pretrain = false
 saved_nn_pretrain = false
 
 if pretrain & !saved_nn_pretrain
