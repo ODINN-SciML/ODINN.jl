@@ -147,6 +147,9 @@ function ∂Diffusivity∂θ(
         @assert "The U law cannot be a callback law as it needs to be differentiated in ∂Diffusivity∂θ. To support U as a callback law, you need to update the structure of the adjoint code computation."
     end
 
+    # Extract relevant parameters specific from the target
+    interpolation = target.interpolation
+
     ∂spatial = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))

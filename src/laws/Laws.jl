@@ -82,12 +82,11 @@ U_law = LawU(nn_model, params; max_NN = 50.0, prescale_bounds = [bounds_H, bound
 function LawU(
     nn_model::NeuralNetwork,
     params::Sleipnir.Parameters;
-    max_NN::Union{F, Nothing} = nothing,
-    prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing} = nothing,
+    max_NN::Union{<: AbstractFloat, Nothing} = nothing,
+    prescale_bounds::Union{Vector{Tuple{<:AbstractFloat, <:AbstractFloat}}, Nothing} = nothing,
     precompute_interpolation::Bool = true,
     precompute_VJPs::Bool = true,
-    dummy_float::F = 1.0, # This is just to recognize the type F when no float argument is provided. Not always, but sometimes this produces an error of "F not been defined"... I am sure there is a better solution to this but I couldn't find it. Doing this for now.
-) where {F <: AbstractFloat}
+)
     prescale = !isnothing(prescale_bounds) ? X -> _ml_model_prescale(X, prescale_bounds) : identity
     # The value of max_NN should correspond to maximum of Umax * dSdx
     postscale = !isnothing(max_NN) ? Y -> _ml_model_postscale(Y, max_NN) : identity
