@@ -8,7 +8,7 @@ The loss function that is being optimized $\mathcal{L}$ consists of a data fidel
 The data fidelity term represents the empirical error between the predicted state of the glacier (given by the simulated forward model) and observations.
 The state of the glacier can be characterized by the thickness $H$ and/or the ice surface velocity $V$.
 The ground truth for each of these variables is available through different datasets.
-On both cases, the objective is to find the value of the model parameters (e.g, the weights of the neural network, the initial state of the glacier), that minize the total loss.
+On both cases, the objective is to find the value of the model parameters (e.g, the weights of the neural network, the initial state of the glacier), that minimize the total loss.
 
 We distinguish between the contributions of the loss function that include observations (empirical loss) and regularization losses that penalize non-smoothness on the solutions.
 The total loss function is given by
@@ -44,7 +44,7 @@ These types which define very simple operations are used in more complex loss fu
 - `LossV`: Loss function over the ice surface velocity only.
 - `LossHV`: Loss function over both the ice thickness and ice surface velocity.
 
-The loss function for the ice thickness $H$ (similar for ice surfave velocity $V$) is mathematically defined as:
+The loss function for the ice thickness $H$ (similar for ice surface velocity $V$) is mathematically defined as:
 ```math
 L(\theta)
 =
@@ -72,10 +72,10 @@ with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node
 
 ### Regularization
 
-Regularizations are very common in inverse modelling as they help to contraint the possible solutions of the problem to physical reasonable values.
-From a mathematical and computational perspective, regularization losses are just another type of loss that do not include contribution from observations (and then have no _empirica_ contribution to their value).
+Regularizations are very common in inverse modelling as they help to constraint the possible solutions of the problem to physical reasonable values.
+From a mathematical and computational perspective, regularization losses are just another type of loss that do not include contribution from observations (and then have no _empirical_ contribution to their value).
 
-ODINN currenly supports the following type of regularization, altought the development of new regularization should be straingforward from the source code API
+ODINN currently supports the following type of regularization, althouth the development of new regularization should be straightforward from the source code API
 - `TikhonovRegularization`: Very common in geophysical inversion. Given an linear operator $A$, this is given by the value of $\| A(S) \|_2^2, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the Laplacian operator.
 - `InitialThicknessRegularization`: Penalizes large second derivatives in the initial condition of the glacier when this is treated as an optimization variable.
-Regularization and empirical losses can be easely combine togheter to construct new form of regualarizations.
+Regularization and empirical losses can be combine together to construct new form of regularizations.

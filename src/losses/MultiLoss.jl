@@ -3,14 +3,19 @@ export loss, backward_loss
 
 """
 """
-@kwdef struct MultiLoss{F <: AbstractFloat} <: AbstractLoss
-    losses::Union{Tuple{Vararg{<:AbstractLoss}}, Nothing} = (L2Sum(), )
-    λs::Union{Tuple{Vararg{F}}, Nothing} = (1.0, )
-
-    function MultiLoss(losses, λs)
-        # @assert all(typeof.(losses) .<: AbstractLoss) "All the object in `losses` need to be a Loss type."
+# struct MultiLoss{F <: AbstractFloat} <: AbstractLoss
+struct MultiLoss{TL, TS} <: AbstractLoss
+    losses::TL
+    λs::TS
+    # losses::Union{Tuple{Vararg{<:AbstractLoss}}, Nothing} = 
+    # λs::Union{Tuple{Vararg{F}}, Nothing} = 
+    function MultiLoss(;
+        losses = (L2Sum(), ),
+        λs = (1.0, ),
+        )
         @assert length(losses) == length(λs) "You need to provide an hyperparameter for each loss term defined."
-        return new{Sleipnir.Float}(losses, λs)
+        # return new{Sleipnir.Float}(losses, λs)
+        return new{typeof(losses), typeof(λs)}(losses, λs)
     end
 end
 
