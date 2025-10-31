@@ -11,7 +11,22 @@ abstract type AbstractSimpleRegularization <: AbstractLoss end
 # Basic Regularization Types
 
 """
-Also known as Ridge regression.
+    TikhonovRegularization(; operator = :laplacian, distance = 3)
+
+A simple regularization type implementing Tikhonov regularization (also known as ridge regularization)
+for inverse problems.
+
+This struct includes both the forward and reverse (adjoint) operators, which are required
+for the computation of the gradients with respect to the model parameters.
+
+# Keyword Arguments (Constructor)
+- `operator::Symbol = :laplacian`: The regularization operator to use. Currently, only `:laplacian` is implemented, which penalizes large gradients by applying the Laplacian operator.
+- `distance::Integer = 3`: A width parameter to determine how far from the margin evaluate the loss.
+
+# Fields (Struct)
+- `operator_forward::Function`: The forward regularization operator (e.g., `∇²`).
+- `operator_reverse::Function`: The reverse-mode (VJP) of the operator (e.g., `VJP_λ_∂∇²a_∂a`).
+- `distance::Integer`: The distance parameter controlling the extent of regularization.
 """
 struct TikhonovRegularization{I<:Integer} <: AbstractSimpleRegularization
     operator_forward::Function
@@ -27,10 +42,31 @@ struct TikhonovRegularization{I<:Integer} <: AbstractSimpleRegularization
     end
 end
 
+"""
+    InitialThicknessRegularization(; reg = TikhonovRegularization(), t₀ = 1994.0)
+
+A composite regularization type designed for initial ice thickness.
+It combines a simple spatial regularization (e.g., `TikhonovRegularization`) with a reference initial time.
+
+# Keyword Arguments
+- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
+- `t₀::AbstractFloat = 1994.0`: The reference initial time (e.g., year) at which the regularization applies.
+"""
 @kwdef struct InitialThicknessRegularization{R<:AbstractSimpleRegularization, F<:AbstractFloat} <: AbstractRegularization
     reg::R = TikhonovRegularization()
     t₀::F = 1994.0
 end
+
+"""
+    VelocityRegularization(; reg = TikhonovRegularization(), components = :abs, distance = 3)
+
+Regularization for velocity fields, combining a spatial smoothing operator with optional component control.
+
+# Keyword Arguments
+- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+- `components::Symbol = :abs`: Determines which velocity components to regularize (e.g. `:abs`, `:x`, `:y`).
+- `distance::Integer = 3`: Distance to glacier margin.
+"""
 
 @kwdef struct VelocityRegularization{R<:AbstractSimpleRegularization, I<:Integer} <: AbstractRegularization
     reg::R = TikhonovRegularization()
@@ -38,9 +74,19 @@ end
     distance::I = 3
 end
 
+"""
+    DiffusivityRegularization(; reg = TikhonovRegularization())
+
+Regularization for diffusivity fields using a specified spatial operator.
+
+# Keyword Arguments
+- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator applied to diffusivity.
+"""
 @kwdef struct DiffusivityRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
     reg::R = TikhonovRegularization()
 end
+
+### Definition of simple regularization functions
 
 function loss(
     regType::TikhonovRegularization,
@@ -174,9 +220,19 @@ function backward_loss(
     return ∂Reg∂H, ∂Reg∂θ
 end
 
-# This next part of the code can probably done with something we already have I think
 """
-Laplacian operator
+    ∇²(a::Matrix{F}, Δx::F, Δy::F) where {F<:AbstractFloat}
+
+Computes the 2D Laplacian operator of a scalar field `a` on a regular grid
+using finite differences and staggered (dual–primal) averaging.
+
+# Arguments
+- `a::Matrix{F}`: 2D scalar field to differentiate.
+- `Δx::F`: Grid spacing in the x-direction.
+- `Δy::F`: Grid spacing in the y-direction.
+
+# Returns
+- `Matrix{F}`: Approximation of the Laplacian ∇²a with boundary values set to `0.0`.
 """
 function ∇²(
     a::Matrix{F},
@@ -203,7 +259,21 @@ function ∇²(
 end
 
 """
-VJP of the Laplacian operator ∇²
+    VJP_λ_∂∇²a_∂a(λ::Matrix{R}, a::Matrix{R}, Δx::R, Δy::R) where {R<:Real}
+
+Computes the vector–Jacobian product (VJP) of the Laplacian operator `∇²`
+with respect to its input field `a`.
+This function effectively propagates sensitivities (adjoints) `λ` backward
+through the Laplacian, as required in adjoint or reverse-mode differentiation.
+
+# Arguments
+- `λ::Matrix{R}`: Adjoint field associated with the Laplacian output.
+- `a::Matrix{R}`: Input scalar field to the Laplacian operator.
+- `Δx::R`: Grid spacing in the x-direction.
+- `Δy::R`: Grid spacing in the y-direction.
+
+# Returns
+- `Matrix{R}`: The adjoint (VJP) with respect to `a`, i.e. `∂⟨λ, ∇²a⟩/∂a`.
 """
 function VJP_λ_∂∇²a_∂a(
     λ::Matrix{R},
