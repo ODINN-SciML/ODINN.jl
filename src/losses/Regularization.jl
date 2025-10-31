@@ -13,8 +13,18 @@ abstract type AbstractSimpleRegularization <: AbstractLoss end
 """
 Also known as Ridge regression.
 """
-@kwdef struct TikhonovRegularization{I<:Integer} <: AbstractSimpleRegularization
-    distance::I = 3
+struct TikhonovRegularization{I<:Integer} <: AbstractSimpleRegularization
+    operator_forward::Function
+    operator_reverse::Function
+    distance::I
+
+    function TikhonovRegularization(; operator = :laplacian, distance = 3)
+        if operator == :laplacian
+            return new{typeof(distance)}(∇², VJP_λ_∂∇²a_∂a, distance)
+        else
+            twrow("Operator named $(operator) not implemented inside Tikhonov regularization")
+        end
+    end
 end
 
 @kwdef struct InitialThicknessRegularization{R<:AbstractSimpleRegularization, F<:AbstractFloat} <: AbstractRegularization
@@ -22,9 +32,10 @@ end
     t₀::F = 1994.0
 end
 
-@kwdef struct VelocityRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
+@kwdef struct VelocityRegularization{R<:AbstractSimpleRegularization, I<:Integer} <: AbstractRegularization
     reg::R = TikhonovRegularization()
     components::Symbol = :abs
+    distance::I = 3
 end
 
 @kwdef struct DiffusivityRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
@@ -38,7 +49,8 @@ function loss(
     Δy::F;
     normalization::F=1.
 ) where {F <: AbstractFloat}
-    return sum(∇²(a, Δx, Δy).^2.0)
+    operator_forward = regType.operator_forward
+    return sum(operator_forward(a, Δx, Δy).^2.0)
 end
 function backward_loss(
     regType::TikhonovRegularization,
@@ -47,8 +59,10 @@ function backward_loss(
     Δy::F;
     normalization::F=1.
 ) where {F <: AbstractFloat}
-    ∂L∂∇²a = 2.0 .* abs.(∇²(a, Δx, Δy))
-    return VJP_λ_∂∇²a_∂a(∂L∂∇²a, a, Δx, Δy)
+    operator_forward = regType.operator_forward
+    operator_reverse = regType.operator_reverse
+    ∂L∂∇²a = 2.0 .* abs.(operator_forward(a, Δx, Δy))
+    return operator_reverse(∂L∂∇²a, a, Δx, Δy)
 end
 
 function loss(
@@ -144,7 +158,7 @@ function backward_loss(
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
 
-    mask = is_in_glacier(H, lossType.distance) .& (V .> 0.0)
+    mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
         ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy)
@@ -162,7 +176,9 @@ function backward_loss(
 end
 
 # This next part of the code can probably done with something we already have I think
-
+"""
+Laplacian operator
+"""
 function ∇²(
     a::Matrix{F},
     Δx::F,
@@ -186,6 +202,9 @@ function ∇²(
     return ∇²a
 end
 
+"""
+VJP of the Laplacian operator ∇²
+"""
 function VJP_λ_∂∇²a_∂a(
     λ::Matrix{R},
     a::Matrix{R},
