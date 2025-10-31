@@ -41,7 +41,7 @@ function loss(
             normalization = normalization
         ), lossType.losses
     )
-    # Combine contrubution of each loss
+    # Combine contribution of each loss
     return sum(lossType.λs .* losses)
 end
 
@@ -67,7 +67,7 @@ function backward_loss(
             normalization = normalization
         ), lossType.losses
     )
-    # Combine contrubution of each gradient
+    # Combine contribution of each gradient
     ∂L∂Hs, ∂L∂θs = map(x -> collect(x), zip(res_backward_losses...))
     ∂L∂H = sum(lossType.λs .* ∂L∂Hs)
     ∂L∂θ = sum(lossType.λs .* ∂L∂θs)
