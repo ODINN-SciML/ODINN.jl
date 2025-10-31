@@ -63,7 +63,10 @@ params = Parameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
-        empirical_loss_function = LossH(),
+        empirical_loss_function = MultiLoss(
+            losses = (LossH(), InitialThicknessRegularization()),
+            λs = (1.0, 1e-4)
+            ),
         target = :A,
         initial_condition_filter = :Zang1980
         ),
@@ -90,7 +93,7 @@ glaciers = generate_ground_truth(glaciers, params, model, tstops)
 nn_model = NeuralNetwork(params)
 
 # Decide if we want or not to learn initial condition
-train_initial_conditions = false
+train_initial_conditions = true
 
 if train_initial_conditions
     ic = InitialCondition(params, glaciers, :Farinotti2019)

@@ -56,13 +56,18 @@ function UDEparameters(;
         optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
         grad::ADJ = SciMLSensitivityAdjoint(),
         optimization_method::String = "AD+AD",
-        empirical_loss_function::AbstractLoss = LossH(),
-        target::Union{Symbol, Nothing} = :A,
+        empirical_loss_function::AbstractLoss = MultiLoss(losses = (LossH(),), λs = (1.0,)),        target::Union{Symbol, Nothing} = :A,
         initial_condition_filter::Union{Symbol, Nothing} = :identity
     ) where {ADJ <: AbstractAdjointMethod}
 
     # Verify that the optimization method is correct
     @assert ((optimization_method == "AD+AD") || (optimization_method == "AD+Diff")) "Wrong optimization method! Needs to be either `AD+AD` or `AD+Diff`"
+
+    # Empirical loss can be either be a MultiLoss or a simple loss. In both cases,
+    # we construct the internal loss to be a MultiLoss
+    if !isa(empirical_loss_function, MultiLoss)
+        empirical_loss_function = MultiLoss(losses = (empirical_loss_function, ), λs = (1.0, ))
+    end
 
     # Build the solver parameters based on input values
     UDE_parameters = UDEparameters{typeof(grad)}(

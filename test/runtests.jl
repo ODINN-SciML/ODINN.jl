@@ -123,6 +123,14 @@ end
 end
 
 if GROUP == "All" || GROUP == "Core7"
+    @testset "Multi-objective function and regularization test" begin
+        @testset "Gradient evaluation testing MultiLoss API" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(),), λs=(0.4,)))
+        @testset "Gradient evaluation testing just regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(VelocityRegularization(),), λs=(1e2,)))
+        @testset "Gradient evaluation testing empirical and regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(), VelocityRegularization()), λs=(1e-2, 2e-1)))
+end
+end
+
+if GROUP == "All" || GROUP == "Core8"
 @testset "Inversion test" begin
     @testset "Inversion Tests w/o MB" inversion_test(use_MB = false, multiprocessing = false)
     @testset "Inversion Tests w/ MB" inversion_test(use_MB = true, multiprocessing = false, grad = ContinuousAdjoint(VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote())))
@@ -130,14 +138,14 @@ if GROUP == "All" || GROUP == "Core7"
 end
 end
 
-if GROUP == "All" || GROUP == "Core8"
+if GROUP == "All" || GROUP == "Core9"
 @testset "Multiglacier inversion test" begin
     @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], multiglacier = true)
     @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], multiglacier = true, train_initial_conditions = true)
 end
 end
 
-if GROUP == "All" || GROUP == "Core9"
+if GROUP == "All" || GROUP == "Core10"
 @testset "Save results" begin
     @testset "Single glacier" save_simulation_test!(multiglacier = false)
     @testset "Multiple glaciers" save_simulation_test!(multiglacier = true)
