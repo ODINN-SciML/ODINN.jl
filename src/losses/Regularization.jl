@@ -61,7 +61,7 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     operator_forward = regType.operator_forward
     operator_reverse = regType.operator_reverse
-    ∂L∂∇²a = 2.0 .* abs.(operator_forward(a, Δx, Δy))
+    ∂L∂∇²a = 2.0 .* operator_forward(a, Δx, Δy)
     return operator_reverse(∂L∂∇²a, a, Δx, Δy)
 end
 
@@ -162,7 +162,6 @@ function backward_loss(
 
     if regType.components == :abs
         ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy)
-        ∂Reg∂Vx, ∂lV∂Vy = zero(∂Reg∂V), zero(∂Reg∂V)
         ∂Reg∂Vx = ifelse.(mask, ∂Reg∂V .* Vx ./ V, 0.0)
         ∂Reg∂Vy = ifelse.(mask, ∂Reg∂V .* Vy ./ V, 0.0)
     else
@@ -197,9 +196,10 @@ function ∇²(
     ∂2a∂x2 = Huginn.avg_y(∂2a∂x2_dual)
     ∂2a∂y2 = Huginn.avg_x(∂2a∂y2_dual)
 
-    ∇²a = zero(a)
-    Huginn.inn(∇²a) .= ∂2a∂x2 .+ ∂2a∂y2
-    return ∇²a
+    nx, ny = size(a)
+    ∇²a = ∂2a∂x2 .+ ∂2a∂y2
+    ∇²a_inner = [i == 1 || i == nx || j == 1 || j == ny ? 0.0 : ∇²a[i - 1, j - 1] for i = 1:nx, j=1:ny]
+    return ∇²a_inner
 end
 
 """
@@ -225,7 +225,8 @@ function VJP_λ_∂∇²a_∂a(
     ∂a∂x_dual = Huginn.avg_y(∂a∂x)
     ∂a∂y_dual = Huginn.avg_x(∂a∂y)
 
-    ∇λ∇a = zero(a)
-    Huginn.inn(∇λ∇a) .= Huginn.avg(∂λ∂x_dual .* ∂a∂x_dual .+ ∂λ∂y_dual .* ∂a∂y_dual)
-    return .- ∇λ∇a
+    nx, ny = size(a)
+    ∇λ∇a = Huginn.avg(∂λ∂x_dual .* ∂a∂x_dual .+ ∂λ∂y_dual .* ∂a∂y_dual)
+    ∇λ∇a_inner = [i == 1 || i == nx || j == 1 || j == ny ? 0.0 : ∇λ∇a[i - 1, j - 1] for i = 1:nx, j=1:ny]
+    return - ∇λ∇a_inner
 end
