@@ -123,14 +123,11 @@ The [functional inversion tutorial](./functional_inversion.md) gives an example 
 
 ## Inversion with respect to initial state of the glacier
 
-Ice flow models are very sensitive to the initial state of the glacier.
-For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations).
-For cases where the initial condition of the glacier is not completelly known and/or we want to avoid shocks during the forward simulation, ODINN provides an interfase to optimize the initial conditions of the ice thickness $H(t = t\_0) = H_0$ as an extra parameter of the inversion. 
+Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t\_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization). 
 
-We provide an object `InitialCondition` that allows to prescribed all the important parameters of the initialization. 
-Initial guess can be provided (e.g., based on the ice thickness product by Farinotti 2019).
-In order to garantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
+We provide an object `InitialCondition` that enables the prescription of all the important parameters of the initialization. An initial guess can be provided (e.g., based on the ice thickness product by Farinotti et al. (2019)). In order to guarantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
 Finally, prescribing an inversion with respect to the initial condition can be directly included by defining the initial condition as one extra regressor inside the model:
+
 ```julia
 ic = InitialCondition(params, glaciers, :Farinotti2019)
 model = Model(
