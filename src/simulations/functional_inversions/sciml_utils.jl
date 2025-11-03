@@ -17,7 +17,7 @@ It is defined as a SciMLStructure and it contains the functional inversion struc
 - `simulation::FI`: Functional inversion instance.
 - `θ::CA`: ComponentArray that contains the parameters used to differentiate the iceflow.
 """
-mutable struct FunctionalInversionBinder{FI <: FunctionalInversion, CA <: ComponentArray}
+mutable struct FunctionalInversionBinder{FI <: FunctionalInversion, CA <: ComponentArray} <: Container
     simulation::FI
     θ::CA
 end

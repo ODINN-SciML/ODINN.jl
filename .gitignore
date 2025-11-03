@@ -18,6 +18,9 @@ docs/src/forward_simulation.md
 docs/src/functional_inversion.md
 docs/src/quick_start.md
 docs/src/laws.md
+docs/src/vjp_laws.md
+docs/src/input_laws.md
+docs/laws_plots/
 docs/data/results/
 
 # Core dump files

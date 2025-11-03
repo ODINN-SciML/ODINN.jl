@@ -93,7 +93,8 @@ function build_simulation_batch(
     model = Sleipnir.Model(iceflow, massbalance, ml)
 
     # Each element of the batch has access only to the current glacier, so glacier_idx=1
-    cache = init_cache(model, simulation, 1, simulation.parameters)
+    θ = simulation.model.machine_learning.θ
+    cache = init_cache(model, simulation, 1, θ)
     glacier = simulation.glaciers[i]
     if length(simulation.results.simulation) < 1
         return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, simulation.results)
