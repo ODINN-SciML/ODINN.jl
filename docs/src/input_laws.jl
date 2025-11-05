@@ -16,7 +16,7 @@ A_law = LawA(nn_model, params)
 # ## Implementation
 
 # It is also possible to define new inputs by creating a new struct type and defining the method for this specific type.
-# On top of type of the input, we also need to override two methods using multiple dispatch: `get_input` and `zero`.
+# On top of type of the input, we also need to override two methods using multiple dispatch: `get_input` and `Base.zero`.
 # The first one computes the value of the input at a given time `t` for a specific glacier inside the simulation.
 # The second one returns the zero value of the input for a specific glacier, used to generate an empty cache.
 # For example the long term air temperature is defined with the following code:
