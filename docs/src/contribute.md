@@ -13,12 +13,15 @@ We will review your PR it and provide feedback. If you are looking for ideas of 
 !!! tip
     If you need help navigating the world of PRs and contributing in GitHub, we encourage you to take a look at the [tutorial](https://docs.oggm.org/en/stable/contributing.html) put together by our OGGM friends.
 
+## SciML code style
+
+In the `ODINN.jl` ecosystem, we follow the [SciML code style](https://github.com/SciML/SciMLStyle). For now, it is enforced only during review, but we plan to soon deploy an automatic code formatter which will enforce that. 
+
 ## Contributing to the documentation
 
 Here we show the basics around building the docs locally and making contributions.
 
 !!! warning "Multiprocessing in the documentation"
-
     In order to use multiprocessing in the documentation, we set up a specific number of workers in the Julia session in the [`documentation.yml`](https://github.com/ODINN-SciML/ODINN.jl/blob/main/.github/workflows/documentation.yml) file. It is imperative that the number of workers set there matches the ones set in the Julia code run in the documentation. By default, we have set them to `-p 3` in `documentation.yml`, meaning that 3 workers will be added on top of the head one. This will match the default number of workers in `SimulationParameters`, but if you manually specify them, make sure to set them to 4 (the number of parameters in ODINN DOES include the head worker). This is often a source of confusion, so refrain from playing with the number of workers in the documentation. 
 
 ### Running the documentation in local
@@ -40,5 +43,6 @@ serve()
 
 This will print a localhost URL that you can open in your browser to visualize the documentation.
 
-!!! note "What to do when it freezes?
+!!! note "What to do when it freezes?"
+
     If the building of the documentation freezes, there can be several reasons that cause this. First try to run `include("testdocs.jl")` which will run the tutorial examples. If there is an error during the execution, this will be easier to spot it as [Literate.jl](https://github.com/fredrikekre/Literate.jl) does not always report the error. If after making sure that the code runs smoothly this still freezes, inspect the generated `.md` files (see the list of files at the beginning of `make.jl`) and check that the markdown file was generated properly (code in `@example` sections).
