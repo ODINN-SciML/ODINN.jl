@@ -243,14 +243,14 @@ function ∇²(
     Δy::F,
 ) where {F <: AbstractFloat}
     # First derivative
-    ∂a∂x = Huginn.diff_x(a)/Δx
-    ∂a∂y = Huginn.diff_y(a)/Δy
+    ∂a∂x = Huginn.diff_x(a, Δx)
+    ∂a∂y = Huginn.diff_y(a, Δy)
     # Evaluate in dual grid
     ∂a∂x_dual = Huginn.avg_y(∂a∂x)
     ∂a∂y_dual = Huginn.avg_x(∂a∂y)
     # Second derivative
-    ∂2a∂x2_dual = Huginn.diff_x(∂a∂x_dual)/Δx
-    ∂2a∂y2_dual = Huginn.diff_y(∂a∂y_dual)/Δy
+    ∂2a∂x2_dual = Huginn.diff_x(∂a∂x_dual, Δx)
+    ∂2a∂y2_dual = Huginn.diff_y(∂a∂y_dual, Δy)
     # Evaluate in primal grid
     ∂2a∂x2 = Huginn.avg_y(∂2a∂x2_dual)
     ∂2a∂y2 = Huginn.avg_x(∂2a∂y2_dual)
