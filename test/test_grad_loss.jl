@@ -268,7 +268,7 @@ function test_grad_finite_diff(
 
 end
 
-function test_grad_loss_term()
+function test_grad_L2Sum()
     function _loss!(l, a, b, norm, lossType)
         l[1] = loss(lossType, a, b; normalization=norm)
         return nothing
@@ -296,6 +296,49 @@ function test_grad_loss_term()
         Enzyme.Const(lossType),
     )
     da = backward_loss(lossType, a, b; normalization=norm)
+    ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
+    thres = 1e-14
+    if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
+        printVecScientific("ratio  = ",[ratio],thres)
+        printVecScientific("angle  = ",[angle],thres)
+        printVecScientific("relerr = ",[relerr],thres)
+    end
+    @test (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres)
+end
+
+function test_grad_TikhonovRegularization()
+    function _loss!(l, a, Δx, Δy, mask, norm, lossType)
+        l[1] = loss(lossType, a, Δx, Δy, mask; normalization=norm)
+        return nothing
+    end
+
+    lossType = TikhonovRegularization()
+    nx = 9
+    ny = 10
+    norm = 3.5
+    a = randn(nx, ny)
+    a[1:2,:] .= 0; a[end-1:end,:] .= 0; a[:,1:2] .= 0; a[:,end-1:end] .= 0
+    b = randn(nx, ny)
+    b[1:2,:] .= 0; b[end-1:end,:] .= 0; b[:,1:2] .= 0; b[:,end-1:end] .= 0
+    Δx = 1.2
+    Δy = 1.8
+    mask = randn(nx, ny).>=0
+    l = [0.]
+    _loss!(l, a, Δx, Δy, mask, norm, lossType)
+    dl_enzyme = [1.]
+    l_enzyme = Enzyme.make_zero(dl_enzyme)
+    da_enzyme = Enzyme.make_zero(a)
+    Enzyme.autodiff(
+        set_runtime_activity(Reverse), _loss!, Const,
+        Duplicated(l_enzyme, dl_enzyme),
+        Duplicated(a, da_enzyme),
+        Enzyme.Const(Δx),
+        Enzyme.Const(Δy),
+        Enzyme.Const(mask),
+        Enzyme.Const(norm),
+        Enzyme.Const(lossType),
+    )
+    da = backward_loss(lossType, a, Δx, Δy, mask; normalization=norm)
     ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
     thres = 1e-14
     if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )

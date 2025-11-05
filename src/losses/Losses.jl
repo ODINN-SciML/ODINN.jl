@@ -1,4 +1,3 @@
-export AbstractLoss
 export L2Sum, LogSum
 export LossH, LossV, LossHV
 export loss, backward_loss
@@ -419,3 +418,6 @@ function backward_loss(
     end
     return ∂L∂H, ∂L∂θ
 end
+
+loss_uses_ref_velocity(lossType::LossH) = false
+loss_uses_ref_velocity(lossType::Union{LossV, LossHV}) = true

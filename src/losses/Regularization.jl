@@ -1,11 +1,10 @@
-export AbstractRegularization
 export TikhonovRegularization
 export InitialThicknessRegularization, VelocityRegularization, DiffusivityRegularization
-export loss, backward_loss
 
 # Abstract regularization type as subtype of loss
 abstract type AbstractRegularization <: AbstractLoss end
 
+# Abstract regularization type used in subtype structs of AbstractRegularization
 abstract type AbstractSimpleRegularization <: AbstractLoss end
 
 # Basic Regularization Types
@@ -52,7 +51,7 @@ It combines a simple spatial regularization (e.g., `TikhonovRegularization`) wit
 - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
 - `t₀::AbstractFloat = 1994.0`: The reference initial time (e.g., year) at which the regularization applies.
 """
-@kwdef struct InitialThicknessRegularization{R<:AbstractSimpleRegularization, F<:AbstractFloat} <: AbstractRegularization
+@kwdef struct InitialThicknessRegularization{R <: AbstractSimpleRegularization, F <: AbstractFloat} <: AbstractRegularization
     reg::R = TikhonovRegularization()
     t₀::F = 1994.0
 end
@@ -68,7 +67,7 @@ Regularization for velocity fields, combining a spatial smoothing operator with 
 - `distance::Integer = 3`: Distance to glacier margin.
 """
 
-@kwdef struct VelocityRegularization{R<:AbstractSimpleRegularization, I<:Integer} <: AbstractRegularization
+@kwdef struct VelocityRegularization{R <: AbstractSimpleRegularization, I <: Integer} <: AbstractRegularization
     reg::R = TikhonovRegularization()
     components::Symbol = :abs
     distance::I = 3
@@ -92,23 +91,27 @@ function loss(
     regType::TikhonovRegularization,
     a::Matrix{F},
     Δx::F,
-    Δy::F;
+    Δy::F,
+    mask::BitMatrix;
     normalization::F=1.
 ) where {F <: AbstractFloat}
     operator_forward = regType.operator_forward
-    return sum(operator_forward(a, Δx, Δy).^2.0)
+    return sum(operator_forward(a, Δx, Δy)[mask].^2.0)
 end
 function backward_loss(
     regType::TikhonovRegularization,
     a::Matrix{F},
     Δx::F,
-    Δy::F;
+    Δy::F,
+    mask::BitMatrix;
     normalization::F=1.
 ) where {F <: AbstractFloat}
     operator_forward = regType.operator_forward
     operator_reverse = regType.operator_reverse
-    ∂L∂∇²a = 2.0 .* operator_forward(a, Δx, Δy)
-    return operator_reverse(∂L∂∇²a, a, Δx, Δy)
+    ∂L∂∇²a = zero(a)
+    ∂L∂∇²a[mask] = 2.0 .* operator_forward(a, Δx, Δy)[mask]
+    ∂L∂a = operator_reverse(∂L∂∇²a, a, Δx, Δy)
+    return ∂L∂a
 end
 
 function loss(
@@ -179,9 +182,10 @@ function loss(
         simulation.model.machine_learning.θ = θ
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
+    mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
-        return loss(regType.reg, V, Δx, Δy)
+        return loss(regType.reg, V, Δx, Δy, mask)
     else
         @error "Regularization $(regType) not implemented."
     end
@@ -203,13 +207,12 @@ function backward_loss(
         simulation.model.machine_learning.θ = θ
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
-
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
-        ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy)
-        ∂Reg∂Vx = ifelse.(mask, ∂Reg∂V .* Vx ./ V, 0.0)
-        ∂Reg∂Vy = ifelse.(mask, ∂Reg∂V .* Vy ./ V, 0.0)
+        ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy, mask)
+        ∂Reg∂Vx = ifelse.(V.>0.0, ∂Reg∂V .* Vx ./ V, 0.0)
+        ∂Reg∂Vy = ifelse.(V.>0.0, ∂Reg∂V .* Vy ./ V, 0.0)
     else
         @error "Regularization $(regType) not implemented."
     end
@@ -238,30 +241,29 @@ function ∇²(
     a::Matrix{F},
     Δx::F,
     Δy::F,
-    ) where {F <: AbstractFloat}
+) where {F <: AbstractFloat}
     # First derivative
-    ∂a∂x = Huginn.diff_x(a, Δx)
-    ∂a∂y = Huginn.diff_y(a, Δy)
+    ∂a∂x = Huginn.diff_x(a)/Δx
+    ∂a∂y = Huginn.diff_y(a)/Δy
     # Evaluate in dual grid
     ∂a∂x_dual = Huginn.avg_y(∂a∂x)
     ∂a∂y_dual = Huginn.avg_x(∂a∂y)
     # Second derivative
-    ∂2a∂x2_dual = Huginn.diff_x(∂a∂x_dual, Δx)
-    ∂2a∂y2_dual = Huginn.diff_y(∂a∂y_dual, Δy)
+    ∂2a∂x2_dual = Huginn.diff_x(∂a∂x_dual)/Δx
+    ∂2a∂y2_dual = Huginn.diff_y(∂a∂y_dual)/Δy
     # Evaluate in primal grid
     ∂2a∂x2 = Huginn.avg_y(∂2a∂x2_dual)
     ∂2a∂y2 = Huginn.avg_x(∂2a∂y2_dual)
 
-    nx, ny = size(a)
-    ∇²a = ∂2a∂x2 .+ ∂2a∂y2
-    ∇²a_inner = [i == 1 || i == nx || j == 1 || j == ny ? 0.0 : ∇²a[i - 1, j - 1] for i = 1:nx, j=1:ny]
-    return ∇²a_inner
+    ∇²a = zero(a)
+    ∇²a[2:end-1, 2:end-1] = ∂2a∂x2 .+ ∂2a∂y2
+    return ∇²a
 end
 
 """
     VJP_λ_∂∇²a_∂a(λ::Matrix{R}, a::Matrix{R}, Δx::R, Δy::R) where {R<:Real}
 
-Computes the vector–Jacobian product (VJP) of the Laplacian operator `∇²`
+Computes the vector-Jacobian product (VJP) of the Laplacian operator `∇²`
 with respect to its input field `a`.
 This function effectively propagates sensitivities (adjoints) `λ` backward
 through the Laplacian, as required in adjoint or reverse-mode differentiation.
@@ -281,22 +283,11 @@ function VJP_λ_∂∇²a_∂a(
     Δx::R,
     Δy::R,
 ) where {R <: Real}
-    # First derivative
-    ∂λ∂x = Huginn.diff_x(λ, Δx)
-    ∂λ∂y = Huginn.diff_y(λ, Δy)
-    # Evaluate in dual grid
-    ∂λ∂x_dual = Huginn.avg_y(∂λ∂x)
-    ∂λ∂y_dual = Huginn.avg_x(∂λ∂y)
-
-    # First derivative
-    ∂a∂x = Huginn.diff_x(a, Δx)
-    ∂a∂y = Huginn.diff_y(a, Δy)
-    # Evaluate in dual grid
-    ∂a∂x_dual = Huginn.avg_y(∂a∂x)
-    ∂a∂y_dual = Huginn.avg_x(∂a∂y)
-
-    nx, ny = size(a)
-    ∇λ∇a = Huginn.avg(∂λ∂x_dual .* ∂a∂x_dual .+ ∂λ∂y_dual .* ∂a∂y_dual)
-    ∇λ∇a_inner = [i == 1 || i == nx || j == 1 || j == ny ? 0.0 : ∇λ∇a[i - 1, j - 1] for i = 1:nx, j=1:ny]
-    return - ∇λ∇a_inner
+    λ_inner = λ[2:end-1,2:end-1]
+    ∂a∂x = diff_x_adjoint(avg_y_adjoint(diff_x_adjoint(avg_y_adjoint(λ_inner), Δx)), Δx)
+    ∂a∂y = diff_y_adjoint(avg_x_adjoint(diff_y_adjoint(avg_x_adjoint(λ_inner), Δy)), Δy)
+    return ∂a∂x + ∂a∂y
 end
+
+
+loss_uses_ref_velocity(lossType::Union{AbstractRegularization, AbstractSimpleRegularization}) = false

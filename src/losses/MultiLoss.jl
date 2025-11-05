@@ -1,5 +1,4 @@
 export MultiLoss
-export loss, backward_loss
 
 """
     MultiLoss(; losses = (L2Sum(),), λs = (1.0,))
@@ -69,7 +68,7 @@ function loss(
             sub_loss,
             H_pred,
             H_ref,
-            t::F,
+            t,
             glacier,
             θ,
             simulation;
@@ -121,7 +120,7 @@ function backward_loss(
             sub_loss,
             H_pred,
             H_ref,
-            t::F,
+            t,
             glacier,
             θ,
             simulation;
@@ -133,4 +132,12 @@ function backward_loss(
     ∂L∂H = sum(lossType.λs .* ∂L∂Hs)
     ∂L∂θ = sum(lossType.λs .* ∂L∂θs)
     return ∂L∂H, ∂L∂θ
+end
+
+function loss_uses_ref_velocity(lossType::MultiLoss)
+    return any(
+        map(lossType.losses) do l
+            loss_uses_ref_velocity(l)
+        end
+    )
 end

@@ -382,7 +382,7 @@ function batch_loss_iceflow_transient(
     @assert length(H_ref) == length(H) "Size of reference and prediction datasets do not match."
     @assert t == glacier.thicknessData.t "Reference and prediction need to be evaluated with the same timestamps."
 
-    if isa(loss_function, LossHV) || isa(loss_function, LossV)
+    if loss_uses_ref_velocity(loss_function)
         @assert !isnothing(glacier.velocityData) "Using $(typeof(loss_function)) but no velocityData in the glacier $(glacier.rgi_id)"
         @assert length(glacier.velocityData.date) > 0 "Using $(typeof(loss_function)) but no reference velocity in the results"
     end
