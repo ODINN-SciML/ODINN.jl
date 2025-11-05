@@ -264,9 +264,9 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             sol_rev = solve(
                 adjoint_PDE_rev,
                 callback = cb,
-                # saveat=t_nodes_rev, # dont use this!
-                dense = true,
-                save_everystep = true,
+                saveat = .-reverse(t_nodes),
+                dense = false, # Using a dense interpolation makes more evaluation of the reverse function, which we don't want!
+                save_everystep = false,
                 tstops = t_ref_inv,
                 simulation.parameters.UDE.grad.solver,
                 dtmax = simulation.parameters.UDE.grad.dtmax,
