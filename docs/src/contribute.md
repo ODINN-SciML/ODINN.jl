@@ -41,7 +41,7 @@ using LiveServer
 serve()
 ```
 
-This will print a localhost URL that you can open in your browser to visualize the documentation.
+This will print a localhost URL that you can open in your browser. Then, click on the `build` folder to visualize the documentation.
 
 !!! note "What to do when it freezes?"
 
