@@ -41,10 +41,10 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
 use_MB = false
 λ = use_MB ? 5.0 : 0.0
-nx, ny = 80, 80
+nx, ny = 60, 60
 # nx, ny = 20, 20
 R₀ = 2000.0
-H₀ = 200.0
+H₀ = 400.0
 H_max = 1.2 * H₀
 A₀ = 1.1e-17 # associated to ice at T ≈ -10C
 n₀ = 3.0
@@ -53,14 +53,14 @@ halfar_params = HalfarParameters(λ = λ, R₀ = R₀, H₀ = H₀, A = A₀, n 
 halfar, t₀ = Halfar(halfar_params)
 halfar_velocity = Huginn.Halfar_velocity(halfar_params)
 
-Δt = 40.0
+Δt = 10.0
 t₁ = t₀ + Δt
 δt = Δt / 200
 tstops = Huginn.define_callback_steps((t₀, t₁), δt) |> collect
 
 B = zeros((nx,ny))
 # Construct a grid that includes the initial Dome
-η = 0.66
+η = 0.80
 Δx = R₀ / nx / (η / 2)
 Δy = R₀ / ny / (η / 2)
 xs = [(i - nx / 2) * Δx for i in 1:nx]
@@ -108,25 +108,36 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = 1,
-        # epochs = [50, 30],
-        epochs = 100,
-        optimizer = #[
+        epochs = [20, 60],
+        # epochs = 100,
+        optimizer = [
             # ODINN.ADAM(0.001),
-            ODINN.LBFGS(
-                linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
-                )
+            ODINN.Optimisers.Adam(0.001, (0.0, 0.999)),
+            # ODINN.GradientDescent(
+                # linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
+            # ),
+            # ODINN.LBFGS(
+            #     linesearch = ODINN.LineSearches.BackTracking(iterations = 10),
+            #     resetalpha = true
+            #     ),
+            ODINN.BFGS(
+                linesearch = ODINN.LineSearches.BackTracking()
+            )
                 # ODINN.LineSearches.HagerZhang( # See https://github.com/JuliaNLSolvers/LineSearches.jl/blob/3259cd240144b96a5a3a309ea96dfb19181058b2/src/hagerzhang.jl#L37
                 #     linesearchmax = 10,
                 #     display = true,
                 #     delta = 0.01,
                 #     sigma = 0.1)
                 #     )
-                # ]
+                ]
         ),
     UDE = UDEparameters(
         sensealg = ZygoteAdjoint(),
         optim_autoAD = ODINN.NoAD(),
-        grad = ContinuousAdjoint(),
+        grad = ContinuousAdjoint(
+            abstol = 1e-6,
+            reltol = 1e-6,
+        ),
         optimization_method = "AD+AD",
         target = :D,
         # empirical_loss_function = LossV(), # TODO
@@ -160,9 +171,8 @@ glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 glaciers[1] = Glacier2D(
     glaciers[1],
     thicknessData = thicknessData,
-    velocityData = velocityData,
+    # velocityData = velocityData,
     )
-
 
 """
 We can define the architecture of the model directly, passing the prescale and postcale
@@ -204,8 +214,8 @@ architecture = Lux.Chain(
 
 ### Pretraining
 
-pretrain = false
-saved_nn_pretrain = false
+pretrain = true
+saved_nn_pretrain = true
 
 if pretrain & !saved_nn_pretrain
     H_samples = 0.0:2.0:H_max
@@ -215,8 +225,8 @@ if pretrain & !saved_nn_pretrain
     function template_U(h, ∇s)
         (; ρ, g) = params.physical
         # Change parameters a little bit so we don't cheat that much
-        n = 0.95 * n₀
-        A = 1.2 * A₀
+        n = 0.90 * n₀
+        A = 1.6 * A₀
         # This one has one less H than the actual diffusivity
         return 2 * A * (ρ * g)^n * h^(n + 1) * ∇s^(n - 1) / (n + 2)
     end
@@ -234,7 +244,7 @@ if pretrain & !saved_nn_pretrain
     architecture, θ_pretrain, st_pretrain, losses = pretraining(
         architecture;
         X = X_samples, Y = Y_samples,
-        nepochs = 500, rng = rng
+        nepochs = 5000, rng = rng
     )
     jldsave("./scripts/MWEs/inversion_diffusivity/data/pretrained.jld2"; θ = θ_pretrain)
 elseif pretrain & saved_nn_pretrain
@@ -262,7 +272,6 @@ law = LawU(
     precompute_VJPs = true,
     precompute_interpolation = true
     )
-
 
 model = Model(
     iceflow = SIA2Dmodel(params; U = law),
