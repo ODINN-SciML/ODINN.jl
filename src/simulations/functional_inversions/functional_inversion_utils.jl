@@ -399,8 +399,8 @@ function batch_loss_iceflow_transient(
                 t[τ],
                 glacier,
                 container.θ,
-                container.simulation;
-                normalization=prod(size(H_ref[τ]))*normalization,
+                container.simulation,
+                prod(size(H_ref[τ]))*normalization,
             )
         Δt[τ-1] * mean_error
     end

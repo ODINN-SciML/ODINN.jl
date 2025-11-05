@@ -23,14 +23,15 @@ struct MultiLoss{TL, TS} <: AbstractLoss
     function MultiLoss(;
         losses = (L2Sum(), ),
         λs = (1.0, ),
-        )
+    )
         @assert length(losses) == length(λs) "You need to provide an hyperparameter for each loss term defined."
+        λs = collect(λs)
         return new{typeof(losses), typeof(λs)}(losses, λs)
     end
 end
 
 """
-    loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier, θ, simulation; normalization::F=1.0) where {F<:AbstractFloat}
+    loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier, θ, simulation, normalization::F) where {F<:AbstractFloat}
 
 Computes the weighted composite loss for a prediction `H_pred` against a reference `H_ref`
 using a `MultiLoss` object.
@@ -46,9 +47,7 @@ weight in `lossType.λs`. The final loss is the sum of these weighted contributi
 - `glacier`: Glacier-specific data structure.
 - `θ`: Model parameters used in the simulation.
 - `simulation`: Simulation object providing necessary context for loss evaluation.
-
-# Keyword Arguments
-- `normalization::F = 1.0`: Optional normalization factor applied within each individual loss.
+- `normalization::F`: Normalization factor applied within each individual loss.
 
 # Returns
 - `F`: The total scalar loss, computed as the sum of weighted individual losses.
@@ -60,8 +59,8 @@ function loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
     losses = map(sub_loss ->
         loss(
@@ -71,8 +70,8 @@ function loss(
             t,
             glacier,
             θ,
-            simulation;
-            normalization = normalization
+            simulation,
+            normalization,
         ), lossType.losses
     )
     # Combine contribution of each loss
@@ -80,7 +79,7 @@ function loss(
 end
 
 """
-    backward_loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier, θ, simulation; normalization::F=1.0) where {F<:AbstractFloat}
+    backward_loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier, θ, simulation; normalization::F) where {F<:AbstractFloat}
 
 Computes the gradient of a composite loss defined by a `MultiLoss` object
 with respect to both the predicted field `H_pred` and model parameters `θ`.
@@ -96,9 +95,7 @@ and summed to form the total gradient.
 - `glacier`: Glacier-specific data structure providing context for the loss.
 - `θ`: Model parameters used in the simulation.
 - `simulation`: Simulation object providing necessary context for gradient computation.
-
-# Keyword Arguments
-- `normalization::F = 1.0`: Optional normalization factor applied within each individual loss.
+- `normalization::F`: Normalization factor applied within each individual loss.
 
 # Returns
 - `(∂L∂H, ∂L∂θ)`: Tuple containing:
@@ -112,8 +109,8 @@ function backward_loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
     res_backward_losses = map(sub_loss ->
         backward_loss(
@@ -123,8 +120,8 @@ function backward_loss(
             t,
             glacier,
             θ,
-            simulation;
-            normalization = normalization
+            simulation,
+            normalization
         ), lossType.losses
     )
     # Combine contribution of each gradient

@@ -92,8 +92,8 @@ function loss(
     a::Matrix{F},
     Δx::F,
     Δy::F,
-    mask::BitMatrix;
-    normalization::F=1.
+    mask::BitMatrix,
+    normalization::F,
 ) where {F <: AbstractFloat}
     operator_forward = regType.operator_forward
     return sum(operator_forward(a, Δx, Δy)[mask].^2.0)
@@ -103,8 +103,8 @@ function backward_loss(
     a::Matrix{F},
     Δx::F,
     Δy::F,
-    mask::BitMatrix;
-    normalization::F=1.
+    mask::BitMatrix,
+    normalization::F,
 ) where {F <: AbstractFloat}
     operator_forward = regType.operator_forward
     operator_reverse = regType.operator_reverse
@@ -121,8 +121,8 @@ function loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert haskey(θ, :IC) """
     Regularization with respect to initial condition requires to set initial condition
@@ -135,7 +135,7 @@ function loss(
     # if t == lossType.t₀
         Δx, Δy = glacier.Δx, glacier.Δy
         H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter)
-        regH = loss(lossType.reg, H₀, Δx, Δy; normalization = normalization)
+        regH = loss(lossType.reg, H₀, Δx, Δy, normalization)
         return regH
     # else
     #     return 0.0
@@ -148,8 +148,8 @@ function backward_loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
     # if t == lossType.t₀
         Δx, Δy = glacier.Δx, glacier.Δy
@@ -158,7 +158,7 @@ function backward_loss(
         ∂L∂θ = zero(θ)
         # Regularization is only evaluated for the first time step of the simulation.
         # However, we save the value of the gradient for every single value of t
-        ∂L∂θ.IC[glacier.rgi_id] = backward_loss(lossType.reg, H₀, Δx, Δy; normalization = normalization)
+        ∂L∂θ.IC[glacier.rgi_id] = backward_loss(lossType.reg, H₀, Δx, Δy, normalization)
         return ∂L∂H, ∂L∂θ
     # else
     #     return zero(H₀), zero(θ)
@@ -172,8 +172,8 @@ function loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
 
     Δx, Δy = glacier.Δx, glacier.Δy
@@ -185,7 +185,7 @@ function loss(
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
-        return loss(regType.reg, V, Δx, Δy, mask)
+        return loss(regType.reg, V, Δx, Δy, mask, normalization)
     else
         @error "Regularization $(regType) not implemented."
     end
@@ -197,8 +197,8 @@ function backward_loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
 
     Δx, Δy = glacier.Δx, glacier.Δy
@@ -210,7 +210,7 @@ function backward_loss(
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
-        ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy, mask)
+        ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy, mask, normalization)
         ∂Reg∂Vx = ifelse.(V.>0.0, ∂Reg∂V .* Vx ./ V, 0.0)
         ∂Reg∂Vy = ifelse.(V.>0.0, ∂Reg∂V .* Vy ./ V, 0.0)
     else

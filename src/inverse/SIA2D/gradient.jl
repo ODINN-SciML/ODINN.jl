@@ -102,8 +102,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t[j],
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization,
+                    simulation,
+                    prod(N) * normalization,
                 ), 1:k)
             # Unzip ∂L∂H, ∂L∂θ at each timestep
             ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
@@ -127,8 +127,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t[j],
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization,
+                    simulation,
+                    prod(N) * normalization,
                 )
                 ℓ += Δt[j-1]*ℓi
 
@@ -209,8 +209,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                         t,
                         glacier,
                         θ,
-                        simulation;
-                        normalization = prod(N) * normalization
+                        simulation,
+                        prod(N) * normalization
                     )
                     integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
                 end
@@ -249,8 +249,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t_final,
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization
+                    simulation,
+                    prod(N) * normalization
                     )
                 λ₁ .+= simulation.parameters.simulation.step .* ∂ℓ∂H
             end
@@ -287,8 +287,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t,
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization,
+                    simulation,
+                    prod(N) * normalization,
                     ),
                 t_nodes)
             # Unzip ∂L∂H, ∂L∂θ at each timestep

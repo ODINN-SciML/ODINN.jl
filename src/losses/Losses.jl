@@ -111,25 +111,25 @@ end
 function loss(
     lossType::L2Sum,
     a::Matrix{F},
-    b::Matrix{F};
-    normalization::F=1.,
+    b::Matrix{F},
+    normalization::F,
 ) where {F <: AbstractFloat}
-    return loss(lossType, a, b, is_in_glacier(b, lossType.distance); normalization=normalization)
+    return loss(lossType, a, b, is_in_glacier(b, lossType.distance), normalization)
 end
 function backward_loss(
     lossType::L2Sum,
     a::Matrix{F},
-    b::Matrix{F};
+    b::Matrix{F},
     normalization::F,
 ) where {F <: AbstractFloat}
-    return backward_loss(lossType, a, b, is_in_glacier(b, lossType.distance); normalization=normalization)
+    return backward_loss(lossType, a, b, is_in_glacier(b, lossType.distance), normalization)
 end
 
 function loss(
     lossType::L2Sum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
+    mask::BitMatrix,
     normalization::F,
 ) where {F <: AbstractFloat}
     return sum(((a .- b)[mask]).^2)/normalization
@@ -138,7 +138,7 @@ function backward_loss(
     lossType::L2Sum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
+    mask::BitMatrix,
     normalization::F,
 ) where {F <: AbstractFloat}
     d = zero(a)
@@ -149,8 +149,8 @@ end
 function loss(
     lossType::L2Sum,
     a::Vector{Matrix{F}},
-    b::Vector{Matrix{F}};
-    normalization::F=1.
+    b::Vector{Matrix{F}},
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
     return [
@@ -158,8 +158,8 @@ function loss(
             lossType,
             ai,
             bi,
-            is_in_glacier(bi, lossType.distance);
-            normalization = normalization,
+            is_in_glacier(bi, lossType.distance),
+            normalization,
             )
         for (ai, bi) in zip(a, b)
         ]
@@ -168,16 +168,16 @@ end
 function backward_loss(
     lossType::L2Sum,
     a::Vector{Matrix{F}},
-    b::Vector{Matrix{F}};
-    normalization::F=1.,
+    b::Vector{Matrix{F}},
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
     return [
         backward_loss(
             lossType,
             ai,
-            bi;
-            normalization=normalization,
+            bi,
+            normalization,
             )
         for (ai, bi) in zip(a, b)
         ]
@@ -190,8 +190,8 @@ end
         lossType::LogSum,
         a::Matrix{F},
         b::Matrix{F},
-        mask::BitMatrix;
-        normalization::F=1.,
+        mask::BitMatrix,
+        normalization::F,
     ) where {F <: AbstractFloat}
 
 Compute logarithmic loss function for ice velocity fields following Morlighem, M. et al.,
@@ -207,8 +207,8 @@ function loss(
     lossType::LogSum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
-    normalization::F=1.,
+    mask::BitMatrix,
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
     return sum((log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)).^2)) ./ normalization
@@ -217,7 +217,7 @@ function backward_loss(
     lossType::LogSum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
+    mask::BitMatrix,
     normalization::F,
 ) where {F <: AbstractFloat}
     d = zero(a)
@@ -228,8 +228,8 @@ end
 function loss(
     lossType::LogSum,
     a::Matrix{F},
-    b::Matrix{F};
-    normalization::F=1.,
+    b::Matrix{F},
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
     return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2) ./ normalization
@@ -237,7 +237,7 @@ end
 function backward_loss(
     lossType::LogSum,
     a::Matrix{F},
-    b::Matrix{F};
+    b::Matrix{F},
     normalization::F,
 ) where {F <: AbstractFloat}
     return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (a .+ lossType.ϵ) ./ normalization
@@ -250,10 +250,10 @@ function loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
-    lH = loss(lossType.loss, H_pred, H_ref; normalization=normalization)
+    lH = loss(lossType.loss, H_pred, H_ref, normalization)
     return lH
 end
 function backward_loss(
@@ -263,10 +263,10 @@ function backward_loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
-    ∂L∂H = backward_loss(lossType.loss, H_pred, H_ref; normalization=normalization)
+    ∂L∂H = backward_loss(lossType.loss, H_pred, H_ref, normalization)
     ∂L∂θ = zero(θ)
     return ∂L∂H, ∂L∂θ
 end
@@ -278,8 +278,8 @@ function loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert !isnothing(glacier.velocityData)
 
@@ -306,9 +306,9 @@ function loss(
     mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
 
     ℓ = if lossType.component == :xy
-        loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization) + loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
+        loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization) + loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization)
     elseif lossType.component == :abs
-        loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
+        loss(lossType.loss, V_pred, V_ref, mask, normalization)
     else
         @error "Loss type not implemented."
     end
@@ -329,8 +329,8 @@ function backward_loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert !isnothing(glacier.velocityData)
 
@@ -356,10 +356,10 @@ function backward_loss(
     mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
 
     if lossType.component == :xy
-        ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
-        ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
+        ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization)
+        ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization)
     elseif lossType.component == :abs
-        ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
+        ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask, normalization)
         # ∂lV∂Vx, ∂lV∂Vy = zero(∂lV∂V), zero(∂lV∂V)
         ∂lV∂Vx = ifelse.(mask, ∂lV∂V .* (Vx_pred .- Vx_ref) ./ (V_pred .- V_ref), 0.0)
         ∂lV∂Vy = ifelse.(mask, ∂lV∂V .* (Vy_pred .- Vy_ref) ./ (V_pred .- V_ref), 0.0)
@@ -389,11 +389,11 @@ function loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
-    lH = loss(lossType.hLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
-    lV = loss(lossType.vLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
+    lH = loss(lossType.hLoss, H_pred, H_ref, t, glacier, θ, simulation, normalization)
+    lV = loss(lossType.vLoss, H_pred, H_ref, t, glacier, θ, simulation, normalization)
     return lH + lossType.scaling * lV
 end
 function backward_loss(
@@ -403,11 +403,11 @@ function backward_loss(
     t::F,
     glacier,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
 ) where {F <: AbstractFloat}
-    ∂lH∂H, ∂lH∂θ = backward_loss(lossType.hLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
-    ∂lV∂H, ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
+    ∂lH∂H, ∂lH∂θ = backward_loss(lossType.hLoss, H_pred, H_ref, t, glacier, θ, simulation, normalization)
+    ∂lV∂H, ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, t, glacier, θ, simulation, normalization)
     ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H + lossType.scaling * ∂lV∂H
     ∂L∂θ = if isnothing(∂lV∂θ)
         ∂lH∂θ

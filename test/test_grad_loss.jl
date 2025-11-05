@@ -270,7 +270,7 @@ end
 
 function test_grad_L2Sum()
     function _loss!(l, a, b, norm, lossType)
-        l[1] = loss(lossType, a, b; normalization=norm)
+        l[1] = loss(lossType, a, b, norm)
         return nothing
     end
 
@@ -295,7 +295,7 @@ function test_grad_L2Sum()
         Enzyme.Const(norm),
         Enzyme.Const(lossType),
     )
-    da = backward_loss(lossType, a, b; normalization=norm)
+    da = backward_loss(lossType, a, b, norm)
     ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
     thres = 1e-14
     if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
@@ -308,7 +308,7 @@ end
 
 function test_grad_TikhonovRegularization()
     function _loss!(l, a, Δx, Δy, mask, norm, lossType)
-        l[1] = loss(lossType, a, Δx, Δy, mask; normalization=norm)
+        l[1] = loss(lossType, a, Δx, Δy, mask, norm)
         return nothing
     end
 
@@ -338,7 +338,7 @@ function test_grad_TikhonovRegularization()
         Enzyme.Const(norm),
         Enzyme.Const(lossType),
     )
-    da = backward_loss(lossType, a, Δx, Δy, mask; normalization=norm)
+    da = backward_loss(lossType, a, Δx, Δy, mask, norm)
     ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
     thres = 1e-14
     if printDebug | !( (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres) )
@@ -364,8 +364,8 @@ function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, params, lossTyp
             t=t₁,
             glacier=glacier,
             θ=θ,
-            params=params;
-            normalization=prod(size(H_ref[τ]))/normalization
+            params=params,
+            prod(size(H_ref[τ]))/normalization
         )
         l_H += Δt[τ-1] * mean_error
     end
