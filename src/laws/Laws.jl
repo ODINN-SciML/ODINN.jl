@@ -98,7 +98,7 @@ function LawU(
     f! = let smodel = smodel, prescale = prescale, postscale = postscale
         function (cache, inp, θ)
             U = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
-            # Flag the in-place assignment as non differented and return D instead in
+            # Flag the in-place assignment as non differentiated and return D instead in
             # order to be able to compute ∂D∂θ with Zygote
             # We introduce the extra dependency w.r.t H
             Zygote.@ignore_derivatives cache.value .= U
@@ -108,7 +108,6 @@ function LawU(
 
     init_cache = function (simulation, glacier_idx, θ)
         glacier = simulation.glaciers[glacier_idx]
-        # Correct for griding factor!!!
         (; nx, ny) = glacier
 
         # Create template interpolation based on half-interpolation range
@@ -122,9 +121,9 @@ function LawU(
 
         # Return cache for a custom interpolation
         return MatrixCacheInterp(
-            zeros(nx - 1, ny - 1),
-            zeros(nx - 1, ny - 1),
-            zeros(nx - 1, ny - 1, length(θ)),
+            # zeros(nx - 1, ny - 1),
+            # zeros(nx - 1, ny - 1),
+            # zeros(nx - 1, ny - 1, length(θ)),
             H_nodes,
             H_nodes,
             grad_itp
@@ -137,14 +136,12 @@ function LawU(
             (; nodes_H, nodes_∇S) = cache
             # Compute exact gradient in certain values of H̄ and ∇S
             grads = [zeros(only(size(θ))) for i = 1:length(nodes_H), j = 1:length(nodes_∇S)]
-            # Evaluate gradiends in nodes
+            # Evaluate gradients in nodes
             for (i, h) in enumerate(nodes_H), (j, ∇s) in enumerate(nodes_∇S)
                 # We don't do this with f! since this evaluates a matrix
                 grad, = Zygote.gradient(_θ -> _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
                 # ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
                 # ∂law∂θ!(backend, nn_model, cache, true, (; H̄=h, ∇S=∇s), θ)
-                # Notice the extra ×h in the gradient calculation
-                # grads[i, j] .= h .* ODINN.ComponentVector2Vector(grad)
                 grads[i, j] .= ODINN.ComponentVector2Vector(grad)
             end
             cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
@@ -236,7 +233,7 @@ function LawY(
         f! = function (cache, inp, θ)
             Y = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
-            # Flag the in-place assignment as non differented and return Y instead in
+            # Flag the in-place assignment as non differentiated and return Y instead in
             # order to be able to compute ∂Y∂θ with Zygote
             Zygote.@ignore_derivatives cache.value .= Y
             return Y
@@ -315,7 +312,7 @@ function LawA(
             inp = collect(values(inp))
             A = only(scale(smodel(inp, θ.A), (min_NN, max_NN)))
 
-            # Flag the in-place assignment as non differented and return A instead in
+            # Flag the in-place assignment as non differentiated and return A instead in
             # order to be able to compute ∂A∂θ with Zygote
             Zygote.@ignore_derivatives cache.value .= A
             return A

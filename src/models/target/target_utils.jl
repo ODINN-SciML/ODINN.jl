@@ -192,9 +192,27 @@ function ComponentVector2Vector(cv::ComponentVector)
 end
 
 """
-    function create_interpolation(A::Matrix; n_interp_half::Int)
+    create_interpolation(A::Vector; n_interp_half::Int, dilation_factor=1.0) -> Vector{Float64}
 
-Function to create an intepolation for AD computation combining uniform and quantiles.
+Construct a one-dimensional interpolation grid from the data in `A`, combining
+uniformly spaced and quantile-based sampling points.
+
+This hybrid interpolation grid provides both coverage of the entire range
+of values and higher resolution in regions where `A` has dense data,
+making it useful for interpolation or machine learning applications
+that need balanced sampling.
+
+# Arguments
+- `A::Vector`: Input data vector (typically containing positive values).
+- `n_interp_half::Int`: Number of points used for both the uniform and quantile-based 
+  subsets of the interpolation grid.
+- `dilation_factor::Real=1.0`: Optional multiplier applied to `maximum(A)` to slightly 
+  extend the grid beyond the data range (useful to avoid extrapolation issues).
+
+# Returns
+A sorted, unique vector of interpolation nodes combining:
+- `n_interp_half` uniformly spaced values between `0` and `dilation_factor * maximum(A)`
+- `n_interp_half` quantile-based values computed from the positive entries of `A`
 """
 function create_interpolation(A::Vector; n_interp_half::Int, dilation_factor = 1.0)
     A_interp_unif = LinRange(0.0, dilation_factor * maximum(A), n_interp_half) |> collect
@@ -213,6 +231,14 @@ function create_interpolation(A::Vector; n_interp_half::Int, dilation_factor = 1
     return A_interp
 end
 
+"""
+    create_interpolation(A::Matrix; n_interp_half::Int) -> Vector{Float64}
+
+Construct a one-dimensional interpolation grid from the elements of a matrix `A` by
+flattening it and delegating to [`create_interpolation(::Vector)`](@ref). This is a 
+convenience method that allows users to pass a 2D array to the function `create_interpolation(A::Vector)`
+directly without manually reshaping it.
+"""
 function create_interpolation(A::Matrix; n_interp_half::Int)
     create_interpolation(vec(A); n_interp_half = n_interp_half)
 end

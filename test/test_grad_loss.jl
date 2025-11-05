@@ -1,5 +1,46 @@
 using Distributed: map
 
+"""
+    test_grad_finite_diff(
+        adjointFlavor::ADJ;
+        thres = [0., 0., 0.],
+        target = :A,
+        finite_difference_method = :FiniteDifferences,
+        finite_difference_order = 3,
+        loss = LossH(),
+        train_initial_conditions = false,
+        multiglacier = false,
+        use_MB = false,
+        custom_NN = false,
+        max_params = 60,
+        mask_parameter_vector = false,
+    ) where {ADJ <: AbstractAdjointMethod}
+
+Test and validate gradient consistency between adjoint-based automatic differentiation
+and finite-difference approximations.
+
+This function sets up a controlled glaciological simulation with configurable physical
+and neural-network components, computes model gradients using both the specified adjoint
+method and finite-difference schemes, and compares them using diagnostic metrics.
+
+
+# Arguments
+- `adjointFlavor::ADJ`: The adjoint computation method to test, e.g. `ODINN.SciMLSensitivityAdjoint` or other `AbstractAdjointMethod` subtypes.
+- `thres::Vector{<:Real}`: Three-element vector of numerical thresholds for 
+  `(ratio, angle, relative error)` comparison between adjoint-based and finite-difference gradients.
+- `target::Symbol`: Model target for training/testing (`:A`, `:D`, or `:D_hybrid`), determining which physical law is parameterized by the neural network.
+- `finite_difference_method::Symbol`: Method for finite-difference computation, 
+  either `:FiniteDifferences` (default, using `FiniteDifferences.jl`) or `:Manual`.
+- `finite_difference_order::Int`: Order of accuracy for central finite differences (used only if `finite_difference_method == :FiniteDifferences`).
+- `loss`: Loss function to evaluate, such as `LossH()` (height-based) or `LossV()` (velocity-based).
+- `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
+- `multiglacier::Bool`: Whether to run the test on multiple glaciers.
+- `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
+- `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network.
+- `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
+- `mask_parameter_vector::Bool`: Whether to apply a mask to the parameter vector `θ` before evaluating finite-difference gradients. If `false`, the
+   mask based on `max_params` is just applied to the initial conditions, not to parameters of the regressor.
+"""
 function test_grad_finite_diff(
     adjointFlavor::ADJ;
     thres = [0., 0., 0.],
@@ -11,7 +52,8 @@ function test_grad_finite_diff(
     multiglacier = false,
     use_MB = false,
     custom_NN = false,
-    max_params = 40,
+    max_params = 60,
+    mask_parameter_vector = false,
 ) where {ADJ<:AbstractAdjointMethod}
 
     print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
@@ -85,7 +127,7 @@ function test_grad_finite_diff(
     )
 
     # We retrieve some glaciers for the simulation
-    # Time stanpshots for transient inversion
+    # Time snanpshots for transient inversion
     tstops = collect(tspan[1]:δt:tspan[2])
     kwargs = velocityLoss ? (;
         velocityDatacubes = Dict(
@@ -232,7 +274,11 @@ function test_grad_finite_diff(
                     end
                 else
                     # Mask parameter vector
-                    indx = ODINN.sample(1:length(θ.U), max_params; replace = false)
+                    if mask_parameter_vector
+                        indx = ODINN.sample(1:length(θ.U), max_params; replace = false)
+                    else
+                        indx = 1:length(θ.U) |> collect
+                    end
                     view(θ_mask, key)[indx] .= true
                 end
             end
@@ -475,7 +521,6 @@ function test_grad_Halfar(
         Enzyme.Const(θ),
     )
 
-    # _loss_halfar!(l_enzyme, R₀, h₀, r₀, A_θ, n, tstops, H_ref, physicalParams, lossType)
     println("l_enzyme=", l_enzyme)
     println("∂A_enzyme=", ∂A_enzyme)
 
@@ -495,7 +540,6 @@ function test_grad_Halfar(
 
     ratio, angle, relerr = stats_err_arrays(dθ, dθ_halfar)
 
-    # TODO: fix this test
     thres_ratio = thres[1]
     thres_angle = thres[2]
     thres_relerr = thres[3]

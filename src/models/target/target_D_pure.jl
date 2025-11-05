@@ -91,17 +91,8 @@ function ∂Diffusivity∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    # iceflow_model = simulation.model.iceflow
-    # iceflow_cache = simulation.cache.iceflow
-
-    # Neural network has already been evaluated in VJPs
-    # TODO: What is this doing here?
-    # This is residual from previous version, we can compute the gradient directly with
-    # evaluations of the diffusivity and the law:
-    # ∂D∂H_no_NN = iceflow_cache.U.value
 
     ∂H∂H = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
-    # ∂D∂H_no_NN .= ∂H∂H .* ∂D∂H_no_NN
 
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H̄))
@@ -120,9 +111,6 @@ function ∂Diffusivity∂∇H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    # iceflow_model = simulation.model.iceflow
-    # iceflow_cache = simulation.cache.iceflow
-
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
 
@@ -173,7 +161,7 @@ function ∂Diffusivity∂θ(
         """
         Interpolation of the gradient as function of values of H̄.
         Introduces interpolation errors but it is faster and probably sufficient depending
-        the decired level of precision for the gradients.
+        the desired level of precision for the gradients.
         We construct an interpolator with quantiles and equal-spaced points.
         """
         # Unpack gradient interpolation
@@ -195,7 +183,7 @@ end
 Function to evaluate derivatives of ice surface velocity in D inversion.
 
 TODO: This functions right now just make a call to the regular functions used for the
-calcualtion of the adjoint. This is not correct, but we keep it as this for now until
+calculation of the adjoint. This is not correct, but we keep it as this for now until
 we figure out how to do this in the case of the D inversion.
 """
 function Diffusivityꜛ(
