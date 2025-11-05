@@ -2,6 +2,10 @@
 
 In this page we compile the general recommendations in terms of best coding practices, conventions and style for developers contributing to the ODINN ecosystem.
 
+## SciML code style
+
+In the `ODINN.jl` ecosystem, we follow the [SciML code style](https://github.com/SciML/SciMLStyle). For now, it is enforced only during review, but we plan to soon deploy an automatic code formatter which will enforce that. 
+
 ## Running the documentation locally
 
 This section contains the instructions to run the documentation locally.
@@ -19,7 +23,7 @@ using LiveServer
 serve()
 ```
 
-This will print a localhost URL that you can open in your browser to visualize the documentation.
+This will print a localhost URL that you can open in your browser to visualize the documentation. Just click on the `build` folder to load the website of the documentation. 
 
 !!! warning "Multiprocessing in the documentation"
 

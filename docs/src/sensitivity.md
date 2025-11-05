@@ -55,12 +55,12 @@ providing better error control on the computation of the gradients.
 
 When evaluating the reverse differential equations, vector-Jacobian products (VJPs) need to be evaluated at every given timestep.
 The computation of these VJPs can be efficiently be computed using automatic differentiation.
-ODINN provides manual implementations of the pullback operations required to compute these VJPs, together with the interphase to
-compute this VJPs using the native Julia automatic differentiation libraries.
+ODINN provides manual implementations of the pullback operations required to compute these VJPs, together with the interface to
+compute these VJPs using the native Julia automatic differentiation libraries.
 The VJP methods in ODINN are implemented as concrete types of `AbstractVJPMethod`:
-- `EnzymeVJP()`: The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code.
-- `DiscreteVJP()`: This is a manual implementation of what the Enzyme VJP does. Equations were derived manually by differentiating the iceflow equation.
-- `ContinuousVJP()`: In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a continuous in space VJP can be derived by integrating by parts the SIA equation. It is then discretized after differentiation.
+- `EnzymeVJP()`: The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the (spatially) discrete VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code. 
+- `DiscreteVJP()`: This is a manual implementation of what the (spatially) discrete Enzyme VJP does. Equations were derived manually by differentiating the iceflow equation.
+- `ContinuousVJP()`: In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a (spatially) continuous VJP can be derived by integrating by parts the SIA equation. It is then discretized after differentiation.
 
 
 ## SciMLSensitivity
