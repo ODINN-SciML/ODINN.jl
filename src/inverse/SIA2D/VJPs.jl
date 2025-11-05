@@ -1,6 +1,6 @@
 
 function VJP_λ_∂SIA∂H(VJPMode::DiscreteVJP, λ, H, θ, simulation::Simulation, t)
-    λ_∂f∂H = VJP_λ_∂SIA_discrete(λ, H, θ, simulation, t)[1]
+    λ_∂f∂H = VJP_λ_∂SIA∂H_discrete(λ, H, θ, simulation, t)
     return λ_∂f∂H, nothing
 end
 
@@ -28,7 +28,7 @@ function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation::Simulation
 end
 
 function VJP_λ_∂SIA∂θ(VJPMode::DiscreteVJP, λ, H, θ, dH_H, simulation::Simulation, t)
-    λ_∂f∂θ = VJP_λ_∂SIA_discrete(λ, H, θ, simulation, t)[2]
+    λ_∂f∂θ = VJP_λ_∂SIA∂θ_discrete(λ, H, θ, simulation, t)
     return λ_∂f∂θ
 end
 
