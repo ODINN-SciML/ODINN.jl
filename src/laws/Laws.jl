@@ -121,7 +121,7 @@ function LawU(
 
         # Return cache for a custom interpolation
         return MatrixCacheInterp(
-            # zeros(nx - 1, ny - 1),
+            zeros(nx - 1, ny - 1),
             # zeros(nx - 1, ny - 1),
             # zeros(nx - 1, ny - 1, length(θ)),
             H_nodes,

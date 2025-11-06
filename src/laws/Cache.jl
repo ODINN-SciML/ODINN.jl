@@ -9,6 +9,7 @@ This interpolation makes complex inversions feasible since it allows the precomp
 of all gradients before the solving the reverse PDE associated to the adjoint variable.
 
 # Fields
+- `value::Array{Float64, 2}`: Matrix to store value of the diffusivity.
 - `nodes_H::Vector{Float64}`: Grid nodes corresponding to the first interpolation dimension, typically representing values of ice thickness `H`.
 - `nodes_∇S::Vector{Float64}`: Grid nodes corresponding to the second interpolation dimension, typically representing absolute values of slope `∇S`.
 - `interp_θ::Interpolations.GriddedInterpolation{Vector{Float64}, 2, Matrix{Vector{Float64}}, Interpolations.Gridded{InterPolations.Linear{InterPolations.Throw{OnGrid}}}, Tuple{Vector{Float64}, Vector{Float64}}}`:
@@ -16,9 +17,7 @@ of all gradients before the solving the reverse PDE associated to the adjoint va
   Used to compute interpolated parameters and enable fast evaluation during repeated model calls.
 """
 mutable struct MatrixCacheInterp <: Cache
-    # value::Array{Float64, 2}
-    # vjp_inp::Array{Float64, 2}
-    # vjp_θ::Array{Float64, 3}
+    value::Array{Float64, 2}
     nodes_H::Array{Float64, 1}
     nodes_∇S::Array{Float64, 1}
     interp_θ::Interpolations.GriddedInterpolation{
