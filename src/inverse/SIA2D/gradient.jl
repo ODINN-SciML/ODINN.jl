@@ -102,8 +102,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t[j],
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization,
+                    simulation,
+                    prod(N) * normalization,
                 ), 1:k)
             # Unzip ∂L∂H, ∂L∂θ at each timestep
             ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
@@ -127,8 +127,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t[j],
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization,
+                    simulation,
+                    prod(N) * normalization,
                 )
                 ℓ += Δt[j-1]*ℓi
 
@@ -152,13 +152,16 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             if haskey(θ, :IC)
                 λ₀ = λ[begin]
                 # This contribution will come from the regularization on the initial condition
-                ∂L∂H₀ = 0.0
                 glacier_id = Symbol("$(glacier.rgi_id)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
                     simulation.parameters.UDE.initial_condition_filter
                     )
+                # This contribution comes from the regularization on the initial condition
+                # The partial with respect to the initial condition is stored in θ.IC for
+                # every single time-step, even when this just corresponds to t = t₀
+                ∂L∂H₀ = ∂L∂θ[begin].IC[glacier_id]
                 dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
             end
 
@@ -206,8 +209,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                         t,
                         glacier,
                         θ,
-                        simulation;
-                        normalization = prod(N) * normalization
+                        simulation,
+                        prod(N) * normalization
                     )
                     integrator.u .= integrator.u .+ simulation.parameters.simulation.step .* ∂ℓ∂H
                 end
@@ -246,8 +249,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t_final,
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization
+                    simulation,
+                    prod(N) * normalization
                     )
                 λ₁ .+= simulation.parameters.simulation.step .* ∂ℓ∂H
             end
@@ -284,8 +287,8 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
                     t,
                     glacier,
                     θ,
-                    simulation;
-                    normalization = prod(N) * normalization,
+                    simulation,
+                    prod(N) * normalization,
                     ),
                 t_nodes)
             # Unzip ∂L∂H, ∂L∂θ at each timestep
@@ -306,14 +309,16 @@ function SIA2D_grad_batch!(θ, simulation::FunctionalInversion)
             # Contribution of initial condition to loss function
             if haskey(θ, :IC)
                 λ₀ = sol_rev(-tspan[1])
-                # This contribution will come from the regularization on the initial condition
-                ∂L∂H₀ = 0.0
                 glacier_id = Symbol("$(glacier.rgi_id)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
                     simulation.parameters.UDE.initial_condition_filter
                     )
+                # This contribution comes from the regularization on the initial condition
+                # The partial with respect to the initial condition is stored in θ.IC for
+                # every single time-step, even when this just corresponds to t = t₀
+                ∂L∂H₀ = ∂L∂θ[begin].IC[glacier_id]
                 dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
             end
 
