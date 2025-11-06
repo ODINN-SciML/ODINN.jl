@@ -2,7 +2,7 @@
 
 ## Results
 
-Every `Simulation` type has an associated `Results` object(s), one for each one of the glaciers in the simulation. This object, as its name indicates, stores all the results of the simulation, which can be used for data anlysis and plotting. These types are handled by `Sleipnir.jl`.
+Every `Simulation` type has an associated `Results` object(s), one for each one of the glaciers in the simulation. This object, as its name indicates, stores all the results of the simulation, which can be used for data analysis and plotting. These types are handled by `Sleipnir.jl`.
 
 ```@docs
 Sleipnir.Results

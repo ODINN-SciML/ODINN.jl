@@ -1,5 +1,9 @@
 # Contributor Covenant 3.0 Code of Conduct
 
+We want everyone in the ODINN community to feel safe and respected.
+Our code of conduct outlines the standards we expect from all contributors and maintainers—please take a moment to read it before getting involved.
+You can find the code of conduct in our [GitHub repository](https://github.com/ODINN-SciML/ODINN.jl) under `docs/src/code_of_conduct.md`:
+
 ## Our Pledge
 
 We pledge to make our community welcoming, safe, and equitable for all.
