@@ -1,17 +1,22 @@
-export evaluate_H₀
 
 """
-    evaluate_H₀(θ::ComponentArray, glacier_id::Symbol, filter::Symbol)
+    evaluate_H₀(
+        θ::ComponentArray,
+        glacier::Glacier2D,
+        filter::Symbol,
+        glacier_id::Integer,
+    )
 
 Evaluate the initial ice thickness `H₀` for a given glacier, optionally applying a smooth thresholding function.
 
 # Arguments
 - `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
-- `glacier::Glacier2D`:Glacier for which to evaluate `H₀`.
+- `glacier::Glacier2D`: Glacier for which to evaluate `H₀`.
 - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
     - `:identity`: applies the identity function (no change).
     - `:softplus`: applies the softplus function `log(1 + exp(x))` to ensure positivity.
     - `:Zang1980`: applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
+- `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
 
 # Returns
 - A numeric value or array representing the filtered initial ice thickness for the specified glacier.
@@ -19,10 +24,11 @@ Evaluate the initial ice thickness `H₀` for a given glacier, optionally applyi
 function evaluate_H₀(
     θ::ComponentArray,
     glacier::Glacier2D,
-    filter::Symbol
-    )
-    glacier_id = Symbol("$(glacier.rgi_id)")
-    H₀ = deepcopy(θ.IC[glacier_id])
+    filter::Symbol,
+    glacier_id::Integer,
+)
+    glacier_id_symbol = Symbol("$(glacier_id)")
+    H₀ = deepcopy(θ.IC[glacier_id_symbol])
     H₀ = @match filter begin
         :identity => H₀
         :softplus => log.(1 .+ exp.(H₀))
@@ -34,17 +40,23 @@ function evaluate_H₀(
 end
 
 """
-    evaluate_∂H₀(θ::ComponentArray, glacier_id::Symbol, filter::Symbol)
+    evaluate_∂H₀(
+        θ::ComponentArray,
+        glacier::Glacier2D,
+        filter::Symbol,
+        glacier_id::Integer,
+    )
 
 Evaluate the derivative of the initial ice thickness `H₀` for a given glacier, optionally applying a smooth thresholding function.
 
 # Arguments
 - `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
-- `glacier::Glacier2D`:Glacier for which to evaluate `∂H₀`.
+- `glacier::Glacier2D`: Glacier for which to evaluate `∂H₀`.
 - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
     - `:identity`: applies the identity function (no change).
     - `:softplus` — applies the softplus function `log(1 + exp(x))` to ensure positivity.
     - `:Zang1980` — applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
+- `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
 
 # Returns
 - A numeric value or array representing the filtered initial ice thickness for the specified glacier.
@@ -52,10 +64,11 @@ Evaluate the derivative of the initial ice thickness `H₀` for a given glacier,
 function evaluate_∂H₀(
     θ::ComponentArray,
     glacier::Glacier2D,
-    filter::Symbol
-    )
-    glacier_id = Symbol("$(glacier.rgi_id)")
-    ∂H₀ = deepcopy(θ.IC[glacier_id])
+    filter::Symbol,
+    glacier_id::Integer,
+)
+    glacier_id_symbol = Symbol("$(glacier_id)")
+    ∂H₀ = deepcopy(θ.IC[glacier_id_symbol])
     ∂H₀ = @match filter begin
         :identity => 1.0
         :softplus => 1 ./ (1 .+ exp.(-∂H₀))
