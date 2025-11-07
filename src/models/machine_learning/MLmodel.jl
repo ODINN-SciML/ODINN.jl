@@ -34,6 +34,7 @@ abstract type FunctionalModel <: TrainableModel end
 
 include("./InitialCondition.jl")
 include("./GlacierWideInv.jl")
+include("./GriddedInv.jl")
 
 """
     Model(;
