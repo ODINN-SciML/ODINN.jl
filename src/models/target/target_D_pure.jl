@@ -190,7 +190,8 @@ function Diffusivityꜛ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    return Diffusivity(
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    return f .* Diffusivity(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -200,7 +201,8 @@ function ∂Diffusivityꜛ∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    return ∂Diffusivity∂H(
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    return f .* ∂Diffusivity∂H(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -210,7 +212,8 @@ function ∂Diffusivityꜛ∂∇H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    return ∂Diffusivity∂∇H(
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    return f .* ∂Diffusivity∂∇H(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -220,7 +223,8 @@ function ∂Diffusivityꜛ∂θ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    return ∂Diffusivity∂θ(
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    return f .* ∂Diffusivity∂θ(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
