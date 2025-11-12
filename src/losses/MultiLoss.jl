@@ -55,23 +55,27 @@ weight in `lossType.λs`. The final loss is the sum of these weighted contributi
 function loss(
     lossType::MultiLoss,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
     glacier,
     θ,
     simulation,
     normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
     losses = map(sub_loss ->
         loss(
             sub_loss,
             H_pred,
             H_ref,
+            V_ref, Vx_ref, Vy_ref,
             t,
             glacier,
             θ,
             simulation,
             normalization,
+            Δt,
         ), lossType.losses
     )
     # Combine contribution of each loss
@@ -105,23 +109,27 @@ and summed to form the total gradient.
 function backward_loss(
     lossType::MultiLoss,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
     glacier,
     θ,
     simulation,
     normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
     res_backward_losses = map(sub_loss ->
         backward_loss(
             sub_loss,
             H_pred,
             H_ref,
+            V_ref, Vx_ref, Vy_ref,
             t,
             glacier,
             θ,
             simulation,
-            normalization
+            normalization,
+            Δt,
         ), lossType.losses
     )
     # Combine contribution of each gradient
@@ -131,10 +139,10 @@ function backward_loss(
     return ∂L∂H, ∂L∂θ
 end
 
-function loss_uses_ref_velocity(lossType::MultiLoss)
+function loss_uses_velocity(lossType::MultiLoss)
     return any(
         map(lossType.losses) do l
-            loss_uses_ref_velocity(l)
+            loss_uses_velocity(l)
         end
     )
 end

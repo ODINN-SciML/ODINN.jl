@@ -48,7 +48,6 @@ function test_adjoint_SIA2D(
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 
@@ -235,7 +234,6 @@ function test_adjoint_surface_V(
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 

@@ -32,7 +32,6 @@ function save_simulation_test!(;
         ),
         solver = Huginn.SolverParameters(
             step = δt,
-            save_everystep = true,
             progress = true
             )
     )

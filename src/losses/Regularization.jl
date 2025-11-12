@@ -117,12 +117,14 @@ end
 function loss(
     lossType::InitialThicknessRegularization,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
     glacier,
     θ,
     simulation,
     normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
     @assert haskey(θ, :IC) """
     Regularization with respect to initial condition requires to set initial condition
@@ -135,7 +137,8 @@ function loss(
     # if t == lossType.t₀
         Δx, Δy = glacier.Δx, glacier.Δy
         H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter)
-        regH = loss(lossType.reg, H₀, Δx, Δy, normalization)
+        mask = trues(size(H₀))
+        regH = loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
         return regH
     # else
     #     return 0.0
@@ -144,21 +147,24 @@ end
 function backward_loss(
     lossType::InitialThicknessRegularization,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
     glacier,
     θ,
     simulation,
     normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
     # if t == lossType.t₀
         Δx, Δy = glacier.Δx, glacier.Δy
         H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter)
+        mask = trues(size(H₀))
         ∂L∂H = zero(H₀)
         ∂L∂θ = zero(θ)
         # Regularization is only evaluated for the first time step of the simulation.
         # However, we save the value of the gradient for every single value of t
-        ∂L∂θ.IC[glacier.rgi_id] = backward_loss(lossType.reg, H₀, Δx, Δy, normalization)
+        ∂L∂θ.IC[glacier.rgi_id] = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
         return ∂L∂H, ∂L∂θ
     # else
     #     return zero(H₀), zero(θ)
@@ -169,11 +175,13 @@ function loss(
     regType::VelocityRegularization,
     H::Matrix{F},
     H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
     glacier,
     θ,
     simulation,
     normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
 
     Δx, Δy = glacier.Δx, glacier.Δy
@@ -185,7 +193,7 @@ function loss(
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
-        return loss(regType.reg, V, Δx, Δy, mask, normalization)
+        return loss(regType.reg, V, Δx, Δy, mask, normalization)*Δt.V
     else
         @error "Regularization $(regType) not implemented."
     end
@@ -194,11 +202,13 @@ function backward_loss(
     regType::VelocityRegularization,
     H::Matrix{F},
     H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
     glacier,
     θ,
     simulation,
     normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
 
     Δx, Δy = glacier.Δx, glacier.Δy
@@ -220,7 +230,7 @@ function backward_loss(
     ∂Reg∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
     ∂Reg∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
 
-    return ∂Reg∂H, ∂Reg∂θ
+    return ∂Reg∂H*Δt.V, ∂Reg∂θ*Δt.V
 end
 
 """
@@ -290,4 +300,5 @@ function VJP_λ_∂∇²a_∂a(
 end
 
 
-loss_uses_ref_velocity(lossType::Union{AbstractRegularization, AbstractSimpleRegularization}) = false
+loss_uses_velocity(lossType::VelocityRegularization) = true
+loss_uses_velocity(lossType::Union{AbstractRegularization, AbstractSimpleRegularization}) = false

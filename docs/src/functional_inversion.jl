@@ -49,7 +49,6 @@ params = Parameters(
     ),
     solver = Huginn.SolverParameters(
         step=δt,
-        save_everystep=true,
         progress=true)
 )
 
@@ -136,7 +135,6 @@ params = Parameters(
         target = :A),
     solver = Huginn.SolverParameters(
         step=δt,
-        save_everystep=true,
         progress=true)
 )
 

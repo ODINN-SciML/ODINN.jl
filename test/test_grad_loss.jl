@@ -21,7 +21,7 @@ function test_grad_finite_diff(
     println(use_MB ? " and with MB" : "")
 
     # Determine if we are working with a velocity loss
-    velocityLoss = typeof(loss) <: Union{<: LossV, <: LossHV}
+    velocityLoss = ODINN.loss_uses_velocity(loss)
 
     thres_ratio = thres[1]
     thres_angle = thres[2]
@@ -82,7 +82,6 @@ function test_grad_finite_diff(
             ),
         solver = Huginn.SolverParameters(
             step = δt,
-            save_everystep = true,
             progress = true
             )
     )
@@ -106,7 +105,9 @@ function test_grad_finite_diff(
     # Time stanpshots for transient inversion
     tstops = collect(tspan[1]:δt:tspan[2])
 
-    glaciers = generate_ground_truth(glaciers, params, model, tstops)
+    # Generate ground truth based on the loss that will be used hereafter
+    store = ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)
+    glaciers = generate_ground_truth(glaciers, params, model, tstops; store=store)
 
     ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti2019) : nothing
     optimizable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, target)
@@ -421,7 +422,6 @@ function test_grad_Halfar(
         solver=SolverParameters(
             reltol=1e-12,
             step=δt,
-            save_everystep=true,
             progress=true
         )
     )

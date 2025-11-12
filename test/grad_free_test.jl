@@ -35,7 +35,6 @@ function grad_free_test(;use_MB::Bool=false)
             target = :A),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 

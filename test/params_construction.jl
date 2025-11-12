@@ -8,7 +8,7 @@ function params_constructor_specified(save_refs::Bool = false)
         reltol = 1e-8,
         step= 1.0/12.0,
         save_everystep = false,
-        tstops = nothing,
+        tstops = Vector{Float64}(),
         progress = true,
         progress_steps = 10
         )
