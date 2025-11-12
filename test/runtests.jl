@@ -128,10 +128,14 @@ end
 end
 
 if GROUP == "All" || GROUP == "Core7"
-    @testset "Multi-objective function and regularization test" begin
-        @testset "Gradient evaluation testing MultiLoss API" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(),), λs=(0.4,)))
-        @testset "Gradient evaluation testing just regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [3e-2, 1e-5, 3e-2], loss=MultiLoss(losses=(VelocityRegularization(),), λs=(1e2,)))
-        @testset "Gradient evaluation testing empirical and regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(), VelocityRegularization()), λs=(1e-2, 2e-1)))
+    @testset "Gradient of multi-objective function and regularization" begin
+        @testset "MultiLoss (continuous adjoint)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(),), λs=(0.4,)))
+        @testset "Velocity regularization (continuous adjoint)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [3e-2, 1e-5, 3e-2], loss=MultiLoss(losses=(VelocityRegularization(),), λs=(1e2,)))
+        @testset "Initial thickness regularization (continuous adjoint)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-8, 1e-14, 1e-8], loss=MultiLoss(losses=(InitialThicknessRegularization(t₀=2010.0),), λs=(1e2,)), train_initial_conditions=true)
+        @testset "Initial thickness regularization (continuous adjoint)" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-8, 1e-14, 1e-8], loss=MultiLoss(losses=(InitialThicknessRegularization(t₀=2010.0),), λs=(1e2,)), train_initial_conditions=true)
+        @testset "Initial thickness regularization with t>t₀ and LossH (continuous adjoint)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-8, 1e-4], loss=MultiLoss(losses=(InitialThicknessRegularization(t₀=2011.0),LossH()), λs=(1e2,1e0)), train_initial_conditions=true)
+        @testset "Initial thickness regularization with t>t₀ (discrete adjoint)" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-8, 1e-4], loss=MultiLoss(losses=(InitialThicknessRegularization(t₀=2011.0),), λs=(1e2,)), train_initial_conditions=true)
+        @testset "LossH and velocity regularization (continuous adjoint)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(), VelocityRegularization()), λs=(1e-2, 2e-1)))
     end
 end
 

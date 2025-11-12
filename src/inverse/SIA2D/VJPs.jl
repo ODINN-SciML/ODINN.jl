@@ -70,7 +70,7 @@ function VJP_λ_∂surface_V∂θ(VJPMode::DiscreteVJP, λx, λy, H, θ, simulat
 end
 
 
-function MB_wrapper!(MB, H, simulation, glacier)
+function MB_wrapper!(MB, H, simulation, glacier, step)
     model = simulation.model
     cache = simulation.cache
     glacier.S .= glacier.B .+ H
@@ -78,15 +78,16 @@ function MB_wrapper!(MB, H, simulation, glacier)
     # Below we call the functions that are inside MB_timestep! manually
     # This is because get_cumulative_climate! cannot be differentiated with Enzyme, so it is called beforehand in the VJP function to retrieve the cumulative climate
     downscale_2D_climate!(glacier)
-    cache.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step)
+    cache.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step, step)
 
     apply_MB_mask!(H, cache.iceflow)
     MB .= simulation.cache.iceflow.MB
 end
 function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, glacier, t)
+    step_MB = simulation.parameters.simulation.step_MB
     # Differentiation of get_cumulative_climate! with Enzyme yields an error
     # Since it isn't involved in the gradient computation (doesn't depend on H), it can be computed beforehand
-    get_cumulative_climate!(glacier.climate, t, simulation.parameters.solver.step)
+    get_cumulative_climate!(glacier.climate, t, step_MB)
 
     _simulation = Enzyme.make_zero(simulation)
     _glacier = Enzyme.make_zero(glacier)
@@ -99,13 +100,14 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
         Duplicated(H, λ_∂MB∂H),
         Duplicated(simulation, _simulation),
         Duplicated(glacier, _glacier),
+        Const(step_MB),
     )
     return λ_∂MB∂H
 end
 
 function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, glacier, t)
     glacier.S .= glacier.B .+ H
-    get_cumulative_climate!(glacier.climate, t, simulation.parameters.solver.step)
+    get_cumulative_climate!(glacier.climate, t, simulation.parameters.simulation.step_MB)
 
     mb_model = simulation.model.mass_balance
     λ_∂MB∂H = if isa(mb_model, TImodel1)

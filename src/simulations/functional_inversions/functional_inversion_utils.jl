@@ -282,9 +282,7 @@ function loss_iceflow_transient(θ, simulation::Inversion, mappingFct)
             simulation.model.machine_learning.θ, simulation,
         ), simulations)
     losses = merge_batches(losses)
-
-    l_H = sum(losses)
-    return l_H
+    return sum(losses)
 end
 
 """
@@ -381,37 +379,71 @@ function batch_loss_iceflow_transient(
     loss_function = container.simulation.parameters.UDE.empirical_loss_function
 
     glacier = container.simulation.glaciers[glacier_idx]
-    H_ref = glacier.thicknessData.H
     t = result.t
-    Δt = diff(t)
     H = result.H
-    @assert size(H_ref[begin]) == size(H[begin]) "Initial state of reference and predicted ice thickness do not match."
-    @assert length(H_ref) == length(H) "Size of reference and prediction datasets do not match."
-    @assert t == glacier.thicknessData.t "Reference and prediction need to be evaluated with the same timestamps."
 
-    if loss_uses_ref_velocity(loss_function)
+    if loss_uses_velocity(loss_function)
         @assert !isnothing(glacier.velocityData) "Using $(typeof(loss_function)) but no velocityData in the glacier $(glacier.rgi_id)"
         @assert length(glacier.velocityData.date) > 0 "Using $(typeof(loss_function)) but no reference velocity in the results"
     end
 
+    # Discretization for the ice thickness loss term
+    tH_ref = tdata(glacier.thicknessData) # If thicknessData is nothing, then tH_ref is an empty vector
+    ΔtH = diff(tH_ref)
+    useThickness = length(tH_ref)>0
+    H_ref = useThickness ? glacier.thicknessData.H : nothing
+
+    # Discretization for the surface velocity loss term
+    tV_ref = tdata(glacier.velocityData, container.simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
+    ΔtV = diff(tV_ref)
+    useVelocity = length(tV_ref)>0
+    Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
+    Vx_ref = useVelocity ? glacier.velocityData.vx : nothing
+    Vy_ref = useVelocity ? glacier.velocityData.vy : nothing
+
+    # Discretization provided to the loss as a named tuple with the discretization for each term
+    Δt_HV = (; H=ΔtH, V=ΔtV)
+
+    if useThickness
+        @assert size(H[begin]) == size(H_ref[begin]) "Size of reference and prediction datasets do not match."
+    end
+    if useVelocity
+        @assert size(H[begin]) == size(Vabs_ref[begin]) "Size of reference and prediction datasets do not match."
+    end
+
     β = 2.0
-    l_H = map(2:length(H)) do τ
+    losses = map(1:length(H)) do τ
         normalization = 1.0
         # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
-        Hr = @ignore_derivatives(H_ref[τ]) # Ignore this part of the computational graph, otherwise AD fails
-        mean_error = loss(
-                loss_function,
-                H[τ],
-                Hr,
-                t[τ],
-                glacier,
-                container.θ,
-                container.simulation,
-                prod(size(H_ref[τ]))*normalization,
-            )
-        Δt[τ-1] * mean_error
+
+        tj = t[τ]
+        indThickness = findfirst(==(tj), tH_ref)
+        indVelocity = findfirst(==(tj), tV_ref)
+
+        # Ignore these parts of the computational graph, otherwise AD fails
+        Hr = @ignore_derivatives(isnothing(indThickness) ? nothing : H_ref[indThickness])
+        Vr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vabs_ref[indVelocity])
+        Vxr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vx_ref[indVelocity])
+        Vyr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vy_ref[indVelocity])
+        Δtj = @ignore_derivatives((;
+            H=isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
+            V=isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1),
+        ))
+
+        loss(
+            loss_function,
+            H[τ],
+            Hr,
+            Vr, Vxr, Vyr,
+            t[τ],
+            glacier_idx,
+            container.θ,
+            container.simulation,
+            prod(size(H[τ]))*normalization,
+            Δtj,
+        )
     end
-    return sum(l_H), result
+    return sum(losses), result
 end
 
 """
@@ -431,27 +463,33 @@ function _batch_iceflow_UDE(
     params = container.simulation.parameters
     glacier = container.simulation.glaciers[glacier_idx]
     step = params.solver.step
+    step_MB = params.simulation.step_MB
 
     container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, container.θ)
     container.simulation.model.machine_learning.θ = container.θ
 
-    # Create mass balance callback
+    # Define tstops
     tstops = Huginn.define_callback_steps(params.simulation.tspan, step)
-    params.solver.tstops = tstops
+    tstops = unique(vcat(tstops, params.solver.tstops)) # Merge time steps controlled by `step` with the user provided time steps
+    tstopsIceThickness = tdata(glacier.thicknessData)
+    tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
+    tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan)
+    tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity, tstopsDiscreteLoss)))
 
+    # Create mass balance callback
     cb_MB = if params.simulation.use_MB
         # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
-        mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, step = step
+        mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, step_MB = step_MB
             function (integrator)
                 # Compute mass balance
                 glacier.S .= glacier.B .+ integrator.u
-                MB_timestep!(cache, model, glacier, step, integrator.t)
+                MB_timestep!(cache, model, glacier, step_MB, integrator.t)
                 apply_MB_mask!(integrator.u, cache.iceflow)
             end
         end
-        # A simulation period is sliced in time windows that are separated by `step`
+        # A simulation period is sliced in time windows that are separated by `step_MB`
         # The mass balance is applied at the end of each of the windows
-        PeriodicCallback(mb_action!, step; initial_affect=false)
+        PeriodicCallback(mb_action!, step_MB; initial_affect=false)
     else
         CallbackSet()
     end
@@ -468,12 +506,11 @@ function _batch_iceflow_UDE(
     cb = CallbackSet(cb_MB, cb_iceflow)
 
     # Run iceflow UDE for this glacier
-    iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob)
+    iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob, tstops)
 
     # Compute simulation results
     return Sleipnir.create_results(
-        container.simulation, glacier_idx, iceflow_sol, nothing;
-        light = !container.simulation.parameters.solver.save_everystep,
+        container.simulation, glacier_idx, iceflow_sol, tstops,
     )
 end
 
@@ -483,6 +520,7 @@ end
         container::InversionBinder,
         cb::SciMLBase.DECallback,
         iceflow_prob::ODEProblem,
+        tstops,
     )
 
 Make a forward simulation of the iceflow UDE.
@@ -491,6 +529,7 @@ function simulate_iceflow_UDE!(
     container::InversionBinder,
     cb::SciMLBase.DECallback,
     iceflow_prob::ODEProblem,
+    tstops,
 )
     params = container.simulation.parameters
     iceflow_prob_remake = remake(iceflow_prob; p = container)
@@ -502,7 +541,7 @@ function simulate_iceflow_UDE!(
         reltol = params.solver.reltol,
         progress = false,
         maxiters = params.solver.maxiters,
-        tstops = params.solver.tstops,
+        tstops = tstops,
     )
     @assert iceflow_sol.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
 
