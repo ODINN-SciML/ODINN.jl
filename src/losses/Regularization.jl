@@ -193,7 +193,7 @@ function loss(
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
 
     if regType.components == :abs
-        return loss(regType.reg, V, Δx, Δy, mask, normalization)*Δt.V
+        return loss(regType.reg, V, Δx, Δy, mask, normalization) * Δt.V
     else
         @error "Regularization $(regType) not implemented."
     end
@@ -231,7 +231,7 @@ function backward_loss(
     ∂Reg∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
     ∂Reg∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
 
-    return ∂Reg∂H*Δt.V, ∂Reg∂θ*Δt.V
+    return ∂Reg∂H * Δt.V, ∂Reg∂θ * Δt.V
 end
 
 """

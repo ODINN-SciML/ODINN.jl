@@ -259,7 +259,7 @@ function loss(
         # That time step has no valid ground truth ice thickness data, so the contribution is zero
         return 0.0
     else
-        return loss(lossType.loss, H_pred, H_ref, normalization)*Δt.H
+        return loss(lossType.loss, H_pred, H_ref, normalization) * Δt.H
     end
 end
 function backward_loss(
@@ -281,7 +281,7 @@ function backward_loss(
     else
         backward_loss(lossType.loss, H_pred, H_ref, normalization)
     end
-    return ∂L∂H*Δt.H, ∂L∂θ*Δt.H
+    return ∂L∂H * Δt.H, ∂L∂θ * Δt.H
 end
 
 function loss(
@@ -325,7 +325,7 @@ function loss(
         ℓ
     end
 
-    return ℓ_scale*Δt.V
+    return ℓ_scale * Δt.V
 end
 function backward_loss(
     lossType::LossV,
@@ -377,7 +377,7 @@ function backward_loss(
     ∂L∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
     ∂L∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
 
-    return ∂L∂H*Δt.V, ∂L∂θ*Δt.V
+    return ∂L∂H * Δt.V, ∂L∂θ * Δt.V
 end
 
 function loss(
@@ -394,7 +394,7 @@ function loss(
 ) where {F <: AbstractFloat}
     lH = loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
     lV = loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
-    return lH*Δt.H + lossType.scaling * lV*Δt.V
+    return lH * Δt.H + lossType.scaling * lV * Δt.V
 end
 function backward_loss(
     lossType::LossHV,
@@ -410,13 +410,13 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     ∂lH∂H, ∂lH∂θ = backward_loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
     ∂lV∂H, ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
-    ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H*Δt.H + lossType.scaling * ∂lV∂H*Δt.V
+    ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H * Δt.H + lossType.scaling * ∂lV∂H * Δt.V
     ∂L∂θ = if isnothing(∂lV∂θ)
-        ∂lH∂θ*Δt.H
+        ∂lH∂θ * Δt.H
     elseif isnothing(∂lH∂θ)
-        lossType.scaling * ∂lV∂θ*Δt.V
+        lossType.scaling * ∂lV∂θ * Δt.V
     else
-        ∂lH∂θ*Δt.H + lossType.scaling * ∂lV∂θ*Δt.V
+        ∂lH∂θ * Δt.H + lossType.scaling * ∂lV∂θ * Δt.V
     end
     return ∂L∂H, ∂L∂θ
 end
