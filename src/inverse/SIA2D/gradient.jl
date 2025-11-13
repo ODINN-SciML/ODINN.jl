@@ -125,7 +125,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             end
 
             tstopsMB = if simulation.parameters.simulation.use_MB
-                tstopsMB = Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step)
+                tstopsMB = Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)
                 @assert all(map(ti -> ti in t, tstopsMB)) "When using the DiscreteAdjoint the tstops of the MB callback must all be included in the tstops from the results."
                 tstopsMB
             else [] end
@@ -301,7 +301,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 end
             end
             cb_adjoint_MB = if simulation.parameters.simulation.use_MB
-                tstopsMB = - Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step)
+                tstopsMB = - Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)
                 stop_condition_MB(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, tstopsMB)
                 # For the moment the time stepping used in the loss, and the one for the MB gradient computation must match
                 # The plan in the future is to be able to customize the time stepping for the MB gradient computation

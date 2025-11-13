@@ -84,10 +84,10 @@ function MB_wrapper!(MB, H, simulation, glacier, step)
     MB .= simulation.cache.iceflow.MB
 end
 function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, glacier, t)
-    step = simulation.parameters.simulation.step
+    step_MB = simulation.parameters.simulation.step_MB
     # Differentiation of get_cumulative_climate! with Enzyme yields an error
     # Since it isn't involved in the gradient computation (doesn't depend on H), it can be computed beforehand
-    get_cumulative_climate!(glacier.climate, t, step)
+    get_cumulative_climate!(glacier.climate, t, step_MB)
 
     _simulation = Enzyme.make_zero(simulation)
     _glacier = Enzyme.make_zero(glacier)
@@ -100,14 +100,14 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
         Duplicated(H, λ_∂MB∂H),
         Duplicated(simulation, _simulation),
         Duplicated(glacier, _glacier),
-        Const(step),
+        Const(step_MB),
     )
     return λ_∂MB∂H
 end
 
 function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, glacier, t)
     glacier.S .= glacier.B .+ H
-    get_cumulative_climate!(glacier.climate, t, simulation.parameters.simulation.step)
+    get_cumulative_climate!(glacier.climate, t, simulation.parameters.simulation.step_MB)
 
     mb_model = simulation.model.mass_balance
     λ_∂MB∂H = if isa(mb_model, TImodel1)

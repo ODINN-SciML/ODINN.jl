@@ -25,7 +25,6 @@ params = Parameters(
         use_MB=false,
         use_velocities=true,
         tspan=tspan,
-        step=δt,
         multiprocessing=false,
         test_mode=true,
         rgi_paths=rgi_paths),

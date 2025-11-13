@@ -38,7 +38,7 @@ function inversion_test(;
             use_MB = use_MB,
             use_velocities = false,
             tspan = tspan,
-            step = δt,
+            step_MB = δt,
             multiprocessing = multiprocessing,
             workers = workers,
             test_mode = true,

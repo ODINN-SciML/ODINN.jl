@@ -13,7 +13,6 @@ function save_simulation_test!(;
             use_MB = false,
             use_velocities = true,
             tspan = tspan,
-            step = δt,
             working_dir = working_dir,
             multiprocessing = false,
             workers = 1,

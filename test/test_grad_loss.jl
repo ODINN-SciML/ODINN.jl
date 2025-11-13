@@ -54,7 +54,7 @@ function test_grad_finite_diff(
             use_MB = use_MB,
             use_velocities = true,
             tspan = tspan,
-            step = δt,
+            step_MB = δt,
             multiprocessing = false,
             workers = 1,
             test_mode = true,
@@ -402,7 +402,6 @@ function test_grad_Halfar(
     parameters = Parameters(
         simulation=SimulationParameters(
             tspan=(t₀, t₁),
-            step=δt,
             multiprocessing=false,
             use_MB=false,
             use_iceflow=true,

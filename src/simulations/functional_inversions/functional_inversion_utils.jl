@@ -463,7 +463,7 @@ function _batch_iceflow_UDE(
     params = container.simulation.parameters
     glacier = container.simulation.glaciers[glacier_idx]
     step = params.solver.step
-    MBstep = params.simulation.step
+    step_MB = params.simulation.step_MB
 
     container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, container.θ)
     container.simulation.model.machine_learning.θ = container.θ
@@ -479,17 +479,17 @@ function _batch_iceflow_UDE(
     # Create mass balance callback
     cb_MB = if params.simulation.use_MB
         # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
-        mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, MBstep = MBstep
+        mb_action! = let model = container.simulation.model, cache = container.simulation.cache, glacier = glacier, step_MB = step_MB
             function (integrator)
                 # Compute mass balance
                 glacier.S .= glacier.B .+ integrator.u
-                MB_timestep!(cache, model, glacier, MBstep, integrator.t)
+                MB_timestep!(cache, model, glacier, step_MB, integrator.t)
                 apply_MB_mask!(integrator.u, cache.iceflow)
             end
         end
-        # A simulation period is sliced in time windows that are separated by `MBstep`
+        # A simulation period is sliced in time windows that are separated by `step_MB`
         # The mass balance is applied at the end of each of the windows
-        PeriodicCallback(mb_action!, MBstep; initial_affect=false)
+        PeriodicCallback(mb_action!, step_MB; initial_affect=false)
     else
         CallbackSet()
     end
