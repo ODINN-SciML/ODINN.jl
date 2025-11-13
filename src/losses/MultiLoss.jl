@@ -31,7 +31,7 @@ struct MultiLoss{TL, TS} <: AbstractLoss
 end
 
 """
-    loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier, θ, simulation, normalization::F) where {F<:AbstractFloat}
+    loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier_idx::Integer, θ, simulation, normalization::F) where {F<:AbstractFloat}
 
 Computes the weighted composite loss for a prediction `H_pred` against a reference `H_ref`
 using a `MultiLoss` object.
@@ -44,7 +44,7 @@ weight in `lossType.λs`. The final loss is the sum of these weighted contributi
 - `H_pred::Matrix{F}`: Predicted ice thickness.
 - `H_ref::Matrix{F}`: Reference ice thickness.
 - `t::F`: Current time or simulation step.
-- `glacier`: Glacier-specific data structure.
+- `glacier_idx::Integer`: Glacier id in the list of glaciers in `simulation`.
 - `θ`: Model parameters used in the simulation.
 - `simulation`: Simulation object providing necessary context for loss evaluation.
 - `normalization::F`: Normalization factor applied within each individual loss.
@@ -58,7 +58,7 @@ function loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
@@ -71,7 +71,7 @@ function loss(
             H_ref,
             V_ref, Vx_ref, Vy_ref,
             t,
-            glacier,
+            glacier_idx,
             θ,
             simulation,
             normalization,
@@ -83,7 +83,7 @@ function loss(
 end
 
 """
-    backward_loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier, θ, simulation; normalization::F) where {F<:AbstractFloat}
+    backward_loss(lossType::MultiLoss, H_pred::Matrix{F}, H_ref::Matrix{F}, t::F, glacier_idx::Integer, θ, simulation; normalization::F) where {F<:AbstractFloat}
 
 Computes the gradient of a composite loss defined by a `MultiLoss` object
 with respect to both the predicted field `H_pred` and model parameters `θ`.
@@ -96,7 +96,7 @@ and summed to form the total gradient.
 - `H_pred::Matrix{F}`: Predicted ice thickness.
 - `H_ref::Matrix{F}`: Reference ice thickness.
 - `t::F`: Current time or simulation step.
-- `glacier`: Glacier-specific data structure providing context for the loss.
+- `glacier_idx::Integer`: Glacier id in the list of glaciers in `simulation`.
 - `θ`: Model parameters used in the simulation.
 - `simulation`: Simulation object providing necessary context for gradient computation.
 - `normalization::F`: Normalization factor applied within each individual loss.
@@ -112,7 +112,7 @@ function backward_loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
@@ -125,7 +125,7 @@ function backward_loss(
             H_ref,
             V_ref, Vx_ref, Vy_ref,
             t,
-            glacier,
+            glacier_idx,
             θ,
             simulation,
             normalization,
@@ -145,4 +145,10 @@ function loss_uses_velocity(lossType::MultiLoss)
             loss_uses_velocity(l)
         end
     )
+end
+function discreteLossSteps(lossType::MultiLoss, tspan)
+    ts = map(lossType.losses) do l
+        discreteLossSteps(l, tspan)
+    end
+    return vcat(ts...)
 end

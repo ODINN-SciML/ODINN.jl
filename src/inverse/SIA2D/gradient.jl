@@ -94,8 +94,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         Δt_HV = (; H=ΔtH, V=ΔtV)
 
         ## 3- Determine tstops in the same way as what is done in the forward and check that this matches
-        tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
-        tstops = sort(unique(vcat(tstops, params.solver.tstops, tH_ref, tV_ref)))
+        tstops = Huginn.define_callback_steps(tspan, params.solver.step)
+        tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, tspan)
+        tstops = sort(unique(vcat(tstops, params.solver.tstops, tH_ref, tV_ref, tstopsDiscreteLoss)))
 
         @assert t ≈ tstops "Times in tstops and reference times in result do not coincide."
         if useThickness
@@ -149,7 +150,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     isnothing(indVelocity) ? nothing : Vx_ref[indVelocity],
                     isnothing(indVelocity) ? nothing : Vy_ref[indVelocity],
                     tj,
-                    glacier,
+                    i,
                     θ,
                     simulation,
                     prod(N) * normalization,
@@ -159,14 +160,14 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             # Unzip ∂L∂H, ∂L∂θ at each timestep
             ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
 
-            for j in reverse(2:k)
+            for j in reverse(1:k)
                 tj = t[j]
 
                 indThickness = findfirst(==(tj), tH_ref)
                 indVelocity = findfirst(==(tj), tV_ref)
                 Δtj = (;
-                    H=isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness-1],
-                    V=isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity-1],
+                    H=isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
+                    V=isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1),
                 )
 
                 if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
@@ -186,7 +187,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     isnothing(indVelocity) ? nothing : Vx_ref[indVelocity],
                     isnothing(indVelocity) ? nothing : Vy_ref[indVelocity],
                     t[j],
-                    glacier,
+                    i,
                     θ,
                     simulation,
                     prod(N) * normalization,
@@ -198,35 +199,33 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 λ_∂f∂H, dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method, λ[j], H[j], θ, simulation, tj)
 
                 ### Update adjoint
-                # For ∂ℓ∂H, time discretization is already included in the loss, so no need to multiply by Δt
-                λ[j-1] .= λ[j] .+ Δt[j-1] * λ_∂f∂H .+ something(∂ℓ∂H, 0.0)
+                if j>1
+                    # For ∂ℓ∂H, time discretization is already included in the loss, so no need to multiply by Δt
+                    λ[j-1] .= λ[j] .+ Δt[j-1] * λ_∂f∂H .+ something(∂ℓ∂H, 0.0)
 
-                ### Custom VJP for grad of loss function
-                λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, simulation, tj)
+                    ### Custom VJP for grad of loss function
+                    λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method, λ[j-1], H[j], θ, dH_H, simulation, tj)
 
-                ### Contribution to the loss
+                    ### Contribution to the loss
+                    dLdθ .+= Δt[j-1] * λ_∂f∂θ
+                end
                 # For ∂ℓ∂θ, time discretization is already included in the loss, so no need to multiply by Δt
-                dLdθ .+= Δt[j-1] * λ_∂f∂θ .+ something(∂ℓ∂θ, 0.0)
+                dLdθ .+= something(∂ℓ∂θ, 0.0)
             end
 
             ### Check consistency between forward and reverse
-            @assert ℓ ≈ loss_per_glacier[i] "Loss in forward and reverse do not coincide: $(ℓ) != $(loss_per_glacier[i])"
+            @assert ℓ ≈ loss_per_glacier[i] "Loss in forward and reverse do not coincide: $(ℓ) (reverse) != $(loss_per_glacier[i]) (forward)"
 
-            # Contribution of initial condition to loss function
+            # Compute gradient wrt initial condition because this is not taken into account in the loop above
             if haskey(θ, :IC)
                 λ₀ = λ[begin]
-                glacier_id = Symbol("$(i)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
                     simulation.parameters.UDE.initial_condition_filter,
                     i,
                 )
-                # This contribution comes from the regularization on the initial condition
-                # The partial with respect to the initial condition is stored in θ.IC for
-                # every single time-step, even when this just corresponds to t = t₀
-                ∂L∂H₀ = ∂L∂θ[begin].IC[glacier_id]
-                dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
+                dLdθ.IC[Symbol("$(i)")] .+= λ₀ .* s₀
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
@@ -266,7 +265,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             ### Definition of callback to introduce contribution of loss function to adjoint
             t_ref_inv = .-reverse(tstops)
             stop_condition_loss(λ, t, integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
-            effect_loss! = let loss_function=loss_function, H_itp=H_itp, useThickness=useThickness, useVelocity=useVelocity, H_ref_itp=H_ref_itp, Vabs_ref_itp=Vabs_ref_itp, Vx_ref_itp=Vx_ref_itp, Vy_ref_itp=Vy_ref_itp, glacier=glacier, θ=θ, simulation=simulation, normalization=normalization, N=N, tH_ref=tH_ref, tV_ref=tV_ref
+            effect_loss! = let loss_function=loss_function, H_itp=H_itp, useThickness=useThickness, useVelocity=useVelocity, H_ref_itp=H_ref_itp, Vabs_ref_itp=Vabs_ref_itp, Vx_ref_itp=Vx_ref_itp, Vy_ref_itp=Vy_ref_itp, i=i, θ=θ, simulation=simulation, normalization=normalization, N=N, tH_ref=tH_ref, tV_ref=tV_ref
                 function (integrator)
                     t = - integrator.t
                     indThickness = findfirst(==(t), tH_ref)
@@ -283,7 +282,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                         useVelocity ? Vx_ref_itp(t) : nothing,
                         useVelocity ? Vy_ref_itp(t) : nothing,
                         t,
-                        glacier,
+                        i,
                         θ,
                         simulation,
                         prod(N) * normalization,
@@ -333,7 +332,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     useVelocity ? Vx_ref_itp(t_final) : nothing,
                     useVelocity ? Vy_ref_itp(t_final) : nothing,
                     t_final,
-                    glacier,
+                    i,
                     θ,
                     simulation,
                     prod(N) * normalization,
@@ -379,7 +378,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     useVelocity ? Vx_ref_itp(t) : nothing,
                     useVelocity ? Vy_ref_itp(t) : nothing,
                     t,
-                    glacier,
+                    i,
                     θ,
                     simulation,
                     prod(N) * normalization,
@@ -390,7 +389,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             _, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
 
             # Final integration of the loss
-            if (typeof(simulation.parameters.UDE.grad.VJP_method) <: DiscreteVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: EnzymeVJP) | (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP)
+            if typeof(simulation.parameters.UDE.grad.VJP_method) <: Union{DiscreteVJP, EnzymeVJP, ContinuousVJP}
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(- t_nodes[j])
                     _H = H_itp(t_nodes[j])
@@ -401,21 +400,35 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
             end
 
-            # Contribution of initial condition to loss function
+            # Compute gradient wrt initial condition because this is not taken into account in the quadrature
             if haskey(θ, :IC)
                 λ₀ = sol_rev(-tspan[1])
-                glacier_id = Symbol("$(i)")
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
                     simulation.parameters.UDE.initial_condition_filter,
                     i,
                 )
-                # This contribution comes from the regularization on the initial condition
-                # The partial with respect to the initial condition is stored in θ.IC for
-                # every single time-step, even when this just corresponds to t = t₀
-                ∂L∂H₀ = ∂L∂θ[begin].IC[glacier_id]
-                dLdθ.IC[glacier_id] .+= λ₀ .* s₀ .+ ∂L∂H₀
+                dLdθ.IC[Symbol("$(i)")] .+= λ₀ .* s₀
+            end
+
+            # Contributions of discrete loss function terms such as the regularization on the initial condition
+            for t in tstopsDiscreteLoss
+                Δtj = (; H=0.0, V=0.0) # Set to zero because we want to compute only the contributions of the discrete loss terms
+                dLdθ .+= backward_loss(
+                    loss_function,
+                    H_itp(t),
+                    useThickness ? H_ref_itp(t) : nothing,
+                    useVelocity ? Vabs_ref_itp(t) : nothing,
+                    useVelocity ? Vx_ref_itp(t) : nothing,
+                    useVelocity ? Vy_ref_itp(t) : nothing,
+                    t,
+                    i,
+                    θ,
+                    simulation,
+                    prod(N) * normalization,
+                    Δtj,
+                )[2]
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint

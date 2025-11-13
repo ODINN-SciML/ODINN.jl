@@ -120,7 +120,7 @@ function loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
@@ -131,18 +131,16 @@ function loss(
     as a trainable parameter. If you want to calibrate the initial condition of the
     glacier, set the initial condition as parameter in the definition of the regressor.
     """
-    # TODO: This should be evaluated just when t = t₀, not in general. However, Currently
-    # this are evaluated at the points of the quadrature, which usually don't include the
-    # extreme values of the time interval.
-    # if t == lossType.t₀
+    if t == lossType.t₀
+        glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter)
+        H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
         mask = trues(size(H₀))
         regH = loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
         return regH
-    # else
-    #     return 0.0
-    # end
+    else
+        return 0.0
+    end
 end
 function backward_loss(
     lossType::InitialThicknessRegularization,
@@ -150,25 +148,26 @@ function backward_loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
     Δt,
 ) where {F <: AbstractFloat}
-    # if t == lossType.t₀
+    # Regularization is only evaluated for the first time step of the simulation.
+    glacier = simulation.glaciers[glacier_idx]
+    if t == lossType.t₀
         Δx, Δy = glacier.Δx, glacier.Δy
-        H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter)
+        H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
         mask = trues(size(H₀))
         ∂L∂H = zero(H₀)
         ∂L∂θ = zero(θ)
-        # Regularization is only evaluated for the first time step of the simulation.
-        # However, we save the value of the gradient for every single value of t
-        ∂L∂θ.IC[glacier.rgi_id] = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
+        key = Symbol("$(glacier_idx)")
+        ∂L∂θ.IC[key] = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
         return ∂L∂H, ∂L∂θ
-    # else
-    #     return zero(H₀), zero(θ)
-    # end
+    else
+        return zero(glacier.H₀), zero(θ)
+    end
 end
 
 function loss(
@@ -177,13 +176,14 @@ function loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
     Δt,
 ) where {F <: AbstractFloat}
 
+    glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
     if !isnothing(simulation.model.machine_learning)
@@ -204,13 +204,14 @@ function backward_loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
     Δt,
 ) where {F <: AbstractFloat}
 
+    glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
     if !isnothing(simulation.model.machine_learning)
@@ -302,3 +303,4 @@ end
 
 loss_uses_velocity(lossType::VelocityRegularization) = true
 loss_uses_velocity(lossType::Union{AbstractRegularization, AbstractSimpleRegularization}) = false
+discreteLossSteps(lossType::InitialThicknessRegularization, tspan) = [lossType.t₀]

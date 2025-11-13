@@ -412,7 +412,7 @@ function batch_loss_iceflow_transient(
     end
 
     β = 2.0
-    losses = map(2:length(H)) do τ
+    losses = map(1:length(H)) do τ
         normalization = 1.0
         # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
 
@@ -426,8 +426,8 @@ function batch_loss_iceflow_transient(
         Vxr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vx_ref[indVelocity])
         Vyr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vy_ref[indVelocity])
         Δtj = @ignore_derivatives((;
-            H=isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness-1],
-            V=isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity-1],
+            H=isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
+            V=isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1),
         ))
 
         loss(
@@ -436,7 +436,7 @@ function batch_loss_iceflow_transient(
             Hr,
             Vr, Vxr, Vyr,
             t[τ],
-            glacier,
+            glacier_idx,
             container.θ,
             container.simulation,
             prod(size(H[τ]))*normalization,
@@ -473,7 +473,8 @@ function _batch_iceflow_UDE(
     tstops = unique(vcat(tstops, params.solver.tstops)) # Merge time steps controlled by `step` with the user provided time steps
     tstopsIceThickness = tdata(glacier.thicknessData)
     tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
-    tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity)))
+    tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan)
+    tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity, tstopsDiscreteLoss)))
 
     # Create mass balance callback
     cb_MB = if params.simulation.use_MB

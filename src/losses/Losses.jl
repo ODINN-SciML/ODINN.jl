@@ -249,7 +249,7 @@ function loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
@@ -267,7 +267,7 @@ function backward_loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
@@ -288,7 +288,7 @@ function loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
@@ -330,7 +330,7 @@ function backward_loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
@@ -382,14 +382,14 @@ function loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
     Δt,
 ) where {F <: AbstractFloat}
-    lH = loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier, θ, simulation, normalization, Δt)
-    lV = loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier, θ, simulation, normalization, Δt)
+    lH = loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
+    lV = loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
     return lH*Δt.H + lossType.scaling * lV*Δt.V
 end
 function backward_loss(
@@ -398,14 +398,14 @@ function backward_loss(
     H_ref,
     V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
     simulation,
     normalization::F,
     Δt,
 ) where {F <: AbstractFloat}
-    ∂lH∂H, ∂lH∂θ = backward_loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier, θ, simulation, normalization, Δt)
-    ∂lV∂H, ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier, θ, simulation, normalization, Δt)
+    ∂lH∂H, ∂lH∂θ = backward_loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
+    ∂lV∂H, ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
     ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H*Δt.H + lossType.scaling * ∂lV∂H*Δt.V
     ∂L∂θ = if isnothing(∂lV∂θ)
         ∂lH∂θ*Δt.H
@@ -419,3 +419,4 @@ end
 
 loss_uses_velocity(lossType::LossH) = false
 loss_uses_velocity(lossType::Union{LossV, LossHV}) = true
+discreteLossSteps(lossType::AbstractLoss, tspan) = Vector{Float64}()
