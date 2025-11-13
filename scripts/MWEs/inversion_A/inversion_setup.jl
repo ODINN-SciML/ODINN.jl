@@ -43,7 +43,6 @@ params = Parameters(
         use_MB = false,
         use_velocities = false,
         tspan = (2010.0, 2015.0),
-        step = δt,
         multiprocessing = false,
         workers = 1,
         test_mode = false,
@@ -72,7 +71,6 @@ params = Parameters(
         ),
     solver = Huginn.SolverParameters(
         step = δt,
-        save_everystep = true,
         progress = true
         )
     )

@@ -83,13 +83,11 @@ params = Parameters(
         use_MB = false,
         use_velocities = false,
         tspan = (2010.0, 2015.0),
-        step = δt,
         rgi_paths = rgi_paths,
         gridScalingFactor = 4 # We reduce the size of glacier for simulation
         ),
     solver = Huginn.SolverParameters(
         step = δt,
-        save_everystep = true,
         progress = true
         )
     )

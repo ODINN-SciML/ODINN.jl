@@ -16,7 +16,7 @@ function grad_free_test(;use_MB::Bool=false)
             use_MB=use_MB,
             use_velocities=true,
             tspan=tspan,
-            step=δt,
+            step_MB=δt,
             multiprocessing=false,
             test_mode=true,
             rgi_paths=rgi_paths),
@@ -35,7 +35,6 @@ function grad_free_test(;use_MB::Bool=false)
             target = :A),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 

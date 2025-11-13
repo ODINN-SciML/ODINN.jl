@@ -24,7 +24,7 @@ function test_MB_VJP(
             use_MB=true,
             use_velocities=false,
             tspan=tspan,
-            step=δt,
+            step_MB=δt,
             multiprocessing=false,
             test_mode=true,
             rgi_paths=rgi_paths,
