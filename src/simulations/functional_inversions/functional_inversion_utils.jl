@@ -388,13 +388,13 @@ function batch_loss_iceflow_transient(
     end
 
     # Discretization for the ice thickness loss term
-    tH_ref = tdata(glacier.thicknessData)
+    tH_ref = tdata(glacier.thicknessData) # If thicknessData is nothing, then tH_ref is an empty vector
     ΔtH = diff(tH_ref)
     useThickness = length(tH_ref)>0
     H_ref = useThickness ? glacier.thicknessData.H : nothing
 
     # Discretization for the surface velocity loss term
-    tV_ref = tdata(glacier.velocityData, container.simulation.parameters.simulation.mapping)
+    tV_ref = tdata(glacier.velocityData, container.simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
     ΔtV = diff(tV_ref)
     useVelocity = length(tV_ref)>0
     Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing

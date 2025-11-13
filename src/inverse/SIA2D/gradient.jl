@@ -77,13 +77,13 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         ## 2- Reference data
 
         # Discretization for the ice thickness loss term
-        tH_ref = tdata(glacier.thicknessData)
+        tH_ref = tdata(glacier.thicknessData) # If thicknessData is nothing, then tH_ref is an empty vector
         ΔtH = diff(tH_ref)
         useThickness = length(tH_ref)>0
         H_ref = useThickness ? glacier.thicknessData.H : nothing
 
         # Discretization for the surface velocity loss term
-        tV_ref = tdata(glacier.velocityData, params.simulation.mapping)
+        tV_ref = tdata(glacier.velocityData, params.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
         ΔtV = diff(tV_ref)
         useVelocity = length(tV_ref)>0
         Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
@@ -98,7 +98,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, tspan)
         tstops = sort(unique(vcat(tstops, params.solver.tstops, tH_ref, tV_ref, tstopsDiscreteLoss)))
 
-        @assert t ≈ tstops "Times in tstops and reference times in result do not coincide."
+        @assert t == tstops "Times in tstops and reference times in result do not coincide."
         if useThickness
             @assert size(H[begin]) == size(H_ref[begin])
         end

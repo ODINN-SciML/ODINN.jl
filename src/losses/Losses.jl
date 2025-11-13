@@ -256,6 +256,7 @@ function loss(
     Δt,
 ) where {F <: AbstractFloat}
     if isnothing(H_ref)
+        # That time step has no valid ground truth ice thickness data, so the contribution is zero
         return 0.0
     else
         return loss(lossType.loss, H_pred, H_ref, normalization)*Δt.H
@@ -275,6 +276,7 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     ∂L∂θ = zero(θ)
     ∂L∂H = if isnothing(H_ref)
+        # That time step has no valid ground truth ice thickness data, so the contribution is zero
         zero(H_pred)
     else
         backward_loss(lossType.loss, H_pred, H_ref, normalization)
@@ -295,6 +297,7 @@ function loss(
     Δt,
 ) where {F <: AbstractFloat}
     if isnothing(V_ref)
+        # That time step has no valid ground truth ice surface velocity data, so the contribution is zero
         return 0.0
     end
 
@@ -337,6 +340,7 @@ function backward_loss(
     Δt,
 ) where {F <: AbstractFloat}
     if isnothing(V_ref)
+        # That time step has no valid ground truth ice surface velocity data, so the contribution is zero
         return nothing, nothing
     end
 
