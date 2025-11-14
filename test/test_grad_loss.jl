@@ -98,7 +98,8 @@ function test_grad_finite_diff(
             workers = 1,
             test_mode = true,
             rgi_paths = rgi_paths,
-            gridScalingFactor = 4
+            gridScalingFactor = 4,
+            f_surface_velocity_factor = velocityLoss ? 0.9 : 1.0
             ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient

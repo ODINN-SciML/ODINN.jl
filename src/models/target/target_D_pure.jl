@@ -73,8 +73,8 @@ function Diffusivity(
     iceflow_cache = simulation.cache.iceflow
     iceflow_model = simulation.model.iceflow
 
-    # TODO: this can be replace by interpolation too!
-    U = iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
+    # Retrieve value of U using the Law cache
+    U = iceflow_cache.U.value
 
     # Include extra dependency in H for U law:
     if size(U) == size(H̄)
@@ -191,10 +191,17 @@ function Diffusivityꜛ(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    return f .* Diffusivity(
+    # return Diffusivity(
+    #     target;
+    #     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    # ) ./ f
+    D = Diffusivity(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
+    # uꜛ = ifelse.((D .> 0.0) .&& (H̄ .> 0.0), D ./ (f .* H̄), 0.0)
+    # return uꜛ
+    return D ./ f
 end
 
 function ∂Diffusivityꜛ∂H(
@@ -202,10 +209,13 @@ function ∂Diffusivityꜛ∂H(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    return f .* ∂Diffusivity∂H(
+    return ∂Diffusivity∂H(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+    ) ./ f
+    # Notice this is wrong, since we have one less H!
+    # ∂D∂Hꜛ = ifelse.((D .> 0.0) .&& (H̄ .> 0.0), ∂D∂H ./ (f .* H̄), 0.0)
+    # return ∂D∂Hꜛ
 end
 
 function ∂Diffusivityꜛ∂∇H(
@@ -213,10 +223,10 @@ function ∂Diffusivityꜛ∂∇H(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    return f .* ∂Diffusivity∂∇H(
+    return ∂Diffusivity∂∇H(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+    ) ./ f
 end
 
 function ∂Diffusivityꜛ∂θ(
@@ -224,8 +234,11 @@ function ∂Diffusivityꜛ∂θ(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    return f .* ∂Diffusivity∂θ(
+    ∂D∂θ = ∂Diffusivity∂θ(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+    ) ./ f
+    # ∂D∂θꜛ = ifelse.((∂D∂θ .> 0.0) .&& (H̄ .> 0.0), ∂D∂θ ./ (f .* H̄), 0.0)
+    # return ∂D∂θꜛ
+    return ∂D∂θ
 end
