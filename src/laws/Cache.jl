@@ -78,7 +78,8 @@ feed_input_cache! = function (
         SIA2D_cache.U.nodes_H = create_interpolation(
             collect(Iterators.flatten(result.H));
             n_interp_half = simulation.model.machine_learning.target.n_interp_half,
-            dilation_factor = 1.05
+            dilation_factor = 1.05,
+            minA_quantile = 10.0, # We start the quantile count at H = 10m to avoid very small values near zero
         )
         ∇S = Huginn.∇slope.([H .+ glacier.B for H in result.H], Ref(glacier.Δx), Ref(glacier.Δy))
         SIA2D_cache.U.nodes_∇S = create_interpolation(
