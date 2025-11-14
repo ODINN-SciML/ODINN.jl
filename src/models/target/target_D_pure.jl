@@ -191,31 +191,26 @@ function Diffusivityꜛ(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    # return Diffusivity(
-    #     target;
-    #     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    # ) ./ f
     D = Diffusivity(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    # uꜛ = ifelse.((D .> 0.0) .&& (H̄ .> 0.0), D ./ (f .* H̄), 0.0)
-    # return uꜛ
-    return D ./ f
+    # Return D / (f ⋅ H)
+    Dꜛ = ifelse.((D .> 0.0) .&& (H̄ .> 1e-6), D ./ (f .* H̄), 0.0)
+    return Dꜛ
 end
 
 function ∂Diffusivityꜛ∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    f = simulation.parameters.simulation.f_surface_velocity_factor
-    return ∂Diffusivity∂H(
+    ∂D∂H = ∂Diffusivity∂H(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    ) ./ f
-    # Notice this is wrong, since we have one less H!
-    # ∂D∂Hꜛ = ifelse.((D .> 0.0) .&& (H̄ .> 0.0), ∂D∂H ./ (f .* H̄), 0.0)
-    # return ∂D∂Hꜛ
+    )
+    # Return D / H
+    ∂D∂Hꜛ = ifelse.(H̄ .> 1e-6, ∂D∂H ./ H̄, 0.0)
+    return ∂D∂Hꜛ
 end
 
 function ∂Diffusivityꜛ∂∇H(
@@ -223,10 +218,12 @@ function ∂Diffusivityꜛ∂∇H(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    return ∂Diffusivity∂∇H(
+    ∂D∂∇H = ∂Diffusivity∂∇H(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    ) ./ f
+    )
+    ∂D∂∇Hꜛ = ifelse.(H̄ .> 1e-6, ∂D∂∇H ./ (f .* H̄), 0.0)
+    return ∂D∂∇Hꜛ
 end
 
 function ∂Diffusivityꜛ∂θ(
@@ -237,8 +234,7 @@ function ∂Diffusivityꜛ∂θ(
     ∂D∂θ = ∂Diffusivity∂θ(
         target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    ) ./ f
-    # ∂D∂θꜛ = ifelse.((∂D∂θ .> 0.0) .&& (H̄ .> 0.0), ∂D∂θ ./ (f .* H̄), 0.0)
-    # return ∂D∂θꜛ
-    return ∂D∂θ
+    )
+    ∂D∂θꜛ = ifelse.(H̄ .> 1e-6, ∂D∂θ ./ (f .* H̄), 0.0)
+    return ∂D∂θꜛ
 end
