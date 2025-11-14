@@ -106,7 +106,7 @@ function LawU(
         end
     end
 
-    init_cache = function (simulation, glacier_idx, θ)
+    init_cache_interp = function (simulation, glacier_idx, θ)
         glacier = simulation.glaciers[glacier_idx]
         (; nx, ny) = glacier
 
@@ -122,15 +122,18 @@ function LawU(
         # Return cache for a custom interpolation
         return MatrixCacheInterp(
             zeros(nx - 1, ny - 1),
-            # zeros(nx - 1, ny - 1),
-            # zeros(nx - 1, ny - 1, length(θ)),
             H_nodes,
             H_nodes,
             grad_itp
             )
     end
+    init_cache_matrix = function (simulation, glacier_idx, θ)
+        glacier = simulation.glaciers[glacier_idx]
+        (; nx, ny) = glacier
+        return MatrixCache(zeros(nx - 1, ny - 1), zeros(nx - 1, ny - 1), zero(θ))
+    end
 
-    p_VJP! = let nn_model = nn_model
+    p_VJP! = let smodel = smodel, prescale = prescale, postscale = postscale
         function (cache, vjpsPrepLaw, inputs, θ)
             # Check that nodes are correct!
             (; nodes_H, nodes_∇S) = cache
@@ -140,8 +143,6 @@ function LawU(
             for (i, h) in enumerate(nodes_H), (j, ∇s) in enumerate(nodes_∇S)
                 # We don't do this with f! since this evaluates a matrix
                 grad, = Zygote.gradient(_θ -> _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
-                # ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
-                # ∂law∂θ!(backend, nn_model, cache, true, (; H̄=h, ∇S=∇s), θ)
                 grads[i, j] .= ODINN.ComponentVector2Vector(grad)
             end
             cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
@@ -155,7 +156,7 @@ function LawU(
     Law{LawCache}(;
         inputs = (; H̄ = iH̄(), ∇S = i∇S()),
         f! = f!,
-        init_cache = precompute_interpolation ? init_cache : nothing,
+        init_cache = precompute_interpolation ? init_cache_interp : init_cache_matrix,
         p_VJP! = precompute_VJPs ? p_VJP! : nothing,
     )
     end
