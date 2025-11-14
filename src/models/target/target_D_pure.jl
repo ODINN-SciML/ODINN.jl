@@ -29,7 +29,7 @@ learnign the velocity field assuming that this is parallel to the gradient in su
 """
 @kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
     interpolation::Symbol = :None
-    n_interp_half::Int = 20
+    n_interp_half::Int = 100
     prescale_provided::Bool = false
     postscale_provided::Bool = false
 end
@@ -71,55 +71,55 @@ function Diffusivity(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_cache = simulation.cache.iceflow
+    iceflow_model = simulation.model.iceflow
+
+    # Retrieve value of U using the Law cache
     U = iceflow_cache.U.value
+
+    # Include extra dependency in H for U law:
     if size(U) == size(H̄)
-        return H̄ .* U
+        D = H̄ .* U
     elseif (size(U) .+ 1) == size(H̄)
-        return Huginn.avg(H̄) .* U
+        D = Huginn.avg(H̄) .* U
     else
         throw("Not matching dimensions between U (∇S) and H̄. size(U)=$(size(U)) but size(H̄)=$(size(H̄))")
     end
+    return D
 end
 
 function ∂Diffusivity∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_model = simulation.model.iceflow
-    iceflow_cache = simulation.cache.iceflow
 
-    # Neural network has already been evaluated in VJPs
-    ∂D∂H_no_NN = iceflow_cache.U.value
     ∂H∂H = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
-    ∂D∂H_no_NN .= ∂H∂H .* ∂D∂H_no_NN
 
     # Derivative of the output of the NN with respect to input layer
     δH = 1e-4 .* ones(size(H̄))
-    # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄+δH, ∇S=∇S), θ)
-    a = iceflow_cache.U.value .* (H̄+δH)
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.U.value .* H̄
-    ∂D∂H_NN = (a .- b) ./ δH
 
-    return ∂D∂H_no_NN + ∂D∂H_NN
+    # TODO: This can also be replace by interpolation
+    D₊ = Diffusivity(target; H̄ = H̄ + δH, ∇S = ∇S, θ, simulation, glacier_idx, t, glacier, params)
+    D₋ = Diffusivity(target; H̄ = H̄ - δH, ∇S = ∇S, θ, simulation, glacier_idx, t, glacier, params)
+
+    # Compute central difference derivative
+    ∂D∂H_NN = (D₊ .- D₋) ./ (2.0 .* δH)
+
+    return ∂H∂H .* ∂D∂H_NN
 end
 
 function ∂Diffusivity∂∇H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_model = simulation.model.iceflow
-    iceflow_cache = simulation.cache.iceflow
-
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
-    # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
-    a = iceflow_cache.U.value .* H̄
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.U.value .* H̄
-    ∂D∂∇S = (a .- b) ./ δ∇H
+
+    # TODO: This can also be replaced by interpolation
+    D₊ = Diffusivity(target; H̄ = H̄, ∇S = ∇S + δ∇H, θ, simulation, glacier_idx, t, glacier, params)
+    D₋ = Diffusivity(target; H̄ = H̄, ∇S = ∇S - δ∇H, θ, simulation, glacier_idx, t, glacier, params)
+
+    # Compute central difference derivative
+    ∂D∂∇S = (D₊ .- D₋) ./ (2.0 .* δ∇H)
 
     return ∂D∂∇S
 end
@@ -137,9 +137,7 @@ function ∂Diffusivity∂θ(
 
     # Extract relevant parameters specific from the target
     interpolation = target.interpolation
-    n_interp_half = target.n_interp_half
 
-    # ∂spatial = ones(size(H̄)...)
     ∂spatial = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
@@ -156,40 +154,22 @@ function ∂Diffusivity∂θ(
                 continue
             end
             ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=H̄[i, j], ∇S=∇S[i, j]), θ)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ * H̄[i, j]
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ[i, j, :] * H̄[i, j]
         end
 
     elseif interpolation == :Linear
         """
         Interpolation of the gradient as function of values of H̄.
         Introduces interpolation errors but it is faster and probably sufficient depending
-        the decired level of precision for the gradients.
+        the desired level of precision for the gradients.
         We construct an interpolator with quantiles and equal-spaced points.
         """
-
-        # Interpolation for H̄
-        H_interp = create_interpolation(H̄; n_interp_half = n_interp_half)
-        # Interpolation for ∇S
-        ∇S_interp = create_interpolation(∇S; n_interp_half = n_interp_half)
-
-        if sum(H̄ .> 0.0) < 2.0 * length(H_interp) * length(∇S_interp)
-            @warn "The total number of AD evaluations using interpolations is comparable to the total number of AD operations required to compute the derivative purely with AD with no interpolation. Recomendation is to switch to interpolation = :None"
-        end
-
-        # Compute exact gradient in certain values of H̄ and ∇S
-        grads = [zeros(only(size(θ))) for i = 1:length(H_interp), j = 1:length(∇S_interp)]
-
-        # TODO: Check if all these gradints cannot be computed at once withing Lux
-        for (i, h) in enumerate(H_interp), (j, ∇s) in enumerate(∇S_interp)
-            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
-            grads[i, j] .= iceflow_cache.U.vjp_θ * h
-        end
-        # Create interpolation for gradient
-        grad_itp = interpolate((H_interp, ∇S_interp), grads, Gridded(Linear()))
-
+        # Unpack gradient interpolation
+        grad_itp = iceflow_cache.U.interp_θ
         # Compute spatial distributed gradient
         for i in axes(H̄, 1), j in axes(H̄, 2)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j])
+            # Include extra contribution of ice thickness H
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j]) * H̄[i, j]
         end
     else
         throw("Method to spatially compute gradient with respect to H̄ not specified.")
@@ -198,124 +178,63 @@ function ∂Diffusivity∂θ(
     return ∂D∂θ
 end
 
+"""
 
+Function to evaluate derivatives of ice surface velocity in D inversion.
+
+TODO: This functions right now just make a call to the regular functions used for the
+calculation of the adjoint. This is not correct, but we keep it as this for now until
+we figure out how to do this in the case of the D inversion.
+"""
 function Diffusivityꜛ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_cache = simulation.cache.iceflow
-    U = iceflow_cache.U.value
-    return U
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    D = Diffusivity(
+        target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    )
+    # Return D / (f ⋅ H)
+    Dꜛ = ifelse.((D .> 0.0) .&& (H̄ .> 1e-6), D ./ (f .* H̄), 0.0)
+    return Dꜛ
 end
 
 function ∂Diffusivityꜛ∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_model = simulation.model.iceflow
-    iceflow_cache = simulation.cache.iceflow
-
-    # Derivative of the output of the NN with respect to input layer
-    δH = 1e-4 .* ones(size(H̄))
-    # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄+δH, ∇S=∇S), θ)
-    a = iceflow_cache.U.value .* (H̄+δH)
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.U.value .* H̄
-    ∂D∂H_NN = (a .- b) ./ δH
-
-    return ∂D∂H_NN
+    ∂D∂H = ∂Diffusivity∂H(
+        target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    )
+    # Return D / H
+    ∂D∂Hꜛ = ifelse.(H̄ .> 1e-6, ∂D∂H ./ H̄, 0.0)
+    return ∂D∂Hꜛ
 end
 
 function ∂Diffusivityꜛ∂∇H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_model = simulation.model.iceflow
-    iceflow_cache = simulation.cache.iceflow
-
-    # For now we ignore the derivative in surface slope
-    δ∇H = 1e-6 .* ones(size(∇S))
-    # We don't use apply_law! because we want to evaluate with custom inputs
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S+δ∇H), θ)
-    a = iceflow_cache.U.value .* H̄
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
-    b = iceflow_cache.U.value .* H̄
-    ∂D∂∇S = (a .- b) ./ δ∇H
-
-    return ∂D∂∇S
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    ∂D∂∇H = ∂Diffusivity∂∇H(
+        target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    )
+    ∂D∂∇Hꜛ = ifelse.(H̄ .> 1e-6, ∂D∂∇H ./ (f .* H̄), 0.0)
+    return ∂D∂∇Hꜛ
 end
 
 function ∂Diffusivityꜛ∂θ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    iceflow_model = simulation.model.iceflow
-    iceflow_cache = simulation.cache.iceflow
-
-    if is_callback_law(iceflow_model.U)
-        @assert "The U law cannot be a callback law as it needs to be differentiated in ∂Diffusivity∂θ. To support U as a callback law, you need to update the structure of the adjoint code computation."
-    end
-
-    # Extract relevant parameters specific from the target
-    interpolation = target.interpolation
-    n_interp_half = target.n_interp_half
-
-    # ∂spatial = ones(size(H̄)...)
-    ∂spatial = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
-
-    ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
-    @assert size(H̄) == size(∇S)
-
-    backend = simulation.parameters.UDE.grad.VJP_method.regressorADBackend
-    if interpolation == :None
-        """
-        Computes derivative at each pixel using the exact numerical value of H̄ at each
-        point in the glacier. Slower but more precise.
-        """
-        for i in axes(H̄, 1), j in axes(H̄, 2)
-            if H̄[i, j] == 0.0
-                continue
-            end
-            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=H̄[i, j], ∇S=∇S[i, j]), θ)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ
-        end
-
-    elseif interpolation == :Linear
-        """
-        Interpolation of the gradient as function of values of H̄.
-        Introduces interpolation errors but it is faster and probably sufficient depending
-        the decired level of precision for the gradients.
-        We construct an interpolator with quantiles and equal-spaced points.
-        """
-
-        # Interpolation for H̄
-        H_interp = create_interpolation(H̄; n_interp_half = n_interp_half)
-        # Interpolation for ∇S
-        ∇S_interp = create_interpolation(∇S; n_interp_half = n_interp_half)
-
-        if sum(H̄ .> 0.0) < 2.0 * length(H_interp) * length(∇S_interp)
-            @warn "The total number of AD evaluations using interpolations is comparable to the total number of AD operations required to compute the derivative purely with AD with no interpolation. Recomendation is to switch to interpolation = :None"
-        end
-
-        # Compute exact gradient in certain values of H̄ and ∇S
-        grads = [zeros(only(size(θ))) for i = 1:length(H_interp), j = 1:length(∇S_interp)]
-
-        # TODO: Check if all these gradints cannot be computed at once withing Lux
-        for (i, h) in enumerate(H_interp), (j, ∇s) in enumerate(∇S_interp)
-            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=h, ∇S=∇s), θ)
-            grads[i, j] .= iceflow_cache.U.vjp_θ
-        end
-        # Create interpolation for gradient
-        grad_itp = interpolate((H_interp, ∇S_interp), grads, Gridded(Linear()))
-
-        # Compute spatial distributed gradient
-        for i in axes(H̄, 1), j in axes(H̄, 2)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j])
-        end
-    else
-        @error "Method to spatially compute gradient with respect to H̄ not specified."
-    end
-
-    return ∂D∂θ
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    ∂D∂θ = ∂Diffusivity∂θ(
+        target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+    )
+    ∂D∂θꜛ = ifelse.(H̄ .> 1e-6, ∂D∂θ ./ (f .* H̄), 0.0)
+    return ∂D∂θꜛ
 end

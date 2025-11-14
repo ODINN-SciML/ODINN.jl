@@ -18,7 +18,7 @@ mutable struct Hyperparameters{F <: AbstractFloat, I <: Integer} <: AbstractPara
     current_epoch::I
     current_minibatch::I
     loss_history::Vector{F}
-    optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule, Vector{Any}}
+    optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule, Vector{Optim.FirstOrderOptimizer}, Vector{Any}}
     loss_epoch::F
     epochs::Union{I, Vector{I}}
     batch_size::I
@@ -47,7 +47,7 @@ function Hyperparameters(;
             current_minibatch::Int64 = 1,
             loss_history::Vector{Float64} = Vector{Float64}(),
             # optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule} = BFGS(initial_stepnorm=0.001),
-            optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule, Vector{Any}} = BFGS(initial_stepnorm=0.001),
+            optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule, Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = BFGS(initial_stepnorm=0.001),
             loss_epoch::Float64 = 0.0,
             epochs::Union{Int64, Vector{Int64}} = 50,
             batch_size::Int64 = 15
