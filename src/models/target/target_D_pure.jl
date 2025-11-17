@@ -71,20 +71,26 @@ function Diffusivity(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_cache = simulation.cache.iceflow
-    iceflow_model = simulation.model.iceflow
 
     # Retrieve value of U using the Law cache
     U = iceflow_cache.U.value
 
     # Include extra dependency in H for U law:
-    if size(U) == size(H̄)
-        D = H̄ .* U
+    D = if size(U) == size(H̄)
+        H̄ .* U
     elseif (size(U) .+ 1) == size(H̄)
-        D = Huginn.avg(H̄) .* U
+        Huginn.avg(H̄) .* U
     else
         throw("Not matching dimensions between U (∇S) and H̄. size(U)=$(size(U)) but size(H̄)=$(size(H̄))")
     end
     return D
+end
+
+function eval_U(target::SIA2D_D_target, H̄, ∇S, θ, simulation)
+    iceflow_cache = simulation.cache.iceflow
+    iceflow_model = simulation.model.iceflow
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    return iceflow_cache.U.value
 end
 
 function ∂Diffusivity∂H(
@@ -98,12 +104,11 @@ function ∂Diffusivity∂H(
     δH = 1e-4 .* ones(size(H̄))
 
     # TODO: This can also be replace by interpolation
-    D₊ = Diffusivity(target; H̄ = H̄ + δH, ∇S = ∇S, θ, simulation, glacier_idx, t, glacier, params)
-    D₋ = Diffusivity(target; H̄ = H̄ - δH, ∇S = ∇S, θ, simulation, glacier_idx, t, glacier, params)
+    D₊ = eval_U(target, H̄ + δH, ∇S, θ, simulation) .* (H̄ + δH)
+    D₋ = eval_U(target, H̄ - δH, ∇S, θ, simulation) .* (H̄ - δH)
 
     # Compute central difference derivative
     ∂D∂H_NN = (D₊ .- D₋) ./ (2.0 .* δH)
-
     return ∂H∂H .* ∂D∂H_NN
 end
 
@@ -115,12 +120,11 @@ function ∂Diffusivity∂∇H(
     δ∇H = 1e-6 .* ones(size(∇S))
 
     # TODO: This can also be replaced by interpolation
-    D₊ = Diffusivity(target; H̄ = H̄, ∇S = ∇S + δ∇H, θ, simulation, glacier_idx, t, glacier, params)
-    D₋ = Diffusivity(target; H̄ = H̄, ∇S = ∇S - δ∇H, θ, simulation, glacier_idx, t, glacier, params)
+    D₊ = eval_U(target, H̄, ∇S + δ∇H, θ, simulation) .* H̄
+    D₋ = eval_U(target, H̄, ∇S - δ∇H, θ, simulation) .* H̄
 
     # Compute central difference derivative
     ∂D∂∇S = (D₊ .- D₋) ./ (2.0 .* δ∇H)
-
     return ∂D∂∇S
 end
 
@@ -190,26 +194,23 @@ function Diffusivityꜛ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
+    iceflow_cache = simulation.cache.iceflow
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    D = Diffusivity(
-        target;
-        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
-    # Return D / (f ⋅ H)
-    Dꜛ = ifelse.((D .> 0.0) .&& (H̄ .> 1e-6), D ./ (f .* H̄), 0.0)
-    return Dꜛ
+    U = iceflow_cache.U.value
+    return U / f
 end
 
 function ∂Diffusivityꜛ∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
-    ∂D∂H = ∂Diffusivity∂H(
-        target;
-        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
-    # Return D / H
-    ∂D∂Hꜛ = ifelse.(H̄ .> 1e-6, ∂D∂H ./ H̄, 0.0)
+    f = simulation.parameters.simulation.f_surface_velocity_factor
+    δH = 1e-4 .* ones(size(H̄))
+    U₊ = eval_U(target, H̄ + δH, ∇S, θ, simulation)
+    U₋ = eval_U(target, H̄ - δH, ∇S, θ, simulation)
+
+    # Compute central difference derivative
+    ∂D∂Hꜛ = (1/f) * (U₊ .- U₋) ./ (2.0 .* δH)
     return ∂D∂Hꜛ
 end
 
@@ -218,11 +219,12 @@ function ∂Diffusivityꜛ∂∇H(
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    ∂D∂∇H = ∂Diffusivity∂∇H(
-        target;
-        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
-    ∂D∂∇Hꜛ = ifelse.(H̄ .> 1e-6, ∂D∂∇H ./ (f .* H̄), 0.0)
+    δ∇H = 1e-6 .* ones(size(∇S))
+    U₊ = eval_U(target, H̄, ∇S + δ∇H, θ, simulation)
+    U₋ = eval_U(target, H̄, ∇S - δ∇H, θ, simulation)
+
+    # Compute central difference derivative
+    ∂D∂∇Hꜛ = (1/f) * (U₊ .- U₋) ./ (2.0 .* δ∇H)
     return ∂D∂∇Hꜛ
 end
 

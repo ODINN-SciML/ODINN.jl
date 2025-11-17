@@ -99,7 +99,7 @@ function test_grad_finite_diff(
             test_mode = true,
             rgi_paths = rgi_paths,
             gridScalingFactor = 4,
-            f_surface_velocity_factor = velocityLoss ? 0.8 : 1.0
+            f_surface_velocity_factor = 0.8,
             ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
@@ -254,9 +254,8 @@ function test_grad_finite_diff(
         ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
 
         if n_params > max_params
-            # Evaluate gradient on subset of parameters
-            # We just evaluate in a subset to save some computation
-            @info "Testing gradient with a subset of parameters since the original parameter vector θ is of dimension $(n_params)."
+            # Evaluate gradient on subset of parameters to save some computation
+            @info "Testing gradient with a subset of parameters of size $(max_params) since the original parameter vector θ is of dimension $(n_params)."
 
             # Component array with binary entry
             θ_mask = θ .== nothing
