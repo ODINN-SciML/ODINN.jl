@@ -144,21 +144,13 @@ function test_grad_finite_diff(
 
     # Neural network model
     if custom_NN
-        function normalize(v::Union{Vector,SubArray})
-            @assert length(v) == 2
-            return [ODINN.normalize(v[1]; lims = (0.0, 200.0)), ODINN.normalize(v[2]; lims = (0.0, 0.6))]
-        end
-        function scale(v::Union{Vector,SubArray})
-            @assert length(v) == 1
-            return 1e2 .* v
-        end
         architecture = Lux.Chain(
-            Lux.WrappedFunction(x -> LuxFunction(normalize, x)),
+            Lux.WrappedFunction(x -> LuxFunction(v -> ODINN.normalize(v; lims=([0.0, 0.0], [200.0, 0.6])), x)),
             Lux.Dense(2, 5, x -> gelu.(x)),
             Lux.Dense(5, 10, x -> gelu.(x)),
             Lux.Dense(10, 5, x -> gelu.(x)),
             Lux.Dense(5, 1, sigmoid),
-            Lux.WrappedFunction(x -> LuxFunction(scale, x))
+            Lux.WrappedFunction(x -> LuxFunction(v -> v*1e2, x))
         )
         nn_model = NeuralNetwork(params; architecture = architecture)
     else

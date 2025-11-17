@@ -129,7 +129,7 @@ upper bounds (m, M) and transforming to O(1) scale.
 """
 function normalize(
     X;
-    lims::Tuple{F, F},
+    lims::Union{Tuple{F, F}, Tuple{Vector{F}, Vector{F}}},
     method::Symbol = :shift
 ) where {F <: AbstractFloat}
 
