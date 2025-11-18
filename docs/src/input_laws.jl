@@ -60,23 +60,28 @@ A_law = LawA(nn_model, params)
 # ```@docs
 # iTemp
 # ```
+iTemp()
 
 # - Cumulative positive degree days (PDD)
 # ```@docs
 # iCPDD
 # ```
+iCPDD()
 
 # - Ice thickness on the dual grid in the SIA
 # ```@docs
 # iH̄
 # ```
+iH̄()
 
 # - Surface slope
 # ```@docs
 # i∇S
 # ```
+i∇S()
 
 # - Topographic roughness
 # ```@docs
 # iTopoRough
 # ```
+iTopoRough()
