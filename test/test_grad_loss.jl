@@ -451,7 +451,7 @@ function test_grad_Halfar(
     S = B + H₀
 
     # Define glacier object
-    climate = Sleipnir.DummyClimate2D(longterm_temps=[T])
+    climate = Sleipnir.DummyClimate2D(longterm_temps_scalar=[T], longterm_temps_gridded=[T T; T T])
     glacier = Glacier2D(rgi_id = "toy", climate = climate, H₀ = H₀, S = S, B = B, A = A, n=n,
                         Δx=Δx, Δy=Δy, nx=nx, ny=ny, C = 0.0)
     glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])

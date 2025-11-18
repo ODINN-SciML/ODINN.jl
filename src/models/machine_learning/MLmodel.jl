@@ -1,9 +1,9 @@
 export NeuralNetwork, Model
 
-_inputs_A_law = (; T=iTemp())
+_inputs_A_law = (; T=iTemp(scalar=false))
 _inputs_C_law = (; )
 _inputs_n_law = (; )
-_inputs_Y_law = (; T=iTemp(), H̄=iH̄())
+_inputs_Y_law = (; T=iTemp(scalar=true), H̄=iH̄())
 _inputs_U_law = (; H̄=iH̄(), ∇S=i∇S())
 
 """

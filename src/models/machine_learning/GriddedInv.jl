@@ -40,7 +40,7 @@ mutable struct GriddedInv{
     )
         inv_param_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
         inv_param = NamedTuple{inv_param_type}(
-            Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀)) for i in 1:length(glaciers))
+            Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀) .-1) for i in 1:length(glaciers))
         )
         θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
 

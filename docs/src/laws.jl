@@ -51,7 +51,7 @@ model = Model(
 
 # Here is a quick example also drawn from the [Functional inversion](./functional_inversion.md) tutorial. We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
 
-A_law = CuffeyPaterson()
+A_law = CuffeyPaterson(scalar=true)
 
 # Note that this time since there is no learnable parameter, ODINN does not need to compute the VJPs.
 

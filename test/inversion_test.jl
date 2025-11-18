@@ -3,6 +3,7 @@ function inversion_test(;
     multiprocessing = false,
     grad = ContinuousAdjoint(),
     functional_inv = true,
+    scalar = true
 )
 
     rgi_paths = get_rgi_paths()
@@ -69,7 +70,7 @@ function inversion_test(;
 
     MB_model = use_MB ? TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0) : nothing
     model = Model(
-        iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
+        iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=scalar)),
         mass_balance = MB_model,
     )
 
@@ -83,21 +84,31 @@ function inversion_test(;
 
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
-    trainable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, :A)
-    A_law = functional_inv ? LawA(trainable_model, params) : LawA(params)
+    if functional_inv
+        trainable_model = NeuralNetwork(params)
+        file_name = "functional_inversion_test.jld2"
+    elseif scalar
+        trainable_model = GlacierWideInv(params, glaciers, :A)
+        file_name = "classical_scalar_inversion_test.jld2"
+    else
+        trainable_model = GriddedInv(params, glaciers, :A)
+        file_name = "classical_gridded_inversion_test.jld2"
+    end
+
+    A_law = functional_inv ? LawA(trainable_model, params; scalar=scalar) : LawA(params; scalar=scalar)
     model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = MB_model,
         regressors = (; A=trainable_model))
 
     # We create an ODINN prediction
-    functional_inversion = Inversion(model, glaciers, params)
+inversion = Inversion(model, glaciers, params)
 
     # We run the simulation
     path = mktempdir()
-    file_name = functional_inv ? "functional_inversion_test.jld2" : "classical_inversion_test.jld2"
+    
     run!(
-        functional_inversion;
+        inversion;
         path = path,
         file_name = file_name
     )
@@ -118,7 +129,7 @@ function inversion_test(;
         functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, θ)
         functional_inversion.model.machine_learning.θ = θ
 
-        T = get_input(iTemp(), functional_inversion, i, t)
+        T = get_input(iTemp(scalar=scalar), functional_inversion, i, t)
         apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
         push!(Temps, T)
         push!(As_optim, functional_inversion.cache.iceflow.A.value[1])

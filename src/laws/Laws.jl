@@ -244,6 +244,7 @@ function LawA(
     nn_model::NeuralNetwork,
     params::Sleipnir.Parameters;
     precompute_VJPs::Bool = true,
+    scalar::Bool = true
 )
     archi = nn_model.architecture
     st = nn_model.st
@@ -273,22 +274,33 @@ function LawA(
         ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
         cache.vjp_θ .= ret
     end
-    A_law = Law{ScalarCache}(;
-        inputs = (; T=iTemp()),
-        f! = f!,
-        init_cache = function (simulation, glacier_idx, θ)
-            return ScalarCache(zeros(), zeros(), zero(θ))
-        end,
-        p_VJP! = precompute_VJPs ? p_VJP! : nothing,
-        callback_freq = callback_freq,
-    )
+    A_law = if scalar
+            Law{ScalarCache}(;
+                inputs = (; T=iTemp(scalar=scalar)),
+                f! = f!,
+                init_cache = function (simulation, glacier_idx, θ)
+                    return ScalarCache(zeros(), zeros(), zero(θ))
+                end,
+                p_VJP! = precompute_VJPs ? p_VJP! : nothing,
+                callback_freq = callback_freq,
+            )
+        else
+            Law{MatrixCache}(;
+                inputs = (; T = iTemp(scalar=scalar)),
+                f! = f!,
+                init_cache = function (simulation, glacier_idx, θ)
+                    (; nx, ny) = simulation.glaciers[glacier_idx]
+                    return MatrixCache(zeros(nx, ny), zeros(nx, ny), zero(θ))
+                end,
+            )
+        end
     return A_law
 end
 
 # TODO: move the cache definition below to Cache.jl once #413 is merged
 import Base.similar, Base.size, Base.fill
 
-export ScalarCacheGlacierId
+export ScalarCacheGlacierId, MatrixCacheGlacierId
 
 """
     ScalarCacheGlacierId <: Cache
@@ -316,6 +328,30 @@ fill(c::ScalarCacheGlacierId, s) = typeof(c)(fill(c.value, s), fill(c.vjp_inp, s
 Base.:(==)(a::ScalarCacheGlacierId, b::ScalarCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
 
 """
+    MatrixCacheGlacierId <: Cache
+
+A cache structure for storing a matrix value (`Float64` 2D array) along with
+their associated vector-Jacobian products (VJP).
+It also stores the glacier ID as an integer.
+This is typically used to invert a spatially varying field per glacier.
+Fields:
+- `value::Array{Float64, 2}`: The cached matrix value.
+- `vjp_inp::Array{Float64, 2}`: VJP with respect to inputs.
+- `vjp_θ::Vector{Float64}`: VJP with respect to parameters.
+- `glacier_id::Int64`: Glacier ID in the list of simulated glaciers.
+"""
+struct MatrixCacheGlacierId <: Cache
+    value::Array{Float64, 2}
+    vjp_inp::Array{Float64, 2}
+    vjp_θ::Vector{Float64}
+    glacier_id::Int64
+end
+similar(c::MatrixCacheGlacierId) = typeof(c)(similar(c.value), similar(c.vjp_inp), similar(c.vjp_θ), c.glacier_id)
+size(c::MatrixCacheGlacierId) = size(c.value)
+fill(c::MatrixCacheGlacierId, s) = typeof(c)(fill(c.value, s), fill(c.vjp_inp, s), similar(c.vjp_θ), c.glacier_id)
+Base.:(==)(a::MatrixCacheGlacierId, b::MatrixCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
+
+"""
     LawA(params::Sleipnir.Parameters; scalar::Bool=true)
 
 Construct a law that defines an ice rheology A per glacier to invert.
@@ -329,30 +365,61 @@ value of `scalar`.
     spatially varying `A` per glacier (matrix to invert).
 """
 function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
-    @assert scalar "Spatially varying inversion of A is not implemented yet."
-    min_NN = params.physical.minA
-    max_NN = params.physical.maxA
-    f! = let min_NN = min_NN, max_NN = max_NN
-        function (cache, inp, θ)
-            val = min_NN+(max_NN-min_NN)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
-            Zygote.@ignore_derivatives cache.value .= val
-            return val
+    min_A = params.physical.minA
+    max_A = params.physical.maxA
+    if scalar
+        f! = let min_A = min_A, max_A = max_A
+            function (cache, inp, θ)
+                val = @. min_A+(max_A-min_A)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
+                Zygote.@ignore_derivatives cache.value .= val
+                return val
+            end
         end
+        init_cache = function (simulation, glacier_idx, θ)
+                ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
+        end
+
+        p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+            ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
+            cache.vjp_θ[cache.glacier_id] = only(ret.A[Symbol("$(cache.glacier_id)")])
+        end
+
+        A_law = Law{ScalarCacheGlacierId}(;
+                inputs = (;),
+                f! = f!,
+                init_cache = init_cache,
+                p_VJP! = p_VJP!,
+                callback_freq = 0
+                )
+    else
+        f! = let min_A = min_A, max_A = max_A
+            function (cache, inp, θ)
+                val = @. min_A+(max_A-min_A)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
+                Zygote.@ignore_derivatives cache.value .= val
+                return val
+            end
+        end
+
+        init_cache = function (simulation, glacier_idx, θ)
+                (; nx, ny) = simulation.glaciers[glacier_idx]
+                MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ), glacier_idx)
+        end
+
+        p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+            @infiltrate
+            ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ)
+            cache.vjp_θ[cache.glacier_id] .= ret.A[Symbol("$(cache.glacier_id)")]
+        end
+
+        A_law = Law{MatrixCacheGlacierId}(;
+                inputs = (; T = iTemp(scalar=scalar)),
+                f! = f!,
+                init_cache = init_cache,
+                p_VJP! = p_VJP!,
+                callback_freq = 0
+                )
     end
-    init_cache = function (simulation, glacier_idx, θ)
-        ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
-    end
-    p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
-        ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
-        cache.vjp_θ[cache.glacier_id] = only(ret.A[Symbol("$(cache.glacier_id)")])
-    end
-    A_law = Law{ScalarCacheGlacierId}(;
-        inputs = (;),
-        f! = f!,
-        init_cache = init_cache,
-        p_VJP! = p_VJP!,
-        callback_freq = 0,
-    )
+
     return A_law
 end
 
