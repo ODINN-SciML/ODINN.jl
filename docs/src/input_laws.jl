@@ -16,6 +16,9 @@ A_law = LawA(nn_model, params)
 # ## Implementation
 
 # It is also possible to define new inputs by creating a new struct type and defining the method for this specific type.
+# On top of type of the input, we also need to override two methods using multiple dispatch: `get_input` and `Base.zero`.
+# The first one computes the value of the input at a given time `t` for a specific glacier inside the simulation.
+# The second one returns the zero value of the input for a specific glacier, used to generate an empty cache.
 # For example the long term air temperature is defined with the following code:
 
 # ```julia
@@ -54,26 +57,31 @@ A_law = LawA(nn_model, params)
 # For the moment we support the following list of inputs:
 
 # - Long term air temperature
-
+# ```@docs
+# iTemp
+# ```
 iTemp()
 
 # - Cumulative positive degree days (PDD)
-
+# ```@docs
+# iCPDD
+# ```
 iCPDD()
 
 # - Ice thickness on the dual grid in the SIA
-
-# This is the variable to use for the ice thickness.
-
+# ```@docs
+# iH̄
+# ```
 iH̄()
 
 # - Surface slope
-
+# ```@docs
+# i∇S
+# ```
 i∇S()
 
 # - Topographic roughness
-
-# It can be the roughness of the bed or of the surface depending on the selected options.
-# There are several ways to compute this quantity which result in different properties.
-
+# ```@docs
+# iTopoRough
+# ```
 iTopoRough()
