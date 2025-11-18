@@ -286,7 +286,7 @@ function LawA(
 end
 
 # TODO: move the cache definition below to Cache.jl once #413 is merged
-import Base.similar, Base.size, Base.fill
+import Base.similar, Base.size
 
 export ScalarCacheGlacierId
 
@@ -312,7 +312,6 @@ struct ScalarCacheGlacierId <: Cache
 end
 similar(c::ScalarCacheGlacierId) = typeof(c)(similar(c.value), similar(c.vjp_inp), similar(c.vjp_θ), c.glacier_id)
 size(c::ScalarCacheGlacierId) = size(c.value)
-fill(c::ScalarCacheGlacierId, s) = typeof(c)(fill(c.value, s), fill(c.vjp_inp, s), similar(c.vjp_θ), c.glacier_id)
 Base.:(==)(a::ScalarCacheGlacierId, b::ScalarCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
 
 """
