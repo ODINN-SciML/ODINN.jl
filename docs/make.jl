@@ -83,7 +83,11 @@ makedocs(
             "Optimization" => "optimization.md",
             "Sensitivity analysis" => "sensitivity.md",
         ],
-        "How to contribute" => "contribute.md",
+        "Community" => [
+            "How to contribute" => "contribute.md",
+            "Code of conduct" => "code_of_conduct.md",
+        ],
+       
         "Ongoing changes and future plans" => "changes_plans.md",
         "References" => "references.md",
     ],
