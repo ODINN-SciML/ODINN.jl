@@ -7,32 +7,34 @@ _inputs_Y_law = (; T=iTemp(), H̄=iH̄())
 _inputs_U_law = (; H̄=iH̄(), ∇S=i∇S())
 
 """
-    OptimizableModel <: AbstractModel
+    TrainableModel <: AbstractModel
 
-Optimizable components of the model.
+Trainable components of the model.
+This can be either functional models or classical inversion models.
 """
 
-abstract type OptimizableModel <: AbstractModel end
+abstract type TrainableModel <: AbstractModel end
 """
-    PerGlacierModel <: OptimizableModel
+    PerGlacierModel <: TrainableModel
 
 Abstract type representing per glacier optimizable components of the model.
-This is a subtype of `OptimizableModel`.
+This is a subtype of `TrainableModel`.
 Typically used for classical inversions.
 """
-abstract type PerGlacierModel <: OptimizableModel end
+abstract type PerGlacierModel <: TrainableModel end
 
 """
-    ParameterizationModel <: OptimizableModel
+    FunctionalModel <: TrainableModel
 
-Abstract type representing parameterizable components of the model.
-This is a subtype of `OptimizableModel`.
+Abstract type representing functional learnable components of the model.
+This is a subtype of `TrainableModel`.
 Typically used for functional inversions.
 """
-abstract type ParameterizationModel <: OptimizableModel end
+abstract type FunctionalModel <: TrainableModel end
 
 include("./InitialCondition.jl")
 include("./GlacierWideInv.jl")
+include("./GriddedInv.jl")
 
 """
     Model(;
@@ -72,21 +74,21 @@ function Model(
 
     # Check that the inputs match what is hardcoded in the adjoint computation when the regressor is used in the context of a functional inversion
     if iceflow.U_is_provided
-        if haskey(regressors, :U) && regressors.U isa ParameterizationModel
+        if haskey(regressors, :U) && regressors.U isa FunctionalModel
             @assert inputs(iceflow.U)==_inputs_U_law "Inputs of U law must be $(_inputs_U_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.U))."
         end
     elseif iceflow.Y_is_provided
-        if haskey(regressors, :Y) && regressors.Y isa ParameterizationModel
+        if haskey(regressors, :Y) && regressors.Y isa FunctionalModel
             @assert inputs(iceflow.Y)==_inputs_Y_law "Inputs of Y law must be $(_inputs_Y_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.Y))."
         end
     else
-        if haskey(regressors, :A) && regressors.A isa ParameterizationModel
+        if haskey(regressors, :A) && regressors.A isa FunctionalModel
             @assert inputs(iceflow.A)==_inputs_A_law "Inputs of A law must be $(_inputs_A_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.A))."
         end
-        if haskey(regressors, :C) && regressors.C isa ParameterizationModel
+        if haskey(regressors, :C) && regressors.C isa FunctionalModel
             @assert inputs(iceflow.C)==_inputs_C_law "Inputs of C law must be $(_inputs_C_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.C))."
         end
-        if haskey(regressors, :n) && regressors.n isa ParameterizationModel
+        if haskey(regressors, :n) && regressors.n isa FunctionalModel
             @assert inputs(iceflow.n)==_inputs_n_law "Inputs of n law must be $(_inputs_n_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.n))."
         end
     end
@@ -97,7 +99,7 @@ function Model(
             target = SIA2D_D_target()
         elseif iceflow.Y_is_provided
             target = SIA2D_D_hybrid_target()
-        elseif !(haskey(regressors, :A) && regressors.A isa ParameterizationModel) || inputs(iceflow.A)==_inputs_A_law
+        elseif !(haskey(regressors, :A) && regressors.A isa FunctionalModel) || inputs(iceflow.A)==_inputs_A_law
             target = SIA2D_A_target()
         else
             throw("Cannot infer target from the laws.")
@@ -121,7 +123,7 @@ end
         ChainType <: Lux.Chain,
         ComponentVectorType <: ComponentVector,
         NamedTupleType <: NamedTuple,
-    } <: ParameterizationModel
+    } <: FunctionalModel
 
 Feed-forward neural network.
 
@@ -134,7 +136,7 @@ mutable struct NeuralNetwork{
     ChainType <: Lux.Chain,
     ComponentVectorType <: ComponentVector,
     NamedTupleType <: NamedTuple,
-} <: ParameterizationModel
+} <: FunctionalModel
     architecture::ChainType
     θ::ComponentVectorType
     st::NamedTupleType
@@ -187,18 +189,18 @@ mutable struct NeuralNetwork{
     end
 
 end
-# Note: we could define any other kind of regressor as a subtype of OptimizableModel
+# Note: we could define any other kind of regressor as a subtype of TrainableModel
 
 # Empty optimizable model
-struct emptyOptimizableModel <: OptimizableModel end
+struct emptyTrainableModel <: TrainableModel end
 
 mutable struct MachineLearning{
-    MLmodelAType <: OptimizableModel,
-    MLmodelCType <: OptimizableModel,
-    MLmodelnType <: OptimizableModel,
-    MLmodelYType <: OptimizableModel,
-    MLmodelUType <: OptimizableModel,
-    MLmodelICType <: OptimizableModel,
+    MLmodelAType <: TrainableModel,
+    MLmodelCType <: TrainableModel,
+    MLmodelnType <: TrainableModel,
+    MLmodelYType <: TrainableModel,
+    MLmodelUType <: TrainableModel,
+    MLmodelICType <: TrainableModel,
     TAR <: AbstractTarget,
     ComponentArrayType <: ComponentArray,
 } <: AbstractModel
@@ -219,11 +221,11 @@ mutable struct MachineLearning{
         if length(θ) == 0
             θ = nothing
         end
-        A = haskey(regressors, :A) ? regressors.A : emptyOptimizableModel()
-        C = haskey(regressors, :C) ? regressors.C : emptyOptimizableModel()
-        n = haskey(regressors, :n) ? regressors.n : emptyOptimizableModel()
-        Y = haskey(regressors, :Y) ? regressors.Y : emptyOptimizableModel()
-        U = haskey(regressors, :U) ? regressors.U : emptyOptimizableModel()
+        A = haskey(regressors, :A) ? regressors.A : emptyTrainableModel()
+        C = haskey(regressors, :C) ? regressors.C : emptyTrainableModel()
+        n = haskey(regressors, :n) ? regressors.n : emptyTrainableModel()
+        Y = haskey(regressors, :Y) ? regressors.Y : emptyTrainableModel()
+        U = haskey(regressors, :U) ? regressors.U : emptyTrainableModel()
         # Dedicated regressor for initial condition
         IC = haskey(regressors, :IC) ? regressors.IC : emptyIC()
 
@@ -241,12 +243,12 @@ mutable struct MachineLearning{
 end
 
 """
-    splitθ(θ, glacier_idx::Integer, optimizableComponent::OptimizableModel)
+    splitθ(θ, glacier_idx::Integer, optimizableComponent::TrainableModel)
 
 Given a `ComponentVector` `θ`, a `glacier_idx` and an `optimizableComponent`, extract the content
 of `θ` relevant for the given `optimizableComponent` and glacier ID `glacier_idx`.
 """
-function splitθ(θ, glacier_idx::Integer, optimizableComponent::OptimizableModel)
+function splitθ(θ, glacier_idx::Integer, optimizableComponent::TrainableModel)
     if isa(optimizableComponent, PerGlacierModel)
         glacier_id = Symbol("$(glacier_idx)")
         return ComponentVector(NamedTuple{(Symbol("1"),)}((θ[glacier_id],)))
@@ -298,23 +300,23 @@ function Base.show(io::IO, nn_model::NeuralNetwork)
 end
 
 function Base.show(io::IO, ml_model::MachineLearning)
-    if !(ml_model.A isa emptyOptimizableModel)
+    if !(ml_model.A isa emptyTrainableModel)
         print(io, "  A: ")
         println(io, ml_model.A)
     end
-    if !(ml_model.C isa emptyOptimizableModel)
+    if !(ml_model.C isa emptyTrainableModel)
         print(io, "  C: ")
         println(io, ml_model.C)
     end
-    if !(ml_model.n isa emptyOptimizableModel)
+    if !(ml_model.n isa emptyTrainableModel)
         print(io, "  n: ")
         println(io, ml_model.n)
     end
-    if !(ml_model.Y isa emptyOptimizableModel)
+    if !(ml_model.Y isa emptyTrainableModel)
         print(io, "  Y: ")
         println(io, ml_model.Y)
     end
-    if !(ml_model.U isa emptyOptimizableModel)
+    if !(ml_model.U isa emptyTrainableModel)
         print(io, "  U: ")
         println(io, ml_model.U)
     end

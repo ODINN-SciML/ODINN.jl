@@ -110,23 +110,23 @@ function test_grad_finite_diff(
     glaciers = generate_ground_truth(glaciers, params, model, tstops; store=store)
 
     ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti2019) : nothing
-    optimizable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, target)
+    trainable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, target)
 
     # Define regressors for each test
     regressors = @match (target, train_initial_conditions) begin
-        (:A, false) => (; A = optimizable_model)
-        (:A, true) => (; A = optimizable_model, IC = ic)
-        (:D_hybrid, false) =>  (; Y = optimizable_model)
-        (:D_hybrid, true) => (; Y = optimizable_model, IC = ic)
-        (:D, false) => (; U = optimizable_model)
-        (:D, true) => (; U = optimizable_model, IC = ic)
+        (:A, false) => (; A = trainable_model)
+        (:A, true) => (; A = trainable_model, IC = ic)
+        (:D_hybrid, false) =>  (; Y = trainable_model)
+        (:D_hybrid, true) => (; Y = trainable_model, IC = ic)
+        (:D, false) => (; U = trainable_model)
+        (:D, true) => (; U = trainable_model, IC = ic)
     end
 
     law = @match (target, functional_inv) begin
-        (:A, true) => LawA(optimizable_model, params)
+        (:A, true) => LawA(trainable_model, params)
         (:A, false) => LawA(params)
-        (:D_hybrid, true) => LawY(optimizable_model, params)
-        (:D, true) => LawU(optimizable_model, params)
+        (:D_hybrid, true) => LawY(trainable_model, params)
+        (:D, true) => LawU(trainable_model, params)
     end
 
     model = @match target begin

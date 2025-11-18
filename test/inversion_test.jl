@@ -82,12 +82,12 @@ function inversion_test(;
 
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
-    optimizable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, :A)
-    A_law = functional_inv ? LawA(optimizable_model, params) : LawA(params)
+    trainable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, :A)
+    A_law = functional_inv ? LawA(trainable_model, params) : LawA(params)
     model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = MB_model,
-        regressors = (; A=optimizable_model))
+        regressors = (; A=trainable_model))
 
     # We create an ODINN prediction
     functional_inversion = Inversion(model, glaciers, params)

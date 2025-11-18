@@ -15,7 +15,7 @@ Huginn.Prediction(model::Sleipnir.Model, glaciers::Vector{G}, parameters::Sleipn
 
 ## Inversion
 
-An inversion is the inversion of the parameters involved in the PDE, or the parameters of a regressor (e.g. a neural network), which parametrize a function that modulates a parameter or set of parameters in a given mechanistic model (e.g. the SIA).
+An `Inversion` is the inversion of the parameters involved in the PDE, or the parameters of a regressor (e.g. a neural network), which parametrize a function that modulates a parameter or set of parameters in a given mechanistic model (e.g. the SIA).
 
 ```@docs
 ODINN.Inversion

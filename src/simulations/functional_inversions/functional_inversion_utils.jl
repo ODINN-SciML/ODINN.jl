@@ -122,6 +122,8 @@ function train_UDE!(
     # simulation_batch_ids = train_loader.data[1]
 
     θ = simulation.model.machine_learning.θ
+    allowed_keys = (:A, :C, :n, :Y, :U)
+    @assert length(intersect(keys(θ), allowed_keys))==1 "The vector of parameters θ should contain at most only one of the following keys: $(allowed_keys)"
 
     # Get the available workers
     # Workers are always the number of allocated cores to Julia minus one
@@ -184,6 +186,8 @@ function train_UDE!(
 
     # The variable θ includes all variables to being optimized, including initial conditions
     θ = simulation.model.machine_learning.θ
+    allowed_keys = (:A, :C, :n, :Y, :U)
+    @assert length(intersect(keys(θ), allowed_keys))==1 "The vector of parameters θ should contain at most only one of the following keys: $(allowed_keys)"
 
     # Get the available workers
     # Workers are always the number of allocated cores to Julia minus one
