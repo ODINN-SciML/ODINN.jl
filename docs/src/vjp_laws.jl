@@ -12,7 +12,6 @@ params = Parameters(
     simulation = SimulationParameters(rgi_paths=rgi_paths),
     UDE = UDEparameters(grad=ContinuousAdjoint()),
 )
-# params = Parameters()
 nn_model = NeuralNetwork(params)
 
 # ## Explanations
