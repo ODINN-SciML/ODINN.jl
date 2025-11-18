@@ -55,6 +55,10 @@ See also `SIA2D_D_target`.
 - `prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing}`: Vector of tuples where each
     tuple defines the lower and upper bounds of the input for scaling.
     If set to `nothing`, no prescaling is applied.
+- `precompute_interpolation::Bool`: Determines which cache to use depending if interpolation
+    is used or not for the evaluation of gradients.
+- `precompute_VJPs::Bool`: Determines is VJPs are stored in the cache during the reverse
+    step.
 
 # Returns
 - `U_law`: A `Law{Array{Float64, 2}}` instance that computes the diffusive velocity `U`
@@ -135,13 +139,12 @@ function LawU(
 
     p_VJP! = let smodel = smodel, prescale = prescale, postscale = postscale
         function (cache, vjpsPrepLaw, inputs, θ)
-            # Check that nodes are correct!
             (; nodes_H, nodes_∇S) = cache
             # Compute exact gradient in certain values of H̄ and ∇S
             grads = [zeros(only(size(θ))) for i = 1:length(nodes_H), j = 1:length(nodes_∇S)]
             # Evaluate gradients in nodes
             for (i, h) in enumerate(nodes_H), (j, ∇s) in enumerate(nodes_∇S)
-                # We don't do this with f! since this evaluates a matrix
+                # We don't do this evaluation with f! since this evaluates a matrix
                 grad, = Zygote.gradient(_θ -> _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
                 grads[i, j] .= ODINN.ComponentVector2Vector(grad)
             end
