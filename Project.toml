@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
-authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 version = "0.3.0"
+authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
@@ -95,7 +95,7 @@ Revise = "3"
 SciMLBase = "2"
 SciMLSensitivity = "7.88"
 SciMLStructures = "1"
-Sleipnir = "0.11.1"
+Sleipnir = "0.11.1, 0.12"
 Statistics = "1"
 TensorBoardLogger = "0.1"
 Tullio = "0.3"
