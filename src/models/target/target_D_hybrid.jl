@@ -200,6 +200,7 @@ function ∂Diffusivityꜛ∂H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
+    (; ρ, g) = params.physical
 
     (; C, n, Y) = iceflow_cache
     n_H = isnothing(iceflow_model.n_H) ? n.value : iceflow_model.n_H

@@ -1,4 +1,4 @@
-export MatrixCacheInterp, feed_input_cache!
+export MatrixCacheInterp
 
 """
     MatrixCacheInterp(nodes_H, nodes_∇S, interp_θ)
@@ -63,7 +63,7 @@ not required the definition of this function.
 - `θ`: Model parameters (not directly used in this function but included for interface consistency).
 - `result`: Output of a previous forward run containing ice thickness fields `H`.
 """
-feed_input_cache! = function (
+function feed_input_cache!(
     SIA2D_model::SIA2Dmodel,
     SIA2D_cache::SIA2DCache,
     simulation,

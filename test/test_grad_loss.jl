@@ -153,18 +153,20 @@ function test_grad_finite_diff(
     glaciers = generate_ground_truth(glaciers, params, model, tstops; store=store)
 
     # Neural network model
-    if custom_NN
-        architecture = Lux.Chain(
-            Lux.WrappedFunction(x -> LuxFunction(v -> ODINN.normalize(v; lims=([0.0, 0.0], [200.0, 0.6])), x)),
-            Lux.Dense(2, 5, x -> gelu.(x)),
-            Lux.Dense(5, 10, x -> gelu.(x)),
-            Lux.Dense(10, 5, x -> gelu.(x)),
-            Lux.Dense(5, 1, sigmoid),
-            Lux.WrappedFunction(x -> LuxFunction(v -> v*1e2, x))
-        )
-        nn_model = NeuralNetwork(params; architecture = architecture)
-    else
-        nn_model = NeuralNetwork(params)
+    if functional_inv
+        if custom_NN
+            architecture = Lux.Chain(
+                Lux.WrappedFunction(x -> LuxFunction(v -> ODINN.normalize(v; lims=([0.0, 0.0], [200.0, 0.6])), x)),
+                Lux.Dense(2, 5, x -> gelu.(x)),
+                Lux.Dense(5, 10, x -> gelu.(x)),
+                Lux.Dense(10, 5, x -> gelu.(x)),
+                Lux.Dense(5, 1, sigmoid),
+                Lux.WrappedFunction(x -> LuxFunction(v -> v*1e2, x))
+            )
+            nn_model = NeuralNetwork(params; architecture = architecture)
+        else
+            nn_model = NeuralNetwork(params)
+        end
     end
 
     ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti2019) : nothing

@@ -98,7 +98,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, tspan)
         tstops = sort(unique(vcat(tstops, params.solver.tstops, tH_ref, tV_ref, tstopsDiscreteLoss)))
 
-        @assert t == tstops "Times in tstops and reference times in result do not coincide."
+        @assert length(t) == length(tstops) "The size of tstops does not match with the size of the reference times."
+        @assert isapprox(t, tstops, rtol=1e-7) "Times in tstops and reference times in result do not coincide. Maximum difference is $(maximum(abs.(t-tstops)))"
         if useThickness
             @assert size(H[begin]) == size(H_ref[begin])
         end
@@ -326,7 +327,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 .-reverse(tspan)
                 )
 
-            tstops_adjoint = sort(unique(vcat(t_ref_inv, t_nodes)))
+            tstops_adjoint = sort(unique(vcat(t_ref_inv, - t_nodes)))
 
             # Solve reverse adjoint PDE with dense output
             sol_rev = solve(

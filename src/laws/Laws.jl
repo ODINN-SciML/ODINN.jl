@@ -115,6 +115,7 @@ function LawU(
         (; nx, ny) = glacier
 
         # Create template interpolation based on half-interpolation range
+        # The values are overwritten later on
         n_nodes = 2 * simulation.model.machine_learning.target.n_interp_half
         H_nodes = LinRange(0.0, 100, n_nodes) |> collect
         ∇S_nodes = LinRange(0.0, 0.2, n_nodes) |> collect
