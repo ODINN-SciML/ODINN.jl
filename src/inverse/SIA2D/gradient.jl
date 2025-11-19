@@ -116,6 +116,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         ℓ = 0.0
 
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
+        feed_input_cache!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, θ, result)
         precompute_all_VJPs_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
@@ -331,9 +332,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             sol_rev = solve(
                 adjoint_PDE_rev,
                 callback = cb,
-                # saveat=t_nodes_rev, # dont use this!
-                # dense = true,
-                # save_everystep = true,
                 tstops = tstops_adjoint,
                 simulation.parameters.UDE.grad.solver,
                 dtmax = simulation.parameters.UDE.grad.dtmax,

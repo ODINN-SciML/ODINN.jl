@@ -28,9 +28,10 @@ result = eval_law(simulation.model.iceflow.A, simulation, glacier_idx, (; T=273.
 """
 function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, input_values::NamedTuple, θ)
     # Initialize the cache to be able to make an inference of the law
-    params = simulation.parameters
 
-    cache = init_cache(law, simulation, glacier_idx, params)
+    # cache = init_cache(law, simulation, glacier_idx, params)
+    cache = init_cache(law, simulation, glacier_idx, θ)
+
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
     end
