@@ -125,7 +125,7 @@ function test_grad_finite_diff(
             optimization_method = "AD+AD",
             empirical_loss_function = loss,
             target = target,
-            initial_condition_filter = :Zang1980
+            initial_condition_filter = :softplus
             ),
         solver = Huginn.SolverParameters(
             step = δt,
@@ -274,8 +274,8 @@ function test_grad_finite_diff(
                         idxs = rand(findall(non_zero), max_params)
                         mask = falses(size(M)...)
                         mask[idxs] .= 1
-                        key = Symbol("$(i)")
-                        θ_mask.IC[key] .= mask
+                        key_glacier = Symbol("$(i)")
+                        θ_mask.IC[key_glacier] .= mask
                     end
                 else
                     # Mask parameter vector
