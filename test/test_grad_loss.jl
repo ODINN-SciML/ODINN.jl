@@ -11,10 +11,11 @@ using Distributed: map
         train_initial_conditions = false,
         multiglacier = false,
         use_MB = false,
+        functional_inv = true,
         custom_NN = false,
         max_params = 60,
         mask_parameter_vector = false,
-    ) where {ADJ <: AbstractAdjointMethod}
+    ) where {ADJ<:AbstractAdjointMethod}
 
 Test and validate gradient consistency between adjoint-based automatic differentiation
 and finite-difference approximations.
@@ -36,6 +37,7 @@ method and finite-difference schemes, and compares them using diagnostic metrics
 - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
 - `multiglacier::Bool`: Whether to run the test on multiple glaciers.
 - `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
+- `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
 - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network.
 - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
 - `mask_parameter_vector::Bool`: Whether to apply a mask to the parameter vector `θ` before evaluating finite-difference gradients. If `false`, the
