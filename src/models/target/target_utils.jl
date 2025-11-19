@@ -129,7 +129,7 @@ upper bounds (m, M) and transforming to O(1) scale.
 """
 function normalize(
     X;
-    lims::Tuple{F, F},
+    lims::Union{Tuple{F, F}, Tuple{Vector{F}, Vector{F}}},
     method::Symbol = :shift
 ) where {F <: AbstractFloat}
 
@@ -192,20 +192,113 @@ function ComponentVector2Vector(cv::ComponentVector)
 end
 
 """
-    function create_interpolation(A::Matrix; n_interp_half::Int)
+    create_interpolation(
+        A::Vector;
+        n_interp_half::Int,
+        dilation_factor = 1.0,
+        minA_unif::Union{F, Nothing} = nothing,
+        minA_quantile::Union{F, Nothing} = nothing,
+        maxA_unif::Union{F, Nothing} = nothing,
+        maxA_quantile::Union{F, Nothing} = nothing
+        ) where {F <: AbstractFloat}
 
-Function to create an intepolation for AD computation combining uniform and quantiles.
+Construct a one-dimensional interpolation grid from the data in `A`, combining
+uniformly spaced and quantile-based sampling points.
+
+This hybrid interpolation grid provides both coverage of the entire range
+of values and higher resolution in regions where `A` has dense data,
+making it useful for interpolation or machine learning applications
+that need balanced sampling.
+
+# Arguments
+- `A::Vector`: Input data vector (typically containing positive values).
+- `n_interp_half::Int`: Number of points used for both the uniform and quantile-based
+  subsets of the interpolation grid.
+- `dilation_factor::Real = 1.0`: Optional multiplier applied to `maximum(A)` to slightly
+  extend the grid beyond the data range (useful to avoid extrapolation issues).
+- `minA_unif::Union{F, Nothing} = nothing`: Minimum value used for the uniform interpolation
+- `minA_quantile::Union{F, Nothing} = nothing`: Maximum value used for the uniform interpolation
+- `maxA_unif::Union{F, Nothing} = nothing`: Minimum value used for the quantile interpolation
+- `maxA_quantile::Union{F, Nothing} = nothing`: Maximum value used for the quantile interpolation
+
+# Returns
+A sorted, unique vector of interpolation nodes combining:
+- `n_interp_half` uniformly spaced values between `0` and `dilation_factor * maximum(A)`
+- `n_interp_half` quantile-based values computed from the positive entries of `A`
 """
-function create_interpolation(A::Matrix; n_interp_half::Int)
-    A_interp_unif = LinRange(0.0, maximum(A), n_interp_half) |> collect
-    pos_values = A[A .> 0.0]
-    if length(pos_values) > 0
-        A_interp_quantiles = quantile!(A[A .> 0.0], LinRange(0.0, 1.0, n_interp_half))
-        A_interp = vcat(A_interp_unif, A_interp_quantiles)
-    else
-        A_interp = A_interp_unif
-    end
+function create_interpolation(
+    A::Vector;
+    n_interp_half::Int,
+    dilation_factor = 1.0,
+    minA_unif::Union{F, Nothing} = nothing,
+    minA_quantile::Union{F, Nothing} = nothing,
+    maxA_unif::Union{F, Nothing} = nothing,
+    maxA_quantile::Union{F, Nothing} = nothing
+    ) where {F <: AbstractFloat}
+
+    # Assign ranges for both uniform and quantile interpolation
+    minA_unif = isnothing(minA_unif) ? 0.0 : minA_unif
+    minA_quantile = isnothing(minA_quantile) ? 0.0 : minA_quantile
+    maxA_unif = isnothing(maxA_unif) ? dilation_factor * maximum(A) : maxA_unif
+    maxA_quantile = isnothing(maxA_quantile) ? maximum(A) : maxA_quantile
+
+    @assert (minA_unif < maxA_unif) && (minA_quantile < maxA_quantile) "There are not enough different values of A to create a proper interpolation."
+
+    # Construct uniform interpolation
+    A_interp_unif = LinRange(minA_unif, maxA_unif, n_interp_half) |> collect
+
+    # Construct quantile interpolation
+    quantile_range = LinRange(0.0, 1.0, n_interp_half + 2)[begin + 1: end - 1]
+    A_interp_quantiles = quantile!(A[(minA_quantile .< A) .&& (A .< maxA_quantile)], quantile_range)
+    A_interp = unique(vcat(A_interp_unif, A_interp_quantiles))
+
     A_interp = unique(A_interp)
+    # Order values in increasing order
     A_interp = sort(A_interp)
+
+    # If some some reason some values between uniform interpolation and quantile are
+    # repeated, we add more values to the interpolation to have the total desired number
+    # of knots in the interpolation.
+    # In theory, this should never happen, but just in case we include this fix.
+    if length(A_interp) < 2 * n_interp_half
+        n_left = 2 * n_interp_half - length(A_interp)
+        rand_idx = sample(1:(length(A_interp) - 1), n_left, replace = false)
+        # The middle point between two elements of A_interp is by definition never included
+        # in the original interpolation array
+        A_left = [(A_interp[i] + A_interp[i + 1]) / 2 for i in rand_idx]
+        A_interp = vcat(A_interp, A_left)
+        A_interp = sort(A_interp)
+    end
+    # This assert is a bit redundant based on the previous code, but we keep it for safety.
+    @assert length(A_interp) == 2 * n_interp_half "The number of interpolation points is different than twice `n_interp_half`"
+
     return A_interp
+end
+
+"""
+    create_interpolation(A::Matrix; n_interp_half::Int) -> Vector{Float64}
+
+Construct a one-dimensional interpolation grid from the elements of a matrix `A` by
+flattening it and delegating to [`create_interpolation(::Vector)`](@ref). This is a 
+convenience method that allows users to pass a 2D array to the function `create_interpolation(A::Vector)`
+directly without manually reshaping it.
+"""
+function create_interpolation(
+    A::Matrix;
+    n_interp_half::Int,
+    dilation_factor = 1.0,
+    minA_unif::Union{F, Nothing} = nothing,
+    minA_quantile::Union{F, Nothing} = nothing,
+    maxA_unif::Union{F, Nothing} = nothing,
+    maxA_quantile::Union{F, Nothing} = nothing,
+    ) where {F <: AbstractFloat}
+    create_interpolation(
+        vec(A);
+        n_interp_half = n_interp_half,
+        dilation_factor = dilation_factor,
+        minA_unif = minA_unif,
+        minA_quantile = minA_quantile,
+        maxA_unif = maxA_unif,
+        maxA_quantile = maxA_quantile,
+        )
 end

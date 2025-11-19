@@ -55,6 +55,10 @@ See also `SIA2D_D_target`.
 - `prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing}`: Vector of tuples where each
     tuple defines the lower and upper bounds of the input for scaling.
     If set to `nothing`, no prescaling is applied.
+- `precompute_interpolation::Bool`: Determines which cache to use depending if interpolation
+    is used or not for the evaluation of gradients.
+- `precompute_VJPs::Bool`: Determines is VJPs are stored in the cache during the reverse
+    step.
 
 # Returns
 - `U_law`: A `Law{Array{Float64, 2}}` instance that computes the diffusive velocity `U`
@@ -82,9 +86,11 @@ U_law = LawU(nn_model, params; max_NN = 50.0, prescale_bounds = [bounds_H, bound
 function LawU(
     nn_model::NeuralNetwork,
     params::Sleipnir.Parameters;
-    max_NN::Union{F, Nothing} = 50.0,
-    prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing} = [(0.0, 300.0), (0.0, 0.5)],
-) where {F <: AbstractFloat}
+    max_NN::Union{<: AbstractFloat, Nothing} = nothing,
+    prescale_bounds::Union{Vector{Tuple{<:AbstractFloat, <:AbstractFloat}}, Nothing} = nothing,
+    precompute_interpolation::Bool = true,
+    precompute_VJPs::Bool = true,
+)
     prescale = !isnothing(prescale_bounds) ? X -> _ml_model_prescale(X, prescale_bounds) : identity
     # The value of max_NN should correspond to maximum of Umax * dSdx
     postscale = !isnothing(max_NN) ? Y -> _ml_model_postscale(Y, max_NN) : identity
@@ -93,21 +99,68 @@ function LawU(
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
-    U_law = let smodel = smodel, prescale = prescale, postscale = postscale
-    Law{MatrixCache}(;
-        inputs = (; H̄=iH̄(), ∇S=i∇S()),
-        f! = function (cache, inp, θ)
-            D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
-
-            # Flag the in-place assignment as non differented and return D instead in
+    f! = let smodel = smodel, prescale = prescale, postscale = postscale
+        function (cache, inp, θ)
+            U = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
+            # Flag the in-place assignment as non differentiated and return D instead in
             # order to be able to compute ∂D∂θ with Zygote
-            Zygote.@ignore_derivatives cache.value .= D
-            return D
-        end,
-        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
-            (; nx, ny) = simulation.glaciers[glacier_idx]
-            return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
-        end,
+            # We introduce the extra dependency w.r.t H
+            Zygote.@ignore_derivatives cache.value .= U
+            return U
+        end
+    end
+
+    init_cache_interp = function (simulation, glacier_idx, θ)
+        glacier = simulation.glaciers[glacier_idx]
+        (; nx, ny) = glacier
+
+        # Create template interpolation based on half-interpolation range
+        n_nodes = 2 * simulation.model.machine_learning.target.n_interp_half
+        H_nodes = LinRange(0.0, 100, n_nodes) |> collect
+        ∇S_nodes = LinRange(0.0, 0.2, n_nodes) |> collect
+
+        θvec = ODINN.ComponentVector2Vector(θ)
+        grads = [zero(θvec) for i = 1:length(H_nodes), j = 1:length(∇S_nodes)]
+        grad_itp = interpolate((H_nodes, H_nodes), grads, Gridded(Linear()))
+
+        # Return cache for a custom interpolation
+        return MatrixCacheInterp(
+            zeros(nx - 1, ny - 1),
+            H_nodes,
+            H_nodes,
+            grad_itp
+            )
+    end
+    init_cache_matrix = function (simulation, glacier_idx, θ)
+        glacier = simulation.glaciers[glacier_idx]
+        (; nx, ny) = glacier
+        return MatrixCache(zeros(nx - 1, ny - 1), zeros(nx - 1, ny - 1), zero(θ))
+    end
+
+    p_VJP! = let smodel = smodel, prescale = prescale, postscale = postscale
+        function (cache, vjpsPrepLaw, inputs, θ)
+            (; nodes_H, nodes_∇S) = cache
+            # Compute exact gradient in certain values of H̄ and ∇S
+            grads = [zeros(only(size(θ))) for i = 1:length(nodes_H), j = 1:length(nodes_∇S)]
+            # Evaluate gradients in nodes
+            for (i, h) in enumerate(nodes_H), (j, ∇s) in enumerate(nodes_∇S)
+                # We don't do this evaluation with f! since this evaluates a matrix
+                grad, = Zygote.gradient(_θ -> _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
+                grads[i, j] .= ODINN.ComponentVector2Vector(grad)
+            end
+            cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
+        end
+    end
+
+    # Determine right type of cache depending of interpolation or not
+    LawCache = precompute_interpolation ? MatrixCacheInterp : MatrixCache
+
+    U_law = let smodel = smodel, prescale = prescale, postscale = postscale
+    Law{LawCache}(;
+        inputs = (; H̄ = iH̄(), ∇S = i∇S()),
+        f! = f!,
+        init_cache = precompute_interpolation ? init_cache_interp : init_cache_matrix,
+        p_VJP! = precompute_VJPs ? p_VJP! : nothing,
     )
     end
     return U_law
@@ -184,7 +237,7 @@ function LawY(
         f! = function (cache, inp, θ)
             Y = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
-            # Flag the in-place assignment as non differented and return Y instead in
+            # Flag the in-place assignment as non differentiated and return Y instead in
             # order to be able to compute ∂Y∂θ with Zygote
             Zygote.@ignore_derivatives cache.value .= Y
             return Y
@@ -263,7 +316,7 @@ function LawA(
             inp = collect(values(inp))
             A = only(scale(smodel(inp, θ.A), (min_NN, max_NN)))
 
-            # Flag the in-place assignment as non differented and return A instead in
+            # Flag the in-place assignment as non differentiated and return A instead in
             # order to be able to compute ∂A∂θ with Zygote
             Zygote.@ignore_derivatives cache.value .= A
             return A
