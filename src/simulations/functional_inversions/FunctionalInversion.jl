@@ -1,18 +1,18 @@
-export FunctionalInversion
+export Inversion
 
-# Subtype composite type for a prediction simulation
 """
-    mutable struct FunctionalInversion{MODEL, CACHE, GLACIER, RES} <: Simulation
+    mutable struct Inversion{MODEL, CACHE, GLACIER, RES} <: Simulation
 
-An object representing a functional inversion simulation (i.e. the inversion of a function using some data-driven regressor).
+An object representing an inversion simulation.
+It can involve at the same time a classical inversion and a functional inversion (i.e. the inversion of a function using some data-driven regressor).
 
 # Fields
 - `model::Sleipnir.Model`: The model used for the simulation.
 - `glaciers::Vector{Sleipnir.AbstractGlacier}`: A vector of glaciers involved in the simulation.
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
-- `results::ODINN.Results`: A `ODINN.Results` instance to store the results of the functional inversion and of the forward simulations.
+- `results::ODINN.Results`: A `ODINN.Results` instance to store the results of the inversion and of the forward simulations.
 """
-mutable struct FunctionalInversion{MODEL, CACHE, GLACIER, RES} <: Simulation
+mutable struct Inversion{MODEL, CACHE, GLACIER, RES} <: Simulation
     model::MODEL
     cache::Union{CACHE, Nothing}
     glaciers::Vector{GLACIER}
@@ -21,13 +21,13 @@ mutable struct FunctionalInversion{MODEL, CACHE, GLACIER, RES} <: Simulation
 end
 
 """
-    function FunctionalInversion(
+    function Inversion(
         model::M,
         glaciers::Vector{G},
         parameters::P
-        ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
+    ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 
-Constructor for FunctionalInversion struct with glacier model information, glaciers, and parameters.
+Constructor for Inversion struct with glacier model information, glaciers, and parameters.
 
 # Arguments
 - `model::Sleipnir.Model`: The model used for the simulation.
@@ -35,9 +35,9 @@ Constructor for FunctionalInversion struct with glacier model information, glaci
 - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
 
 # Returns
-- `FunctionalInversion`: A new instance of the FunctionalInversion struct.
+- `Inversion`: A new instance of the Inversion struct.
 """
-function FunctionalInversion(
+function Inversion(
     model::M,
     glaciers::Vector{G},
     parameters::P
@@ -49,12 +49,12 @@ function FunctionalInversion(
     # Build the results struct based on input values
     emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
     emptyResults = Results(emptySimulationResults, TrainingStats())
-    functional_inversion = FunctionalInversion{M, cache_type(model), G, typeof(emptyResults)}(model, nothing,
+    inversion = Inversion{M, cache_type(model), G, typeof(emptyResults)}(model, nothing,
                             glaciers,
                             parameters,
                             emptyResults)
 
-    return functional_inversion
+    return inversion
 end
 
 ###############################################

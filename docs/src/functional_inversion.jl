@@ -28,7 +28,6 @@ params = Parameters(
         use_MB=false,
         use_velocities=true,
         tspan=(2010.0, 2015.0),
-        step=δt,
         multiprocessing=true,
         workers=4,
         test_mode=false,
@@ -49,7 +48,6 @@ params = Parameters(
     ),
     solver = Huginn.SolverParameters(
         step=δt,
-        save_everystep=true,
         progress=true)
 )
 
@@ -80,7 +78,7 @@ model = Model(
 )
 
 ## We specify the type of simulation we want to perform
-functional_inversion = FunctionalInversion(model, glaciers, params)
+functional_inversion = Inversion(model, glaciers, params)
 
 ## And finally, we just run the simulation
 run!(functional_inversion)
@@ -88,7 +86,7 @@ run!(functional_inversion)
 # ## Step-by-step explanation of the tutorial
 
 # Here we will cover in detail each one of the steps that lead us to run the
-# `FunctionalInversion` from the previous example.
+# `Inversion` from the previous example.
 # The goal of this simple example is to learn a mapping of a law for `A`, the creep
 # coefficient of ice. Mathematically, we make `A` depends on the long term air
 # temperature `T` through a neural network `A=NN(T, θ)` and we optimize `θ` so that
@@ -116,7 +114,6 @@ params = Parameters(
         use_MB=false,
         use_velocities=true,
         tspan=(2010.0, 2015.0),
-        step=δt,
         multiprocessing=true,
         workers=4,
         test_mode=false,
@@ -136,7 +133,6 @@ params = Parameters(
         target = :A),
     solver = Huginn.SolverParameters(
         step=δt,
-        save_everystep=true,
         progress=true)
 )
 
@@ -199,8 +195,8 @@ model = Model(
 
 # ### Step 4: Train a Universal Differential Equation via a functional inversion
 
-# The next step is to specify the type of simulation we want to perform. In this case, we will use a `FunctionalInversion` simulation, which will use the synthetic dataset generated in the previous step to train a Universal Differential Equation (UDE) model.
-functional_inversion = FunctionalInversion(model, glaciers, params)
+# The next step is to specify the type of simulation we want to perform. In this case, we will use a `Inversion` simulation, which will use the synthetic dataset generated in the previous step to train a Universal Differential Equation (UDE) model.
+functional_inversion = Inversion(model, glaciers, params)
 
 # And finally, we just run the simulation. This will run the adjoint method to compute the gradients and then use the ADAM optimizer
 # to train the UDE model.

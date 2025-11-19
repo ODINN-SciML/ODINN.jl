@@ -128,7 +128,14 @@ function ∂Diffusivity∂∇H(
     return ∂D∂∇S
 end
 
-function ∂Diffusivity∂θ(
+
+function ∂Diffusivity∂θ(target::SIA2D_D_target;
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
+    return ∂U∂θ(target; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params) .* H̄
+end
+
+function ∂U∂θ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -158,7 +165,7 @@ function ∂Diffusivity∂θ(
                 continue
             end
             ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=H̄[i, j], ∇S=∇S[i, j]), θ)
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ[i, j, :] * H̄[i, j]
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ[i, j, :]
         end
 
     elseif interpolation == :Linear
@@ -173,7 +180,7 @@ function ∂Diffusivity∂θ(
         # Compute spatial distributed gradient
         for i in axes(H̄, 1), j in axes(H̄, 2)
             # Include extra contribution of ice thickness H
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j]) * H̄[i, j]
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j])
         end
     else
         throw("Method to spatially compute gradient with respect to H̄ not specified.")
@@ -231,12 +238,8 @@ end
 function ∂Diffusivityꜛ∂θ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+)
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    ∂D∂θ = ∂Diffusivity∂θ(
-        target;
-        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
-    ∂D∂θꜛ = ifelse.(H̄ .> 1e-6, ∂D∂θ ./ (f .* H̄), 0.0)
+    ∂D∂θꜛ = ∂U∂θ(target; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params) / f
     return ∂D∂θꜛ
 end

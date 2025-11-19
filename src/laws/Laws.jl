@@ -115,6 +115,7 @@ function LawU(
         (; nx, ny) = glacier
 
         # Create template interpolation based on half-interpolation range
+        # The values are overwritten later on
         n_nodes = 2 * simulation.model.machine_learning.target.n_interp_half
         H_nodes = LinRange(0.0, 100, n_nodes) |> collect
         ∇S_nodes = LinRange(0.0, 0.2, n_nodes) |> collect
@@ -337,6 +338,77 @@ function LawA(
     )
     return A_law
 end
+
+# TODO: move the cache definition below to Cache.jl once #413 is merged
+import Base.similar, Base.size
+
+export ScalarCacheGlacierId
+
+"""
+    ScalarCacheGlacierId <: Cache
+
+A cache structure for storing a scalar value as a zero-dimensional array of `Float64` along with
+their associated vector-Jacobian products (VJP).
+It also stores the glacier ID as an integer.
+This is typically used to invert a single scalar per glacier.
+Fields:
+- `value::Array{Float64, 0}`: The cached scalar value.
+- `vjp_inp::Array{Float64, 0}`: VJP with respect to inputs. Must be defined but never used in
+    practice since this cache is used for classical inversions and the law does not have inputs.
+- `vjp_θ::Vector{Float64}`: VJP with respect to parameters.
+- `glacier_id::Int64`: Glacier ID in the list of simulated glaciers.
+"""
+struct ScalarCacheGlacierId <: Cache
+    value::Array{Float64, 0}
+    vjp_inp::Array{Float64, 0}
+    vjp_θ::Vector{Float64}
+    glacier_id::Int64
+end
+similar(c::ScalarCacheGlacierId) = typeof(c)(similar(c.value), similar(c.vjp_inp), similar(c.vjp_θ), c.glacier_id)
+size(c::ScalarCacheGlacierId) = size(c.value)
+Base.:(==)(a::ScalarCacheGlacierId, b::ScalarCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
+
+"""
+    LawA(params::Sleipnir.Parameters; scalar::Bool=true)
+
+Construct a law that defines an ice rheology A per glacier to invert.
+This can be either a spatially varying A or a scalar value per glacier based on the
+value of `scalar`.
+
+# Arguments
+- `params::Sleipnir.Parameters`: Parameters struct used to retrieve the minimum and
+    maximum values of A for scaling the parameter to invert.
+- `scalar::Bool`: Whether the ice rheology to invert is a scalar per glacier, or a
+    spatially varying `A` per glacier (matrix to invert).
+"""
+function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
+    @assert scalar "Spatially varying inversion of A is not implemented yet."
+    min_NN = params.physical.minA
+    max_NN = params.physical.maxA
+    f! = let min_NN = min_NN, max_NN = max_NN
+        function (cache, inp, θ)
+            val = min_NN+(max_NN-min_NN)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
+            Zygote.@ignore_derivatives cache.value .= val
+            return val
+        end
+    end
+    init_cache = function (simulation, glacier_idx, θ)
+        ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
+    end
+    p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+        ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
+        cache.vjp_θ[cache.glacier_id] = only(ret.A[Symbol("$(cache.glacier_id)")])
+    end
+    A_law = Law{ScalarCacheGlacierId}(;
+        inputs = (;),
+        f! = f!,
+        init_cache = init_cache,
+        p_VJP! = p_VJP!,
+        callback_freq = 0,
+    )
+    return A_law
+end
+
 
 include("auto_VJP.jl")
 include("laws_utils.jl")

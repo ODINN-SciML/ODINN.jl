@@ -33,7 +33,6 @@ function test_adjoint_SIA2D(
             use_MB=false,
             use_velocities=true,
             tspan=tspan,
-            step=δt,
             multiprocessing=false,
             test_mode=true,
             rgi_paths=rgi_paths),
@@ -48,7 +47,6 @@ function test_adjoint_SIA2D(
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 
@@ -86,7 +84,7 @@ function test_adjoint_SIA2D(
     H = glaciers[glacier_idx].H₀
     glaciers[glacier_idx].C = C
 
-    simulation = FunctionalInversion(model, glaciers, params)
+    simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
     θ = simulation.model.machine_learning.θ
@@ -219,7 +217,6 @@ function test_adjoint_surface_V(
             use_MB=false,
             use_velocities=true,
             tspan=tspan,
-            step=δt,
             multiprocessing=false,
             test_mode=true,
             rgi_paths=rgi_paths,
@@ -235,7 +232,6 @@ function test_adjoint_surface_V(
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 
@@ -257,7 +253,7 @@ function test_adjoint_surface_V(
     glacier_idx = 1
 
     H = glaciers[glacier_idx].H₀
-    simulation = FunctionalInversion(model, glaciers, params)
+    simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
     θ = simulation.model.machine_learning.θ

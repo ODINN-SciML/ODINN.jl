@@ -99,7 +99,7 @@ params = Parameters(
         use_MB = use_MB,
         use_velocities = true,
         tspan = (t₀, t₁),
-        step = δt,
+        step_MB = δt,
         multiprocessing = false,
         workers = 1,
         test_mode = false,
@@ -144,7 +144,6 @@ params = Parameters(
         ),
     solver = Huginn.SolverParameters(
         step = δt,
-        save_everystep = true,
         progress = true
         )
     )
@@ -287,4 +286,4 @@ model = Model(
 )
 
 # We create an ODINN prediction
-functional_inversion = FunctionalInversion(model, glaciers, params)
+functional_inversion = Inversion(model, glaciers, params)
