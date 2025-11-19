@@ -31,6 +31,15 @@ function SIA2D_grad!(dθ, θ, simulation::Inversion)
 end
 
 """
+    safe_slice(obj, ind::Integer)
+
+Return a sliced object `obj` if `ind > 0`, otherwise return 0.0.
+"""
+@inline function safe_slice(obj, ind::Integer)
+    return ind>0 ? obj[ind] : 0.0
+end
+
+"""
 Compute gradient glacier per glacier
 """
 function SIA2D_grad_batch!(θ, simulation::Inversion)
