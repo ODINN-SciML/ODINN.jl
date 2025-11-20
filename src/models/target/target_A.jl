@@ -19,11 +19,12 @@ function Diffusivity(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    (; n, A) = iceflow_cache
+    (; A, n, p, q) = iceflow_cache
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
     return (
-            S(iceflow_model, iceflow_cache, params) .+ A.value .* Γ_no_A .* H̄
-        ) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 1)
+            S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value .+ 1) .* ∇S.^(p.value .- 1)
+            + A.value .* Γ_no_A .* H̄.^(n.value .+ 2) .* ∇S.^(n.value .- 1)
+        )
 end
 
 function ∂Diffusivity∂H(
@@ -32,10 +33,11 @@ function ∂Diffusivity∂H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    n = iceflow_cache.n
+    (; n, p, q) = iceflow_cache
     return (
-            (n.value .+ 1) .* S(iceflow_model, iceflow_cache, params) .+ Γ(iceflow_model, iceflow_cache, params) .* H̄ .* (n.value .+ 2)
-        ) .* H̄.^n.value .* ∇S.^(n.value .- 1)
+            (p.value .- q.value .+ 1) .* S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value) .* ∇S.^(p.value .- 1)
+            + Γ(iceflow_model, iceflow_cache, params) .* (n.value .+ 2) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 1)
+        )
 end
 
 function ∂Diffusivity∂∇H(
@@ -44,10 +46,11 @@ function ∂Diffusivity∂∇H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    n = iceflow_cache.n
+    (; n, p, q) = iceflow_cache
     return (
-            S(iceflow_model, iceflow_cache, params) .+ Γ(iceflow_model, iceflow_cache, params) .* H̄
-        ) .* (n.value .- 1) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 3)
+            S(iceflow_model, iceflow_cache, params) .* (p.value .- 1) .* H̄.^(p.value .- q.value .+ 1) .* ∇S.^(p.value .- 3)
+            + Γ(iceflow_model, iceflow_cache, params) .* (n.value .- 1) .* H̄.^(n.value .+ 2) .* ∇S.^(n.value .- 3)
+        )
 end
 
 function ∂Diffusivity∂θ(
@@ -81,11 +84,12 @@ function Diffusivityꜛ(
 )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    (; n, A) = iceflow_cache
+    (; A, n, p, q) = iceflow_cache
     Γꜛ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
     return (
-            Sꜛ(iceflow_model, iceflow_cache, params) .+ A.value .* Γꜛ_no_A
-        ) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 1)
+            S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) * H̄.^(p.value .- q.value .+ 1) .* ∇S .^ (n.value .- 1)
+            + A.value .* Γꜛ_no_A .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 1)
+        )
 end
 
 function ∂Diffusivityꜛ∂H(
@@ -94,10 +98,11 @@ function ∂Diffusivityꜛ∂H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    n = iceflow_cache.n
+    (; n, p, q) = iceflow_cache
     return (
-            Sꜛ(iceflow_model, iceflow_cache, params) .+ Γꜛ(iceflow_model, iceflow_cache, params)
-        ) .* (n.value .+ 1) .* H̄.^n.value .* ∇S.^(n.value .- 1)
+            S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) * H̄.^(p.value .- q.value) .* ∇S .^ (n.value .- 1)
+            + Γꜛ(iceflow_model, iceflow_cache, params) .* (n.value .+ 1) .* H̄.^n.value .* ∇S.^(n.value .- 1)
+        )
 end
 
 function ∂Diffusivityꜛ∂∇H(
@@ -106,10 +111,11 @@ function ∂Diffusivityꜛ∂∇H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    n = iceflow_cache.n
+    (; n, p, q) = iceflow_cache
     return (
-            Sꜛ(iceflow_model, iceflow_cache, params) .+ Γꜛ(iceflow_model, iceflow_cache, params)
-        ) .* (n.value .- 1) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 3)
+            S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) .* (p.value .- 1) * H̄.^(p.value .- q.value .+ 1) .* ∇S .^ (n.value .- 3)
+            + Γꜛ(iceflow_model, iceflow_cache, params) .* (n.value .- 1) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 3)
+        )
 end
 
 function ∂Diffusivityꜛ∂θ(
