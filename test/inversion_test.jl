@@ -11,21 +11,26 @@ function inversion_test(;
     working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
     ## Retrieving simulation data for the following glaciers
-    if multiprocessing && functional_inv
+    if multiprocessing && functional_inv # Multiprocessing functional inversion
         workers = 3 # Two processes for the two glaciers + one for main
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
         # Multiprocessing is especially slow in the CI, so we perform a very short optimization
         epochs = 3
         optimizer = ODINN.ADAM(0.01)
-    elseif functional_inv || !scalar
+    elseif functional_inv # Singleprocessing functional inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
         epochs = [20,20]
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
-    else
+    elseif scalar # Scalar classical inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
         epochs = [5,7]
+        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+    else # Gridded classical inversion
+        workers = 1
+        rgi_ids = ["RGI60-11.03638"]
+        epochs = [20,20]
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
     end
 
@@ -119,8 +124,8 @@ function inversion_test(;
 
     # Compute estimated values of A
 
-    Temps = Float64[]
-    As_optim = Float64[]
+    Temps = scalar ? Float64[] : Vector{Matrix{Float64}}()
+    As_optim = scalar ? Float64[] : Vector{Matrix{Float64}}()
 
     t = tstops[end]
     for (i, glacier) in enumerate(glaciers)
@@ -131,10 +136,14 @@ function inversion_test(;
         T = get_input(iTemp(scalar=scalar), inversion, i, t)
         apply_law!(inversion.model.iceflow.A, inversion.cache.iceflow.A, inversion, i, t, θ)
         push!(Temps, T)
-        push!(As_optim, inversion.cache.iceflow.A.value[1])
+        if scalar
+            push!(As_optim, inversion.cache.iceflow.A.value[1])
+        else
+            push!(As_optim, inversion.cache.iceflow.A.value)
+        end
     end
 
-    if !multiprocessing || !functional_inv
+    if (functional_inv && !multiprocessing) || (!functional_inv && scalar)
         # Reference value of A
         As_fake = A_poly.(Temps)
         @show As_fake

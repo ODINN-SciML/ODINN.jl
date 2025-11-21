@@ -75,7 +75,13 @@ function ∂Diffusivity∂θ(
     ∂law∂θ!(backend, iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, inputs, θ)
 
     # Create a tensor with both elements
-    return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    if isa(iceflow_cache.A, Union{ScalarCache, ScalarCacheGlacierId})
+        # Glacier wide VJP
+        return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    else
+        # Spatially distributed VJP
+        return sparse_cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    end
 end
 
 function Diffusivityꜛ(
@@ -140,5 +146,11 @@ function ∂Diffusivityꜛ∂θ(
     ∂law∂θ!(backend, iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, inputs, θ)
 
     # Create a tensor with both elements
-    return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+        if isa(iceflow_cache.A, Union{ScalarCache, ScalarCacheGlacierId})
+        # Glacier wide VJP
+        return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    else
+        # Spatially distributed VJP
+        return sparse_cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    end
 end

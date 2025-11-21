@@ -48,7 +48,7 @@ mutable struct GlacierWideInv{
         # Invert parameterization
         minA = params.physical.minA
         maxA = params.physical.maxA
-        θ = atanh.((θ .- minA).*(2/(maxA-minA))) .- 1.0
+        θ = atanh.((θ .- minA).*(2/(maxA-minA)) .- 1.0)
 
         new{typeof(θ)}(θ)
     end

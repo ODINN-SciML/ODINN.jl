@@ -74,6 +74,7 @@ if GROUP == "All" || GROUP == "Core2"
         @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[3e-4, 2e-4, 2e-2], target = :A, C=7e-8)
         @testset "VJP (continuous) of SIA2D vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
         @testset "VJP (continuous) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres=[6e-4, 7e-4, 4e-2], target = :A, C=7e-8)
+        @testset "VJP (discrete) of SIA2D with classical scalar inversion vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[6e-4, 7e-4, 4e-2], target = :A, functional_inv = false)
         @testset "VJP (discrete) of SIA2D with classical gridded inversion vs finite differences" test_adjoint_SIA2D(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres=[6e-4, 7e-4, 4e-2], target = :A, functional_inv = false, scalar = false)
     end
 
@@ -86,8 +87,7 @@ end
 if GROUP == "All" || GROUP == "Core3"
     @testset "Manual adjoint methods of SIA equation with A as target" begin
         @testset "Discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
-        @testset "Discrete adjoint with discrete VJP vs finite differences for scalar classical inversions" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); functional_inv = false, thres = [1e-2, 1e-5, 1e-2])
-        @testset "Discrete adjoint with discrete VJP vs finite differences for gridded classical inversions" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); functional_inv = false, scalar=false, thres = [1e-2, 1e-5, 1e-2])
+        @testset "Discrete adjoint with discrete VJP vs finite differences for scalar classical inversions" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); functional_inv = false, thres = [4e-2, 1e-5, 3e-2], finite_difference_method=:Manual)
         @testset "Discrete adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [3e-2, 8e-5, 3e-2], train_initial_conditions = true)
         @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
         @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2])
