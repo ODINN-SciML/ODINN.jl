@@ -12,9 +12,9 @@ function Γ(model, model_cache, params; include_A::Bool = true)
 end
 
 function S(model, model_cache, params)
-    (; C, n) = model_cache
+    (; C, p, q) = model_cache
     (; ρ, g) = params.physical
-    return C.value .* (ρ * g).^n.value
+    return C.value .* (ρ * g).^(p.value - q.value)
 end
 
 function Γꜛ(model, model_cache, params; include_A::Bool = true)
@@ -26,12 +26,6 @@ function Γꜛ(model, model_cache, params; include_A::Bool = true)
     else
         return 2.0 .* (ρ * g).^n ./ (n.+1)
     end
-end
-
-function Sꜛ(model, model_cache, params)
-    (; C, n) = model_cache
-    (; ρ, g) = params.physical
-    return (n.value.+2) .* C.value .* (ρ * g).^n.value
 end
 
 """
