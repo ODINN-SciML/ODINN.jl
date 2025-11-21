@@ -1,6 +1,7 @@
 export NeuralNetwork, Model
 
-_inputs_A_law = (; T=iTemp(scalar=false))
+_inputs_A_law_scalar = (; T=iTemp(scalar=true))
+_inputs_A_law_gridded = (; T=iTemp(scalar=false))
 _inputs_C_law = (; )
 _inputs_n_law = (; )
 _inputs_Y_law = (; T=iTemp(scalar=true), H̄=iH̄())
@@ -83,7 +84,7 @@ function Model(
         end
     else
         if haskey(regressors, :A) && regressors.A isa FunctionalModel
-            @assert inputs(iceflow.A)==_inputs_A_law "Inputs of A law must be $(_inputs_A_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.A))."
+            @assert inputs(iceflow.A)==_inputs_A_law_scalar || inputs(iceflow.A)==_inputs_A_law_gridded "Inputs of A law must be $(_inputs_A_law_scalar) or $(_inputs_A_law_gridded) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.A))."
         end
         if haskey(regressors, :C) && regressors.C isa FunctionalModel
             @assert inputs(iceflow.C)==_inputs_C_law "Inputs of C law must be $(_inputs_C_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.C))."
@@ -99,7 +100,7 @@ function Model(
             target = SIA2D_D_target()
         elseif iceflow.Y_is_provided
             target = SIA2D_D_hybrid_target()
-        elseif !(haskey(regressors, :A) && regressors.A isa FunctionalModel) || inputs(iceflow.A)==_inputs_A_law
+        elseif !(haskey(regressors, :A) && regressors.A isa FunctionalModel) || inputs(iceflow.A)==_inputs_A_law_scalar || inputs(iceflow.A)==_inputs_A_law_gridded
             target = SIA2D_A_target()
         else
             throw("Cannot infer target from the laws.")

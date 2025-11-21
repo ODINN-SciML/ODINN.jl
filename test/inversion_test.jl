@@ -17,7 +17,7 @@ function inversion_test(;
         # Multiprocessing is especially slow in the CI, so we perform a very short optimization
         epochs = 3
         optimizer = ODINN.ADAM(0.01)
-    elseif functional_inv
+    elseif functional_inv || !scalar
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
         epochs = [20,20]
@@ -125,13 +125,13 @@ function inversion_test(;
     t = tstops[end]
     for (i, glacier) in enumerate(glaciers)
         # Initialize the cache to make predictions with the law
-        functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, θ)
-        functional_inversion.model.machine_learning.θ = θ
+        inversion.cache = init_cache(inversion.model, inversion, i, θ)
+        inversion.model.machine_learning.θ = θ
 
-        T = get_input(iTemp(scalar=scalar), functional_inversion, i, t)
-        apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
+        T = get_input(iTemp(scalar=scalar), inversion, i, t)
+        apply_law!(inversion.model.iceflow.A, inversion.cache.iceflow.A, inversion, i, t, θ)
         push!(Temps, T)
-        push!(As_optim, functional_inversion.cache.iceflow.A.value[1])
+        push!(As_optim, inversion.cache.iceflow.A.value[1])
     end
 
     if !multiprocessing || !functional_inv

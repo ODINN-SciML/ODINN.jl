@@ -27,6 +27,7 @@ Per glacier invertible parameter container.
 # Example
 ```julia
 GlacierWideInv(params, glaciers, :A)
+```
 """
 mutable struct GlacierWideInv{
     ComponentVectorType <: ComponentVector
@@ -43,6 +44,11 @@ mutable struct GlacierWideInv{
             Tuple(fill(getfield(glaciers[i], var)) for i in 1:length(glaciers))
         )
         θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
+
+        # Invert parameterization
+        minA = params.physical.minA
+        maxA = params.physical.maxA
+        θ = atanh.((θ .- minA).*(2/(maxA-minA))) .- 1.0
 
         new{typeof(θ)}(θ)
     end

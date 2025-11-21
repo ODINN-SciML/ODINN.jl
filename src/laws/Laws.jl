@@ -25,6 +25,7 @@ Compute the output of a neural network model on the input vector `inp`.
 ```julia
 mymodel = StatefulLuxLayer{true}(archi, nothing, st)
 y = _pred_NN([1.0, 2.0], mymodel, θ, prescale_fn, postscale_fn)
+```
 """
 function _pred_NN(inp::Vector{F}, smodel, θ, prescale, postscale) where {F <: AbstractFloat}
     return only(postscale(smodel(prescale(inp), θ)))
@@ -82,6 +83,7 @@ nn_model = NeuralNetwork(params)
 bounds_H = (0.0, 300.0)
 bounds_∇S = (0.0, 0.5)
 U_law = LawU(nn_model, params; max_NN = 50.0, prescale_bounds = [bounds_H, bounds_∇S])
+```
 """
 function LawU(
     nn_model::NeuralNetwork,
@@ -217,6 +219,7 @@ nn_model = NeuralNetwork(params)
 bounds_T = (-25.0, 0.0)
 bounds_H = (0.0, 500.0)
 Y_law = LawY(nn_model, params; prescale_bounds = [bounds_T, bounds_H])
+```
 """
 function LawY(
     nn_model::NeuralNetwork,
@@ -293,6 +296,7 @@ See also `SIA2D_A_target`.
 ```julia
 nn_model = NeuralNetwork(params)
 A_law = LawA(nn_model, params; precompute_VJPs=false)
+```
 """
 function LawA(
     nn_model::NeuralNetwork,
@@ -433,7 +437,7 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
 
         p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
             ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
-            cache.vjp_θ[cache.glacier_id] = only(ret.A[Symbol("$(cache.glacier_id)")])
+            cache.vjp_θ[1] = only(ret.A[Symbol("$(cache.glacier_id)")])
         end
 
         A_law = Law{ScalarCacheGlacierId}(;
@@ -458,9 +462,8 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
         end
 
         p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
-            @infiltrate
-            ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ)
-            cache.vjp_θ[cache.glacier_id] .= ret.A[Symbol("$(cache.glacier_id)")]
+            ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ) # We can use that `sum` trick to compute the gradient wrt all the parameters because `f!` applies element-wise
+            cache.vjp_θ .= vec(ret.A[Symbol("$(cache.glacier_id)")])
         end
 
         A_law = Law{MatrixCacheGlacierId}(;
