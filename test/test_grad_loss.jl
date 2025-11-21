@@ -54,6 +54,7 @@ function test_grad_finite_diff(
     multiglacier = false,
     use_MB = false,
     functional_inv = true,
+    scalar = true,
     custom_NN = false,
     max_params = 60,
     mask_parameter_vector = false,
@@ -116,7 +117,7 @@ function test_grad_finite_diff(
         physical = PhysicalParameters(
             # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
             minA = use_MB ? 1e-21 : 8e-21,
-            maxA = use_MB ? 2e-21 : 8e-18
+            maxA = use_MB ? 2e-21 : 8e-17
             ),
         UDE = UDEparameters(
             sensealg = sensealg,
@@ -142,8 +143,9 @@ function test_grad_finite_diff(
             rgi_ids[1] => Sleipnir.fake_multi_datacube()
         )
     ) : NamedTuple()
+    ground_truth_A_law = scalar ? ConstantA(2.21e-18) : CuffeyPaterson(scalar=scalar)
     model = Model(
-        iceflow = SIA2Dmodel(params; A = ConstantA(2.21e-18)),
+        iceflow = SIA2Dmodel(params; A = ground_truth_A_law),
         mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
     )
     glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
@@ -170,7 +172,13 @@ function test_grad_finite_diff(
     end
 
     ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti2019) : nothing
-    trainable_model = functional_inv ? nn_model : GlacierWideInv(params, glaciers, target)
+    trainable_model = if functional_inv
+        nn_model
+    elseif scalar
+        GlacierWideInv(params, glaciers, target)
+    else
+        GriddedInv(params, glaciers, target)
+    end
 
     # Define regressors for each test
     regressors = @match (target, train_initial_conditions) begin
@@ -183,8 +191,8 @@ function test_grad_finite_diff(
     end
 
     law = @match (target, functional_inv) begin
-        (:A, true) => LawA(trainable_model, params)
-        (:A, false) => LawA(params)
+        (:A, true) => LawA(trainable_model, params; scalar=scalar)
+        (:A, false) => LawA(params; scalar=scalar)
         (:D_hybrid, true) => LawY(trainable_model, params)
         (:D, true) => LawU(trainable_model, params)
     end
@@ -531,7 +539,7 @@ function test_grad_Halfar(
     S = B + H₀
 
     # Define glacier object
-    climate = Sleipnir.DummyClimate2D(longterm_temps=[T])
+    climate = Sleipnir.DummyClimate2D(longterm_temps_scalar=[T], longterm_temps_gridded=[T T; T T])
     glacier = Glacier2D(rgi_id = "toy", climate = climate, H₀ = H₀, S = S, B = B, A = A, n=n,
                         Δx=Δx, Δy=Δy, nx=nx, ny=ny, C = 0.0)
     glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
