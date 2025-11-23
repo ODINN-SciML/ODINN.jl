@@ -117,8 +117,8 @@ end
 
 if GROUP == "All" || GROUP == "Core5"
 @testset "Manual adjoint methods of SIA equation with hybrid D as target" begin
-    @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-6, 1e-2], target = :D_hybrid)
-    @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [1e-2, 1e-6, 1e-2], target = :D_hybrid)
+    @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-8, 1e-4], target = :D_hybrid)
+    @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [1e-3, 1e-8, 1e-3], target = :D_hybrid)
 end
 end
 

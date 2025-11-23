@@ -59,7 +59,7 @@ function ∂Diffusivity∂H(
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
     a = compute_D(
         target, iceflow_cache.Y.value;
-        H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, glacier, params # I don't think there should be "+δH" here
+        H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
     b = compute_D(
@@ -231,7 +231,7 @@ function ∂Diffusivityꜛ∂H(
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
     a = compute_D(
         target, iceflow_cache.Y.value;
-        H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, glacier, params # I don't think there should be "+δH" here
+        H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
     b = compute_D(
