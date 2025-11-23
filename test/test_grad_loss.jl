@@ -117,7 +117,7 @@ function test_grad_finite_diff(
         physical = PhysicalParameters(
             # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
             minA = use_MB ? 1e-21 : 8e-21,
-            maxA = use_MB ? 2e-21 : 8e-17
+            maxA = use_MB ? 2e-21 : 8e-18
             ),
         UDE = UDEparameters(
             sensealg = sensealg,
@@ -149,6 +149,11 @@ function test_grad_finite_diff(
         mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
     )
     glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
+    if !functional_inv
+        for i in 1:length(glaciers)
+            glaciers[i].A = 4e-18
+        end
+    end
 
     # Generate ground truth based on the loss that will be used hereafter
     store = ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)

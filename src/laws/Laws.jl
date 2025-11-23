@@ -467,7 +467,7 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
         end
 
         A_law = Law{MatrixCacheGlacierId}(;
-                inputs = (; T = iTemp()),
+                inputs = (;),
                 f! = f!,
                 init_cache = init_cache,
                 p_VJP! = p_VJP!,
