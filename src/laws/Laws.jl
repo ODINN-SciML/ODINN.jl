@@ -462,7 +462,9 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
         end
 
         p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
-            ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ) # We can use that `sum` trick to compute the gradient wrt all the parameters because `f!` applies element-wise
+            # In this function we compute the diagonal of the Jacobian since `f!` applies element-wise
+            # We do so by using the `sum` trick below
+            ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ)
             cache.vjp_θ .= vec(ret.A[Symbol("$(cache.glacier_id)")])
         end
 
