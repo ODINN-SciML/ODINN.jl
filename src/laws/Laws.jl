@@ -237,7 +237,7 @@ function LawY(
 
     Y_law = let smodel = smodel, prescale = prescale, postscale = postscale
     Law{MatrixCache}(;
-        inputs = (; T=iTemp(), H̄=iH̄()),
+        inputs = (; T=iAvgTemp(), H̄=iH̄()),
         f! = function (cache, inp, θ)
             Y = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
@@ -334,7 +334,7 @@ function LawA(
     end
     A_law = if scalar
             Law{ScalarCache}(;
-                inputs = (; T=iTemp(scalar=scalar)),
+                inputs = (; T=iAvgTemp()),
                 f! = f!,
                 init_cache = function (simulation, glacier_idx, θ)
                     return ScalarCache(zeros(), zeros(), zero(θ))
@@ -344,7 +344,7 @@ function LawA(
             )
         else
             Law{MatrixCache}(;
-                inputs = (; T = iTemp(scalar=scalar)),
+                inputs = (; T = iTemp()),
                 f! = f!,
                 init_cache = function (simulation, glacier_idx, θ)
                     (; nx, ny) = simulation.glaciers[glacier_idx]
@@ -467,7 +467,7 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
         end
 
         A_law = Law{MatrixCacheGlacierId}(;
-                inputs = (; T = iTemp(scalar=scalar)),
+                inputs = (; T = iTemp()),
                 f! = f!,
                 init_cache = init_cache,
                 p_VJP! = p_VJP!,

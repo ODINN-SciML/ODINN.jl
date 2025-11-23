@@ -56,7 +56,13 @@ A_law = LawA(nn_model, params)
 
 # For the moment we support the following list of inputs:
 
-# - Long term air temperature
+# - Averaged long term air temperature
+# ```@docs
+# iAvgTemp
+# ```
+iAvgTemp()
+
+# - Gridded long term air temperature
 # ```@docs
 # iTemp
 # ```

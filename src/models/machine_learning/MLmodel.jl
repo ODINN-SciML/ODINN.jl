@@ -1,10 +1,10 @@
 export NeuralNetwork, Model
 
-_inputs_A_law_scalar = (; T=iTemp(scalar=true))
-_inputs_A_law_gridded = (; T=iTemp(scalar=false))
+_inputs_A_law_scalar = (; T=iAvgTemp())
+_inputs_A_law_gridded = (; T=iTemp())
 _inputs_C_law = (; )
 _inputs_n_law = (; )
-_inputs_Y_law = (; T=iTemp(scalar=true), H̄=iH̄())
+_inputs_Y_law = (; T=iAvgTemp(), H̄=iH̄())
 _inputs_U_law = (; H̄=iH̄(), ∇S=i∇S())
 
 """
