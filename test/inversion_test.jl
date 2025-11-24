@@ -133,7 +133,7 @@ function inversion_test(;
         inversion.cache = init_cache(inversion.model, inversion, i, θ)
         inversion.model.machine_learning.θ = θ
 
-        T = get_input(scalar ? iAvgTemp() : iTemp(), inversion, i, t)
+        T = get_input(scalar ? iAvgScalarTemp() : iAvgGriddedTemp(), inversion, i, t)
         apply_law!(inversion.model.iceflow.A, inversion.cache.iceflow.A, inversion, i, t, θ)
         push!(Temps, T)
         if scalar

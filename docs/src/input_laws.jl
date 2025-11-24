@@ -22,15 +22,15 @@ A_law = LawA(nn_model, params)
 # For example the long term air temperature is defined with the following code:
 
 # ```julia
-# struct iTemp <: AbstractInput end
-# default_name(::iTemp) = :long_term_temperature
-# function get_input(::iTemp, simulation, glacier_idx, t)
+# struct iAvgScalarTemp <: AbstractInput end
+# default_name(::iAvgScalarTemp) = :averaged_long_term_temperature
+# function get_input(temp::iAvgScalarTemp, simulation, glacier_idx, t)
 #     glacier = simulation.glaciers[glacier_idx]
-#     return mean(glacier.climate.longterm_temps)
+#     return mean(glacier.climate.longterm_temps_scalar)
 # end
-# function Base.zero(::iTemp, simulation, glacier_idx)
+# function Base.zero(temp::iAvgScalarTemp, simulation, glacier_idx)
 #     glacier = simulation.glaciers[glacier_idx]
-#     return zero(glacier.climate.longterm_temps)
+#     return zero(glacier.climate.longterm_temps_scalar)
 # end
 # ```
 
@@ -56,17 +56,17 @@ A_law = LawA(nn_model, params)
 
 # For the moment we support the following list of inputs:
 
-# - Averaged long term air temperature
+# - Scalar averaged long term air temperature
 # ```@docs
-# iAvgTemp
+# iAvgScalarTemp
 # ```
-iAvgTemp()
+iAvgScalarTemp()
 
-# - Gridded long term air temperature
+# - Gridded averaged long term air temperature
 # ```@docs
-# iTemp
+# iAvgGriddedTemp
 # ```
-iTemp()
+iAvgGriddedTemp()
 
 # - Cumulative positive degree days (PDD)
 # ```@docs
