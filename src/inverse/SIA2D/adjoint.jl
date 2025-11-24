@@ -306,14 +306,14 @@ function VJP_λ_∂surface_V∂H_discrete(
     Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Equals ∂Dꜛ/∂H
-    α = ∂Diffusivityꜛ∂H(
+    α = ∂Velocityꜛ∂H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     # Equals ∂Dꜛ/∂(∇H)
-    β = ∂Diffusivityꜛ∂∇H(
+    β = ∂Velocityꜛ∂∇H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,
@@ -329,7 +329,7 @@ function VJP_λ_∂surface_V∂H_discrete(
     βy = β .* ∇Sy
     ∂D∂H = avg_adjoint(α .* ∇S∂V) .+ diff_x_adjoint(avg_y_adjoint(βx .* ∇S∂V), Δx) + diff_y_adjoint(avg_x_adjoint(βy .* ∇S∂V), Δy)
 
-    Dꜛ = Diffusivityꜛ(
+    Dꜛ = Velocityꜛ(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,
@@ -390,7 +390,7 @@ function VJP_λ_∂surface_V∂θ_discrete(
     ∇S∂V = (∇Sx .* inn1(∂Vx) .+ ∇Sy .* inn1(∂Vy))
 
     # Gradient wrt θ
-    ∂D∂θ = ∂Diffusivityꜛ∂θ(
+    ∂D∂θ = ∂Velocityꜛ∂θ(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,

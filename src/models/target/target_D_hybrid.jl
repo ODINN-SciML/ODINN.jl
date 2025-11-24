@@ -194,19 +194,19 @@ function compute_D(
     return D
 end
 
-function Diffusivityꜛ(
+function Velocityꜛ(
     target::SIA2D_D_hybrid_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    return compute_Dꜛ(
+    return compute_Velocityꜛ(
         target;
         H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
         )
 end
 
-function ∂Diffusivityꜛ∂H(
+function ∂Velocityꜛ∂H(
     target::SIA2D_D_hybrid_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -243,7 +243,7 @@ function ∂Diffusivityꜛ∂H(
     return ∂D∂H_no_NN + ∂D∂H_NN
 end
 
-function ∂Diffusivityꜛ∂∇H(
+function ∂Velocityꜛ∂∇H(
     target::SIA2D_D_hybrid_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -262,7 +262,7 @@ function ∂Diffusivityꜛ∂∇H(
     return ∂D∂∇S_no_NN
 end
 
-function ∂Diffusivityꜛ∂θ(
+function ∂Velocityꜛ∂θ(
     target::SIA2D_D_hybrid_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -328,7 +328,7 @@ function ∂Diffusivityꜛ∂θ(
     return ∂D∂θ
 end
 
-function compute_Dꜛ(
+function compute_Velocityꜛ(
     target::SIA2D_D_hybrid_target;
     H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
