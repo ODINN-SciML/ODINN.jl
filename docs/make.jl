@@ -36,6 +36,7 @@ DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 tutorial_files = [
     "./src/forward_simulation.jl",
     "./src/functional_inversion.jl",
+    "./src/classical_inversion.jl",
     "./src/laws.jl",
     "./src/vjp_laws.jl",
     "./src/input_laws.jl",
@@ -67,6 +68,7 @@ makedocs(
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
             "Functional inversion" => "functional_inversion.md",
+            "Classical inversion" => "classical_inversion.md",
             "Laws" => "laws.md",
             "VJP law customization" => "vjp_laws.md",
             "Laws inputs" => "input_laws.md",
@@ -87,7 +89,7 @@ makedocs(
             "How to contribute" => "contribute.md",
             "Code of conduct" => "code_of_conduct.md",
         ],
-       
+
         "Ongoing changes and future plans" => "changes_plans.md",
         "References" => "references.md",
     ],

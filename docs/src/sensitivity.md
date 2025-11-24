@@ -60,7 +60,7 @@ ODINN provides manual implementations of the pullback operations required to com
 compute these VJPs using the native Julia automatic differentiation libraries.
 The VJP methods in ODINN are implemented as concrete types of `AbstractVJPMethod`:
 - `EnzymeVJP()`: The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the (spatially) discrete VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code. 
-- `DiscreteVJP()`: This is a manual implementation of what the (spatially) discrete Enzyme VJP does. Equations were derived manually by differentiating the discretized differential operators. For example, this means that the partial derivative $\frac{\partial f}{\partial x} is first discretized as, for example, `df[i] = (f[i + 1] - f[i]) / dx` and then the pullback operator is directly applied to the discretization `df`.  
+- `DiscreteVJP()`: This is a manual implementation of what the (spatially) discrete Enzyme VJP does. Equations were derived manually by differentiating the discretized differential operators. For example, this means that the partial derivative $\frac{\partial f}{\partial x}$ is first discretized as, for example, `df[i] = (f[i + 1] - f[i]) / dx` and then the pullback operator is directly applied to the discretization `df`.
 - `ContinuousVJP()`: In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a (spatially) continuous VJP can be derived by integrating by parts the spatial differential operators inside the SIA equation. This means the pullback operator of the differentiation step $\frac{\partial f}{\partial x}$ is first computed before discretizing. It is then discretized after differentiation
 
 
