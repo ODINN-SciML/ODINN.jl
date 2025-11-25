@@ -28,7 +28,7 @@ Dimensional Domains".
 ```julia
 v = [0.5, 1.0]
 features = fourier_feature(v, n=4, random=true, σ=2.0)
-
+```
 """
 function fourier_feature(v, n::Integer = 10, random = false, σ = 5.0)
     a₁ = ones(n)
@@ -90,6 +90,7 @@ arch = Chain(Dense(10 => 20, relu), Dense(20 => 1))
 X = rand(10, 100)
 Y = rand(1, 100)
 model, params, state = pretraining(arch; X=X, Y=Y)
+```
 """
 function pretraining(
     architecture::Lux.Chain;
