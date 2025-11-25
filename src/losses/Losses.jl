@@ -343,7 +343,7 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     if isnothing(V_ref)
         # That time step has no valid ground truth ice surface velocity data, so the contribution is zero
-        return nothing, nothing
+        return zero(H_pred), zero(θ)
     end
 
     # Compute the predicted velocity Vx_pred, Vy_pred, V_pred

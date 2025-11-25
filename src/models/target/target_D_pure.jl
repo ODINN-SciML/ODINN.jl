@@ -197,7 +197,7 @@ TODO: This functions right now just make a call to the regular functions used fo
 calculation of the adjoint. This is not correct, but we keep it as this for now until
 we figure out how to do this in the case of the D inversion.
 """
-function Diffusivityꜛ(
+function Velocityꜛ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -207,7 +207,7 @@ function Diffusivityꜛ(
     return U / f
 end
 
-function ∂Diffusivityꜛ∂H(
+function ∂Velocityꜛ∂H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -221,7 +221,7 @@ function ∂Diffusivityꜛ∂H(
     return ∂D∂Hꜛ
 end
 
-function ∂Diffusivityꜛ∂∇H(
+function ∂Velocityꜛ∂∇H(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
     )
@@ -235,7 +235,7 @@ function ∂Diffusivityꜛ∂∇H(
     return ∂D∂∇Hꜛ
 end
 
-function ∂Diffusivityꜛ∂θ(
+function ∂Velocityꜛ∂θ(
     target::SIA2D_D_target;
     H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
 )
