@@ -81,9 +81,11 @@ For each element, the transformation is: `max_NN * exp((Y - 1.0) / Y)`
 - The rescaled values after applying the exponential transformation.
 """
 function _ml_model_postscale(
-    Y::Vector,
+    Y::Union{Vector, SubArray},
     max_NN,
 )
+    @assert 0.0 <= minimum(Y)
+    @assert maximum(Y) <= 1.0
     return max_NN .* exp.((Y .- 1.0) ./ Y)
 end
 
