@@ -257,7 +257,7 @@ function loss(
 ) where {F <: AbstractFloat}
     if isnothing(H_ref)
         # That time step has no valid ground truth ice thickness data, so the contribution is zero
-        return zero(H_pred)
+        return 0.0
     else
         mask = is_in_glacier(H_ref, lossType.loss.distance)
         return loss(lossType.loss, H_pred, H_ref, mask, normalization) * Δt.H
