@@ -268,7 +268,7 @@ archi = nn_model.architecture
 st = nn_model.st
 smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
 
-inputs = (; T=iAvgGriddedTemp(), H̄=iH̄())
+inputs = (; T=iAvgScalarTemp(), H̄=iH̄())
 
 f! = let smodel = smodel, prescale = prescale, postscale = postscale
     function (cache, inp, θ)
