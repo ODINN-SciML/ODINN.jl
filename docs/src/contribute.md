@@ -15,7 +15,38 @@ We will review your PR it and provide feedback. If you are looking for ideas of 
 
 ## SciML code style
 
-In the `ODINN.jl` ecosystem, we follow the [SciML code style](https://github.com/SciML/SciMLStyle). For now, it is enforced only during review, but we plan to soon deploy an automatic code formatter which will enforce that. 
+In the [ODINN.jl](https://github.com/ODINN-SciML/ODINN.jl/) ecosystem, we follow the [SciML code style](https://github.com/SciML/SciMLStyle).
+If you make changes to [Sleipnir.jl](https://github.com/ODINN-SciML/Sleipnir.jl), [Muninn.jl](https://github.com/ODINN-SciML/Muninn.jl), [Huginn.jl](https://github.com/ODINN-SciML/Huginn.jl/) or [ODINN.jl](https://github.com/ODINN-SciML/ODINN.jl/), make sure that you have installed the code formatting tool before committing any change.
+
+!!! warning
+    If you open a PR with changes that were not properly formatted, the CI will raise an error and in any case a PR that does not follow the coding style cannot be merged.
+
+We use `JuliaFormatter.jl` to format the code.
+This can be run automatically everytime you commit changes by using [pre-commit](https://pre-commit.com/) which installs a pre-commit hook.
+The pre-commit hook is defined at the root of each repository, for example [here for ODINN.jl](https://github.com/ODINN-SciML/ODINN.jl/blob/main/.pre-commit-config.yaml).
+
+### Install the pre-commit hook
+
+In order to install the pre-commit hook, make sure that you have installed [pre-commit](https://pre-commit.com/) in a Python environment:
+
+```bash
+pip install pre-commit
+```
+
+Then in the environment where you have installed pre-commit, simply run:
+```bash
+pre-commit install
+```
+
+!!! note
+    You have to install the pre-commit hook (second command) in each of the packages you edit.
+
+!!! note
+    When committing changes, you don't need to be in the Python environment where `pre-commit` has been installed. This environment is used only for the installation of the hook.
+
+### Commit changes
+
+Once you have staged your changes, when running the git commit command, the hook will trigger and the JuliaFormatter will ask you to confirm the formatting that have been applied (if changes to the code format were necessary).
 
 ## Contributing to the documentation
 
