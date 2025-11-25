@@ -68,8 +68,8 @@ makedocs(
             "Forward simulation" => "forward_simulation.md",
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
-            "VJP law customization" => "vjp_laws.md",
             "Laws inputs" => "input_laws.md",
+            "VJP law customization" => "vjp_laws.md",
         ],
         "How to use ODINN" => [
             "Parameters" => "parameters.md",
