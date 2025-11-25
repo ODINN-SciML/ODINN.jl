@@ -7,6 +7,7 @@ Manifest.toml
 # ODINN specific files
 scripts/plots/
 scripts/.CondaPkg/
+scripts/.DS_Store
 benchmark/results.txt
 plots/MB/
 plots/training/
