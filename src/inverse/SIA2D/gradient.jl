@@ -272,16 +272,16 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     indThickness = findfirst(==(t), tH_ref)
                     indVelocity = findfirst(==(t), tV_ref)
                     Δtj = (;
-                        H=isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
-                        V=isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.H, indVelocity-1),
+                        H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness - 1),
+                        V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.H, indVelocity - 1),
                     )
                     ∂ℓ∂H, ∂ℓ∂θ = backward_loss(
                         loss_function,
                         H_itp(t),
-                        useThickness ? H_ref_itp(t) : nothing,
-                        useVelocity ? Vabs_ref_itp(t) : nothing,
-                        useVelocity ? Vx_ref_itp(t) : nothing,
-                        useVelocity ? Vy_ref_itp(t) : nothing,
+                        (useThickness && Δtj.H > 0.0) ? H_ref_itp(t) : nothing,
+                        (useVelocity && Δtj.V > 0.0) ? Vabs_ref_itp(t) : nothing,
+                        (useVelocity && Δtj.V > 0.0) ? Vx_ref_itp(t) : nothing,
+                        (useVelocity && Δtj.V > 0.0) ? Vy_ref_itp(t) : nothing,
                         t,
                         i,
                         θ,

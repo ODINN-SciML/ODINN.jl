@@ -7,6 +7,7 @@ Manifest.toml
 # ODINN specific files
 scripts/plots/
 scripts/.CondaPkg/
+scripts/.DS_Store
 benchmark/results.txt
 plots/MB/
 plots/training/
@@ -48,7 +49,7 @@ docs/data/results/
 *.gz
 *.bz2
 .coverage
-.DS_Store
+*/.DS_Store
 Untitled*.ipynb
 *.aux
 *.bbl
