@@ -36,7 +36,7 @@ function save_simulation_test!(;
     )
 
     model = Model(
-        iceflow = SIA2Dmodel(params, A=CuffeyPaterson()),
+        iceflow = SIA2Dmodel(params, A=CuffeyPaterson(scalar=true)),
         mass_balance = TImodel1(params),
     )
 

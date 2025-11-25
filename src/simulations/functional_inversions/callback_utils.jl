@@ -4,7 +4,7 @@
 Callback function to generate plots during training.
 """
 function callback_plots_A(θ, l, simulation)
-    @assert inputs(simulation.model.iceflow.A)==_inputs_A_law "In order to use `callback_plots_A`, A law must be used and its inputs must be $(_inputs_A_law)"
+    @assert inputs(simulation.model.iceflow.A)==_inputs_A_law_scalar || inputs(simulation.model.iceflow.A)==_inputs_A_law_gridded "In order to use `callback_plots_A`, A law must be used and its inputs must be $(_inputs_A_law_scalar) or $(_inputs_A_law_gridded)"
 
     @ignore_derivatives begin
 

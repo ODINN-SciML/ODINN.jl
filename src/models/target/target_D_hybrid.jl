@@ -55,11 +55,11 @@ function ∂Diffusivity∂H(
     # This is done already in SphereUDE.jl with Lux
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    temp = get_input(iTemp(), simulation, glacier_idx, t)
+    temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
     a = compute_D(
         target, iceflow_cache.Y.value;
-        H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, glacier, params # I don't think there should be "+δH" here
+        H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
     b = compute_D(
@@ -112,7 +112,7 @@ function ∂Diffusivity∂θ(
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 1)
 
-    temp = get_input(iTemp(), simulation, glacier_idx, t)
+    temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
 
@@ -227,11 +227,11 @@ function ∂Velocityꜛ∂H(
 
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
-    temp = get_input(iTemp(), simulation, glacier_idx, t)
+    temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
     a = compute_D(
         target, iceflow_cache.Y.value;
-        H̄ = H̄ + δH, ∇S, θ, iceflow_model, iceflow_cache, glacier, params # I don't think there should be "+δH" here
+        H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
     iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
     b = compute_D(
@@ -284,7 +284,7 @@ function ∂Velocityꜛ∂θ(
     Γ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
 
-    temp = get_input(iTemp(), simulation, glacier_idx, t)
+    temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
 

@@ -149,10 +149,20 @@ end
 
 ### General Utils
 
-function cartesian_tensor(A, v)
+function cartesian_tensor(A::Matrix{F}, v::Vector{F}) where {F <: AbstractFloat}
     B = zeros(size(A)..., only(size(v)))
     for i in axes(A, 1), j in axes(A, 2), k in axes(v,1)
         B[i, j, k] = A[i, j] * v[k]
+    end
+    return B
+end
+function sparse_cartesian_tensor(A::Matrix{F}, v::Vector{F}) where {F <: AbstractFloat}
+    B = zeros(size(A)..., only(size(v)))
+    vMat = zero(A)
+    vec(vMat) .= v
+    for i in axes(A, 1), j in axes(A, 2)
+        k = LinearIndices(A)[i, j]
+        B[i, j, k] = A[i, j] * vMat[i, j]
     end
     return B
 end

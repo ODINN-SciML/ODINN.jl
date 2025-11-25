@@ -52,7 +52,7 @@ params = Parameters(
 )
 
 ## We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
-A_law = CuffeyPaterson()
+A_law = CuffeyPaterson(scalar=true)
 
 model = Model(
     iceflow = SIA2Dmodel(params; A=A_law),
@@ -147,7 +147,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # learning model. We define a synthetic law to generate the synthetic dataset.
 # For this, we use some tabular data from Cuffey and Paterson (2010). The REPL
 # shows that it maps the long term air temperature `T` to the creep coefficient `A`.
-A_law = CuffeyPaterson()
+A_law = CuffeyPaterson(scalar=true)
 
 # The model is initialized using the `Model` constructor:
 model = Model(

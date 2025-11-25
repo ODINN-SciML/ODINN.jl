@@ -4,14 +4,14 @@ In this section we present the main ideas behind the inversions.
 In data assimilation, one aims at calibrating a model such that the predictions match the observations.
 The observations can be either an initial, intermediate or final state or observations over time. When we try to invert a trajectory by matching multiple states or observations over time, we are referring to a transient inversion. 
 
-In the standard setting, inversions are made with respect to some quantity of interest that is involed in the iceflow equation, i.e. the mechanistic model.
+In the classical setting, inversions are made with respect to some quantity of interest that is involed in the iceflow equation, i.e. the mechanistic model.
 This can be for example the creep coefficient $A$ for the Shallow Ice Approximation (SIA) like in [bolibar_universal_2023](@cite).
 This parameter can be constant for one glacier or vary with respect to space (i.e. in a grid), in which case a spatial regularization is added to make the inversion problem well-posed.
 
 Another way to invert a parameter in an iceflow equation is to parametrize the quantity of interest, let us say $A$, by other quantities which can be in the case of [bolibar_universal_2023](@cite), the long term air temperature $T$.
 The optimized variable is not $A$ but the parameters $\theta$ and the mapping $(T,\theta)\mapsto A(\theta,T)$ defines a parametrization of the ice rheology. We refer hereafter to this kind of inversion as a *functional inversion*, where the goal is to optimize the parameters of a regressor specifying a function, rather than directly optimizing parameters or coefficients of a mechanistic model.
 
-We summarize the main differences between the two kind of inversions hereafter, and then we explain how we perform inversion of the initial conditions (i.e. glacier state). But first let us define the loss functions used in ODINN.
+We summarize the main differences between the two kind of inversions hereafter, and we specify the case for performing inversions of the initial conditions (i.e. glacier state), which are a sub-case of classical inversions.
 
 ## Classical inversions
 
@@ -22,6 +22,30 @@ The optimization problem is
 \min_\theta L \left(\hat S, S \right) + R\left( \hat S, p \right)
 ```
 where $\theta$ is the vector of parameters to invert, for example $\theta=[A]$; $L(\hat S, S)$ is the empirical loss function between a predicted state $\hat S$ and observations $S$ (for example, the ice thickness or the ice surface velocity); and $R(\hat S, p)$ is a regularization term.
+
+### Classical inversions tutorial
+
+The [classical inversion tutorial](./classical_inversion.md) provides an example on how to use these methods to invert in a scalar or gridded way a parameter of the Shallow Ice Approximation. 
+
+### Inversion with respect to initial state of the glacier
+
+A specific case of a classical inversion is inverting the initial state of glacier. Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t\_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization). 
+
+We provide an object `InitialCondition` that enables the prescription of all the important parameters of the initialization. An initial guess can be provided: `:Farinotti2019` for the ice thickness product by Farinotti et al. (2019), or `:Farinotti2019Random` for the same product with some added Gaussian noise. In order to guarantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
+Finally, prescribing an inversion with respect to the initial condition can be directly included by defining the initial condition as one extra regressor inside the model:
+
+```julia
+ic = InitialCondition(params, glaciers, :Farinotti2019)
+model = Model(
+    iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
+    mass_balance = nothing,
+    regressors = (; A = nn_model, IC = ic)
+)
+```
+
+From an optimization perspective, the computation of the gradients of the loss function with respect to the initial condition is simply given by the value of the adjoint variable at the initial time, which is part of the standard inversion pipeline of ODINN and it does not add any extra computational overhead.
+
+Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `\theta` using the `evaluate_H₀` function to a specific glacier.
 
 ## Functional inversions
 
@@ -118,25 +142,9 @@ Whether a classical or a functional inversion should be made with respect to som
 
 The [functional inversion tutorial](./functional_inversion.md) gives an example of how such an inversion can be run in practice with `ODINN.jl`.
 
-## Inversion with respect to initial state of the glacier
+### Laws and Law inputs tutorials
 
-Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t\_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization). 
-
-We provide an object `InitialCondition` that enables the prescription of all the important parameters of the initialization. An initial guess can be provided: `:Farinotti2019` for the ice thickness product by Farinotti et al. (2019), or `:Farinotti2019Random` for the same product with some added Gaussian noise. In order to guarantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
-Finally, prescribing an inversion with respect to the initial condition can be directly included by defining the initial condition as one extra regressor inside the model:
-
-```julia
-ic = InitialCondition(params, glaciers, :Farinotti2019)
-model = Model(
-    iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
-    mass_balance = nothing,
-    regressors = (; A = nn_model, IC = ic)
-)
-```
-
-From an optimization perspective, the computation of the gradients of the loss function with respect to the initial condition is simply given by the value of the adjoint variable at the initial time, which is part of the standard inversion pipeline of ODINN and it does not add any extra computational overhead.
-
-Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `\theta` using the `evaluate_H₀` function to a specific glacier.
+For more details on how to actually implement new laws and law inputs, and for a list of all the ones that are already available within `ODINN.jl`, you can check the [Laws tutorial](./laws.md) and the [Laws inputs tutorial](./input_laws.md) respectively. 
 
 ## Logging
 

@@ -140,7 +140,7 @@ st = nn_model.st
 smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
 min_NN = params.physical.minA
 max_NN = params.physical.maxA
-inputs = (; T=iTemp())
+inputs = (; T=iAvgScalarTemp())
 
 # And then the `f!` and `init_cache` functions:
 f! = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
@@ -268,7 +268,7 @@ archi = nn_model.architecture
 st = nn_model.st
 smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
 
-inputs = (; T=iTemp(), H̄=iH̄())
+inputs = (; T=iAvgScalarTemp(), H̄=iH̄())
 
 f! = let smodel = smodel, prescale = prescale, postscale = postscale
     function (cache, inp, θ)

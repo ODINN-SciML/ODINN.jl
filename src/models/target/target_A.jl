@@ -33,10 +33,10 @@ function ∂Diffusivity∂H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    (; n, p, q) = iceflow_cache
+    (; A, n, p, q) = iceflow_cache
     return (
             (p.value .- q.value .+ 1) .* S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value) .* ∇S.^(p.value .- 1)
-            + Γ(iceflow_model, iceflow_cache, params) .* (n.value .+ 2) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 1)
+            + A.value .* Γ(iceflow_model, iceflow_cache, params; include_A = false) .* (n.value .+ 2) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 1)
         )
 end
 
@@ -46,10 +46,10 @@ function ∂Diffusivity∂∇H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    (; n, p, q) = iceflow_cache
+    (; A, n, p, q) = iceflow_cache
     return (
             S(iceflow_model, iceflow_cache, params) .* (p.value .- 1) .* H̄.^(p.value .- q.value .+ 1) .* ∇S.^(p.value .- 3)
-            + Γ(iceflow_model, iceflow_cache, params) .* (n.value .- 1) .* H̄.^(n.value .+ 2) .* ∇S.^(n.value .- 3)
+            + A.value .* Γ(iceflow_model, iceflow_cache, params; include_A = false) .* (n.value .- 1) .* H̄.^(n.value .+ 2) .* ∇S.^(n.value .- 3)
         )
 end
 
@@ -71,7 +71,13 @@ function ∂Diffusivity∂θ(
     ∂law∂θ!(backend, iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, inputs, θ)
 
     # Create a tensor with both elements
-    return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    if isa(iceflow_cache.A, Union{ScalarCache, ScalarCacheGlacierId})
+        # Glacier wide VJP
+        return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    else
+        # Spatially distributed VJP
+        return sparse_cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    end
 end
 
 function Velocityꜛ(
@@ -94,10 +100,10 @@ function ∂Velocityꜛ∂H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    (; n, p, q) = iceflow_cache
+    (; A, n, p, q) = iceflow_cache
     return (
             S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) * H̄.^(p.value .- q.value) .* ∇S .^ (n.value .- 1)
-            + Γꜛ(iceflow_model, iceflow_cache, params) .* (n.value .+ 1) .* H̄.^n.value .* ∇S.^(n.value .- 1)
+            + A.value .* Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .* (n.value .+ 1) .* H̄.^n.value .* ∇S.^(n.value .- 1)
         )
 end
 
@@ -107,10 +113,10 @@ function ∂Velocityꜛ∂∇H(
     )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
-    (; n, p, q) = iceflow_cache
+    (; A, n, p, q) = iceflow_cache
     return (
             S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) .* (p.value .- 1) * H̄.^(p.value .- q.value .+ 1) .* ∇S .^ (n.value .- 3)
-            + Γꜛ(iceflow_model, iceflow_cache, params) .* (n.value .- 1) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 3)
+            + A.value .* Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .* (n.value .- 1) .* H̄.^(n.value .+ 1) .* ∇S.^(n.value .- 3)
         )
 end
 
@@ -132,5 +138,11 @@ function ∂Velocityꜛ∂θ(
     ∂law∂θ!(backend, iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, inputs, θ)
 
     # Create a tensor with both elements
-    return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+        if isa(iceflow_cache.A, Union{ScalarCache, ScalarCacheGlacierId})
+        # Glacier wide VJP
+        return cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    else
+        # Spatially distributed VJP
+        return sparse_cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
+    end
 end

@@ -27,6 +27,7 @@ Per glacier invertible parameter container.
 # Example
 ```julia
 GriddedInv(params, glaciers, :A)
+```
 """
 mutable struct GriddedInv{
     ComponentVectorType <: ComponentVector
@@ -40,9 +41,14 @@ mutable struct GriddedInv{
     )
         inv_param_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
         inv_param = NamedTuple{inv_param_type}(
-            Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀)) for i in 1:length(glaciers))
+            Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀) .-1) for i in 1:length(glaciers))
         )
         θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
+
+        # Invert parameterization
+        minA = params.physical.minA
+        maxA = params.physical.maxA
+        θ = atanh.((θ .- minA).*(2/(maxA-minA)) .- 1.0)
 
         new{typeof(θ)}(θ)
     end

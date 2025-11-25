@@ -104,7 +104,7 @@ min_H, max_H = 0.0, H_max
 
 # We define the prescale and postscale of quantities.
 model = Model(
-    iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
+    iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=true)),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
 )
 

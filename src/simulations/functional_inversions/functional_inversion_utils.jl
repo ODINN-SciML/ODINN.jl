@@ -26,8 +26,6 @@ function run!(
         Dates.format(now(), "yyyy-mm-dd_HH:MM:SS"),
     ),
 )
-    println("Training UDE...\n")
-
     # Set expected total number of epochs from beginning for the callback
     simulation.results.stats.niter = sum(simulation.parameters.hyper.epochs)
 
@@ -106,7 +104,7 @@ function train_UDE!(
 end
 
 """
-BFGS Training
+BFGS optim
 """
 function train_UDE!(
     simulation::Inversion,
@@ -115,7 +113,7 @@ function train_UDE!(
     logger::Union{<: TBLogger, Nothing} = nothing
     )
 
-    @info "Training with BFGS optimizer"
+    @info "Optimizing with BFGS"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
@@ -138,7 +136,7 @@ function train_UDE!(
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
     else
-        @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
+        @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
     end
     loss_function_grad!(_dθ, _θ, _simulation) = if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         grad_loss_iceflow!(_dθ, _θ, only(_simulation), pmap)
@@ -149,7 +147,7 @@ function train_UDE!(
 
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
-    # Training diagnosis callback
+    # Optim diagnosis callback
     cb(θ, l) = let simulation=simulation, logger=logger, save_every_iter=save_every_iter
         callback_diagnosis(θ, l, simulation; save = save_every_iter, tbLogger = logger)
     end
@@ -170,7 +168,7 @@ function train_UDE!(
 end
 
 """
-ADAM Training
+ADAM optim
 """
 function train_UDE!(
     simulation::Inversion,
@@ -179,7 +177,7 @@ function train_UDE!(
     logger::Union{<: TBLogger, Nothing} = nothing
     ) where {AR <: Optimisers.AbstractRule}
 
-    @info "Training with ADAM optimizer"
+    @info "Optimizing with ADAM"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
@@ -204,7 +202,7 @@ function train_UDE!(
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
     else
-        @info "Training with custom $(typeof(simulation.parameters.UDE.grad)) method"
+        @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
     end
     loss_function_grad!(_dθ, _θ, simulation_loader) = if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         grad_loss_iceflow!(_dθ, _θ, simulation_loader[1], pmap)
@@ -215,7 +213,7 @@ function train_UDE!(
 
     optprob = OptimizationProblem(optf, θ, simulation_train_loader)
 
-    # Training diagnosis callback
+    # Optim diagnosis callback
     cb(θ, l) = let simulation=simulation, logger=logger, save_every_iter=save_every_iter
         callback_diagnosis(θ, l, simulation; save = save_every_iter, tbLogger = logger)
     end

@@ -3,6 +3,7 @@ function inversion_test(;
     multiprocessing = false,
     grad = ContinuousAdjoint(),
     functional_inv = true,
+    scalar = true
 )
 
     rgi_paths = get_rgi_paths()
@@ -10,21 +11,26 @@ function inversion_test(;
     working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 
     ## Retrieving simulation data for the following glaciers
-    if multiprocessing && functional_inv
+    if multiprocessing && functional_inv # Multiprocessing functional inversion
         workers = 3 # Two processes for the two glaciers + one for main
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
         # Multiprocessing is especially slow in the CI, so we perform a very short optimization
         epochs = 3
         optimizer = ODINN.ADAM(0.01)
-    elseif functional_inv
+    elseif functional_inv # Singleprocessing functional inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
         epochs = [20,20]
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
-    else
+    elseif scalar # Scalar classical inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
         epochs = [5,7]
+        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+    else # Gridded classical inversion
+        workers = 1
+        rgi_ids = ["RGI60-11.03638"]
+        epochs = [20,20]
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
     end
 
@@ -68,7 +74,7 @@ function inversion_test(;
 
     MB_model = use_MB ? TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0) : nothing
     model = Model(
-        iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
+        iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=scalar)),
         mass_balance = MB_model,
     )
 
@@ -82,21 +88,31 @@ function inversion_test(;
 
     glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
-    trainable_model = functional_inv ? NeuralNetwork(params) : GlacierWideInv(params, glaciers, :A)
-    A_law = functional_inv ? LawA(trainable_model, params) : LawA(params)
+    if functional_inv
+        trainable_model = NeuralNetwork(params)
+        file_name = "functional_inversion_test.jld2"
+    elseif scalar
+        trainable_model = GlacierWideInv(params, glaciers, :A)
+        file_name = "classical_scalar_inversion_test.jld2"
+    else
+        trainable_model = GriddedInv(params, glaciers, :A)
+        file_name = "classical_gridded_inversion_test.jld2"
+    end
+
+    A_law = functional_inv ? LawA(trainable_model, params; scalar=scalar) : LawA(params; scalar=scalar)
     model = Model(
         iceflow = SIA2Dmodel(params; A=A_law),
         mass_balance = MB_model,
         regressors = (; A=trainable_model))
 
     # We create an ODINN prediction
-    functional_inversion = Inversion(model, glaciers, params)
+    inversion = Inversion(model, glaciers, params)
 
     # We run the simulation
     path = mktempdir()
-    file_name = functional_inv ? "functional_inversion_test.jld2" : "classical_inversion_test.jld2"
+
     run!(
-        functional_inversion;
+        inversion;
         path = path,
         file_name = file_name
     )
@@ -108,22 +124,26 @@ function inversion_test(;
 
     # Compute estimated values of A
 
-    Temps = Float64[]
-    As_optim = Float64[]
+    Temps = scalar ? Float64[] : Vector{Matrix{Float64}}()
+    As_optim = scalar ? Float64[] : Vector{Matrix{Float64}}()
 
     t = tstops[end]
     for (i, glacier) in enumerate(glaciers)
         # Initialize the cache to make predictions with the law
-        functional_inversion.cache = init_cache(functional_inversion.model, functional_inversion, i, θ)
-        functional_inversion.model.machine_learning.θ = θ
+        inversion.cache = init_cache(inversion.model, inversion, i, θ)
+        inversion.model.machine_learning.θ = θ
 
-        T = get_input(iTemp(), functional_inversion, i, t)
-        apply_law!(functional_inversion.model.iceflow.A, functional_inversion.cache.iceflow.A, functional_inversion, i, t, θ)
+        T = get_input(scalar ? iAvgScalarTemp() : iAvgGriddedTemp(), inversion, i, t)
+        apply_law!(inversion.model.iceflow.A, inversion.cache.iceflow.A, inversion, i, t, θ)
         push!(Temps, T)
-        push!(As_optim, functional_inversion.cache.iceflow.A.value[1])
+        if scalar
+            push!(As_optim, inversion.cache.iceflow.A.value[1])
+        else
+            push!(As_optim, inversion.cache.iceflow.A.value)
+        end
     end
 
-    if !multiprocessing || !functional_inv
+    if (functional_inv && !multiprocessing) || (!functional_inv && scalar)
         # Reference value of A
         As_fake = A_poly.(Temps)
         @show As_fake
