@@ -67,8 +67,8 @@ makedocs(
         "Quick start" => "quick_start.md",
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
-            "Functional inversion" => "functional_inversion.md",
             "Classical inversion" => "classical_inversion.md",
+            "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
             "Laws inputs" => "input_laws.md",
             "VJP law customization" => "vjp_laws.md",

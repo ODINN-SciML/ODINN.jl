@@ -15,6 +15,19 @@ julia> Pkg.add("ODINN")
 !!! info
     `ODINN.jl` and the rest of the ODINN ecosystem packages require Julia v1.10 or later, which are the ones used in the CI. 
 
+
+## Documentation overview
+
+The documentation, which you can navigate through the left-hand-side panel, is structured in the following way:
+
+- *Quick start*: Provides a straight-to-the-point example of a simple use-case of `ODINN.jl` to get an idea of the basic interface and style.
+- *Tutorials*: They provide clear examples of the main types of simulations and workflows that you can work with in `ODINN.jl`.
+- *How to use ODINN*: Explains the basic building blocks (i.e. types) used in `ODINN.jl` simulations, and how they are assembled together. 
+- *Inversions*: Addresses more advanced questions related to inverse modelling, computing gradients, optimization and machine learning. 
+- *Community*: Explains the aspects related to how to contribute to the model(s), code style, building the documentation in local and the code of conduct. 
+- *Ongoing changes and future plans*: Self-explanatory.
+- *References*: List of scientific papers used in this documentation.
+
 ## Vision
 
 Rather than focusing on global-scale simulations and sea-level rise contributions, `ODINN.jl` has, for now, a regional and catchment-scale focus, aiming to exploit the latest remote sensing and in situ observations to capture missing or subgrid glacier processes. In order to do so, `ODINN.jl` leverages Universal Differential Equations (UDEs), combining PDEs describing ice flow dynamics with data-driven regressors, such as neural networks [rackauckas_universal_2020](@cite). For this, `ODINN.jl` relies heavily on the [SciML](https://sciml.ai/) Julia ecosytem and the native automatic differentiation (AD) support. Therefore `ODINN.jl` has a two-fold goal:

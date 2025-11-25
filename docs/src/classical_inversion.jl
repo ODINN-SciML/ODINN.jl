@@ -1,14 +1,12 @@
 # # Classical inversion tutorial
 
-# This tutorial provides a simple example on how to perform a classical inversion in ODINN.jl.
+# This tutorial provides a simple example on how to perform a classical gridded inversion in `ODINN.jl`.
 # For this, we generate a synthetic dataset using a forward simulation, and then we use this dataset to perform the classical inversion.
 # The goal of this classical inversion is to retrieve the matrix of `A` values, i.e. the ice rigidity, that was used to generate the results of a forward simulation.
 
 # ## Step 1: Parameter and glacier initialization
 
-using Revise
 using ODINN
-using Infiltrator
 
 # We fetch the paths with the files for the available glaciers on disk
 
@@ -29,7 +27,7 @@ params = Parameters(
         test_mode=false,
         multiprocessing=false, # We are processing only one glacier
         rgi_paths=rgi_paths,
-        gridScalingFactor=4), # Downscale the glacier grid to speed-up this example
+        gridScalingFactor=4), # Downscale the glacier grid to speed-up this example for the GitHub servers
     hyper = Hyperparameters(
         batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
         epochs=[2,2], # [35,30]
@@ -46,7 +44,7 @@ params = Parameters(
 
 # ## Step 2: Defining a forward simulation as a synthetic ground truth
 
-# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
+# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010) in a law that we have already available in `ODINN.jl`, which we specify to be in a gridded format (i.e. non-scalar).
 
 A_law = CuffeyPaterson(scalar=false)
 
@@ -69,7 +67,7 @@ prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
 glaciers = prediction.glaciers
 
-# Now we compute the spatially varying A to have a ground truth for the comparison at the end of this tutorial.
+# Now we compute the spatially varying `A` to have a ground truth for the comparison at the end of this tutorial.
 
 A_ground_truth = zeros(size(prediction.glaciers[1].H₀))
 inn1(A_ground_truth) .= eval_law(prediction.model.iceflow.A, prediction, 1, (;T=get_input(iAvgGriddedTemp(), prediction, 1, tstops[1])), nothing)
@@ -77,7 +75,7 @@ A_ground_truth[prediction.glaciers[1].H₀.==0] .= NaN;
 
 # ## Step 3: Model specification to perform a classical inversion
 
-# After this forward simulation, we restart the iceflow model to be ready for the inversions
+# After this forward simulation, we restart the iceflow model to be ready for the inversions
 
 trainable_model = GriddedInv(params, glaciers, :A)
 A_law = LawA(params; scalar=false)
@@ -97,11 +95,11 @@ inversion = Inversion(model, glaciers, params)
 
 run!(inversion)
 
-# Now that the model has been optimized, we retrieve the inverted parameters. These parameters do not correspond directly to the values of A. What it defines instead is a parameterization of A to ensure positiveness through a tanh function.
+# Now that the model has been optimized, we retrieve the inverted parameters. These parameters do not correspond directly to the values of `A`. What it defines instead is a parameterization of `A` to ensure positiveness through a tanh function.
 
 θ = inversion.results.stats.θ
 
-# We map the parameters to the values of A by evaluating the law.
+# We map the parameters to the values of `A` by evaluating the law.
 
 A = zeros(size(inversion.glaciers[1].H₀))
 inn1(A) .= eval_law(inversion.model.iceflow.A, inversion, 1, (;), θ)
@@ -109,11 +107,11 @@ A[inversion.glaciers[1].H₀.==0] .= NaN;
 
 # ## Step 5: Compare the inverted parameter to the synthetic ground truth
 
-# Finally we visualize the inverted A.
+# Finally we visualize the inverted `A`.
 
 plot_gridded_data(A, inversion.results.simulation[1]; colormap=:YlGnBu, logPlot=true)
 
-# We can compare it to the ground truth A values:
+# We can compare it to the ground truth `A` values:
 
 plot_gridded_data(A_ground_truth, inversion.results.simulation[1]; colormap=:YlGnBu, logPlot=true)
 
