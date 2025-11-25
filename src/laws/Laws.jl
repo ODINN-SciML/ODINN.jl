@@ -118,7 +118,7 @@ function LawU(
 
         # Create template interpolation based on half-interpolation range
         # The values are overwritten later on
-        n_nodes = 2 * simulation.model.machine_learning.target.n_interp_half
+        n_nodes = 2 * simulation.model.trainable_components.target.n_interp_half
         H_nodes = LinRange(0.0, 100, n_nodes) |> collect
         ∇S_nodes = LinRange(0.0, 0.2, n_nodes) |> collect
 
@@ -354,58 +354,6 @@ function LawA(
         end
     return A_law
 end
-
-# TODO: move the cache definition below to Cache.jl once #413 is merged
-import Base.similar, Base.size
-
-export ScalarCacheGlacierId, MatrixCacheGlacierId
-
-"""
-    ScalarCacheGlacierId <: Cache
-
-A cache structure for storing a scalar value as a zero-dimensional array of `Float64` along with
-their associated vector-Jacobian products (VJP).
-It also stores the glacier ID as an integer.
-This is typically used to invert a single scalar per glacier.
-Fields:
-- `value::Array{Float64, 0}`: The cached scalar value.
-- `vjp_inp::Array{Float64, 0}`: VJP with respect to inputs. Must be defined but never used in
-    practice since this cache is used for classical inversions and the law does not have inputs.
-- `vjp_θ::Vector{Float64}`: VJP with respect to parameters.
-- `glacier_id::Int64`: Glacier ID in the list of simulated glaciers.
-"""
-struct ScalarCacheGlacierId <: Cache
-    value::Array{Float64, 0}
-    vjp_inp::Array{Float64, 0}
-    vjp_θ::Vector{Float64}
-    glacier_id::Int64
-end
-similar(c::ScalarCacheGlacierId) = typeof(c)(similar(c.value), similar(c.vjp_inp), similar(c.vjp_θ), c.glacier_id)
-size(c::ScalarCacheGlacierId) = size(c.value)
-Base.:(==)(a::ScalarCacheGlacierId, b::ScalarCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
-
-"""
-    MatrixCacheGlacierId <: Cache
-
-A cache structure for storing a matrix value (`Float64` 2D array) along with
-their associated vector-Jacobian products (VJP).
-It also stores the glacier ID as an integer.
-This is typically used to invert a spatially varying field per glacier.
-Fields:
-- `value::Array{Float64, 2}`: The cached matrix value.
-- `vjp_inp::Array{Float64, 2}`: VJP with respect to inputs.
-- `vjp_θ::Vector{Float64}`: VJP with respect to parameters.
-- `glacier_id::Int64`: Glacier ID in the list of simulated glaciers.
-"""
-struct MatrixCacheGlacierId <: Cache
-    value::Array{Float64, 2}
-    vjp_inp::Array{Float64, 2}
-    vjp_θ::Vector{Float64}
-    glacier_id::Int64
-end
-similar(c::MatrixCacheGlacierId) = typeof(c)(similar(c.value), similar(c.vjp_inp), similar(c.vjp_θ), c.glacier_id)
-size(c::MatrixCacheGlacierId) = size(c.value)
-Base.:(==)(a::MatrixCacheGlacierId, b::MatrixCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
 
 """
     LawA(params::Sleipnir.Parameters; scalar::Bool=true)

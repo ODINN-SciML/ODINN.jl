@@ -131,7 +131,7 @@ function inversion_test(;
     for (i, glacier) in enumerate(glaciers)
         # Initialize the cache to make predictions with the law
         inversion.cache = init_cache(inversion.model, inversion, i, θ)
-        inversion.model.machine_learning.θ = θ
+        inversion.model.trainable_components.θ = θ
 
         T = get_input(scalar ? iAvgScalarTemp() : iAvgGriddedTemp(), inversion, i, t)
         apply_law!(inversion.model.iceflow.A, inversion.cache.iceflow.A, inversion, i, t, θ)

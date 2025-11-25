@@ -158,7 +158,7 @@ H_smooth = collect(0.0:1.0:max_H)
 
 AtimesH_pred = zeros(length(Temps_smooth), length(H_smooth))
 
-θ = functional_inversion.model.machine_learning.θ
+θ = functional_inversion.model.trainable_components.θ
 for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
     temp = Temps_smooth[i]
     H = H_smooth[j]
