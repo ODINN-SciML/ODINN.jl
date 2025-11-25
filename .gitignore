@@ -48,7 +48,7 @@ docs/data/results/
 *.gz
 *.bz2
 .coverage
-.DS_Store
+*/.DS_Store
 Untitled*.ipynb
 *.aux
 *.bbl
