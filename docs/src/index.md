@@ -45,7 +45,7 @@ Rather than focusing on global-scale simulations and sea-level rise contribution
 - [`Gungnir`](https://github.com/ODINN-SciML/Gungnir) is a Python package, using [OGGM](https://github.com/OGGM/oggm) to retrieve all the necessary files (i.e. rasters and climate data) for the initial conditions and simulations in all the ODINN ecosystem. The user has the possibility to either store those files locally, or to use the ones we provide in a server. This is work in progress, so we will progressively cover more and more glaciers and regions in the near future.
 
 ```@raw html
-<img src="./assets/ODINN_ecosystem_v4.png" alt="ODINN ecosystem overview" width="700"/>
+<img src="./assets/odinn_ecosystem_v4.png" alt="ODINN ecosystem overview" width="700"/>
 ```
 
 ## Developers
