@@ -46,7 +46,6 @@ params = Parameters(
         use_MB = false,
         use_velocities = true,
         tspan = (2010.0, 2015.0),
-        step = δt,
         multiprocessing = false,
         workers = 1,
         test_mode = false,
@@ -70,7 +69,6 @@ params = Parameters(
         ),
     solver = Huginn.SolverParameters(
         step = δt,
-        save_everystep = true,
         progress = true
         )
     )
@@ -106,7 +104,7 @@ min_H, max_H = 0.0, H_max
 
 # We define the prescale and postscale of quantities.
 model = Model(
-    iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
+    iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=true)),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
 )
 
@@ -118,7 +116,7 @@ A_poly = Huginn.polyA_PatersonCuffey()
 # We generate a fake law with A and no direct dependency on H
 glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
-prediction = Huginn.Prediction(model, glaciers, params)
+prediction = Prediction(model, glaciers, params)
 
 Temps = Float64[]
 As_fake = Float64[]
@@ -144,7 +142,7 @@ model = Model(
 )
 
 # We create an ODINN prediction
-functional_inversion = FunctionalInversion(model, glaciers, params)
+functional_inversion = Inversion(model, glaciers, params)
 
 # We run the simulation with ADAM and then LBFGS
 run!(functional_inversion)

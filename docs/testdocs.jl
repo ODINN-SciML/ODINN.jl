@@ -17,7 +17,10 @@ using Test
 
 @testset "Forward simulation" include("src/forward_simulation.jl")
 @testset "Functional inversion" include("src/functional_inversion.jl")
+@testset "Classical inversion" include("src/classical_inversion.jl")
 @testset "Laws" include("src/laws.jl")
+@testset "Laws VJPs" include("src/vjp_laws.jl")
+@testset "Laws inputs" include("src/input_laws.jl")
 @testset "Quick start" include("src/quick_start.jl")
 
 end

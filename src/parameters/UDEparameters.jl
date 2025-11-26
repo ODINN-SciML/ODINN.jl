@@ -1,4 +1,4 @@
-export UDEparameters
+export UDEparameters, Parameters
 
 """
 A mutable struct that holds parameters for a UDE (Universal Differential Equation).
@@ -36,7 +36,7 @@ Create a `UDEparameters` object for configuring the sensitivity analysis and opt
 # Keyword Arguments
 - `sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm`: The sensitivity algorithm to use for adjoint calculations. Defaults to `GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP())`.
 - `optim_autoAD::AbstractADType`: The automatic differentiation type for optimization. Defaults to `Optimization.AutoEnzyme()`.
-- `grad::ADJ`: The adjoint gradient computation method. Defaults to `SciMLSensitivityAdjoint()`.
+- `grad::ADJ`: The adjoint gradient computation method. Defaults to `ContinuousAdjoint()`.
 - `optimization_method::String`: The optimization method to use. Must be either `"AD+AD"` or `"AD+Diff"`. Defaults to `"AD+AD"`.
 - `empirical_loss_function::AbstractLoss`: The loss function to use for optimization. Defaults to `LossH()`.
 - `target::Union{Symbol, Nothing}`: The target variable for optimization. Defaults to `:A`.
@@ -54,9 +54,9 @@ This function creates a `UDEparameters` object that encapsulates the configurati
 function UDEparameters(;
         sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP()),
         optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
-        grad::ADJ = SciMLSensitivityAdjoint(),
+        grad::ADJ = ContinuousAdjoint(),
         optimization_method::String = "AD+AD",
-        empirical_loss_function::AbstractLoss = LossH(),
+        empirical_loss_function::AbstractLoss = MultiLoss(losses = (LossH(),), λs = (1.0,)),
         target::Union{Symbol, Nothing} = :A,
         initial_condition_filter::Union{Symbol, Nothing} = :identity
     ) where {ADJ <: AbstractAdjointMethod}

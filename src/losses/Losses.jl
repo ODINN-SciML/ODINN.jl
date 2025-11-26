@@ -1,4 +1,3 @@
-export AbstractLoss
 export L2Sum, LogSum
 export LossH, LossV, LossHV
 export loss, backward_loss
@@ -112,25 +111,25 @@ end
 function loss(
     lossType::L2Sum,
     a::Matrix{F},
-    b::Matrix{F};
-    normalization::F=1.,
+    b::Matrix{F},
+    normalization::F,
 ) where {F <: AbstractFloat}
-    return loss(lossType, a, b, is_in_glacier(b, lossType.distance); normalization=normalization)
+    return loss(lossType, a, b, is_in_glacier(b, lossType.distance), normalization)
 end
 function backward_loss(
     lossType::L2Sum,
     a::Matrix{F},
-    b::Matrix{F};
+    b::Matrix{F},
     normalization::F,
 ) where {F <: AbstractFloat}
-    return backward_loss(lossType, a, b, is_in_glacier(b, lossType.distance); normalization=normalization)
+    return backward_loss(lossType, a, b, is_in_glacier(b, lossType.distance), normalization)
 end
 
 function loss(
     lossType::L2Sum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
+    mask::BitMatrix,
     normalization::F,
 ) where {F <: AbstractFloat}
     return sum(((a .- b)[mask]).^2)/normalization
@@ -139,7 +138,7 @@ function backward_loss(
     lossType::L2Sum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
+    mask::BitMatrix,
     normalization::F,
 ) where {F <: AbstractFloat}
     d = zero(a)
@@ -150,8 +149,8 @@ end
 function loss(
     lossType::L2Sum,
     a::Vector{Matrix{F}},
-    b::Vector{Matrix{F}};
-    normalization::F=1.
+    b::Vector{Matrix{F}},
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
     return [
@@ -159,8 +158,8 @@ function loss(
             lossType,
             ai,
             bi,
-            is_in_glacier(bi, lossType.distance);
-            normalization = normalization,
+            is_in_glacier(bi, lossType.distance),
+            normalization,
             )
         for (ai, bi) in zip(a, b)
         ]
@@ -169,16 +168,16 @@ end
 function backward_loss(
     lossType::L2Sum,
     a::Vector{Matrix{F}},
-    b::Vector{Matrix{F}};
-    normalization::F=1.,
+    b::Vector{Matrix{F}},
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
     return [
         backward_loss(
             lossType,
             ai,
-            bi;
-            normalization=normalization,
+            bi,
+            normalization,
             )
         for (ai, bi) in zip(a, b)
         ]
@@ -191,8 +190,8 @@ end
         lossType::LogSum,
         a::Matrix{F},
         b::Matrix{F},
-        mask::BitMatrix;
-        normalization::F=1.,
+        mask::BitMatrix,
+        normalization::F,
     ) where {F <: AbstractFloat}
 
 Compute logarithmic loss function for ice velocity fields following Morlighem, M. et al.,
@@ -208,8 +207,8 @@ function loss(
     lossType::LogSum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
-    normalization::F=1.,
+    mask::BitMatrix,
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
     return sum((log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)).^2)) ./ normalization
@@ -218,7 +217,7 @@ function backward_loss(
     lossType::LogSum,
     a::Matrix{F},
     b::Matrix{F},
-    mask::BitMatrix;
+    mask::BitMatrix,
     normalization::F,
 ) where {F <: AbstractFloat}
     d = zero(a)
@@ -229,8 +228,8 @@ end
 function loss(
     lossType::LogSum,
     a::Matrix{F},
-    b::Matrix{F};
-    normalization::F=1.,
+    b::Matrix{F},
+    normalization::F,
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
     return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)).^2) ./ normalization
@@ -238,7 +237,7 @@ end
 function backward_loss(
     lossType::LogSum,
     a::Matrix{F},
-    b::Matrix{F};
+    b::Matrix{F},
     normalization::F,
 ) where {F <: AbstractFloat}
     return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (a .+ lossType.ϵ) ./ normalization
@@ -247,120 +246,120 @@ end
 function loss(
     lossType::LossH,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
-    lH = loss(lossType.loss, H_pred, H_ref; normalization=normalization)
-    return lH
+    if isnothing(H_ref)
+        # That time step has no valid ground truth ice thickness data, so the contribution is zero
+        return 0.0
+    else
+        mask = is_in_glacier(H_ref, lossType.loss.distance)
+        return loss(lossType.loss, H_pred, H_ref, mask, normalization) * Δt.H
+    end
 end
 function backward_loss(
     lossType::LossH,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
-    ∂L∂H = backward_loss(lossType.loss, H_pred, H_ref; normalization=normalization)
     ∂L∂θ = zero(θ)
-    return ∂L∂H, ∂L∂θ
+    ∂L∂H = if isnothing(H_ref)
+        # That time step has no valid ground truth ice thickness data, so the contribution is zero
+        zero(H_pred)
+    else
+        mask = is_in_glacier(H_ref, lossType.loss.distance)
+        backward_loss(lossType.loss, H_pred, H_ref, mask, normalization)
+    end
+    return ∂L∂H * Δt.H, ∂L∂θ * Δt.H
 end
 
 function loss(
     lossType::LossV,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
-    @assert !isnothing(glacier.velocityData)
-
-    # 1- Retrieve the reference velocity Vx_ref, Vy_ref, V_ref
-    # Note: This should be do just once in glacier, no in every call of the function
-    Vx_ref, Vy_ref, V_ref, useVel = mapVelocity(
-        simulation.parameters.simulation.mapping,
-        glacier.velocityData,
-        t,
-    )
-
-    if !useVel
-        @info "Discarding reference data for t=$(t)"
+    if isnothing(V_ref)
+        # That time step has no valid ground truth ice surface velocity data, so the contribution is zero
         return 0.0
     end
 
-    # 2- Compute the predicted velocity Vx_pred, Vy_pred, V_pred
+    # Compute the predicted velocity Vx_pred, Vy_pred, V_pred
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
     end
     Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
     # TODO: in the future we should dispatch wrt the iceflow model
 
-    mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
+    mask = (V_ref .> 0.0)
 
     ℓ = if lossType.component == :xy
-        loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization) + loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
+        loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization) + loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization)
     elseif lossType.component == :abs
-        loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
+        loss(lossType.loss, V_pred, V_ref, mask, normalization)
     else
         @error "Loss type not implemented."
     end
 
-    # Scale loss function 
+    # Scale loss function
     ℓ_scale = if lossType.scale_loss
         ℓ / mean(Vx_ref[mask].^2 .+ Vy_ref[mask].^2)^0.5
     else
         ℓ
     end
 
-    return ℓ_scale
+    return ℓ_scale * Δt.V
 end
 function backward_loss(
     lossType::LossV,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
-    @assert !isnothing(glacier.velocityData)
-
-    # 1- Retrieve the reference velocity Vx_ref, Vy_ref, V_ref
-    Vx_ref, Vy_ref, V_ref, useVel = mapVelocity(
-        simulation.parameters.simulation.mapping,
-        glacier.velocityData,
-        t,
-    )
-
-    if !useVel
-        @info "Discarding reference data for t=$(t)"
-        return nothing, nothing
+    if isnothing(V_ref)
+        # That time step has no valid ground truth ice surface velocity data, so the contribution is zero
+        return zero(H_pred), zero(θ)
     end
 
-    # 2- Compute the predicted velocity Vx_pred, Vy_pred, V_pred
+    # Compute the predicted velocity Vx_pred, Vy_pred, V_pred
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
     end
     Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
     # TODO: in the future we should dispatch wrt the iceflow model
 
-    mask = is_in_glacier(H_ref, lossType.loss.distance) .& (V_ref .> 0.0)
+    mask = (V_ref .> 0.0)
 
     if lossType.component == :xy
-        ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask; normalization=normalization)
-        ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask; normalization=normalization)
+        ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization)
+        ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization)
     elseif lossType.component == :abs
-        ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask; normalization=normalization)
+        ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask, normalization)
         # ∂lV∂Vx, ∂lV∂Vy = zero(∂lV∂V), zero(∂lV∂V)
         ∂lV∂Vx = ifelse.(mask, ∂lV∂V .* (Vx_pred .- Vx_ref) ./ (V_pred .- V_ref), 0.0)
         ∂lV∂Vy = ifelse.(mask, ∂lV∂V .* (Vy_pred .- Vy_ref) ./ (V_pred .- V_ref), 0.0)
@@ -380,42 +379,50 @@ function backward_loss(
     ∂L∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
     ∂L∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
 
-    return ∂L∂H, ∂L∂θ
+    return ∂L∂H * Δt.V, ∂L∂θ * Δt.V
 end
 
 function loss(
     lossType::LossHV,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
-    lH = loss(lossType.hLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
-    lV = loss(lossType.vLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
-    return lH + lossType.scaling * lV
+    lH = loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
+    lV = loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
+    return lH * Δt.H + lossType.scaling * lV * Δt.V
 end
 function backward_loss(
     lossType::LossHV,
     H_pred::Matrix{F},
-    H_ref::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
     t::F,
-    glacier,
+    glacier_idx::Integer,
     θ,
-    simulation;
-    normalization::F=1.,
+    simulation,
+    normalization::F,
+    Δt,
 ) where {F <: AbstractFloat}
-    ∂lH∂H, ∂lH∂θ = backward_loss(lossType.hLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
-    ∂lV∂H, ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, t, glacier, θ, simulation; normalization=normalization)
-    ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H + lossType.scaling * ∂lV∂H
+    ∂lH∂H, ∂lH∂θ = backward_loss(lossType.hLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
+    ∂lV∂H, ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref, t, glacier_idx, θ, simulation, normalization, Δt)
+    ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H * Δt.H + lossType.scaling * ∂lV∂H * Δt.V
     ∂L∂θ = if isnothing(∂lV∂θ)
-        ∂lH∂θ
+        ∂lH∂θ * Δt.H
     elseif isnothing(∂lH∂θ)
-        lossType.scaling * ∂lV∂θ
+        lossType.scaling * ∂lV∂θ * Δt.V
     else
-        ∂lH∂θ + lossType.scaling * ∂lV∂θ
+        ∂lH∂θ * Δt.H + lossType.scaling * ∂lV∂θ * Δt.V
     end
     return ∂L∂H, ∂L∂θ
 end
+
+loss_uses_velocity(lossType::LossH) = false
+loss_uses_velocity(lossType::Union{LossV, LossHV}) = true
+discreteLossSteps(lossType::AbstractLoss, tspan) = Vector{Float64}()

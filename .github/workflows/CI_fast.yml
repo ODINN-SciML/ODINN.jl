@@ -70,6 +70,8 @@ jobs:
           - Core7
           - Core8
           - Core9
+          - Core10
+          - Core11
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

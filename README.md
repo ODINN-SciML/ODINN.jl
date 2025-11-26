@@ -75,7 +75,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 prediction = Prediction(model, glaciers, params)
 
 # And finally, we just run the simulation
-Huginn.run!(prediction)
+run!(prediction)
 ```
 
 ## How to cite 📖

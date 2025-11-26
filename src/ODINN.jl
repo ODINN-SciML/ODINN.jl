@@ -22,7 +22,6 @@ module ODINN
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
 
-import Sleipnir: Parameters, Model
 using Statistics, LinearAlgebra
 using Random, Distributions
 using EnzymeCore
@@ -54,6 +53,8 @@ using Zygote
 using TensorBoardLogger
 using Dates
 using MLStyle
+import DifferentiationInterface as DI
+import Mooncake
 
 # ##############################################
 # ############    PARAMETERS     ###############
@@ -74,6 +75,8 @@ const global root_plots::String = joinpath(root_dir, "plots")
 include(joinpath(root_dir, "src/setup/config.jl"))
 # Losses
 include(joinpath(root_dir, "src/losses/Losses.jl"))
+include(joinpath(root_dir, "src/losses/Regularization.jl"))
+include(joinpath(root_dir, "src/losses/MultiLoss.jl"))
 # All parameters needed for the models
 include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
 include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
@@ -82,13 +85,13 @@ include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
 # Simulations
 include(joinpath(root_dir, "src/simulations/results/Results.jl"))
 include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
-include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 # ML models
 include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))
 include(joinpath(root_dir, "src/models/target/Target.jl"))
 include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
 # Parameterizations
+include(joinpath(root_dir, "src/laws/Cache.jl"))
 include(joinpath(root_dir, "src/laws/Laws.jl"))
 
 # Inversion for SIA equation

@@ -15,24 +15,11 @@ Huginn.Prediction(model::Sleipnir.Model, glaciers::Vector{G}, parameters::Sleipn
 
 ## Inversion
 
-An inversion optimises a given set of model parameters, based on a given target and an optimizer. These are handled by `ODINN.jl`.
+An `Inversion` is the inversion of the parameters involved in the PDE, or the parameters of a regressor (e.g. a neural network), which parametrize a function that modulates a parameter or set of parameters in a given mechanistic model (e.g. the SIA).
 
 ```@docs
 ODINN.Inversion
 ODINN.Inversion(
-    model::Sleipnir.Model,
-    glaciers::Vector{G},
-    parameters::Sleipnir.Parameters
-) where {G <: Sleipnir.AbstractGlacier}
-```
-
-## Functional inversion
-
-A functional inversion is the inversion of the parameters of a regressor (e.g. a neural network), which parametrize a function that modulates a parameter or set of parameters in a given mechanistic model (e.g. the SIA).
-
-```@docs
-ODINN.FunctionalInversion
-ODINN.FunctionalInversion(
     model::M,
     glaciers::Vector{G},
     parameters::P

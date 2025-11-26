@@ -25,7 +25,6 @@ params = Parameters(
         use_MB=false,
         use_velocities=true,
         tspan=tspan,
-        step=δt,
         multiprocessing=false,
         test_mode=true,
         rgi_paths=rgi_paths),
@@ -37,7 +36,6 @@ params = Parameters(
         target = :A),
     solver = Huginn.SolverParameters(
         step=δt,
-        save_everystep=true,
         progress=true)
 )
 
@@ -53,10 +51,10 @@ glaciers = initialize_glaciers(rgi_ids, params)
 glacier_idx = 1
 batch_idx = 1
 H = glaciers[glacier_idx].H₀
-simulation = FunctionalInversion(model, glaciers, params)
-simulation.cache = init_cache(model, simulation, glacier_idx, params)
-t = tspan[1]
+simulation = Inversion(model, glaciers, params)
 θ = simulation.model.machine_learning.θ
+simulation.cache = init_cache(model, simulation, glacier_idx, θ)
+t = tspan[1]
 λ = rand(size(H)...)
 
 for VJPMode in (ODINN.EnzymeVJP(), ODINN.DiscreteVJP(), ODINN.ContinuousVJP())

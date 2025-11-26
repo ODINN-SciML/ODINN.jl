@@ -146,24 +146,27 @@ function is_ubuntu_2404()
     return false
 end
 
-
-# On Ubuntu 24.04, there is an error with Blink (used by PlotlyJS): "ERROR: IOError: connect: connection refused (ECONNREFUSED)"
-# The lines below fix it
-# Cf https://github.com/JuliaGizmos/Blink.jl/issues/325#issuecomment-2252670794
-if ODINN.is_ubuntu_2404() && !parse(Bool, get(ENV, "ODINN_PLOTLYJS_NB", "false"))
-    using Blink
-    @eval AtomShell begin
-        function init(; debug = false)
-            electron() # Check path exists
-            p, dp = port(), port()
-            debug && inspector(dp)
-            dbg = debug ? "--debug=$dp" : []
-            proc = (debug ? run_rdr : run)(
-                `$(electron()) --no-sandbox $dbg $mainjs port $p`; wait=false)
-            conn = try_connect(ip"127.0.0.1", p)
-            shell = Electron(proc, conn)
-            initcbs(shell)
-            return shell
+function connect_electron_backend()
+    # On Ubuntu 24.04, there is an error with Blink (used by PlotlyJS): "ERROR: IOError: connect: connection refused (ECONNREFUSED)"
+    # The lines below fix it
+    # Cf https://github.com/JuliaGizmos/Blink.jl/issues/325#issuecomment-2252670794
+    if ODINN.is_ubuntu_2404() && !parse(Bool, get(ENV, "ODINN_PLOTLYJS_NB", "false"))
+        Base.@eval begin
+            using Blink
+            @eval AtomShell begin
+                function init(; debug = false)
+                    electron() # Check path exists
+                    p, dp = port(), port()
+                    debug && inspector(dp)
+                    dbg = debug ? "--debug=$dp" : []
+                    proc = (debug ? run_rdr : run)(
+                        `$(electron()) --no-sandbox $dbg $mainjs port $p`; wait=false)
+                    conn = try_connect(ip"127.0.0.1", p)
+                    shell = Electron(proc, conn)
+                    initcbs(shell)
+                    return shell
+                end
+            end
         end
     end
 end

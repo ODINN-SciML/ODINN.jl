@@ -53,14 +53,15 @@ providing better error control on the computation of the gradients.
 
 ### Computing the VJPs inside the solver
 
-When evaluating the reverse differential equations, vector-Jacobian products (VJPs) need to be evaluated at every given timestep.
+When evaluating the adjoint differential equations used to compute the gradient of the loss function, vector-Jacobian products (VJPs) need to be evaluated at every given timestep (see Section 4.2.1.1 in [sapienza_differentiable_2024](@cite)).
+These VJPs are then used inside both continuous and discrete adjoints, where the adjoint equation is integrated in time. 
 The computation of these VJPs can be efficiently be computed using automatic differentiation.
-ODINN provides manual implementations of the pullback operations required to compute these VJPs, together with the interphase to
-compute this VJPs using the native Julia automatic differentiation libraries.
+ODINN provides manual implementations of the pullback operations required to compute these VJPs, together with the interface to
+compute these VJPs using the native Julia automatic differentiation libraries.
 The VJP methods in ODINN are implemented as concrete types of `AbstractVJPMethod`:
-- `EnzymeVJP()`: The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code.
-- `DiscreteVJP()`: This is a manual implementation of what the Enzyme VJP does. Equations were derived manually by differentiating the iceflow equation.
-- `ContinuousVJP()`: In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a continuous in space VJP can be derived by integrating by parts the SIA equation. It is then discretized after differentiation.
+- `EnzymeVJP()`: The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the (spatially) discrete VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code. 
+- `DiscreteVJP()`: This is a manual implementation of what the (spatially) discrete Enzyme VJP does. Equations were derived manually by differentiating the discretized differential operators. For example, this means that the partial derivative $\frac{\partial f}{\partial x}$ is first discretized as, for example, `df[i] = (f[i + 1] - f[i]) / dx` and then the pullback operator is directly applied to the discretization `df`.
+- `ContinuousVJP()`: In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a (spatially) continuous VJP can be derived by integrating by parts the spatial differential operators inside the SIA equation. This means the pullback operator of the differentiation step $\frac{\partial f}{\partial x}$ is first computed before discretizing. It is then discretized after differentiation
 
 
 ## SciMLSensitivity

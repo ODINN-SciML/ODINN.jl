@@ -24,19 +24,19 @@ Evaluates a law on the specified glacier within a simulation context and for a u
 # Example
 ```julia
 result = eval_law(simulation.model.iceflow.A, simulation, glacier_idx, (; T=273.15), θ)
-````
+```
 """
-function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, input_values::NamedTuple, θ; scalar::Bool = false)
+function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer, input_values::NamedTuple, θ)
     # Initialize the cache to be able to make an inference of the law
-    params = simulation.parameters
 
-    cache = init_cache(law, simulation, glacier_idx, params; scalar=scalar)
+    cache = init_cache(law, simulation, glacier_idx, θ)
+
     if !isnothing(simulation.model.machine_learning)
         simulation.model.machine_learning.θ = θ
     end
 
     law.f.f(cache, input_values, θ)
-    return cache
+    return cache.value
 end
 
 
@@ -67,12 +67,13 @@ Evaluate the A law when it defines a mapping between the long term air temperatu
 # Example
 ```julia
 T, A = T_A_Alaw(simulation, glacier_idx, θ, 2010.0)
+```
 """
 function T_A_Alaw(simulation::Simulation, glacier_idx::Integer, θ, t::AbstractFloat)
-    _inputs_A_law = (; T=iTemp())
+    _inputs_A_law = (; T=iAvgScalarTemp())
     @assert inputs(simulation.model.iceflow.A)==_inputs_A_law "The function T_A_Alaw can be called only when the inputs of the A law are $(_inputs_A_law)."
 
-    T = get_input(iTemp(), simulation, glacier_idx, t)
+    T = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
     A = eval_law(simulation.model.iceflow.A, simulation, glacier_idx, (;T=T), θ)
 
     return T, A[]

@@ -43,7 +43,6 @@ params = Parameters(
         use_MB = false,
         use_velocities = false,
         tspan = (2010.0, 2015.0),
-        step = δt,
         multiprocessing = false,
         workers = 1,
         test_mode = false,
@@ -63,19 +62,21 @@ params = Parameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
-        empirical_loss_function = LossH(),
+        empirical_loss_function = MultiLoss(
+            losses = (LossH(), InitialThicknessRegularization()),
+            λs = (1.0, 1e-4)
+            ),
         target = :A,
         initial_condition_filter = :Zang1980
         ),
     solver = Huginn.SolverParameters(
         step = δt,
-        save_everystep = true,
         progress = true
         )
     )
 
 model = Model(
-    iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
+    iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=true)),
     mass_balance = nothing, #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
 
@@ -90,7 +91,7 @@ glaciers = generate_ground_truth(glaciers, params, model, tstops)
 nn_model = NeuralNetwork(params)
 
 # Decide if we want or not to learn initial condition
-train_initial_conditions = false
+train_initial_conditions = true
 
 if train_initial_conditions
     ic = InitialCondition(params, glaciers, :Farinotti2019)
@@ -111,7 +112,7 @@ end
 
 
 # We create an ODINN prediction
-functional_inversion = FunctionalInversion(model, glaciers, params)
+functional_inversion = Inversion(model, glaciers, params)
 
 # We run the simulation with ADAM and then LBFGS
 # run!(functional_inversion)

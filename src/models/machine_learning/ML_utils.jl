@@ -79,52 +79,53 @@ end
 const rng_seed() = MersenneTwister(666)   # Random seed
 
 function build_simulation_batch(
-    simulation::FunctionalInversion,
+    simulation::Inversion,
     i::I,
     nbatches::I = 1
     ) where {I <: Integer}
 
+    θi = splitθ(simulation.model.machine_learning.θ, i, simulation.model.machine_learning)
+
     iceflow = simulation.model.iceflow
     massbalance = simulation.model.mass_balance
-    ml = simulation.model.machine_learning
+    ml = MachineLearning(simulation.model.machine_learning, θi)
 
     # TODO: in the future we could avoid a copy of model since it is stateless
     # but we need to pay attention that there is no side effect with multiprocessing
     model = Sleipnir.Model(iceflow, massbalance, ml)
 
-    # Each element of the batch has access only to the current glacier, so glacier_idx=1
-    cache = init_cache(model, simulation, 1, simulation.parameters)
+    cache = init_cache(model, simulation, i, θi)
     glacier = simulation.glaciers[i]
     if length(simulation.results.simulation) < 1
-        return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, simulation.results)
+        return Inversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, simulation.results)
     else
         # TODO: Notice this assumes there is just one vector in results! Probably needs a fix
         # results = Results([simulation.results.simulation[i]], simulation.results.stats)
         results = Results([only(simulation.results.simulation)], simulation.results.stats)
-        return FunctionalInversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, results)
+        return Inversion{typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(model, cache, [glacier], simulation.parameters, results)
     end
 end
 
 """
-    generate_simulation_batches(simulation::FunctionalInversion)
+    generate_simulation_batches(simulation::Inversion)
 
-Generate batches of simulations from a `FunctionalInversion` object for parallel or batched processing.
+Generate batches of simulations from a `Inversion` object for parallel or batched processing.
 
 # Arguments
-- `simulation::FunctionalInversion`: A `FunctionalInversion` object containing the model, glaciers, parameters, results, and statistics for the simulation.
+- `simulation::Inversion`: A `Inversion` object containing the model, glaciers, parameters, results, and statistics for the simulation.
 
 # Returns
-- A vector of `FunctionalInversion` objects, each representing a batch of simulations. Each batch contains a subset of glaciers, models, and results from the original simulation.
+- A vector of `Inversion` objects, each representing a batch of simulations. Each batch contains a subset of glaciers, models, and results from the original simulation.
 
 # Description
-This function splits the glaciers and associated data in the `simulation` object into smaller batches for processing. Each batch is represented as a new `FunctionalInversion` object. The number of batches is determined by the `nbatches` variable (currently set to 1). If the simulation results are empty, the function creates batches with empty results. Otherwise, it includes the corresponding results for each glacier in the batches.
+This function splits the glaciers and associated data in the `simulation` object into smaller batches for processing. Each batch is represented as a new `Inversion` object. The number of batches is determined by the `nbatches` variable (currently set to 1). If the simulation results are empty, the function creates batches with empty results. Otherwise, it includes the corresponding results for each glacier in the batches.
 
 # Notes
 - The number of glaciers (`ninstances`) must be divisible by the number of batches (`nbatches`). An assertion is used to enforce this condition.
 - The function currently defaults to `nbatches = 1`, meaning no actual batching is performed. This can be updated to use `simulation.parameters.hyper.batchsize` for dynamic batching.
 - If the simulation results are empty, the function creates batches with empty results objects.
 """
-function generate_simulation_batches(simulation::FunctionalInversion)
+function generate_simulation_batches(simulation::Inversion)
     # TODO: we need to change how this is done here, with a manual =1 batch size
     nbatches = 1 #simulation.parameters.hyper.batchsize
     ninstances = length(simulation.glaciers)
