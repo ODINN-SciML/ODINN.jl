@@ -29,7 +29,7 @@ The [classical inversion tutorial](./classical_inversion.md) provides an example
 
 ### Inversion with respect to initial state of the glacier
 
-A specific case of a classical inversion is inverting the initial state of glacier. Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t\_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization). 
+A specific case of a classical inversion is inverting the initial state of a glacier. Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t\_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization). 
 
 We provide an object `InitialCondition` that enables the prescription of all the important parameters of the initialization. An initial guess can be provided: `:Farinotti2019` for the ice thickness product by Farinotti et al. (2019), or `:Farinotti2019Random` for the same product with some added Gaussian noise. In order to guarantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
 Finally, prescribing an inversion with respect to the initial condition can be directly included by defining the initial condition as one extra regressor inside the model:
@@ -67,7 +67,7 @@ We present the concept of a functional inversion for the case where we want to l
 In ODINN, in order to specify functional inversions, we have introduced a `Law` type which is responsible for linking a given regressor and a set of input variables to a target of a mechanistic model (for now the SIA). Here is a quick example on how this looks like:
 
 ```julia
-law_inputs = (; CPDD=InpCPDD(), topo_roughness=InpTopoRough())
+law_inputs = (; CPDD = iCPDD(), topo_roughness = iTopoRough())
 model = Model(
     iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
     mass_balance = nothing
@@ -83,31 +83,36 @@ Here is an example of how the code of an input variable looks like:
 
 ```julia
 # We first need to declare the type for the input variable, with any fields that might be needed
-struct InpCPDD <: AbstractInput
-    window::Int
+struct iCPDD{P<:Period} <: AbstractInput
+    window::P
+    function iCPDD(; window::P = Week(1)) where {P<:Period}
+        new{typeof(window)}(window)
+    end
 end
-
-# Then we can specify a default name for that input
-default_name(::InpCPDD) = :CPDD
+default_name(::iCPDD) = :CPDD
 
 # And then, using multiple dispatch, we specify the righ `get_input` function for this type, i.e. how to get it
-function get_input(cpdd::InpCPDD, simulation, glacier_idx, t)
-    window = cpdd.window
-    glacier = simulation.glaciers[glacier_idx]
-    # We trim only the time period between `t` and `t - x`, where `x` is the PDD time window defined in the physical parameters.
-    period = (partial_year(Day, t) - Day(window)):Day(1):partial_year(Day, t)
-    get_cumulative_climate!(glacier.climate, period)
-    # Convert climate dataset to 2D based on the glacier's DEM
-    climate_2D_step = downscale_2D_climate(glacier.climate.climate_step, glacier)
+function get_input(cpdd::iCPDD, simulation, glacier_idx, t)  
+    window = cpdd.window  
+    glacier = simulation.glaciers[glacier_idx]  
+    # We trim only the time period between `t` and `t - x`, where `x` is the PDD time window defined in the input attributes. 
+    period = (partial_year(Day, t) - window):Day(1):partial_year(Day, t)  
+    get_cumulative_climate!(glacier.climate, period)  
+    # Convert climate dataset to 2D based on the glacier's DEM  
+    climate_2D_step = downscale_2D_climate(glacier.climate.climate_step, glacier.S, glacier.Coords)  
 
     return climate_2D_step.PDD
+end
+function Base.zero(::iCPDD, simulation, glacier_idx)
+    (; nx, ny) = simulation.glaciers[glacier_idx]
+    return zeros(nx, ny)
 end
 ```
 
 The logic behind the `Law`s system is quite similar. Here is a simple example of a synthetic law made following this interface:
 
 ```julia
-function SyntheticC(params::Sleipnir.Parameters; inputs = (; CPDD=InpCPDD()))
+function SyntheticC(params::Sleipnir.Parameters; inputs = (; CPDD=iCPDD()))
     C_synth_law = Law{Array{Float64, 2}}(;
         name = :SyntheticC,
         inputs = inputs,

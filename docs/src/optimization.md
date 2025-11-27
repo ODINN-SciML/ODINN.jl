@@ -20,7 +20,7 @@ The total loss function is given by
 \lambda_k \mathcal{L}_k(\theta),
 ```
 where each $\mathcal{L}_i$ is a different contribution to the loss (either empirical or regularization) weighted by an hyperparameter $\lambda_i$.
-ODINN supports multiobjective loss functions thought `MultiLoss`.
+ODINN supports multiobjective loss functions throught `MultiLoss`.
 For example, an objective function consisting of one empirical loss function corresponding to differences in ice thickness and a regularization of the ice surface velocity can be defined as follows
 ```julia
 loss = MultiLoss(
