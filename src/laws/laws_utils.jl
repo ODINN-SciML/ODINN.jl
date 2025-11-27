@@ -31,8 +31,8 @@ function eval_law(law::AbstractLaw, simulation::Simulation, glacier_idx::Integer
 
     cache = init_cache(law, simulation, glacier_idx, θ)
 
-    if !isnothing(simulation.model.machine_learning)
-        simulation.model.machine_learning.θ = θ
+    if !isnothing(simulation.model.trainable_components)
+        simulation.model.trainable_components.θ = θ
     end
 
     law.f.f(cache, input_values, θ)

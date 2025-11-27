@@ -29,7 +29,7 @@ The [classical inversion tutorial](./classical_inversion.md) provides an example
 
 ### Inversion with respect to initial state of the glacier
 
-A specific case of a classical inversion is inverting the initial state of a glacier. Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t\_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization). 
+A specific case of a classical inversion is inverting the initial state of glacier. Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization).
 
 We provide an object `InitialCondition` that enables the prescription of all the important parameters of the initialization. An initial guess can be provided: `:Farinotti2019` for the ice thickness product by Farinotti et al. (2019), or `:Farinotti2019Random` for the same product with some added Gaussian noise. In order to guarantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
 Finally, prescribing an inversion with respect to the initial condition can be directly included by defining the initial condition as one extra regressor inside the model:
@@ -45,7 +45,7 @@ model = Model(
 
 From an optimization perspective, the computation of the gradients of the loss function with respect to the initial condition is simply given by the value of the adjoint variable at the initial time, which is part of the standard inversion pipeline of ODINN and it does not add any extra computational overhead.
 
-Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `\theta` using the `evaluate_H₀` function to a specific glacier.
+Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `θ` using the `evaluate_H₀` function on a specific glacier.
 
 ## Functional inversions
 
@@ -64,7 +64,9 @@ We present the concept of a functional inversion for the case where we want to l
 
 ### Understanding the `Law`s interface
 
-In ODINN, in order to specify functional inversions, we have introduced a `Law` type which is responsible for linking a given regressor and a set of input variables to a target of a mechanistic model (for now the SIA). Here is a quick example on how this looks like:
+In ODINN, the components of the iceflow equation can be customized with a `Law` type.
+It is responsible for linking a given regressor and a set of input variables to a target component of a mechanistic model (for now the SIA).
+Here is a quick example on how this looks like:
 
 ```julia
 law_inputs = (; CPDD = iCPDD(), topo_roughness = iTopoRough())
@@ -77,7 +79,7 @@ model = Model(
 In this piece of code, we are selecting cumulative positive degree days (CPDDs) and topographical roughness as inputs for a law/parametrization named `SyntheticC`. Then, when declaring the ice flow model, we associate it to the parameter `C` of the iceflow model (i.e. the basal sliding). Using this simple interface, we can easily combine all sorts of input variables, with different laws and targets/subparts of mechanistic models.
 
 !!! warning
-    It is important to bear in mind that new input types and laws cannot be created on the fly, they need to be specified/added by a user beforehand. For input variables, it is generally a matter of fetching the right data and processing it to the right format for the law/function. For laws, one just needs to specify which function is applied to the different input variables. If the law and input variables involve a regressor, then the new types for the law and inputs must be added to `ODINN.jl` [here](https://github.com/ODINN-SciML/ODINN.jl/blob/main/src/laws/Laws.jl); if the law doesn't include any regressors, they can be added directly to `Huginn.jl` [here](https://github.com/ODINN-SciML/Huginn.jl/blob/main/src/laws/Laws.jl). 
+    It is important to bear in mind that new input types and laws cannot be created on the fly, they need to be specified/added by a user beforehand. For input variables, it is generally a matter of fetching the right data and processing it to the right format for the law/function. For laws, one just needs to specify which function is applied to the different input variables. If the law and input variables involve a regressor (that is a learnable component), then the new types for the law and inputs must be added to `ODINN.jl` [here](https://github.com/ODINN-SciML/ODINN.jl/blob/main/src/laws/Laws.jl); if the law doesn't include any regressors, they can be added directly to `Huginn.jl` [here](https://github.com/ODINN-SciML/Huginn.jl/blob/main/src/laws/Laws.jl).
 
 Here is an example of how the code of an input variable looks like:
 
@@ -109,7 +111,8 @@ function Base.zero(::iCPDD, simulation, glacier_idx)
 end
 ```
 
-The logic behind the `Law`s system is quite similar. Here is a simple example of a synthetic law made following this interface:
+A synthetic `C` law can then be defined using this `InpCPDD` input.
+Here is a simple example of a synthetic law made following this interface:
 
 ```julia
 function SyntheticC(params::Sleipnir.Parameters; inputs = (; CPDD=iCPDD()))
@@ -138,7 +141,13 @@ function SyntheticC(params::Sleipnir.Parameters; inputs = (; CPDD=iCPDD()))
 end
 ```
 
-Declaring a `Law` implies creating a function which returns a specific type for that law. That custom type needs to specify (1) any necessary fields to be used (e.g. the `inputs`, its `name`...), (2) its associated function `f!`, i.e. what does the law do, (3) how the cache needs to be initialized for the law to interact with the simulation, and (4) the callback frequency `callback_freq`, which determines the time frequency on which the law will be called during the simulation (e.g. weekly).
+Creating a `Law` implies declaring different components which are provided to the constructor function:
+- (1) `inputs`: The inputs that the law uses, which is provided as a named tuple. The values of the named tuple are subtypes of `AbstractInput`.
+- (2) `f!`: The function that applies the law.
+- (3) `init_cache`: A function that describes how the cache needs to be initialized for the law to interact with the simulation. It returns an initialized cache.
+- (4) `callback_freq`: Optionally the callback frequency which determines the time frequency on which the law will be called during the simulation (e.g. weekly).
+It is also possible to not provide the `inputs` in which case the `f!` function is in charge of retrieving the appropriate variables to use in the law.
+See in the API the docstring of [`Sleipnir.Law`](./api.md#Sleipnir.Law-api).
 
 Functional inversions in ODINN are also handled by the `Inversion` subtype of `Simulation`.
 Whether a classical or a functional inversion should be made with respect to some of the components of the PDE depends on how the law is defined.
@@ -150,11 +159,3 @@ The [functional inversion tutorial](./functional_inversion.md) gives an example 
 ### Laws and Law inputs tutorials
 
 For more details on how to actually implement new laws and law inputs, and for a list of all the ones that are already available within `ODINN.jl`, you can check the [Laws tutorial](./laws.md) and the [Laws inputs tutorial](./input_laws.md) respectively. 
-
-## Logging
-
-`ODINN.jl` provides useful statistics, such as the training loss history or the parameters history in the inversion objects.
-The training statistics can also be inspected with [TensorBoard](https://www.tensorflow.org/tensorboard) through VSCode or a local webserver.
-You can either use the [TensorBoard VSCode extension](https://marketplace.visualstudio.com/items?itemName=ms-toolsai.tensorboard) or simply install TensorBoard in a Python environment and then launch `tensorboard --logdir .logs/`.
-
-By default the TensorBoard logs are stored in your ODINN folder in `ODINN/.logs/` but you may have to adapt the command above if you log in a different folder.

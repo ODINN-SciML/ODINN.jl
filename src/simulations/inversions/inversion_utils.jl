@@ -44,7 +44,7 @@ function run!(
             simulation.parameters.hyper.epochs = epochs[i]
             if i !== 1
                 θ_trained = sol.u
-                simulation.model.machine_learning.θ = θ_trained
+                simulation.model.trainable_components.θ = θ_trained
             end
             sol = train_UDE!(simulation; save_every_iter=save_every_iter, logger=logger)
             # Clear results of previous simulation for fresh start
@@ -55,7 +55,7 @@ function run!(
     end
 
     # Setup final results
-    simulation.model.machine_learning.θ = sol.u
+    simulation.model.trainable_components.θ = sol.u
 
     simulation.results.stats.niter = length(simulation.results.stats.losses)
     # Final parameters of the optimization
@@ -66,7 +66,7 @@ function run!(
         for glacier_id in 1:length(simulation.glaciers)
             glacier = simulation.glaciers[glacier_id]
             simulation.results.stats.initial_conditions[String(glacier.rgi_id)] = evaluate_H₀(
-                simulation.model.machine_learning.θ,
+                simulation.model.trainable_components.θ,
                 glacier,
                 simulation.parameters.UDE.initial_condition_filter,
                 glacier_id,
@@ -119,7 +119,7 @@ function train_UDE!(
     simulation_train_loader = generate_batches(simulation)
     # simulation_batch_ids = train_loader.data[1]
 
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     allowed_keys = (:A, :C, :n, :Y, :U)
     @assert length(intersect(keys(θ), allowed_keys))==1 "The vector of parameters θ should contain at most only one of the following keys: $(allowed_keys)"
 
@@ -183,7 +183,7 @@ function train_UDE!(
     simulation_train_loader = generate_batches(simulation)
 
     # The variable θ includes all variables to being optimized, including initial conditions
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     allowed_keys = (:A, :C, :n, :Y, :U)
     @assert length(intersect(keys(θ), allowed_keys))==1 "The vector of parameters θ should contain at most only one of the following keys: $(allowed_keys)"
 
@@ -247,13 +247,13 @@ Arguments:
 - `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
 """
 function create_results(θ, simulation::Inversion, mappingFct)
-    simulation.model.machine_learning.θ = θ
+    simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     results = mappingFct(simulations) do simulation
-        container = InversionBinder(simulation, simulation.model.machine_learning.θ)
+        container = InversionBinder(simulation, simulation.model.trainable_components.θ)
         [_batch_iceflow_UDE(
             container, glacier_idx,
-            define_iceflow_prob(simulation.model.machine_learning.θ, simulation, glacier_idx)
+            define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx)
         ) for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
@@ -277,11 +277,11 @@ Arguments:
 - `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
 """
 function loss_iceflow_transient(θ, simulation::Inversion, mappingFct)
-    simulation.model.machine_learning.θ = θ
+    simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     losses = mappingFct(
         simulation -> parallel_loss_iceflow_transient(
-            simulation.model.machine_learning.θ, simulation,
+            simulation.model.trainable_components.θ, simulation,
         ), simulations)
     losses = merge_batches(losses)
     return sum(losses)
@@ -313,10 +313,10 @@ function grad_loss_iceflow!(θ, simulation::Inversion, mappingFct)
         @assert simulation.parameters.UDE.optim_autoAD isa NoAD "Differentiation of callbacks with SciMLStruct is not supported by SciMLSensitivity yet. You get this error because you are using MB + gradient computation with SciMLSensitivity."
     end
 
-    simulation.model.machine_learning.θ = θ
+    simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     grads = mappingFct(simulations) do simulation
-        [grad_parallel_loss_iceflow!(simulation.model.machine_learning.θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
+        [grad_parallel_loss_iceflow!(simulation.model.trainable_components.θ, simulation, glacier_idx) for glacier_idx in 1:length(simulation.glaciers)]
     end
     return sum(merge_batches(grads))
 end
@@ -468,7 +468,7 @@ function _batch_iceflow_UDE(
     step_MB = params.simulation.step_MB
 
     container.simulation.cache = init_cache(container.simulation.model, container.simulation, glacier_idx, container.θ)
-    container.simulation.model.machine_learning.θ = container.θ
+    container.simulation.model.trainable_components.θ = container.θ
 
     # Define tstops
     tstops = Huginn.define_callback_steps(params.simulation.tspan, step)

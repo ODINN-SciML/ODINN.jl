@@ -1,4 +1,4 @@
-export NeuralNetwork, Model
+export Model
 
 _inputs_A_law_scalar = (; T=iAvgScalarTemp())
 _inputs_A_law_gridded = (; T=iAvgGriddedTemp())
@@ -33,6 +33,7 @@ Typically used for functional inversions.
 """
 abstract type FunctionalModel <: TrainableModel end
 
+include("./NeuralNetwork.jl")
 include("./InitialCondition.jl")
 include("./GlacierWideInv.jl")
 include("./GriddedInv.jl")
@@ -115,106 +116,33 @@ function Model(
         end
     end
 
-    machine_learning = MachineLearning(target, regressors)
-    return Sleipnir.Model(iceflow, mass_balance, machine_learning)
+    trainable_components = TrainableComponents(target, regressors)
+    return Sleipnir.Model(iceflow, mass_balance, trainable_components)
 end
-
-"""
-    NeuralNetwork{
-        ChainType <: Lux.Chain,
-        ComponentVectorType <: ComponentVector,
-        NamedTupleType <: NamedTuple,
-    } <: FunctionalModel
-
-Feed-forward neural network.
-
-# Fields
-- `architecture::ChainType`: `Flux.Chain` neural network architecture
-- `θ::ComponentVectorType`: Neural network parameters
-- `st::NamedTupleType`: Neural network status
-"""
-mutable struct NeuralNetwork{
-    ChainType <: Lux.Chain,
-    ComponentVectorType <: ComponentVector,
-    NamedTupleType <: NamedTuple,
-} <: FunctionalModel
-    architecture::ChainType
-    θ::ComponentVectorType
-    st::NamedTupleType
-
-    function NeuralNetwork(
-        params::P;
-        architecture::Union{ChainType, Nothing} = nothing,
-        θ::Union{ComponentArrayType, Nothing} = nothing,
-        st::Union{NamedTupleType, Nothing} = nothing,
-        seed::Union{RNG, Nothing} = nothing,
-    ) where {
-        P<:Sleipnir.Parameters,
-        ChainType<:Lux.Chain,
-        ComponentArrayType<:ComponentArray,
-        NamedTupleType<:NamedTuple,
-        RNG<:AbstractRNG
-    }
-
-        # Float type
-        ft = Sleipnir.Float
-        lightNN = params.simulation.test_mode
-
-        if isnothing(architecture) & isnothing(θ) & isnothing(st)
-            if params.UDE.target == :A
-                architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN, seed = seed)
-            elseif params.UDE.target == :D_hybrid
-                architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
-                architecture, θ, st = set_NN(architecture; ft = ft, seed = seed)
-            elseif params.UDE.target == :D
-                architecture = build_default_NN(; n_input = 2, lightNN = lightNN)
-                architecture, θ, st = set_NN(architecture; ft = ft, seed = seed)
-            else
-                @warn "Constructing default Neural Network"
-                architecture, θ, st = get_default_NN(θ, ft; lightNN = lightNN, seed = seed)
-            end
-        elseif !isnothing(architecture) & isnothing(θ) & isnothing(st)
-            architecture, θ, st = set_NN(architecture; ft = ft, seed = seed)
-        elseif !isnothing(architecture) & !isnothing(θ) & isnothing(st)
-            architecture, θ, st = set_NN(architecture; θ_trained = θ, ft = ft, seed = seed)
-        elseif !isnothing(architecture) & !isnothing(θ) & !isnothing(st)
-            # Architecture and setup already provided
-            nothing
-        else
-            @warn "To specify the neural network please provide architecture, (architecture, θ, st), or none of them to create default NN."
-        end
-
-        new{typeof(architecture), typeof(θ), typeof(st)}(
-            architecture, θ, st
-        )
-    end
-
-end
-# Note: we could define any other kind of regressor as a subtype of TrainableModel
 
 # Empty optimizable model
 struct emptyTrainableModel <: TrainableModel end
 
-mutable struct MachineLearning{
-    MLmodelAType <: TrainableModel,
-    MLmodelCType <: TrainableModel,
-    MLmodelnType <: TrainableModel,
-    MLmodelYType <: TrainableModel,
-    MLmodelUType <: TrainableModel,
-    MLmodelICType <: TrainableModel,
+mutable struct TrainableComponents{
+    TrainableModelAType <: TrainableModel,
+    TrainableModelCType <: TrainableModel,
+    TrainableModelnType <: TrainableModel,
+    TrainableModelYType <: TrainableModel,
+    TrainableModelUType <: TrainableModel,
+    TrainableModelICType <: TrainableModel,
     TAR <: AbstractTarget,
     ComponentArrayType <: ComponentArray,
 } <: AbstractModel
-    A::Union{MLmodelAType, Nothing}
-    C::Union{MLmodelCType, Nothing}
-    n::Union{MLmodelnType, Nothing}
-    Y::Union{MLmodelYType, Nothing}
-    U::Union{MLmodelUType, Nothing}
-    IC::Union{MLmodelICType, Nothing}
+    A::Union{TrainableModelAType, Nothing}
+    C::Union{TrainableModelCType, Nothing}
+    n::Union{TrainableModelnType, Nothing}
+    Y::Union{TrainableModelYType, Nothing}
+    U::Union{TrainableModelUType, Nothing}
+    IC::Union{TrainableModelICType, Nothing}
     target::TAR
     θ::Union{ComponentArrayType, Nothing}
 
-    function MachineLearning(
+    function TrainableComponents(
         target,
         regressors::NamedTuple = (;)
     )
@@ -232,14 +160,14 @@ mutable struct MachineLearning{
 
         new{typeof(A), typeof(C), typeof(n), typeof(Y), typeof(U), typeof(IC), typeof(target), typeof(θ)}(A, C, n, Y, U, IC, target, θ)
     end
-    function MachineLearning(
-        ml::MachineLearning,
+    function TrainableComponents(
+        submodels::TrainableComponents,
         θ::Union{ComponentArray, Nothing},
     )
         new{
-            typeof(ml.A), typeof(ml.C), typeof(ml.n), typeof(ml.Y), typeof(ml.U),
-            typeof(ml.IC), typeof(ml.target), typeof(θ)
-        }(ml.A, ml.C, ml.n, ml.Y, ml.U, ml.IC, ml.target, θ)
+            typeof(submodels.A), typeof(submodels.C), typeof(submodels.n), typeof(submodels.Y), typeof(submodels.U),
+            typeof(submodels.IC), typeof(submodels.target), typeof(θ)
+        }(submodels.A, submodels.C, submodels.n, submodels.Y, submodels.U, submodels.IC, submodels.target, θ)
     end
 end
 
@@ -257,20 +185,20 @@ function splitθ(θ, glacier_idx::Integer, optimizableComponent::TrainableModel)
         return θ
     end
 end
-function splitθ(θ::ComponentArray, glacier_idx::Integer, ml::MachineLearning)
-    return ComponentVector(; map(k -> (k=>splitθ(θ[k], glacier_idx, getfield(ml, k))), keys(θ))...)
+function splitθ(θ::ComponentArray, glacier_idx::Integer, submodels::TrainableComponents)
+    return ComponentVector(; map(k -> (k=>splitθ(θ[k], glacier_idx, getfield(submodels, k))), keys(θ))...)
 end
 """
-    aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, ml::MachineLearning)
+    aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, submodels::TrainableComponents)
 
 Aggregate the vector of gradients `∇θ` as a single `ComponentArray`.
 The argument `∇θ` is the vector of all the gradients computed for each glacier.
-This function aggregates them based on the optimizable components of `ml`.
+This function aggregates them based on the optimizable components of `submodels`.
 """
-function aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, ml::MachineLearning)
+function aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, submodels::TrainableComponents)
     ∇θfull = Dict()
     for k in keys(θ)
-        optimizableComponent = getfield(ml, k)
+        optimizableComponent = getfield(submodels, k)
         tmp_k = zero(θ[k])
         for i in 1:length(∇θ)
             if isa(optimizableComponent, PerGlacierModel)
@@ -285,44 +213,29 @@ function aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, ml::MachineLearnin
     return ComponentVector(; ∇θfull...)
 end
 
-# Display setup
-function Base.show(io::IO, nn_model::NeuralNetwork)
-    println(io, "--- NeuralNetwork ---")
-    println(io, "    architecture:")
-    # Retrieve the printed lines
-    iotmp = IOBuffer()
-    show(iotmp, "text/plain", nn_model.architecture)
-    str = String(take!(iotmp))
-    # Add prefix to each line
-    prefix = "      "
-    prefixed_str = join(prefix .* split(str, '\n'), '\n')
-    println(io, prefixed_str)
-    print(io, "    θ: ComponentVector of length $(length(nn_model.θ))")
-end
-
-function Base.show(io::IO, ml_model::MachineLearning)
-    if !(ml_model.A isa emptyTrainableModel)
+function Base.show(io::IO, submodels::TrainableComponents)
+    if !(submodels.A isa emptyTrainableModel)
         print(io, "  A: ")
-        println(io, ml_model.A)
+        println(io, submodels.A)
     end
-    if !(ml_model.C isa emptyTrainableModel)
+    if !(submodels.C isa emptyTrainableModel)
         print(io, "  C: ")
-        println(io, ml_model.C)
+        println(io, submodels.C)
     end
-    if !(ml_model.n isa emptyTrainableModel)
+    if !(submodels.n isa emptyTrainableModel)
         print(io, "  n: ")
-        println(io, ml_model.n)
+        println(io, submodels.n)
     end
-    if !(ml_model.Y isa emptyTrainableModel)
+    if !(submodels.Y isa emptyTrainableModel)
         print(io, "  Y: ")
-        println(io, ml_model.Y)
+        println(io, submodels.Y)
     end
-    if !(ml_model.U isa emptyTrainableModel)
+    if !(submodels.U isa emptyTrainableModel)
         print(io, "  U: ")
-        println(io, ml_model.U)
+        println(io, submodels.U)
     end
-    if !(ml_model.IC isa emptyIC)
+    if !(submodels.IC isa emptyIC)
         print(io, "  IC: ")
-        println(io, ml_model.IC)
+        println(io, submodels.IC)
     end
 end

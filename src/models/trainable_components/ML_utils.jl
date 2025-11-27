@@ -84,15 +84,15 @@ function build_simulation_batch(
     nbatches::I = 1
     ) where {I <: Integer}
 
-    θi = splitθ(simulation.model.machine_learning.θ, i, simulation.model.machine_learning)
+    θi = splitθ(simulation.model.trainable_components.θ, i, simulation.model.trainable_components)
 
     iceflow = simulation.model.iceflow
     massbalance = simulation.model.mass_balance
-    ml = MachineLearning(simulation.model.machine_learning, θi)
+    submodels = TrainableComponents(simulation.model.trainable_components, θi)
 
     # TODO: in the future we could avoid a copy of model since it is stateless
     # but we need to pay attention that there is no side effect with multiprocessing
-    model = Sleipnir.Model(iceflow, massbalance, ml)
+    model = Sleipnir.Model(iceflow, massbalance, submodels)
 
     cache = init_cache(model, simulation, i, θi)
     glacier = simulation.glaciers[i]
