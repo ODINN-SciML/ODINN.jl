@@ -87,5 +87,5 @@ function grad_free_test(;use_MB::Bool=false)
     # Check that losses change over iterations
     @test any(!=(first(functional_inversion.results.stats.losses)), functional_inversion.results.stats.losses)
     # Check parameter has changed
-    @test any(!=(first(functional_inversion.model.machine_learning.θ)),  functional_inversion.model.machine_learning.θ)
+    @test any(!=(first(functional_inversion.model.trainable_components.θ)),  functional_inversion.model.trainable_components.θ)
 end

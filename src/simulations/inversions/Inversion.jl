@@ -44,7 +44,7 @@ function Inversion(
 ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 
     # We perform this check here to avoid having to provide the parameters when creating the model
-    @assert targetType(model.machine_learning.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
+    @assert targetType(model.trainable_components.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
 
     # Build the results struct based on input values
     emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
@@ -62,5 +62,5 @@ end
 ###############################################
 
 include("sciml_utils.jl")
-include("functional_inversion_utils.jl")
+include("inversion_utils.jl")
 include("callback_utils.jl")

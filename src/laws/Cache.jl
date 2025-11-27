@@ -1,4 +1,7 @@
+import Base.similar, Base.size
+
 export MatrixCacheInterp
+export ScalarCacheGlacierId, MatrixCacheGlacierId
 
 """
     MatrixCacheInterp(nodes_H, nodes_∇S, interp_θ)
@@ -32,6 +35,54 @@ mutable struct MatrixCacheInterp <: Cache
         Tuple{Vector{Float64}, Vector{Float64}}
         }
 end
+
+"""
+    ScalarCacheGlacierId <: Cache
+
+A cache structure for storing a scalar value as a zero-dimensional array of `Float64` along with
+their associated vector-Jacobian products (VJP).
+It also stores the glacier ID as an integer.
+This is typically used to invert a single scalar per glacier.
+Fields:
+- `value::Array{Float64, 0}`: The cached scalar value.
+- `vjp_inp::Array{Float64, 0}`: VJP with respect to inputs. Must be defined but never used in
+    practice since this cache is used for classical inversions and the law does not have inputs.
+- `vjp_θ::Vector{Float64}`: VJP with respect to parameters.
+- `glacier_id::Int64`: Glacier ID in the list of simulated glaciers.
+"""
+struct ScalarCacheGlacierId <: Cache
+    value::Array{Float64, 0}
+    vjp_inp::Array{Float64, 0}
+    vjp_θ::Vector{Float64}
+    glacier_id::Int64
+end
+similar(c::ScalarCacheGlacierId) = typeof(c)(similar(c.value), similar(c.vjp_inp), similar(c.vjp_θ), c.glacier_id)
+size(c::ScalarCacheGlacierId) = size(c.value)
+Base.:(==)(a::ScalarCacheGlacierId, b::ScalarCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
+
+"""
+    MatrixCacheGlacierId <: Cache
+
+A cache structure for storing a matrix value (`Float64` 2D array) along with
+their associated vector-Jacobian products (VJP).
+It also stores the glacier ID as an integer.
+This is typically used to invert a spatially varying field per glacier.
+Fields:
+- `value::Array{Float64, 2}`: The cached matrix value.
+- `vjp_inp::Array{Float64, 2}`: VJP with respect to inputs.
+- `vjp_θ::Vector{Float64}`: VJP with respect to parameters.
+- `glacier_id::Int64`: Glacier ID in the list of simulated glaciers.
+"""
+struct MatrixCacheGlacierId <: Cache
+    value::Array{Float64, 2}
+    vjp_inp::Array{Float64, 2}
+    vjp_θ::Vector{Float64}
+    glacier_id::Int64
+end
+similar(c::MatrixCacheGlacierId) = typeof(c)(similar(c.value), similar(c.vjp_inp), similar(c.vjp_θ), c.glacier_id)
+size(c::MatrixCacheGlacierId) = size(c.value)
+Base.:(==)(a::MatrixCacheGlacierId, b::MatrixCacheGlacierId) = a.value == b.value && a.vjp_inp == b.vjp_inp && a.vjp_θ == b.vjp_θ && a.glacier_id == b.glacier_id
+
 
 """
     feed_input_cache!(
@@ -77,14 +128,14 @@ function feed_input_cache!(
         # forward simulation
         SIA2D_cache.U.nodes_H = create_interpolation(
             collect(Iterators.flatten(result.H));
-            n_interp_half = simulation.model.machine_learning.target.n_interp_half,
+            n_interp_half = simulation.model.trainable_components.target.n_interp_half,
             dilation_factor = 1.05,
             minA_quantile = 10.0, # We start the quantile count at H = 10m to avoid very small values near zero
         )
         ∇S = Huginn.∇slope.([H .+ glacier.B for H in result.H], Ref(glacier.Δx), Ref(glacier.Δy))
         SIA2D_cache.U.nodes_∇S = create_interpolation(
             collect(Iterators.flatten(∇S));
-            n_interp_half = simulation.model.machine_learning.target.n_interp_half,
+            n_interp_half = simulation.model.trainable_components.target.n_interp_half,
             dilation_factor = 1.05
         )
     end

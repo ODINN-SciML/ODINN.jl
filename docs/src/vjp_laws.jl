@@ -193,7 +193,7 @@ simulation = Inversion(model, glaciers, params)
 
 # We will also need `θ` in order to call the VJPs of the law manually although in practice we do not have to worry about retrieving this:
 
-θ = simulation.model.machine_learning.θ
+θ = simulation.model.trainable_components.θ
 
 # We then create the cache, and again all of this is handled internally in ODINN. We need to instantiate manually here to demonstrate how the VJPs can be customized.
 
@@ -294,7 +294,7 @@ end
 function init_cache_interp(simulation, glacier_idx, θ)
     glacier = simulation.glaciers[glacier_idx]
     (; nx, ny) = glacier
-    H_interp = ODINN.create_interpolation(glacier.H₀; n_interp_half = simulation.model.machine_learning.target.n_interp_half)
+    H_interp = ODINN.create_interpolation(glacier.H₀; n_interp_half = simulation.model.trainable_components.target.n_interp_half)
     θvec = ODINN.ComponentVector2Vector(θ)
     grads = [zero(θvec) for i in 1:length(H_interp)]
     grad_itp = interpolate((H_interp,), grads, Gridded(Linear()))
@@ -307,7 +307,7 @@ end
 # Below we define the precomputation function which defines a coarse grid and differentiates the neural network at each of these points.
 
 function p_VJP!(cache, vjpsPrepLaw, inputs, θ)
-    H_interp = ODINN.create_interpolation(inputs.H̄; n_interp_half = simulation.model.machine_learning.target.n_interp_half)
+    H_interp = ODINN.create_interpolation(inputs.H̄; n_interp_half = simulation.model.trainable_components.target.n_interp_half)
     grads = Vector{Float64}[]
     for h in H_interp
         ret, = ODINN.Zygote.gradient(_θ -> f!(cache, (; T=inputs.T, H̄=h), _θ), θ)
@@ -349,7 +349,7 @@ model = Model(
     regressors = (; Y=nn_model)
 )
 simulation = Inversion(model, glaciers, params)
-θ = simulation.model.machine_learning.θ
+θ = simulation.model.trainable_components.θ
 glacier_idx = 1
 t = simulation.parameters.simulation.tspan[1]
 simulation.cache = ODINN.init_cache(model, simulation, glacier_idx, θ)

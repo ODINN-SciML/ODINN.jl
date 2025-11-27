@@ -186,8 +186,8 @@ function loss(
     glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
-    if !isnothing(simulation.model.machine_learning)
-        simulation.model.machine_learning.θ = θ
+    if !isnothing(simulation.model.trainable_components)
+        simulation.model.trainable_components.θ = θ
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
@@ -214,8 +214,8 @@ function backward_loss(
     glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
-    if !isnothing(simulation.model.machine_learning)
-        simulation.model.machine_learning.θ = θ
+    if !isnothing(simulation.model.trainable_components)
+        simulation.model.trainable_components.θ = θ
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
