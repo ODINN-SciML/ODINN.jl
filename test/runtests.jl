@@ -5,7 +5,8 @@ Pkg.activate(dirname(Base.current_project()))
 Pkg.develop(url="https://github.com/albangossard/SciMLSensitivity.jl/")
 
 const GROUP = get(ENV, "GROUP", "All")
-if !parse(Bool, get(ENV, "CI", "false"))
+const CI = parse(Bool, get(ENV, "CI", "false"))
+if !CI
     using Revise
     const printDebug = true
 else
@@ -129,7 +130,8 @@ if GROUP == "All" || GROUP == "Core6"
         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences (loss V)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-4, 1e-2], target = :D, loss=LossV())
     end
 end
-if GROUP == "All" || GROUP == "Core7"
+if (GROUP == "All" && (!CI || !Sys.isapple())) || GROUP == "Core7"
+    # Skip this test on macOS when running the "Full tests" CI because it is too slow and produces a timeout error (>6h)
     @testset "Adjoint method of SIA equation with pure D as target and custom NN" begin
         # @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-7, 1e-3], target = :D, custom_NN = true)
         @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences (loss V)" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-4, 1e-2], target = :D, custom_NN = true, loss=LossV())
