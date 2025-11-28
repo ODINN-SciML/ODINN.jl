@@ -16,14 +16,15 @@ A_law = LawA(nn_model, params)
 # ## Implementation
 
 # It is also possible to define new inputs by creating a new struct type and defining the method for this specific type.
-# On top of type of the input, we also need to override two methods using multiple dispatch: `get_input` and `Base.zero`.
-# The first one computes the value of the input at a given time `t` for a specific glacier inside the simulation.
-# The second one returns the zero value of the input for a specific glacier, used to generate an empty cache.
-# For example the long term air temperature is defined with the following code:
+# On top of type of the input, we also need to override three methods using multiple dispatch: `default_name`, `get_input` and `Base.zero`.
+# The first one returns a symbolic representation of the input, which is convenient to have the complete name of it.
+# The second one computes the value of the input at a given time `t` for a specific glacier inside the simulation.
+# The last one returns the zero value of the input for a specific glacier, used to generate an empty cache.
+# For example the scalar long term air temperature is defined with the following code:
 
 # ```julia
 # struct iAvgScalarTemp <: AbstractInput end
-# default_name(::iAvgScalarTemp) = :averaged_long_term_temperature
+# default_name(::iAvgScalarTemp) = :averaged_scalar_long_term_temperature
 # function get_input(temp::iAvgScalarTemp, simulation, glacier_idx, t)
 #     glacier = simulation.glaciers[glacier_idx]
 #     return mean(glacier.climate.longterm_temps_scalar)

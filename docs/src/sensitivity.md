@@ -45,23 +45,23 @@ The gradient of the loss function $L(\theta)$ with respect to the parameter $\th
 ```
 The integration of the adjoint equation can be performed using the discrete adjoint (discretize-then-differentiate) or the continuous adjoint (differentiate-then-discretize).
 Both types of adjoints are implemented as an `AbstractAdjointMethod`:
-- `DiscreteAdjoint()`: The discrete adjoint is a very simple adjoint that uses an explicit Euler scheme to solve the adjoint ODE. The timestep is prescribed by the frequency at which the results are saved in the forward run. It is usually set to one month.
-- `ContinuousAdjoint()`: With this adjoint method, the adjoint ODE is treated and solved as a standard ODE using SciMLSensitivity. The VJP with respect to the ice thickness of the ice flow equation (e.g. `SIA2D!`) is integrated backward in time. The gradients with respect to the parameters involved in the iceflow equation are then computed using a simple Gauss Quadrature at prescribed time steps. These time steps are determined by the Gauss Quadrature method and in a general case they are different from the time steps at which results are gathered in the forward run. This is way the adjoint solution is interpolated. For the moment only linear interpolators are supported.
+- `DiscreteAdjoint`: The discrete adjoint is a very simple adjoint that uses an explicit Euler scheme to solve the adjoint ODE. The timestep is prescribed by the frequency at which the results are saved in the forward run. It is usually set to one month but it can also adapt when the loss function is evaluated at non uniform time steps.
+- `ContinuousAdjoint`: With this adjoint method, the adjoint ODE is treated and solved as a standard ODE using [`DifferentialEquations.jl`](https://diffeq.sciml.ai/). The VJP with respect to the ice thickness of the ice flow equation (e.g. `SIA2D!`) is integrated backward in time. The gradients with respect to the parameters involved in the iceflow equation are then computed using a simple Gauss Quadrature at prescribed time steps. These time steps are determined by the Gauss Quadrature method and in a general case they are different from the time steps at which results are gathered in the forward run. This way the adjoint solution is interpolated. For the moment only linear interpolators are supported.
 
-The default choice for the manual adjoint is `ContinuousAdjoint()`, which relies on `DifferentialEquations.jl` for solving the reverse adjoint equations, then
+The default choice for the manual adjoint is `ContinuousAdjoint`, which relies on [`DifferentialEquations.jl`](https://diffeq.sciml.ai/) for solving the reverse adjoint equations, then
 providing better error control on the computation of the gradients.
 
 ### Computing the VJPs inside the solver
 
 When evaluating the adjoint differential equations used to compute the gradient of the loss function, vector-Jacobian products (VJPs) need to be evaluated at every given timestep (see Section 4.2.1.1 in [sapienza_differentiable_2024](@cite)).
 These VJPs are then used inside both continuous and discrete adjoints, where the adjoint equation is integrated in time. 
-The computation of these VJPs can be efficiently be computed using automatic differentiation.
+The computation of these VJPs can be efficiently computed using automatic differentiation.
 ODINN provides manual implementations of the pullback operations required to compute these VJPs, together with the interface to
 compute these VJPs using the native Julia automatic differentiation libraries.
 The VJP methods in ODINN are implemented as concrete types of `AbstractVJPMethod`:
-- `EnzymeVJP()`: The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the (spatially) discrete VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code. 
-- `DiscreteVJP()`: This is a manual implementation of what the (spatially) discrete Enzyme VJP does. Equations were derived manually by differentiating the discretized differential operators. For example, this means that the partial derivative $\frac{\partial f}{\partial x}$ is first discretized as, for example, `df[i] = (f[i + 1] - f[i]) / dx` and then the pullback operator is directly applied to the discretization `df`.
-- `ContinuousVJP()`: In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a (spatially) continuous VJP can be derived by integrating by parts the spatial differential operators inside the SIA equation. This means the pullback operator of the differentiation step $\frac{\partial f}{\partial x}$ is first computed before discretizing. It is then discretized after differentiation
+- `EnzymeVJP`: The Enzyme VJPs rely on [`Enzyme.jl`](https://enzymead.github.io/Enzyme.jl/) to compute the (spatially) discrete VJPs of the iceflow equation. It corresponds to the true VJP of the numerical code.
+- `DiscreteVJP`: This is a manual implementation of what the (spatially) discrete Enzyme VJP does. Equations were derived manually by differentiating the discretized differential operators. For example, this means that the partial derivative $\frac{\partial f}{\partial x}$ is first discretized as, for example, `df[i] = (f[i + 1] - f[i]) / dx` and then the pullback operator is directly applied to the discretization `df`.
+- `ContinuousVJP`: In the special case of `SIA2D!`, as we are dealing with a diffusion equation, a (spatially) continuous VJP can be derived by integrating by parts the spatial differential operators inside the SIA equation. This means the pullback operator of the differentiation step $\frac{\partial f}{\partial x}$ is first computed before discretizing. It is then discretized after differentiation
 
 
 ## SciMLSensitivity

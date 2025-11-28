@@ -95,7 +95,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
         ## 3- Determine tstops in the same way as what is done in the forward and check that this matches
         tstops = Huginn.define_callback_steps(tspan, params.solver.step)
-        tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, tspan)
+        tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, tspan))
         tstops = sort(unique(vcat(tstops, params.solver.tstops, tH_ref, tV_ref, tstopsDiscreteLoss)))
 
         @assert length(t) == length(tstops) "The size of tstops does not match with the size of the reference times."

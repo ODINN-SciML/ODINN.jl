@@ -3,7 +3,10 @@
 # This tutorial provides simple examples on how to create learnable and non learnable 
 # laws and how to inject them into the iceflow model.
 
-# Let's say we have followed the classical workflow from ODINN, shown in the [Forward simulation](./forward_simulation.md) and [Functional inversion](./functional_inversion.md) tutorials. When we declare the `Model` type, we can specify the laws that we want to use in the iceflow model. Here we will briefly show how to do it. For more details you can check the [Understanding the Law interface section](./inversions.md).
+# Let's say we have followed the classical workflow from ODINN, shown in the [Forward simulation](./forward_simulation.md) and [Functional inversion](./functional_inversion.md) tutorials.
+# When we declare the `Model` type, we can specify the laws that we want to use in the iceflow model.
+# Here we will briefly show how to do it.
+# For more details you can check the [Understanding the Law interface section](./inversions.md#Understanding-the-Laws-interface).
 
 using ODINN
 using Plots
@@ -29,11 +32,11 @@ A_law = LawA(nn_model, params)
 # As explained in the [Sensitivity analysis](./sensitivity.md) section, ODINN needs to compute the vector-Jacobian products (VJPs).
 # The part of the VJP concerning the law can be computed from different ways and it is possible to customize this, or use a default automatic differentiation backend.
 # For this specific law the VJPs are already customized to have an efficient implementation and the user does not have to worry about this.
-# The [VJP law customization](./vjp_laws.md) tutorial provides a complete description of how this VJP computation can be customized.
+# The [laws VJP customization](./vjp_laws.md) tutorial provides a complete description of how this VJP computation can be customized.
 
-# The ouput above shows that the law is applied at each iteration of the iceflow PDE.
+# The ouput above shows that the law is applied only once at the beginning of the simulation.
 # Additionally it says that custom VJPs are used to compute the gradient and that these VJPs are precomputed as the inputs of the law do not depend on the glacier state.
-# By precomputed we mean that they are computed before solving the adjoint iceflow PDE, refer to the [VJP law customization](./vjp_laws.md) tutorial for more information.
+# By precomputed we mean that they are computed before solving the adjoint iceflow PDE, refer to the [laws VJP customization](./vjp_laws.md) tutorial for more information.
 
 # It is then possible to visualize how the law integrates into the iceflow PDE:
 
@@ -49,7 +52,7 @@ model = Model(
 
 # ### Example 1: Cuffey and Paterson (2010) 1-dimensional law
 
-# Here is a quick example also drawn from the [Functional inversion](./functional_inversion.md) tutorial. We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).
+# Here is a quick example also drawn from the [functional inversion tutorial](./functional_inversion.md) where a non learnable law has been used to generate the synthetic dataset.
 
 A_law = CuffeyPaterson(scalar=true)
 
@@ -85,14 +88,14 @@ params = Parameters(
         tspan = (2010.0, 2015.0),
         rgi_paths = rgi_paths,
         gridScalingFactor = 4 # We reduce the size of glacier for simulation
-        ),
+    ),
     solver = Huginn.SolverParameters(
         step = δt,
         progress = true
-        )
     )
+)
 
-# When declaring the model, we will indicate that the basal sliding coefficient `C` will be simulated by the `SyntheticC` law, which takes as input the parameters and the law inputs we defined before.
+# When declaring the model, we will indicate that the basal sliding coefficient `C` will be simulated by the `SyntheticC` law, which takes as input the parameters and the law inputs we defined before.
 
 model = Huginn.Model(
     iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
@@ -111,7 +114,7 @@ tstops = collect(2010:δt:2015)
 
 prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
-# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D.
+# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D.
 # This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.
 
 fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing);

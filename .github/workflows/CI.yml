@@ -5,12 +5,14 @@ on:
       - main
     paths-ignore:
       - 'docs/**'
+      - 'scripts/**'
   push:
     branches:
       - main
     tags: '*'
     paths-ignore:
       - 'docs/**'
+      - 'scripts/**'
 env:
   PR_NUMBER: ${{ github.event.number }}
 permissions:

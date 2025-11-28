@@ -8,7 +8,7 @@
 
 using ODINN
 
-# We fetch the paths with the files for the available glaciers on disk
+# We fetch the paths with the files for the available glaciers on disk
 
 rgi_paths = get_rgi_paths()
 
@@ -29,9 +29,14 @@ params = Parameters(
         rgi_paths=rgi_paths,
         gridScalingFactor=4), # Downscale the glacier grid to speed-up this example for the GitHub servers
     hyper = Hyperparameters(
-        batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
+        batch_size=length(rgi_ids), # Set batch size equals size of the dataset
         epochs=[2,2], # [35,30]
-        optimizer=[ODINN.ADAM(0.02), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
+        optimizer=[
+            ODINN.ADAM(0.02),
+            ODINN.LBFGS(
+                linesearch = ODINN.LineSearches.BackTracking(iterations = 5)
+            )
+        ]),
     physical = PhysicalParameters(
         minA = 8e-21,
         maxA = 8e-17),
@@ -42,9 +47,9 @@ params = Parameters(
     solver = Huginn.SolverParameters(step=δt),
 )
 
-# ## Step 2: Defining a forward simulation as a synthetic ground truth
+# ## Step 2: Generate synthetic ground truth data with a forward simulation
 
-# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010) in a law that we have already available in `ODINN.jl`, which we specify to be in a gridded format (i.e. non-scalar).
+# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010) [cuffey_physics_2010](@cite) in a law that we have already available in `ODINN.jl`, which we specify to be in a gridded format which means that it varies spatially (i.e. non-scalar).
 
 A_law = CuffeyPaterson(scalar=false)
 
@@ -61,7 +66,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 
 tstops = collect(2010:δt:2015)
 
-# We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities for each glacier at each time step. The dataset will be to make the inversion hereafter.
+# We generate the synthetic dataset using the forward simulation. This will generate a dataset with the ice thickness and surface velocities for each glacier at each time step. The dataset will be used to make the inversion hereafter.
 
 prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 

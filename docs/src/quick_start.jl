@@ -8,7 +8,7 @@ using ODINN
 working_dir = joinpath(ODINN.root_dir, "demos")
 mkpath(working_dir)
 
-rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-08.00203"]
+rgi_ids = ["RGI60-11.03638"]
 rgi_paths = get_rgi_paths()
 
 params = Parameters(
@@ -34,4 +34,4 @@ run!(prediction)
 
 # Then, we can easily visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier:
 
-pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
+plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
