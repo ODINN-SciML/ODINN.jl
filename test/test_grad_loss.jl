@@ -229,6 +229,15 @@ function test_grad_finite_diff(
     θ = simulation.model.trainable_components.θ
     n_params = length(θ)
 
+    if (:A in keys(θ)) && (Symbol("1") in keys(θ.A)) # Classical inversion
+        if length(θ.A) != length(glaciers) # Gridded inversion
+            for i in 1:length(glaciers)
+                # Perturb the parameterization so that the value of the regularization is not zero (constant matrix is in the null space of the Tikhonov regularization)
+                θ.A[Symbol("$(i)")] .*= 0.5 .+ rand(Float64, size(θ.A[Symbol("$(i)")]))
+            end
+        end
+    end
+
     loss_iceflow_grad!(dθ, _θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         ret = ODINN.grad_loss_iceflow!(_θ, simulation, map)
         @assert !any(isnan, ret) "Gradient computed with SciML contains NaNs. Try to run the code again if you just started the REPL. Gradient is $(ret)"
@@ -279,7 +288,6 @@ function test_grad_finite_diff(
             for key in keys(θ)
                 if key == :IC
                     # Initial condition
-                    # for glacier in glaciers
                     for i in 1:length(glaciers)
                         glacier = glaciers[i]
                         M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter, i)
@@ -289,6 +297,18 @@ function test_grad_finite_diff(
                         mask[idxs] .= 1
                         key_glacier = Symbol("$(i)")
                         θ_mask.IC[key_glacier] .= mask
+                    end
+                elseif (key == :A) && (Symbol("1") in keys(θ.A)) && length(θ.A) != length(glaciers)
+                    # Gridded classical inversion
+                    for i in 1:length(glaciers)
+                        glacier = glaciers[i]
+                        M = glacier.H₀
+                        non_zero = M .> 1.0
+                        idxs = rand(findall(non_zero), max_params)
+                        mask = falses(size(M).-1)
+                        mask[idxs] .= 1
+                        key_glacier = Symbol("$(i)")
+                        θ_mask.A[key_glacier] .= mask
                     end
                 else
                     # Mask parameter vector

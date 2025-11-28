@@ -138,9 +138,10 @@ end
 
 if GROUP == "All" || GROUP == "Core8"
     @testset "Multi-objective function and regularization test" begin
-        @testset "Gradient evaluation testing MultiLoss API" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(),), λs=(0.4,)))
-        @testset "Gradient evaluation testing just regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [3e-2, 1e-5, 3e-2], loss=MultiLoss(losses=(VelocityRegularization(),), λs=(1e2,)))
-        @testset "Gradient evaluation testing empirical and regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(), VelocityRegularization()), λs=(1e-2, 2e-1)))
+        @testset "MultiLoss" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(),), λs=(0.4,)))
+        @testset "Just regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [3e-2, 1e-5, 3e-2], loss=MultiLoss(losses=(VelocityRegularization(),), λs=(1e2,)))
+        @testset "Empirical and regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], loss=MultiLoss(losses=(LossH(), VelocityRegularization()), λs=(1e-2, 2e-1)))
+        @testset "Rheology regularization" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2], functional_inv = false, scalar = false, loss=RheologyRegularization())
     end
 end
 

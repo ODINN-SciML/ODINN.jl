@@ -475,7 +475,7 @@ function _batch_iceflow_UDE(
     tstops = unique(vcat(tstops, params.solver.tstops)) # Merge time steps controlled by `step` with the user provided time steps
     tstopsIceThickness = tdata(glacier.thicknessData)
     tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
-    tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan)
+    tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan))
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity, tstopsDiscreteLoss)))
 
     # Create mass balance callback

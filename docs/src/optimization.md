@@ -79,10 +79,13 @@ Regularizations are very common in inverse modelling as they help to constraint 
 From a mathematical and computational perspective, regularization losses are just another type of loss that do not include contribution from observations (and then have no _empirical_ contribution to their value).
 
 ODINN currently supports the following type of regularization, although the development of new regularization should be straightforward from the source code API:
-- `TikhonovRegularization`: Very common in geophysical inversion. Given an linear operator $A$, this is given by the value of $\| A(S) \|_2^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the Laplacian operator $\nabla^2$.
 - `InitialThicknessRegularization`: Penalizes large second order derivatives in the initial condition of the glacier when this is treated as an optimization variable. This builds on top of `TikhonovRegularization`.
 - `VelocityRegularization`: Penalizes large second order derivatives in the simulated surface velocity of the glacier. This builds on top of `TikhonovRegularization`.
 Regularization and empirical losses can be combined together to construct new form of regularizations.
+
+Regularizations rely on simple losses which are agnostic to the nature of the variable that it takes as input.
+The following simple losses are implemented, and the regularizations described above are built on top of them:
+- `TikhonovRegularization`: Very common in geophysical inversion. Given an linear operator $A$, this is given by the value of $\| A(S) \|_2^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the Laplacian operator $\nabla^2$.
 
 ## Logging
 
