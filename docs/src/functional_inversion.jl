@@ -194,7 +194,8 @@ nn_model = NeuralNetwork(params)
 # Then we define a law that uses this neural network to map the long term air temperature `T` to the creep coefficient `A`.
 # ODINN comes with a set of already defined laws. Only a few of them support functional inversion as the computation of the gradient needs to be carefully handled.
 # More information about these laws can be found in the [laws tutorial](./laws.md).
-A_law = LawA(nn_model, params)
+law_input = (; T = iAvgScalarTemp())
+A_law = LawA(nn_model, params, law_input)
 
 # Then we define an iceflow and ODINN tells us how the law is used in the iceflow equation.
 iceflow = SIA2Dmodel(params; A=A_law)
@@ -219,4 +220,7 @@ functional_inversion = Inversion(model, glaciers, params)
 run!(functional_inversion)
 
 # The optimized parameters can be found in the results:
-functional_inversion.results.stats.θ
+θ = functional_inversion.results.stats.θ
+
+# And then we can visualize the learnt law by plotting the neural network mapping from temperature to A.
+fig = plot_law(functional_inversion.model.iceflow.A, functional_inversion, law_input, 1, θ)

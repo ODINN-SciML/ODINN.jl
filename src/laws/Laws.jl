@@ -300,13 +300,16 @@ A_law = LawA(nn_model, params; precompute_VJPs=false)
 """
 function LawA(
     nn_model::NeuralNetwork,
-    params::Sleipnir.Parameters;
+    params::Sleipnir.Parameters,
+    input::NamedTuple = (; T=iAvgScalarTemp());
     precompute_VJPs::Bool = true,
     scalar::Bool = true
 )
     archi = nn_model.architecture
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
+
+    @assert (typeof(input.T) == iAvgScalarTemp && scalar)|| (typeof(input.T) == iAvgGriddedTemp && !scalar) "Input type not supported. Use either `iAvgScalarTemp` when `scalar=true` or `iAvgGriddedTemp` when `scalar=false`."
 
     min_NN = params.physical.minA
     max_NN = params.physical.maxA
@@ -334,7 +337,8 @@ function LawA(
     end
     A_law = if scalar
             Law{ScalarCache}(;
-                inputs = (; T=iAvgScalarTemp()),
+                name = :A_neural_network,
+                inputs = input,
                 f! = f!,
                 init_cache = function (simulation, glacier_idx, θ)
                     return ScalarCache(zeros(), zeros(), zero(θ))
@@ -344,7 +348,8 @@ function LawA(
             )
         else
             Law{MatrixCache}(;
-                inputs = (; T = iAvgGriddedTemp()),
+            name = :A_neural_network,
+                inputs = input,
                 f! = f!,
                 init_cache = function (simulation, glacier_idx, θ)
                     (; nx, ny) = simulation.glaciers[glacier_idx]

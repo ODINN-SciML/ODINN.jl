@@ -18,7 +18,7 @@ function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw, simulation:
     mkpath(folder)
     filepath = joinpath(folder, filename * ".pdf")
     @info "Saving law plot to $filepath"
-    savefig(fig, filepath)
+    Plots.savefig(fig, filepath)
 end
 
 function plot_law(
@@ -33,7 +33,7 @@ function plot_law(
     input_names = sort(collect(keys(inputs)))
 
     if n_inputs == 1
-        fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names)
+        fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names[1])
         save_law_plot(fig, n_inputs, input_names, law, simulation, idx_fixed_input)
     elseif n_inputs == 2
         fig = plot_law_2d(law, simulation, inputs, glacier_idx, θ, input_names, idx_fixed_input)
@@ -50,13 +50,24 @@ function plot_law_1d(
     inputs::NamedTuple,
     glacier_idx::Integer,
     θ,
-    input_names::Vector{Symbol}
+    input_name::Symbol
 )
-    xname = input_names[1]
-    xvals = get_input(inputs[xname], simulation, glacier_idx, 2010.0)
-    input_tuple = NamedTuple{(xname,)}((xvals,))
-    outputs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
-    return plot(xvals, outputs, xlabel=string(xname), ylabel=string(law.name), title="Law Function Plot")
+    scalar = length(get_input(inputs[input_name], simulation, 1, 2010.0)) == 1 ? true : false
+    @show scalar
+    if scalar 
+        xvals = [get_input(inputs[input_name], simulation, i, 2010.0) for i in 1:length(simulation.glaciers)]
+        input_tuples = [NamedTuple{(input_name,)}((xvals[i],) ) for i in 1:length(simulation.glaciers)]
+        outputs = [only(eval_law(law, simulation, i, input_tuples[i], θ)) for i in 1:length(simulation.glaciers)]
+        fig = Plots.plot(xvals, outputs, xlabel=string(input_name), ylabel=string(law.name), title="Law Function Plot")
+    else
+        xname = input_names[glacier_idx]
+        xvals = get_input(inputs[xname], simulation, glacier_idx, 2010.0)
+        input_tuple = NamedTuple{(xname,)}((xvals,))
+        outputs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
+        fig = Plots.plot(xvals, outputs, xlabel=string(xname), ylabel=string(law.name), title="Law Function Plot")
+    end
+
+    return fig
 end
 
 function plot_law_2d(

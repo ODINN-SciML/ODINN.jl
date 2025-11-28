@@ -111,7 +111,7 @@ function Base.zero(::iCPDD, simulation, glacier_idx)
 end
 ```
 
-A synthetic `C` law can then be defined using this `InpCPDD` input.
+A synthetic `C` law can then be defined using this `iCPDD` input.
 Here is a simple example of a synthetic law made following this interface:
 
 ```julia
