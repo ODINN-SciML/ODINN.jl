@@ -2,7 +2,7 @@
 
 # This tutorial provides a simple example on how to perform a classical gridded inversion in `ODINN.jl`.
 # For this, we generate a synthetic dataset using a forward simulation, and then we use this dataset to perform the classical inversion.
-# The goal of this classical inversion is to retrieve the matrix of `A` values, i.e. the ice rigidity, that was used to generate the results of a forward simulation.
+# The goal of this classical inversion is to retrieve the matrix of `A` values associated to the Glen coefficient/rigidity in Glen's Law that was used to generate the results of a forward simulation.
 
 # ## Step 1: Parameter and glacier initialization
 
@@ -16,22 +16,20 @@ rgi_paths = get_rgi_paths()
 
 rgi_ids = ["RGI60-11.03638"]
 
-# Define the time step for the simulation output and for the adjoint calculation. In this case, a month.
-
-δt = 1/12
+# We now define the parameters used for the simulation
 
 params = Parameters(
     simulation = SimulationParameters(
-        use_MB=false,
-        tspan=(2010.0, 2015.0),
-        test_mode=false,
-        multiprocessing=false, # We are processing only one glacier
-        rgi_paths=rgi_paths,
-        gridScalingFactor=4), # Downscale the glacier grid to speed-up this example for the GitHub servers
+        use_MB = false,
+        tspan = (2010.0, 2015.0),
+        test_mode = false,
+        multiprocessing = false, # We are processing only one glacier
+        rgi_paths = rgi_paths,
+        gridScalingFactor = 4), # Downscale the glacier grid to speed-up this example for the GitHub servers
     hyper = Hyperparameters(
-        batch_size=length(rgi_ids), # Set batch size equals size of the dataset
-        epochs=[2,2], # [35,30]
-        optimizer=[
+        batch_size = length(rgi_ids), # Set batch size equals size of the dataset
+        epochs = [2,2], # [35,30]
+        optimizer = [
             ODINN.ADAM(0.02),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 5)
@@ -44,25 +42,26 @@ params = Parameters(
         optim_autoAD=ODINN.NoAD(),
         empirical_loss_function = LossH() # Loss function based on ice thickness
     ),
-    solver = Huginn.SolverParameters(step=δt),
+    solver = Huginn.SolverParameters(step = 1 / 12), # Save simulation every one month
 )
 
 # ## Step 2: Generate synthetic ground truth data with a forward simulation
 
-# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010) [cuffey_physics_2010](@cite) in a law that we have already available in `ODINN.jl`, which we specify to be in a gridded format which means that it varies spatially (i.e. non-scalar).
+# We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010) [cuffey_physics_2010](@cite) in a law relating
+# ice temperature with the coefficient A. This law is already available in `ODINN.jl`, which we specify to be in a gridded format which means that it varies spatially (i.e. non-scalar).
 
-A_law = CuffeyPaterson(scalar=false)
+A_law = CuffeyPaterson(scalar = false)
 
 model = Model(
-    iceflow = SIA2Dmodel(params; A=A_law),
-    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    iceflow = SIA2Dmodel(params; A = A_law),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
 )
 
-# We initialize the glaciers with all the necessary data
+# We initialize the glaciers with all the necessary data:
 
 glaciers = initialize_glaciers(rgi_ids, params)
 
-# Time snapshots where to store data for the inversion
+# Time snapshots where to store data for the inversion:
 
 tstops = collect(2010:δt:2015)
 
@@ -75,19 +74,19 @@ glaciers = prediction.glaciers
 # Now we compute the spatially varying `A` to have a ground truth for the comparison at the end of this tutorial.
 
 A_ground_truth = zeros(size(prediction.glaciers[1].H₀))
-inn1(A_ground_truth) .= eval_law(prediction.model.iceflow.A, prediction, 1, (;T=get_input(iAvgGriddedTemp(), prediction, 1, tstops[1])), nothing)
-A_ground_truth[prediction.glaciers[1].H₀.==0] .= NaN;
+inn1(A_ground_truth) .= eval_law(prediction.model.iceflow.A, prediction, 1, (;T = get_input(iAvgGriddedTemp(), prediction, 1, tstops[1])), nothing)
+A_ground_truth[prediction.glaciers[1].H₀ .== 0] .= NaN;
 
 # ## Step 3: Model specification to perform a classical inversion
 
 # After this forward simulation, we restart the iceflow model to be ready for the inversions
 
 trainable_model = GriddedInv(params, glaciers, :A)
-A_law = LawA(params; scalar=false)
+A_law = LawA(params; scalar = false)
 model = Model(
-    iceflow = SIA2Dmodel(params; A=A_law),
-    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-    regressors = (; A=trainable_model)
+    iceflow = SIA2Dmodel(params; A = A_law),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    regressors = (; A = trainable_model)
 )
 
 # ## Step 4: Perform the inversion by optimizing the model
@@ -108,16 +107,16 @@ run!(inversion)
 
 A = zeros(size(inversion.glaciers[1].H₀))
 inn1(A) .= eval_law(inversion.model.iceflow.A, inversion, 1, (;), θ)
-A[inversion.glaciers[1].H₀.==0] .= NaN;
+A[inversion.glaciers[1].H₀ .== 0] .= NaN;
 
 # ## Step 5: Compare the inverted parameter to the synthetic ground truth
 
 # Finally we visualize the inverted `A`.
 
-plot_gridded_data(A, inversion.results.simulation[1]; colormap=:YlGnBu, logPlot=true)
+plot_gridded_data(A, inversion.results.simulation[1]; colormap = :YlGnBu, logPlot = true)
 
 # We can compare it to the ground truth `A` values:
 
-plot_gridded_data(A_ground_truth, inversion.results.simulation[1]; colormap=:YlGnBu, logPlot=true)
+plot_gridded_data(A_ground_truth, inversion.results.simulation[1]; colormap = :YlGnBu, logPlot = true)
 
 # Unsurprisingly the inverted A is noisy in comparison to the ground truth. This is because the inversion requires regularization. For more information on how to define regularizations, see the [Optimization](./optimization.md) section.

@@ -1,6 +1,6 @@
 # # Quick start
 
-# Before going into model details, it is always better to have a quick overview with a simple example on how `ODINN.jl` 
+# Before going into model details, it is always better to have a quick overview with a simple example on how `ODINN.jl`
 # is used from a user point of view. This is the simplest example of how to create and run a simple glacier forward simulation:
 
 using ODINN
@@ -15,7 +15,7 @@ params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
         tspan = (2010.0, 2015.0),
-        multiprocessing=false,
+        multiprocessing = false,
         rgi_paths = rgi_paths
     )
 )
@@ -29,9 +29,9 @@ glaciers = initialize_glaciers(rgi_ids, params)
 prediction = Prediction(model, glaciers, params)
 run!(prediction)
 
-# This code will run a forward simulation for the glaciers defined in `rgi_ids` from 2010 to 2015, 
+# This code will run a forward simulation for the glaciers defined in `rgi_ids` from 2010 to 2015,
 # using the specified ice flow and mass balance models. The results will be stored in the `working_dir` directory.
 
 # Then, we can easily visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier:
 
-plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
+plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"])
