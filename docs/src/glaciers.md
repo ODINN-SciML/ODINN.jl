@@ -11,7 +11,7 @@ Sleipnir.Glacier2D()
 
 ## Climate
 
-Every glacier has its associated climate, following the same spatial representation (e.g. 2D). These are also retrieved using OGGM, and different types of climate can be used. By default we provide W5E5, which is downscaled (for now using very simple methods) to the glacier grid. 
+Every glacier has its associated climate, following the same spatial representation (e.g. 2D). These are also retrieved using OGGM, and different types of climate can be used. By default we provide W5E5, which is downscaled (for now using very simple methods) to the glacier grid.
 
 ```@docs
 Sleipnir.Climate2D
@@ -32,7 +32,7 @@ The main climate data supported include:
 
 In order to create `Glacier` types with information of a given glacier for a simulation, one can initialize a list of glaciers based on RGI (Randolph Glacier Inventory) IDs. Before running this, make sure to have used `Gungnir` to download all the necessary data for those glaciers in local. [Here](https://github.com/ODINN-SciML/Gungnir/blob/main/notebooks/Example.ipynb) you will find a notebook showing how to do so. Even easier, you can just double check that these glaciers are already available on the ODINN server. The list of the already processed glaciers can be obtained with `get_rgi_paths()`.
 
-!!! info 
+!!! info
     We will soon host all the preprocessed glacier directories in a server so they can be automatically downloaded by users, without having to process them using `Gungnir`.
 
 ```@docs

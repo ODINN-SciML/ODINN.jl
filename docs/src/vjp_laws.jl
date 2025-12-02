@@ -1,7 +1,7 @@
 # # Law VJP customization
 
-# This tutorial explains how to customize VJP (vector-Jacobian product) computation of the laws in ODINN.jl and clarifies the runtime flow used internally by the library.
-# It explains which functions are part of the public, user-facing customization API and which are internal helpers used by ODINN when an automatic-differentiation (AD) backend is required.
+# This tutorial explains how to customize VJP (vector-Jacobian product) computation of the laws in `ODINN.jl` and clarifies the runtime flow used internally by the library.
+# It explains which functions are part of the public, user-facing customization API and which are internal helpers used by ODINN when an AD backend is required.
 
 # !!! warning "Advanced features"
 #     The features presented in this section are considered as advanced features and this tutorial was written primarily for ODINN developers.
@@ -12,8 +12,8 @@ using ODINN
 rgi_ids = ["RGI60-11.03638"]
 rgi_paths = get_rgi_paths()
 params = Parameters(
-    simulation = SimulationParameters(rgi_paths=rgi_paths),
-    UDE = UDEparameters(grad=ContinuousAdjoint()),
+    simulation = SimulationParameters(rgi_paths = rgi_paths),
+    UDE = UDEparameters(grad = ContinuousAdjoint()),
 )
 nn_model = NeuralNetwork(params)
 
@@ -22,8 +22,8 @@ nn_model = NeuralNetwork(params)
 # ### High-level summary
 
 # At the user level the customization can be made by implementing hand-written VJPs through the following functions:
-# - `f_VJP_input!(...)` — VJP w.r.t. inputs
-# - `f_VJP_θ!(...)` — VJP w.r.t. parameters θ
+# - `f_VJP_input!(...)`: VJP w.r.t. inputs
+# - `f_VJP_θ!(...)`: VJP w.r.t. parameters θ
 # - You may also implement your own precompute function to cache expensive computations which is the purpose of `p_VJP!(...)`. This function is called before solving the adjoint iceflow PDE.
 
 # Internally when the user does NOT provide VJPs, ODINN uses a default AD backend (via [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl)) to compute the VJPs of the laws.
@@ -143,7 +143,7 @@ st = nn_model.st
 smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
 min_NN = params.physical.minA
 max_NN = params.physical.maxA
-inputs = (; T=iAvgScalarTemp())
+inputs = (; T = iAvgScalarTemp())
 
 # And then the `f!` and `init_cache` functions:
 f! = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
@@ -210,7 +210,7 @@ ODINN.∂law∂θ!(
     simulation.model.iceflow.A,
     simulation.cache.iceflow.A,
     simulation.cache.iceflow.A_prep_vjps,
-    (; T=1.0), θ)
+    (; T = 1.0), θ)
 
 # ## VJP precomputation
 
