@@ -337,7 +337,7 @@ function LawA(
     end
     A_law = if scalar
             Law{ScalarCache}(;
-                name = :A_neural_network,
+                name = :NN_A,
                 inputs = input,
                 f! = f!,
                 init_cache = function (simulation, glacier_idx, θ)
@@ -348,7 +348,7 @@ function LawA(
             )
         else
             Law{MatrixCache}(;
-            name = :A_neural_network,
+                name = :NN_A,
                 inputs = input,
                 f! = f!,
                 init_cache = function (simulation, glacier_idx, θ)

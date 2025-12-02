@@ -21,19 +21,44 @@ function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw, simulation:
     Plots.savefig(fig, filepath)
 end
 
+"""
+    plot_law(law::AbstractLaw, simulation::Simulation, inputs::NamedTuple, θ; glacier_idx=1, idx_fixed_input=0)
+
+Plot a law function with one or two input variables.
+
+# Arguments
+- `law::AbstractLaw`: The law to plot (e.g., a sliding law or creep law).
+- `simulation::Simulation`: The simulation containing glaciers and parameters.
+- `inputs::NamedTuple`: Named tuple of input variables for the law (e.g., `(T=iTemp(), H̄=iH̄())`).
+- `θ`: Parameters for the law (can be `nothing` for laws without parameters).
+
+# Keyword Arguments
+- `glacier_idx::Integer=1`: Index of the glacier to use for extracting input values (for 2D inputs).
+- `idx_fixed_input::Integer=0`: For two-input laws, index (1 or 2) of the input to fix at its mean value. If `0`, plots a 3D surface.
+
+# Returns
+- A plot figure (1D line plot, 2D scatter, or 3D surface) and saves it to the simulation's working directory.
+
+# Examples
+```julia
+# 1D plot (temperature input for Cuffey-Paterson law)
+plot_law(A_law, simulation, (T=iTemp(),), nothing)
+```
+"""
 function plot_law(
     law::AbstractLaw,
     simulation::Simulation,
     inputs::NamedTuple,
-    glacier_idx::Integer,
     θ;
-    idx_fixed_input::Integer = 0
+    glacier_idx::Integer = 1,
+    idx_fixed_input::Integer = 0,
+    plot_full_input_range::Bool = false
 )
     n_inputs = length(keys(inputs))
     input_names = sort(collect(keys(inputs)))
 
     if n_inputs == 1
-        fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names[1])
+        fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names[1], plot_full_input_range)
         save_law_plot(fig, n_inputs, input_names, law, simulation, idx_fixed_input)
     elseif n_inputs == 2
         fig = plot_law_2d(law, simulation, inputs, glacier_idx, θ, input_names, idx_fixed_input)
@@ -50,21 +75,25 @@ function plot_law_1d(
     inputs::NamedTuple,
     glacier_idx::Integer,
     θ,
-    input_name::Symbol
+    input_name::Symbol,
+    plot_full_input_range::Bool
 )
+    xlabel = replace(string(input_name), "_" => " ")
+    ylabel = replace(string(law.name), "_" => " ")
     scalar = length(get_input(inputs[input_name], simulation, 1, 2010.0)) == 1 ? true : false
-    @show scalar
+    
     if scalar 
-        xvals = [get_input(inputs[input_name], simulation, i, 2010.0) for i in 1:length(simulation.glaciers)]
-        input_tuples = [NamedTuple{(input_name,)}((xvals[i],) ) for i in 1:length(simulation.glaciers)]
-        outputs = [only(eval_law(law, simulation, i, input_tuples[i], θ)) for i in 1:length(simulation.glaciers)]
-        fig = Plots.plot(xvals, outputs, xlabel=string(input_name), ylabel=string(law.name), title="Law Function Plot")
+        xvals = get_xvals(input_name, inputs, simulation, plot_full_input_range)
+        input_tuples = [NamedTuple{(input_name,)}((xval,) ) for xval in xvals]
+        outputs = [only(eval_law(law, simulation, i, input_tuples[i], θ)) for i in 1:length(xvals)]
+        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:blue)
+
     else
         xname = input_names[glacier_idx]
         xvals = get_input(inputs[xname], simulation, glacier_idx, 2010.0)
         input_tuple = NamedTuple{(xname,)}((xvals,))
         outputs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
-        fig = Plots.plot(xvals, outputs, xlabel=string(xname), ylabel=string(law.name), title="Law Function Plot")
+        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:blue)
     end
 
     return fig
@@ -170,4 +199,17 @@ function plot_law_2d_surface(
             )
         )
     )
+end
+
+function get_xvals(input_name::Symbol, inputs::NamedTuple, simulation::Simulation, plot_full_input_range::Bool)
+    if plot_full_input_range
+        # We plot customised input ranges depending on the input
+        # TODO: make this depend on values in PhysicalParameters or something stored in the law
+        if input_name == :T
+            xvals = collect(-20.0:0.5:10.0)
+        end
+    else
+        xvals = [get_input(inputs[input_name], simulation, i, 2010.0) for i in 1:length(simulation.glaciers)]
+    end
+    return xvals
 end

@@ -10,6 +10,7 @@ end
 
 Pkg.activate(".")
 
+using Revise
 using ODINN
 using Test
 

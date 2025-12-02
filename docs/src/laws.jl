@@ -117,7 +117,7 @@ prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 # Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D.
 # This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.
 
-fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing);
+fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing);
 
 # Since we are in the documentation it is not possible to have an interactive plot but if you reproduce this example locally, you can run the line above without ";" and you can skip the lines hereafter. This will open an interactive window with a 3D plot that you can rotate.
 
