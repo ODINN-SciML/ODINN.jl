@@ -16,6 +16,10 @@ rgi_paths = get_rgi_paths()
 
 rgi_ids = ["RGI60-11.03638"]
 
+# Define the time step for the simulation output, in this case, a month.
+
+δt = 1/12
+
 # We now define the parameters used for the simulation
 
 params = Parameters(
@@ -42,7 +46,7 @@ params = Parameters(
         optim_autoAD=ODINN.NoAD(),
         empirical_loss_function = LossH() # Loss function based on ice thickness
     ),
-    solver = Huginn.SolverParameters(step = 1 / 12), # Save simulation every one month
+    solver = Huginn.SolverParameters(step = δt), # Save simulation every one month
 )
 
 # ## Step 2: Generate synthetic ground truth data with a forward simulation

@@ -19,6 +19,9 @@ rgi_paths = get_rgi_paths()
 ## Ensure the working directory exists
 mkpath(working_dir)
 
+## Define the time step for the simulation output, in this case, a month.
+δt = 1/12
+
 ## Define which glacier RGI IDs we want to work with
 rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-07.00065"]
 
@@ -32,8 +35,8 @@ params = Parameters(
         workers = 4,
         test_mode = false,
         rgi_paths = rgi_paths,
-        gridScalingFactor = 4
-        ), # Downscale the glacier grid to speed-up this example
+        gridScalingFactor = 4, # Downscale the glacier grid to speed-up this example
+        ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
         epochs = [15,10],
@@ -126,8 +129,8 @@ params = Parameters(
         workers = 4,
         test_mode = false,
         rgi_paths = rgi_paths,
-        gridScalingFactor = 4
-        ), # Downscale the glacier grid to speed-up this example
+        gridScalingFactor = 4, # Downscale the glacier grid to speed-up this example
+        ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
         epochs = [15,10],
