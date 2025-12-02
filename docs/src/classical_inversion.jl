@@ -123,5 +123,5 @@ plot_gridded_data(A, inversion.results.simulation[1]; colormap = :YlGnBu, logPlo
 
 plot_gridded_data(A_ground_truth, inversion.results.simulation[1]; colormap = :YlGnBu, logPlot = true)
 
-# Unsurprisingly the inverted `A`` is noisy in comparison to the ground truth. This is because the inversion requires regularization. The fact that we are using only the ice thickness might also not help. Adding a second target observation in the loss function, i.e. the ice surface velocities, would help. 
+# Unsurprisingly the inverted `A` is noisy in comparison to the ground truth. This is because the inversion requires regularization. The fact that we are using only the ice thickness might also not help. Adding a second target observation in the loss function, i.e. the ice surface velocities, would help. 
 # For more information on how to define regularizations, see the [Optimization](./optimization.md) section.

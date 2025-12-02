@@ -4,7 +4,7 @@
 
 using ODINN
 
-# If we represent the A law that we already presented in the [Laws](./laws.md) tutorial, we can see that it depends on an input `T`, which is the long term air temperature:
+# If we represent the `A` simple rheological law that we already presented in the [Laws](./laws.md) tutorial, we can see that it depends on an input `T`, which is the long term air temperature:
 
 params = Parameters() # Dummy parameters
 nn_model = NeuralNetwork(params)
