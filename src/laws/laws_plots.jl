@@ -204,9 +204,10 @@ end
 function get_xvals(input_name::Symbol, inputs::NamedTuple, simulation::Simulation, plot_full_input_range::Bool)
     if plot_full_input_range
         # We plot customised input ranges depending on the input
-        # TODO: make this depend on values in PhysicalParameters or something stored in the law
         if input_name == :T
-            xvals = collect(-20.0:0.5:10.0)
+            T_max = simulation.parameters.physical.maxTlaw
+            T_min = simulation.parameters.physical.minTlaw
+            xvals = collect(T_min:0.5:T_max)
         end
     else
         xvals = [get_input(inputs[input_name], simulation, i, 2010.0) for i in 1:length(simulation.glaciers)]

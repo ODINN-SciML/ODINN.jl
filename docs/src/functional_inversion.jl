@@ -229,12 +229,12 @@ run!(functional_inversion)
 θ = functional_inversion.results.stats.θ
 
 # And then we can visualize the learnt law by plotting the neural network mapping from temperature to A.
-fig = plot_law(functional_inversion.model.iceflow.A, functional_inversion, law_input, θ)
+plot_law(functional_inversion.model.iceflow.A, functional_inversion, law_input, θ)
 
 # And then we compare it to the ground truth law used to generate the synthetic dataset.
-fig = plot_law(prediction.model.iceflow.A, functional_inversion, law_input, nothing)
+plot_law(prediction.model.iceflow.A, functional_inversion, law_input, nothing)
 
 # Since we have a very limited range of temperature coverage with these 4 glaciers, we have only captured a small portion of the ground truth law, which has an almost linear form. If we wanted to learn the full dynamics of the Cuffey and Paterson synthetic law, we would need to have glaciers that cover a wider range of temperatures.
 
 # Just to have some additional context, here is how the synthetic law looks like for the full range of temperatures:
-fig = plot_law(prediction.model.iceflow.A, functional_inversion, law_input, nothing; plot_full_input_range=true)
+plot_law(prediction.model.iceflow.A, functional_inversion, law_input, nothing; plot_full_input_range=true)
