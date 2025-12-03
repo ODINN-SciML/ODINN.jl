@@ -47,7 +47,7 @@ ODINN.Hyperparameters()
 
 ## UDE parameters
 
-Universal Differential Equation (UDE) parameters are used to determine different modelling choices regarding the use of UDEs, such as wich sensitivity algorithm or optimization method to use.
+Universal Differential Equation (UDE) parameters are used to determine different modelling choices regarding the use of UDEs, such as which sensitivity algorithm or optimization method to use.
 
 ```@docs
 ODINN.UDEparameters

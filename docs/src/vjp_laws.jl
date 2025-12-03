@@ -1,7 +1,10 @@
 # # Law VJP customization
 
-# This tutorial explains how to customize VJP (vector-Jacobian product) computation of the laws in ODINN.jl and clarifies the runtime flow used internally by the library.
-# It explains which functions are part of the public, user-facing customization API and which are internal helpers used by ODINN when an automatic-differentiation (AD) backend is required.
+# This tutorial explains how to customize VJP (vector-Jacobian product) computation of the laws in `ODINN.jl` and clarifies the runtime flow used internally by the library.
+# It explains which functions are part of the public, user-facing customization API and which are internal helpers used by ODINN when an AD backend is required.
+
+# !!! warning "Advanced features"
+#     The features presented in this section are considered as advanced features and this tutorial was written primarily for ODINN developers.
 
 # It assumes that you have followed the [Laws](./laws.md) tutorial.
 
@@ -9,8 +12,8 @@ using ODINN
 rgi_ids = ["RGI60-11.03638"]
 rgi_paths = get_rgi_paths()
 params = Parameters(
-    simulation = SimulationParameters(rgi_paths=rgi_paths),
-    UDE = UDEparameters(grad=ContinuousAdjoint()),
+    simulation = SimulationParameters(rgi_paths = rgi_paths),
+    UDE = UDEparameters(grad = ContinuousAdjoint()),
 )
 nn_model = NeuralNetwork(params)
 
@@ -19,8 +22,8 @@ nn_model = NeuralNetwork(params)
 # ### High-level summary
 
 # At the user level the customization can be made by implementing hand-written VJPs through the following functions:
-# - `f_VJP_input!(...)` — VJP w.r.t. inputs
-# - `f_VJP_θ!(...)` — VJP w.r.t. parameters θ
+# - `f_VJP_input!(...)`: VJP w.r.t. inputs
+# - `f_VJP_θ!(...)`: VJP w.r.t. parameters θ
 # - You may also implement your own precompute function to cache expensive computations which is the purpose of `p_VJP!(...)`. This function is called before solving the adjoint iceflow PDE.
 
 # Internally when the user does NOT provide VJPs, ODINN uses a default AD backend (via [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl)) to compute the VJPs of the laws.
@@ -45,7 +48,7 @@ nn_model = NeuralNetwork(params)
 #   - Intent and behavior:
 #     - This is an internal routine. It is NOT intended to be called by users directly.
 #     - It is invoked when ODINN must fall back to the AD backend (with [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl)) because the law did not supply explicit VJP functions (`f_VJP_input!`/`f_VJP_θ!` or because `p_VJP!` is set to `DIVJP()`).
-#     - Its job is to precompile and prepare the AD-based VJP code for a given law and to produce *preparation* objects that store [preparation](https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/explanation/operators/#Preparation) results.
+#     - Its job is to precompile and prepare the AD-based VJP code for a given law and to produce *preparation* objects that store [preparation](https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/explanation/operators/#Preparation) results from [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl).
 #     - `prepare_vjp_law` is typically called just after the iceflow model / law objects have been instantiated — i.e., early in the setup — so that preparations are ready before solving or adjoint runs.
 
 # - `precompute_law_VJP` (used before solving the adjoint PDE)
@@ -89,7 +92,7 @@ nn_model = NeuralNetwork(params)
 # Advanced users seeking maximum performance can customize the VJPs which can significantly speed-up the code.
 
 # How do the pieces compose in practice?
-# - If you, as a user, provide custom VJP functions (through `f_VJP_input!`/`f_VJP_θ!`, or through `p_VJP!`), ODINN will use them directly at adjoint time and will skip the AD fallback path. You can also provide your own precompute wrapper and cache to optimize expensive computations.
+# - If you, as a user, provide custom VJP functions (through `f_VJP_input!`/`f_VJP_θ!`, or through `p_VJP!`), ODINN will use them directly in the adjoint and will skip the AD fallback path. You can also provide your own precompute wrapper and cache to optimize expensive computations.
 # - If you do NOT provide VJP functions, ODINN runs the AD fallback:
 #   1. `prepare_vjp_law` runs early (post-instantiation) to compile/prepare AD-based helpers and returns some `AbstractPrepVJP` object.
 #   2. `precompute_law_VJP` is skipped.
@@ -119,7 +122,7 @@ nn_model = NeuralNetwork(params)
 #     For the moment, using the preparation object at the user level is not supported yet.
 
 # ### Best practices and debugging tips
-# - If you supply custom VJPs, test them with finite-difference checks for both inputs and parameters. ODINN does not check that the correctness of your implementation!
+# - If you supply custom VJPs, test them with finite-difference checks for both inputs and parameters. ODINN does not check the correctness of your implementation!
 # - If you rely on ODINN's AD fallback, be aware that `prepare_vjp_law` will precompile and prepare AD helpers at model instantiation time — expect longer setup time but faster adjoint runs thereafter.
 # - Inspect/validate cache content if you get inconsistent adjoints — a stale or incorrect cache entry is a common cause.
 # - Although the API is designed to provide everything you need as arguments, if your VJP needs anything from the forward pass, ensure it is stored in the cache.
@@ -140,7 +143,7 @@ st = nn_model.st
 smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
 min_NN = params.physical.minA
 max_NN = params.physical.maxA
-inputs = (; T=iAvgScalarTemp())
+inputs = (; T = iAvgScalarTemp())
 
 # And then the `f!` and `init_cache` functions:
 f! = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
@@ -207,7 +210,7 @@ ODINN.∂law∂θ!(
     simulation.model.iceflow.A,
     simulation.cache.iceflow.A,
     simulation.cache.iceflow.A_prep_vjps,
-    (; T=1.0), θ)
+    (; T = 1.0), θ)
 
 # ## VJP precomputation
 
@@ -317,7 +320,7 @@ function p_VJP!(cache, vjpsPrepLaw, inputs, θ)
 end
 
 # Then at each iteration of the adjoint PDE, we use the interpolator that we evaluate with the values in `inputs.H̄`.
-# Since many of the points are zeros, we evaluate the interpolator for `H̄=0` only once.
+# Since many of the points are zeros (outside of the glacier), we evaluate the interpolator for `H̄=0` only once.
 
 function f_VJP_θ!(cache, inputs, θ)
     H̄ = inputs.H̄
@@ -382,6 +385,6 @@ simulation.cache.iceflow.Y.vjp_θ
 # ## Frequently Asked Questions
 # - Can I use the preparation object in the `p_VJP!`/`f_VJP_*` functions?
 # No it is not possible for the moment to use the preparation object inside these functions.
-# The preparation object is used to store things precompiled by [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) when `p_VJP!=DIVJP()` and hence it excludes from using it in `p_VJP!`.
+# The preparation object is used to store things precompiled by [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) when `p_VJP!=DIVJP()` and hence it excludes its use in `p_VJP!`.
 # As for `f_VJP_*`, the preparation object cannot be accessed for the moment.
 # If there is a need, we might add it as an argument in the future.

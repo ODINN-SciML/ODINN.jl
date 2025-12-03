@@ -5,7 +5,11 @@ on:
     branches:
       - main # update to match your development branch (master, main, dev, trunk, ...)
     tags: '*'
+    paths-ignore:
+      - 'test/**'
   pull_request:
+    paths-ignore:
+      - 'test/**'
 
 jobs:
   tutorials-check:

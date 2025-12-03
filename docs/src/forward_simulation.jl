@@ -27,7 +27,8 @@ params = Parameters(
     )
 )
 
-## Specify a model based on an iceflow model, a mass balance model, and a machine learning model
+## Specify a model based on an iceflow model, a mass balance model,
+## and a machine learning model
 model = Model(
     iceflow = SIA2Dmodel(params),
     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
@@ -42,35 +43,36 @@ prediction = Prediction(model, glaciers, params)
 ## And finally, we just run the simulation
 run!(prediction)
 
-## Then we can visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier
-pdiff = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
+## Then we can visualize the results of the simulation, e.g. the difference in ice thickness
+## between 2010 to 2015 for Argentière glacier
+plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"])
 
 # ## Step-by-step explanation of the tutorial
 
 # Here we will cover in detail each one of the steps that lead us to run the
-# `Prediction` from the previous example (i.e. a forward run). This first tutorial keeps things simple, and since
-# we are not using machine learning models, we will only use the `Model` type to specify the iceflow and mass balance models. These functionalities
-# are mainly covered by `Huginn.jl`.
+# forward models `Prediction` from the previous example. This first tutorial keeps things simple, and since
+# we are not using machine learning models, we will only use `Model` to specify the iceflow and mass balance models. These functionalities
+# are mainly included in [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl).
 
 
 # ### Step 1: Parameter initialization
 
-# The first step is to initialize and specify all the necessary parameters. In ODINN.jl
+# The first step is to initialize and specify all the necessary parameters. In `ODINN.jl`
 # we have many different types of parameters, specifying different aspects of the model.
-# All the parameter types come with a default constructor, which will provide default
-# values in case you don't want to tune those. The main types of parameters are:
+# All the parameter types have a default constructor, which provide default
+# values. The main types of parameters are:
 
 # - *Simulation parameters*: `SimulationParameters` includes all the parameters related to the
-#                              ODINN.jl simulation, including the number of workers, the timespan
+#                               simulation, including the number of workers, the timespan
 #                               of the simulation or the working directory.
-# - *Hyperparameters*: `Hyperparameters` includes all the necessary hyperparameters for a machine learning model.
-# - *UDEparameters*: `UDEparameters` contains the parameters related to the training of a Universal Differential Equation.
+# - *Hyper parameters*: `Hyperparameters` includes all the necessary hyperparameters to optimize the model.
+# - *UDE parameters*: `UDEparameters` contains the parameters related to the training of a Universal Differential Equation.
 
 # All these sub-types of parameters are held in a `Parameters` struct, a general
 # parameters structure to be passed to an ODINN simulation.
 
-# First we need to specify a list of RGI IDs of the glacier we want to work with. Specifying an RGI
-# region is also possible. From these RGI IDs, we will look for the necessary files inside the workspace.
+# First, we specify a list of RGI IDs (associated to the Randolph Glacier Inventory) of the glaciers we want to work with.
+# From these RGI IDs, we will look for the necessary files inside the workspace.
 
 rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-08.00203"]
 rgi_paths = get_rgi_paths()
@@ -89,26 +91,28 @@ params = Parameters(
 # The next step is to specify which model(s) we want to use for our simulation. In ODINN
 # we have two different types of model, which are encompassed in a `Model` structure:
 # - *Iceflow model*: `IceflowModel` is the ice flow dynamics model that will be used to simulate
-#                       iceflow. It defaults to a 2D Shallow Ice Approximation.
+#                       iceflow. It defaults to a 2D Shallow Ice Approximation (SIA).
+#      Check out [this glaciology notebook](https://ldeo-glaciology.github.io/glaciology-intro-book/sections/ice_flow/sia_derivation.html) for a very good introduction to the Shallow Ice Approximation.
 # - *Surface mass balance model*: `MassBalanceModel` is the mass balance model that will be used for
 #                               simulations. Options here include temperature-index models, or
-#                               machine learning models coming from `MassBalanceMachine`.
-# Trainable components can be embedded inside the iceflow model which can be a neural network to learn a parameterization in the context of Universal Differential Equation, or per glacier values in the context of classical inversion (like the initial conditions).
+#                               machine learning models coming from [`MassBalanceMachine`](https://github.com/ODINN-SciML/MassBalanceMachine).
+# Trainable components can be embedded inside the iceflow model which can be a neural network to learn a parameterization in the context of Universal Differential Equation, or per glacier values in the context of a classical inversion (like inverting the initial conditions).
+# Refer to the [functional inversion tutorial](./functional_inversion.md) for an example of how to incorporate a neural network inside the iceflow model.
 
 # The model is initialized using the `Model` constructor:
 
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
 )
 
 
 # ### Step 3: Glacier initialization
 
 # The third step is to fetch and initialize all the necessary data for our glaciers of interest.
-# This is strongly built on top of OGGM, mostly providing a Julia interface to automatize this. The package
-# Gungnir is used to fetch the necessary data from the RGI and other sources. The data is then stored in servers
-# and fetched and read using `Rasters.jl` directly by `Sleipnir.jl` when needed.
+# This is strongly built on top of the [Open Global Glacier Model (OGGM)](https://github.com/OGGM/oggm) Python package, mostly providing a Julia interface to automatize preprocessing of the glacier data.
+# The package Gungnir is used to fetch the necessary data from the RGI and other sources. The data is then stored in servers
+# and fetched and read using [`Rasters.jl`](https://github.com/rafaqz/Rasters.jl) directly by [`Sleipnir.jl`](https://github.com/ODINN-SciML/Sleipnir.jl) when needed.
 
 # Then, we initialize those glaciers based on those RGI IDs and the parameters we previously specified.
 glaciers = initialize_glaciers(rgi_ids, params)
@@ -119,14 +123,13 @@ glaciers = initialize_glaciers(rgi_ids, params)
 # The final step of the pipeline, is to create an ODINN simulation based on all the previous
 # steps, and then to run it. There are different types of simulations that we can do with ODINN:
 
-# - `Prediction`: This is a forward simulation, where the initial glacier conditions are run forward in
-#                   in time based on specified parameters and climate data.
+# - `Prediction`: This is a forward simulation, where the initial glacier conditions are run forward in time based on specified parameters and climate data.
 
 # This is as simple as doing:
 
 prediction = Prediction(model, glaciers, params)
 
-# And once we have the `Prediction` object, we can run it using `run!`:
+# And once we have the `Prediction` object, we can run the simulation using the function `run!`:
 run!(prediction)
 
 # There we go, we have successfully simulated the evolution of 3 glaciers for 5 years in around 1-2 seconds!
@@ -134,9 +137,11 @@ run!(prediction)
 
 # ### Step 5: Visualizing the results
 
-# Finally, we can use the plotting functions of `ODINN.jl` to visualize the results of the simulation. Like the glacier ice thickness evolution
-plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics=["difference"])
+# Finally, we can use the plotting functions of `ODINN.jl` to visualize the results of the simulation. Like the glacier ice thickness evolution:
+plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"])
 
-# Or the initial glacier ice thickness and the resulting ice surface velocities
+# Or the initial glacier ice thickness and the resulting ice surface velocities:
 plot_glacier(prediction.results[1], "heatmaps", [:H, :V])
 
+# We can also visualize the results for other glaciers, like Aletsch:
+plot_glacier(prediction.results[2], "evolution difference", [:H]; metrics = ["difference"])

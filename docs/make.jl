@@ -15,6 +15,9 @@ ODINN_OVERWRITE_MULTI = get(ENV, "CI", nothing)=="true"
 ENV["ODINN_OVERWRITE_MULTI"] = ODINN_OVERWRITE_MULTI
 @show ODINN_OVERWRITE_MULTI
 
+# Activate to avoid GKS plots popping up in the REPL in local
+ENV["GKSwstype"]="nul"
+
 # # Disable the Blink hack when the target output is for notebooks
 # ENV["ODINN_PLOTLYJS_NB"] = "true"
 
@@ -35,8 +38,8 @@ DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
 # List of tutorial files
 tutorial_files = [
     "./src/forward_simulation.jl",
-    "./src/functional_inversion.jl",
     "./src/classical_inversion.jl",
+    "./src/functional_inversion.jl",
     "./src/laws.jl",
     "./src/vjp_laws.jl",
     "./src/input_laws.jl",
@@ -71,7 +74,7 @@ makedocs(
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
             "Laws inputs" => "input_laws.md",
-            "VJP law customization" => "vjp_laws.md",
+            "Laws VJP customization" => "vjp_laws.md",
         ],
         "How to use ODINN" => [
             "Parameters" => "parameters.md",
