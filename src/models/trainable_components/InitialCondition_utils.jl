@@ -10,22 +10,26 @@
 Evaluate the initial ice thickness `H₀` for a given glacier, optionally applying a smooth thresholding function.
 
 # Arguments
-- `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
-- `glacier::Glacier2D`: Glacier for which to evaluate `H₀`.
-- `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
-    - `:identity`: applies the identity function (no change).
-    - `:softplus`: applies the softplus function `log(1 + exp(x))` to ensure positivity.
-    - `:Zang1980`: applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
-- `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
+
+  - `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
+
+  - `glacier::Glacier2D`: Glacier for which to evaluate `H₀`.
+  - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
+
+      + `:identity`: applies the identity function (no change).
+      + `:softplus`: applies the softplus function `log(1 + exp(x))` to ensure positivity.
+      + `:Zang1980`: applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
+  - `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
 
 # Returns
-- A numeric value or array representing the filtered initial ice thickness for the specified glacier.
+
+  - A numeric value or array representing the filtered initial ice thickness for the specified glacier.
 """
 function evaluate_H₀(
-    θ::ComponentArray,
-    glacier::Glacier2D,
-    filter::Symbol,
-    glacier_id::Integer,
+        θ::ComponentArray,
+        glacier::Glacier2D,
+        filter::Symbol,
+        glacier_id::Integer
 )
     glacier_id_symbol = Symbol("$(glacier_id)")
     H₀ = deepcopy(θ.IC[glacier_id_symbol])
@@ -50,22 +54,26 @@ end
 Evaluate the derivative of the initial ice thickness `H₀` for a given glacier, optionally applying a smooth thresholding function.
 
 # Arguments
-- `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
-- `glacier::Glacier2D`: Glacier for which to evaluate `∂H₀`.
-- `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
-    - `:identity`: applies the identity function (no change).
-    - `:softplus` — applies the softplus function `log(1 + exp(x))` to ensure positivity.
-    - `:Zang1980` — applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
-- `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
+
+  - `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
+
+  - `glacier::Glacier2D`: Glacier for which to evaluate `∂H₀`.
+  - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
+
+      + `:identity`: applies the identity function (no change).
+      + `:softplus` — applies the softplus function `log(1 + exp(x))` to ensure positivity.
+      + `:Zang1980` — applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
+  - `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
 
 # Returns
-- A numeric value or array representing the filtered initial ice thickness for the specified glacier.
+
+  - A numeric value or array representing the filtered initial ice thickness for the specified glacier.
 """
 function evaluate_∂H₀(
-    θ::ComponentArray,
-    glacier::Glacier2D,
-    filter::Symbol,
-    glacier_id::Integer,
+        θ::ComponentArray,
+        glacier::Glacier2D,
+        filter::Symbol,
+        glacier_id::Integer
 )
     glacier_id_symbol = Symbol("$(glacier_id)")
     ∂H₀ = deepcopy(θ.IC[glacier_id_symbol])
@@ -86,8 +94,9 @@ Smooth thresholding function for enforcing non-negativity and zero values for ne
 values following I. Zang, "A smoothing-out technique for min—max optimization" (1980).
 
 # Arguments
-- `x::Real`: Input value to be thresholded.
-- `β::Real`: (optional) Parameter controlling the transition zone width. Default is 2.0.
+
+  - `x::Real`: Input value to be thresholded.
+  - `β::Real`: (optional) Parameter controlling the transition zone width. Default is 2.0.
 """
 function σ_zang(x; β = 2.0)
     if x < - β / 2
@@ -105,8 +114,9 @@ end
 Derivative of the smooth thresholding function `σ_zang`.
 
 # Arguments
-- `x::Real`: Input value to be thresholded.
-- `β::Real`: (optional) Parameter controlling the transition zone width. Default is 2.0.
+
+  - `x::Real`: Input value to be thresholded.
+  - `β::Real`: (optional) Parameter controlling the transition zone width. Default is 2.0.
 """
 function ∂σ_zang(x; β = 2.0)
     if x < - β / 2
@@ -126,14 +136,16 @@ whose mean is given by `mean` and whose covariance decays exponentially with
 grid distance.
 
 # Arguments
-- `mean::AbstractMatrix{<:Real}`: Matrix specifying the spatial mean values at each grid point.
+
+  - `mean::AbstractMatrix{<:Real}`: Matrix specifying the spatial mean values at each grid point.
     Entries equal to `0.0` are treated as inactive and skipped in sampling.
-- `std::Real`: Standard deviation scaling factor for the covariance kernel.
-- `corr_length::Real`: Correlation length parameter controlling how fast correlations
+  - `std::Real`: Standard deviation scaling factor for the covariance kernel.
+  - `corr_length::Real`: Correlation length parameter controlling how fast correlations
     decay with Euclidean distance between grid points.
 
 # Returns
-- `H_sample::Matrix{Float64}`: A random realization of the same size as `mean`, with correlated entries 
+
+  - `H_sample::Matrix{Float64}`: A random realization of the same size as `mean`, with correlated entries
     drawn from `MvNormal(mean, Σ)`, where
     `Σ[i,j] = std * exp(-‖coords[i] - coords[j]‖ / corr_length)`.
 """
@@ -142,7 +154,7 @@ function random_matrix(mean, std, corr_length)
     N = nx * ny
     # Sample coordinates
     μ = [mean[i, j] for i in 1:nx for j in 1:ny]
-    coords = [(i,j) for i in 1:nx for j in 1:ny]
+    coords = [(i, j) for i in 1:nx for j in 1:ny]
     Σ = zeros(N, N)
     for i in 1:N
         for j in 1:N

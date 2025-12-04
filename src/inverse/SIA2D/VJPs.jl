@@ -22,7 +22,7 @@ function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation::Simulation
         Duplicated(dH_H, λH),
         Duplicated(H, λ_∂f∂H),
         Duplicated(simulation, _simulation),
-        Const(t),
+        Const(t)
     )
     return λ_∂f∂H, dH_H
 end
@@ -49,7 +49,7 @@ function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, simulation::Sim
         Duplicated(dH_λ, λθ),
         Const(H),
         Duplicated(simulation, _simulation),
-        Const(t),
+        Const(t)
     )
     # Run simple test that both closures are computing the same primal
     if !isnothing(dH_H)
@@ -57,7 +57,6 @@ function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, simulation::Sim
     end
     return λ_∂f∂θ
 end
-
 
 function VJP_λ_∂surface_V∂H(VJPMode::DiscreteVJP, λx, λy, H, θ, simulation, t)
     λ_∂V∂H = VJP_λ_∂surface_V∂H_discrete(λx, λy, H, θ, simulation, t)
@@ -68,7 +67,6 @@ function VJP_λ_∂surface_V∂θ(VJPMode::DiscreteVJP, λx, λy, H, θ, simulat
     λ_∂V∂H = VJP_λ_∂surface_V∂θ_discrete(λx, λy, H, θ, simulation, t)
     return λ_∂V∂H, nothing
 end
-
 
 function MB_wrapper!(MB, H, simulation, glacier, step)
     model = simulation.model
@@ -100,7 +98,7 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
         Duplicated(H, λ_∂MB∂H),
         Duplicated(simulation, _simulation),
         Duplicated(glacier, _glacier),
-        Const(step_MB),
+        Const(step_MB)
     )
     return λ_∂MB∂H
 end

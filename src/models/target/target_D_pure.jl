@@ -12,20 +12,24 @@ So now we are learning the velocity field given by D * ∇S. This inversion is s
 learnign the velocity field assuming that this is parallel to the gradient in surface ∇S.
 
 # Arguments
-- `interpolation::Symbol = :None`: Specifies the interpolation method. Options include `:Linear`, `:None`.
-- `n_interp_half::Int = 20`: Half-width of the interpolation stencil. Determines resolution of interpolation.
-- `prescale::Union{Fin, Nothing} = nothing`: Optional prescaling function or factor applied before parametrization. Must be of type `Fin` or `nothing`.
-- `postscale::Union{Fout, Nothing} = nothing`: Optional postscaling function or factor applied after parametrization. Must be of type `Fout` or `nothing`.
+
+  - `interpolation::Symbol = :None`: Specifies the interpolation method. Options include `:Linear`, `:None`.
+  - `n_interp_half::Int = 20`: Half-width of the interpolation stencil. Determines resolution of interpolation.
+  - `prescale::Union{Fin, Nothing} = nothing`: Optional prescaling function or factor applied before parametrization. Must be of type `Fin` or `nothing`.
+  - `postscale::Union{Fout, Nothing} = nothing`: Optional postscaling function or factor applied after parametrization. Must be of type `Fout` or `nothing`.
 
 # Type Parameters
-- `Fin`: Type of the prescale function or operator.
-- `Fout`: Type of the postscale function or operator.
+
+  - `Fin`: Type of the prescale function or operator.
+  - `Fout`: Type of the postscale function or operator.
 
 # Supertype
-- `AbstractSIA2DTarget`: Inherits from the abstract target type for 2D SIA modeling.
+
+  - `AbstractSIA2DTarget`: Inherits from the abstract target type for 2D SIA modeling.
 
 # Returns
-- An instance of `SIA2D_D_target` configured with optional scaling and interpolation parameters.
+
+  - An instance of `SIA2D_D_target` configured with optional scaling and interpolation parameters.
 """
 @kwdef struct SIA2D_D_target <: AbstractSIA2DTarget
     interpolation::Symbol = :None
@@ -39,7 +43,7 @@ targetType(::SIA2D_D_target) = :D
 """
     Diffusivity(target::SIA2D_D_target; H, ∇S, θ, iceflow_model, glacier, params)
 
-Compute the effective diffusivity field for a 2D shallow ice model using the diagnostic `target` and 
+Compute the effective diffusivity field for a 2D shallow ice model using the diagnostic `target` and
 a predicted velocity matrix `U`.
 
 This function uses a learned or specified model to estimate the velocity matrix `U`, then
@@ -47,29 +51,34 @@ calculates the diffusivity as either `H .* U` (if dimensions match) or the avera
 if dimensions differ by one grid cell (staggered grid). Errors if dimensions are incompatible.
 
 # Arguments
-- `target::SIA2D_D_target`: Diagnostic target object defining interpolation and scaling rules.
+
+  - `target::SIA2D_D_target`: Diagnostic target object defining interpolation and scaling rules.
 
 # Keyword Arguments
-- `H`: Ice thickness.
-- `∇S`: Ice surface slope.
-- `θ`: Parameters of the model.
-- `iceflow_model`: Iceflow model used for simulation.
-- `glacier`: Glacier data.
-- `params`: Model parameters.
+
+  - `H`: Ice thickness.
+  - `∇S`: Ice surface slope.
+  - `θ`: Parameters of the model.
+  - `iceflow_model`: Iceflow model used for simulation.
+  - `glacier`: Glacier data.
+  - `params`: Model parameters.
 
 # Returns
-- A matrix of diffusivity values with the same shape as `H` or staggered by one cell, depending on `U`.
+
+  - A matrix of diffusivity values with the same shape as `H` or staggered by one cell, depending on `U`.
 
 # Throws
-- An error if the dimensions of `U` and `H` are not compatible for diffusivity calculation.
+
+  - An error if the dimensions of `U` and `H` are not compatible for diffusivity calculation.
 
 # Notes
+
 Supports both grid-matched and staggered configurations by averaging `H` where necessary.
 """
 function Diffusivity(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_cache = simulation.cache.iceflow
 
     # Retrieve value of U using the Law cache
@@ -89,15 +98,14 @@ end
 function eval_U(target::SIA2D_D_target, H̄, ∇S, θ, simulation)
     iceflow_cache = simulation.cache.iceflow
     iceflow_model = simulation.model.iceflow
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄=H̄, ∇S=∇S), θ)
+    iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
     return iceflow_cache.U.value
 end
 
 function ∂Diffusivity∂H(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
-
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     ∂H∂H = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
 
     # Derivative of the output of the NN with respect to input layer
@@ -113,9 +121,9 @@ function ∂Diffusivity∂H(
 end
 
 function ∂Diffusivity∂∇H(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     # For now we ignore the derivative in surface slope
     δ∇H = 1e-6 .* ones(size(∇S))
 
@@ -128,17 +136,16 @@ function ∂Diffusivity∂∇H(
     return ∂D∂∇S
 end
 
-
 function ∂Diffusivity∂θ(target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
 )
     return ∂U∂θ(target; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params) .* H̄
 end
 
 function ∂U∂θ(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
 
@@ -161,10 +168,12 @@ function ∂U∂θ(
         point in the glacier. Slower but more precise.
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
+
             if H̄[i, j] == 0.0
                 continue
             end
-            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U, iceflow_cache.U_prep_vjps, (; H̄=H̄[i, j], ∇S=∇S[i, j]), θ)
+            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U,
+                iceflow_cache.U_prep_vjps, (; H̄ = H̄[i, j], ∇S = ∇S[i, j]), θ)
             ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ[i, j, :]
         end
 
@@ -190,7 +199,6 @@ function ∂U∂θ(
 end
 
 """
-
 Function to evaluate derivatives of ice surface velocity in D inversion.
 
 TODO: This functions right now just make a call to the regular functions used for the
@@ -198,9 +206,9 @@ calculation of the adjoint. This is not correct, but we keep it as this for now 
 we figure out how to do this in the case of the D inversion.
 """
 function Velocityꜛ(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_cache = simulation.cache.iceflow
     f = simulation.parameters.simulation.f_surface_velocity_factor
     U = iceflow_cache.U.value
@@ -208,9 +216,9 @@ function Velocityꜛ(
 end
 
 function ∂Velocityꜛ∂H(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     f = simulation.parameters.simulation.f_surface_velocity_factor
     δH = 1e-4 .* ones(size(H̄))
     U₊ = eval_U(target, H̄ + δH, ∇S, θ, simulation)
@@ -222,9 +230,9 @@ function ∂Velocityꜛ∂H(
 end
 
 function ∂Velocityꜛ∂∇H(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     f = simulation.parameters.simulation.f_surface_velocity_factor
     δ∇H = 1e-6 .* ones(size(∇S))
     U₊ = eval_U(target, H̄, ∇S + δ∇H, θ, simulation)
@@ -236,8 +244,8 @@ function ∂Velocityꜛ∂∇H(
 end
 
 function ∂Velocityꜛ∂θ(
-    target::SIA2D_D_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+        target::SIA2D_D_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
 )
     f = simulation.parameters.simulation.f_surface_velocity_factor
     ∂D∂θꜛ = ∂U∂θ(target; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params) / f

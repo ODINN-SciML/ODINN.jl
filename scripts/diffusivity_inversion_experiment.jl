@@ -30,7 +30,7 @@ processes = 18
 ODINN.enable_multiprocessing(processes)
 # Flags
 ODINN.set_use_MB(true)
-ODINN.make_plots(true)   
+ODINN.make_plots(true)
 # Spin up 
 ODINN.set_run_spinup(false) # Run the spin-up simulation
 ODINN.set_use_spinup(false) # Use the updated spinup 
@@ -42,14 +42,14 @@ ODINN.set_retrain(false) # Re-use previous NN weights to continue training
 ODINN.set_ice_thickness_source("farinotti")
 
 function run()
-
     tspan = (2017, 2018) # period in years for simulation (also for spin-up)
 
     # Defining glaciers to be modelled with RGI IDs
-    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213", "RGI60-04.04351", "RGI60-01.02170",
-                "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",
-                "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316",
-                "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
+    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-08.00213",
+        "RGI60-04.04351", "RGI60-01.02170",
+        "RGI60-02.05098", "RGI60-01.01104", "RGI60-01.09162", "RGI60-01.00570", "RGI60-04.07051",
+        "RGI60-07.00274", "RGI60-07.01323", "RGI60-03.04207", "RGI60-03.03533", "RGI60-01.17316",
+        "RGI60-07.01193", "RGI60-01.22174", "RGI60-14.07309", "RGI60-15.10261"]
 
     ### Initialize glacier directory to obtain DEM and ice thickness inversion  ###
     gdirs = init_gdirs(rgi_ids)
@@ -59,10 +59,11 @@ function run()
     #########################################
 
     # Process climate data for glaciers
-    gdirs_climate, gdirs_climate_batches = get_gdirs_with_climate(gdirs, tspan, overwrite=false, plot=false)
+    gdirs_climate,
+    gdirs_climate_batches = get_gdirs_with_climate(gdirs, tspan, overwrite = false, plot = false)
     # Generate random mass balance series for toy model
     if ODINN.use_MB[]
-        random_MB = generate_random_MB(gdirs_climate, tspan; plot=false)
+        random_MB = generate_random_MB(gdirs_climate, tspan; plot = false)
     else
         random_MB = nothing
     end
@@ -80,9 +81,9 @@ function run()
     # Run forward model for selected glaciers
     if ODINN.create_ref_dataset[]
         println("Generating reference dataset for training...")
-    
+
         # Compute reference dataset in parallel
-        gdir_refs = @time generate_ref_dataset(gdirs_climate, tspan; random_MB=random_MB)
+        gdir_refs = @time generate_ref_dataset(gdirs_climate, tspan; random_MB = random_MB)
 
         println("Saving reference data")
         jldsave(joinpath(ODINN.root_dir, "data/D_inv_experiment/gdir_refs.jld2"); gdir_refs)
@@ -110,15 +111,15 @@ function run()
         epochs_BFGS = 200
         # batch_size = 4
         batch_size = length(gdir_refs)
-        optimizer = BFGS(initial_stepnorm=0.001f0)
+        optimizer = BFGS(initial_stepnorm = 0.001f0)
         # optimizer = Adam(0.001)
         train_settings = (optimizer, epochs_BFGS, batch_size) # optimizer, epochs, batch size
-        @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; 
-                                                        gdirs_climate=gdirs_climate,
-                                                        gdirs_climate_batches=gdirs_climate_batches, 
-                                                        gdir_refs=gdir_refs, 
-                                                        θ_trained=θ_trained, 
-                                                        target=:A)           
+        @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings;
+            gdirs_climate = gdirs_climate,
+            gdirs_climate_batches = gdirs_climate_batches,
+            gdir_refs = gdir_refs,
+            θ_trained = θ_trained,
+            target = :A)
         θ_trained = rheology_trained.minimizer
 
         # Save trained NN weights
@@ -128,16 +129,16 @@ function run()
         epochs = 250
         # batch_size = 10
         batch_size = length(gdir_refs)
-        optimizer = BFGS(initial_stepnorm=0.001f0)
+        optimizer = BFGS(initial_stepnorm = 0.001f0)
         # optimizer = LBFGS()
         # optimizer = Adam(0.05)
         train_settings = (optimizer, epochs, batch_size) # optimizer, epochs
-        
-        @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings; 
-                                                        gdirs_climate=gdirs_climate,
-                                                        gdirs_climate_batches=gdirs_climate_batches, 
-                                                        gdir_refs=gdir_refs, 
-                                                        target=:A)  
+
+        @time rheology_trained = train_iceflow_inversion(rgi_ids, tspan, train_settings;
+            gdirs_climate = gdirs_climate,
+            gdirs_climate_batches = gdirs_climate_batches,
+            gdir_refs = gdir_refs,
+            target = :A)
         θ_trained = rheology_trained.minimizer
 
         # Save trained NN weights
@@ -146,7 +147,6 @@ function run()
     end
 
     return rheology_trained
-
 end
 
 # Run main

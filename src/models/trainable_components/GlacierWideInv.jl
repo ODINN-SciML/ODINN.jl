@@ -9,7 +9,8 @@ Per glacier invertible parameter container.
 `GlacierWideInv` wraps a ComponentVector (θ) that stores one scalar parameter per glacier and implements the `PerGlacierModel` interface used by the inversion machinery.
 
 # Fields
-- `θ::ComponentVectorType`: The per glacier parameter vector (one scalar value per glacier).
+
+  - `θ::ComponentVectorType`: The per glacier parameter vector (one scalar value per glacier).
 
 # Constructor
 
@@ -20,11 +21,13 @@ Per glacier invertible parameter container.
     )
 
 # Arguments
-- `params::Sleipnir.Parameters`: Parameters struct.
-- `glaciers::Vector{<: AbstractGlacier}`: Vector of AbstractGlacier. The i-th entry in θ corresponds to glaciers[i].
-- `var::Symbol`: Symbol naming the field on each glacier to use as the initial value.
+
+  - `params::Sleipnir.Parameters`: Parameters struct.
+  - `glaciers::Vector{<: AbstractGlacier}`: Vector of AbstractGlacier. The i-th entry in θ corresponds to glaciers[i].
+  - `var::Symbol`: Symbol naming the field on each glacier to use as the initial value.
 
 # Example
+
 ```julia
 GlacierWideInv(params, glaciers, :A)
 ```
@@ -35,9 +38,9 @@ mutable struct GlacierWideInv{
     θ::ComponentVectorType
 
     function GlacierWideInv(
-        params::Sleipnir.Parameters,
-        glaciers::Vector{<: AbstractGlacier},
-        var::Symbol,
+            params::Sleipnir.Parameters,
+            glaciers::Vector{<: AbstractGlacier},
+            var::Symbol
     )
         inv_param_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
         inv_param = NamedTuple{inv_param_type}(
@@ -48,11 +51,10 @@ mutable struct GlacierWideInv{
         # Invert parameterization
         minA = params.physical.minA
         maxA = params.physical.maxA
-        θ = atanh.((θ .- minA).*(2/(maxA-minA)) .- 1.0)
+        θ = atanh.((θ .- minA) .* (2/(maxA-minA)) .- 1.0)
 
         new{typeof(θ)}(θ)
     end
-
 end
 
 # Display setup

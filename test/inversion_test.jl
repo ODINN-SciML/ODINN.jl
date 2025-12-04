@@ -1,11 +1,10 @@
 function inversion_test(;
-    use_MB = false,
-    multiprocessing = false,
-    grad = ContinuousAdjoint(),
-    functional_inv = true,
-    scalar = true
+        use_MB = false,
+        multiprocessing = false,
+        grad = ContinuousAdjoint(),
+        functional_inv = true,
+        scalar = true
 )
-
     rgi_paths = get_rgi_paths()
     # The value of this does not really matter, it is hardcoded in Sleipnir right now.
     working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
@@ -20,17 +19,17 @@ function inversion_test(;
     elseif functional_inv # Singleprocessing functional inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
-        epochs = [20,20]
+        epochs = [20, 20]
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
     elseif scalar # Scalar classical inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
-        epochs = [5,7]
+        epochs = [5, 7]
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
     else # Gridded classical inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
-        epochs = [20,20]
+        epochs = [20, 20]
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
     end
 
@@ -50,32 +49,33 @@ function inversion_test(;
             test_mode = true,
             rgi_paths = rgi_paths,
             gridScalingFactor = 4 # We reduce the size of glacier for simulation
-            ),
+        ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
             epochs = epochs,
             optimizer = optimizer
-            ),
+        ),
         physical = PhysicalParameters(
             minA = 8e-21,
             maxA = 8e-17
-            ),
+        ),
         UDE = UDEparameters(
             optim_autoAD = ODINN.NoAD(),
             grad = grad,
-            optimization_method  ="AD+AD",
+            optimization_method = "AD+AD",
             target = :A
-            ),
+        ),
         solver = Huginn.SolverParameters(
             step = δt,
             progress = true
-            )
         )
+    )
 
-    MB_model = use_MB ? TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0) : nothing
+    MB_model = use_MB ? TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0) :
+               nothing
     model = Model(
-        iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=scalar)),
-        mass_balance = MB_model,
+        iceflow = SIA2Dmodel(params; A = CuffeyPaterson(scalar = scalar)),
+        mass_balance = MB_model
     )
 
     # We retrieve some glaciers for the simulation
@@ -99,11 +99,12 @@ function inversion_test(;
         file_name = "classical_gridded_inversion_test.jld2"
     end
 
-    A_law = functional_inv ? LawA(trainable_model, params; scalar=scalar) : LawA(params; scalar=scalar)
+    A_law = functional_inv ? LawA(trainable_model, params; scalar = scalar) :
+            LawA(params; scalar = scalar)
     model = Model(
-        iceflow = SIA2Dmodel(params; A=A_law),
+        iceflow = SIA2Dmodel(params; A = A_law),
         mass_balance = MB_model,
-        regressors = (; A=trainable_model))
+        regressors = (; A = trainable_model))
 
     # We create an ODINN prediction
     inversion = Inversion(model, glaciers, params)

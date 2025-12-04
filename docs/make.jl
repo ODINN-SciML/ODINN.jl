@@ -8,7 +8,7 @@ end
 Pkg.activate(".")
 
 # Add the local version of the package
-Pkg.develop(PackageSpec(path=".."))
+Pkg.develop(PackageSpec(path = ".."))
 Pkg.instantiate()
 
 ODINN_OVERWRITE_MULTI = get(ENV, "CI", nothing)=="true"
@@ -30,10 +30,10 @@ cd(dirname(Base.active_project()))
 
 bib = CitationBibliography(
     joinpath(@__DIR__, "src/assets", "references.bib");
-    style=:numeric
+    style = :numeric
 )
 
-DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive=true)
+DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive = true)
 
 # List of tutorial files
 tutorial_files = [
@@ -54,18 +54,18 @@ end
 
 # Which markdown files to compile to HTML
 makedocs(
-    modules=[ODINN, Huginn, Muninn, Sleipnir],
-    authors="Jordi Bolibar, Facu Sapienza, Alban Gossard, Mathieu le Séac'h, Vivek Gajadhar",
-    repo=Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
-    sitename="ODINN.jl",
+    modules = [ODINN, Huginn, Muninn, Sleipnir],
+    authors = "Jordi Bolibar, Facu Sapienza, Alban Gossard, Mathieu le Séac'h, Vivek Gajadhar",
+    repo = Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
+    sitename = "ODINN.jl",
     format = Documenter.HTML(
-        prettyurls=get(ENV, "CI", nothing)=="true",
-        ansicolor=true, collapselevel=3,
-        size_threshold=2000 * 1024,  # Increase size threshold to 500 KiB
-        size_threshold_warn=1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
-        example_size_threshold=1000 * 1024
+        prettyurls = get(ENV, "CI", nothing)=="true",
+        ansicolor = true, collapselevel = 3,
+        size_threshold = 2000 * 1024,  # Increase size threshold to 500 KiB
+        size_threshold_warn = 1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
+        example_size_threshold = 1000 * 1024
     ),
-    pages=[
+    pages = [
         "Home" => "index.md",
         "Quick start" => "quick_start.md",
         "Tutorials" => [
@@ -74,30 +74,28 @@ makedocs(
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
             "Laws inputs" => "input_laws.md",
-            "Laws VJP customization" => "vjp_laws.md",
+            "Laws VJP customization" => "vjp_laws.md"
         ],
         "How to use ODINN" => [
             "Parameters" => "parameters.md",
             "Glaciers" => "glaciers.md",
             "Models" => "models.md",
             "Results and plotting" => "results_plotting.md",
-            "API" => "api.md",
+            "API" => "api.md"
         ],
         "Inversions" => [
             "Inversion types" => "inversions.md",
             "Optimization" => "optimization.md",
-            "Sensitivity analysis" => "sensitivity.md",
+            "Sensitivity analysis" => "sensitivity.md"
         ],
         "Community" => [
             "How to contribute" => "contribute.md",
-            "Code of conduct" => "code_of_conduct.md",
-        ],
-
-        "Ongoing changes and future plans" => "changes_plans.md",
-        "References" => "references.md",
+            "Code of conduct" => "code_of_conduct.md"
+        ], "Ongoing changes and future plans" => "changes_plans.md",
+        "References" => "references.md"
     ],
-    checkdocs=:none,
-    plugins=[bib]
+    checkdocs = :none,
+    plugins = [bib]
 )
 
 if get(ENV, "CI", nothing)=="true"
@@ -106,6 +104,6 @@ if get(ENV, "CI", nothing)=="true"
         branch = "gh-pages",
         devbranch = "main",
         push_preview = true,
-        forcepush = true,
+        forcepush = true
     )
 end
