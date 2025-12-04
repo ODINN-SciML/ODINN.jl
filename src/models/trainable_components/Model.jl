@@ -1,11 +1,11 @@
 export Model
 
-_inputs_A_law_scalar = (; T=iAvgScalarTemp())
-_inputs_A_law_gridded = (; T=iAvgGriddedTemp())
-_inputs_C_law = (; )
-_inputs_n_law = (; )
-_inputs_Y_law = (; T=iAvgScalarTemp(), H̄=iH̄())
-_inputs_U_law = (; H̄=iH̄(), ∇S=i∇S())
+_inputs_A_law_scalar = (; T = iAvgScalarTemp())
+_inputs_A_law_gridded = (; T = iAvgGriddedTemp())
+_inputs_C_law = (;)
+_inputs_n_law = (;)
+_inputs_Y_law = (; T = iAvgScalarTemp(), H̄ = iH̄())
+_inputs_U_law = (; H̄ = iH̄(), ∇S = i∇S())
 
 """
     TrainableModel <: AbstractModel
@@ -49,29 +49,32 @@ include("./GriddedInv.jl")
 Creates a new model instance using the provided iceflow, mass balance, and machine learning components.
 
 # Arguments
-- `iceflow::Union{IFM, Nothing}`: The iceflow model to be used. Can be a single model or `nothing`.
-- `mass_balance::Union{MBM, Nothing}`: The mass balance model to be used. Can be a single model or `nothing`.
-- `regressors::Union{NamedTuple, Nothing}`: The regressors to be used in the laws.
+
+  - `iceflow::Union{IFM, Nothing}`: The iceflow model to be used. Can be a single model or `nothing`.
+  - `mass_balance::Union{MBM, Nothing}`: The mass balance model to be used. Can be a single model or `nothing`.
+  - `regressors::Union{NamedTuple, Nothing}`: The regressors to be used in the laws.
+
 # Returns
-- `model`: A new instance of `Sleipnir.Model` initialized with the provided components.
+
+  - `model`: A new instance of `Sleipnir.Model` initialized with the provided components.
 """
 function Model(;
-    iceflow::Union{IFM, Nothing} = nothing,
-    mass_balance::Union{MBM, Nothing} = nothing,
-    regressors::Union{NamedTuple, Nothing} = nothing,
-    target::Union{TAR, Nothing} = nothing,
+        iceflow::Union{IFM, Nothing} = nothing,
+        mass_balance::Union{MBM, Nothing} = nothing,
+        regressors::Union{NamedTuple, Nothing} = nothing,
+        target::Union{TAR, Nothing} = nothing
 ) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
     if isnothing(regressors)
         Sleipnir.Model(iceflow, mass_balance, nothing)
     else
-        Model(iceflow, mass_balance, regressors; target=target)
+        Model(iceflow, mass_balance, regressors; target = target)
     end
 end
 function Model(
-    iceflow::Union{IFM, Nothing},
-    mass_balance::Union{MBM, Nothing},
-    regressors::NamedTuple;
-    target::Union{TAR, Nothing} = nothing,
+        iceflow::Union{IFM, Nothing},
+        mass_balance::Union{MBM, Nothing},
+        regressors::NamedTuple;
+        target::Union{TAR, Nothing} = nothing
 ) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
 
     # Check that the inputs match what is hardcoded in the adjoint computation when the regressor is used in the context of a functional inversion
@@ -85,7 +88,8 @@ function Model(
         end
     else
         if haskey(regressors, :A) && regressors.A isa FunctionalModel
-            @assert inputs(iceflow.A)==_inputs_A_law_scalar || inputs(iceflow.A)==_inputs_A_law_gridded "Inputs of A law must be $(_inputs_A_law_scalar) or $(_inputs_A_law_gridded) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.A))."
+            @assert inputs(iceflow.A)==_inputs_A_law_scalar ||
+                    inputs(iceflow.A)==_inputs_A_law_gridded "Inputs of A law must be $(_inputs_A_law_scalar) or $(_inputs_A_law_gridded) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.A))."
         end
         if haskey(regressors, :C) && regressors.C isa FunctionalModel
             @assert inputs(iceflow.C)==_inputs_C_law "Inputs of C law must be $(_inputs_C_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.C))."
@@ -101,7 +105,9 @@ function Model(
             target = SIA2D_D_target()
         elseif iceflow.Y_is_provided
             target = SIA2D_D_hybrid_target()
-        elseif !(haskey(regressors, :A) && regressors.A isa FunctionalModel) || inputs(iceflow.A)==_inputs_A_law_scalar || inputs(iceflow.A)==_inputs_A_law_gridded
+        elseif !(haskey(regressors, :A) && regressors.A isa FunctionalModel) ||
+               inputs(iceflow.A)==_inputs_A_law_scalar ||
+               inputs(iceflow.A)==_inputs_A_law_gridded
             target = SIA2D_A_target()
         else
             throw("Cannot infer target from the laws.")
@@ -131,7 +137,7 @@ mutable struct TrainableComponents{
     TrainableModelUType <: TrainableModel,
     TrainableModelICType <: TrainableModel,
     TAR <: AbstractTarget,
-    ComponentArrayType <: ComponentArray,
+    ComponentArrayType <: ComponentArray
 } <: AbstractModel
     A::Union{TrainableModelAType, Nothing}
     C::Union{TrainableModelCType, Nothing}
@@ -143,8 +149,8 @@ mutable struct TrainableComponents{
     θ::Union{ComponentArrayType, Nothing}
 
     function TrainableComponents(
-        target,
-        regressors::NamedTuple = (;)
+            target,
+            regressors::NamedTuple = (;)
     )
         θ = ComponentVector(; (k => r.θ.θ for (k, r) in pairs(regressors))...)
         if length(θ) == 0
@@ -158,16 +164,19 @@ mutable struct TrainableComponents{
         # Dedicated regressor for initial condition
         IC = haskey(regressors, :IC) ? regressors.IC : emptyIC()
 
-        new{typeof(A), typeof(C), typeof(n), typeof(Y), typeof(U), typeof(IC), typeof(target), typeof(θ)}(A, C, n, Y, U, IC, target, θ)
+        new{typeof(A), typeof(C), typeof(n), typeof(Y),
+            typeof(U), typeof(IC), typeof(target), typeof(θ)}(A, C, n, Y, U, IC, target, θ)
     end
     function TrainableComponents(
-        submodels::TrainableComponents,
-        θ::Union{ComponentArray, Nothing},
+            submodels::TrainableComponents,
+            θ::Union{ComponentArray, Nothing}
     )
         new{
-            typeof(submodels.A), typeof(submodels.C), typeof(submodels.n), typeof(submodels.Y), typeof(submodels.U),
+            typeof(submodels.A), typeof(submodels.C), typeof(submodels.n),
+            typeof(submodels.Y), typeof(submodels.U),
             typeof(submodels.IC), typeof(submodels.target), typeof(θ)
-        }(submodels.A, submodels.C, submodels.n, submodels.Y, submodels.U, submodels.IC, submodels.target, θ)
+        }(submodels.A, submodels.C, submodels.n, submodels.Y,
+            submodels.U, submodels.IC, submodels.target, θ)
     end
 end
 
@@ -186,7 +195,8 @@ function splitθ(θ, glacier_idx::Integer, optimizableComponent::TrainableModel)
     end
 end
 function splitθ(θ::ComponentArray, glacier_idx::Integer, submodels::TrainableComponents)
-    return ComponentVector(; map(k -> (k=>splitθ(θ[k], glacier_idx, getfield(submodels, k))), keys(θ))...)
+    return ComponentVector(;
+        map(k -> (k=>splitθ(θ[k], glacier_idx, getfield(submodels, k))), keys(θ))...)
 end
 """
     aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, submodels::TrainableComponents)

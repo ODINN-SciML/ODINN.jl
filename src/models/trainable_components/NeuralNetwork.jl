@@ -10,31 +10,32 @@ export NeuralNetwork
 Feed-forward neural network.
 
 # Fields
-- `architecture::ChainType`: `Flux.Chain` neural network architecture
-- `θ::ComponentVectorType`: Neural network parameters
-- `st::NamedTupleType`: Neural network status
+
+  - `architecture::ChainType`: `Flux.Chain` neural network architecture
+  - `θ::ComponentVectorType`: Neural network parameters
+  - `st::NamedTupleType`: Neural network status
 """
 mutable struct NeuralNetwork{
     ChainType <: Lux.Chain,
     ComponentVectorType <: ComponentVector,
-    NamedTupleType <: NamedTuple,
+    NamedTupleType <: NamedTuple
 } <: FunctionalModel
     architecture::ChainType
     θ::ComponentVectorType
     st::NamedTupleType
 
     function NeuralNetwork(
-        params::P;
-        architecture::Union{ChainType, Nothing} = nothing,
-        θ::Union{ComponentArrayType, Nothing} = nothing,
-        st::Union{NamedTupleType, Nothing} = nothing,
-        seed::Union{RNG, Nothing} = nothing,
+            params::P;
+            architecture::Union{ChainType, Nothing} = nothing,
+            θ::Union{ComponentArrayType, Nothing} = nothing,
+            st::Union{NamedTupleType, Nothing} = nothing,
+            seed::Union{RNG, Nothing} = nothing
     ) where {
-        P<:Sleipnir.Parameters,
-        ChainType<:Lux.Chain,
-        ComponentArrayType<:ComponentArray,
-        NamedTupleType<:NamedTuple,
-        RNG<:AbstractRNG
+            P <: Sleipnir.Parameters,
+            ChainType <: Lux.Chain,
+            ComponentArrayType <: ComponentArray,
+            NamedTupleType <: NamedTuple,
+            RNG <: AbstractRNG
     }
 
         # Float type
@@ -69,7 +70,6 @@ mutable struct NeuralNetwork{
             architecture, θ, st
         )
     end
-
 end
 # Note: we could define any other kind of regressor as a subtype of TrainableModel
 

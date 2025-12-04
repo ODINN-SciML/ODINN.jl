@@ -32,7 +32,7 @@ params = Parameters(
         gridScalingFactor = 4), # Downscale the glacier grid to speed-up this example for the GitHub servers
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
-        epochs = [2,2], # [35,30]
+        epochs = [2, 2], # [35,30]
         optimizer = [
             ODINN.ADAM(0.02),
             ODINN.LBFGS(
@@ -43,10 +43,10 @@ params = Parameters(
         minA = 8e-21,
         maxA = 8e-17),
     UDE = UDEparameters(
-        optim_autoAD=ODINN.NoAD(),
+        optim_autoAD = ODINN.NoAD(),
         empirical_loss_function = LossH() # Loss function based on ice thickness
     ),
-    solver = Huginn.SolverParameters(step = δt), # Save simulation every one month
+    solver = Huginn.SolverParameters(step = δt) # Save simulation every one month
 )
 
 # ## Step 2: Generate synthetic ground truth data with a forward simulation
@@ -58,7 +58,7 @@ A_law = CuffeyPaterson(scalar = false)
 
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
 
 # We initialize the glaciers with all the necessary data:
@@ -78,7 +78,9 @@ glaciers = prediction.glaciers
 # Now we compute the spatially varying `A` to have a ground truth for the comparison at the end of this tutorial.
 
 A_ground_truth = zeros(size(prediction.glaciers[1].H₀))
-inn1(A_ground_truth) .= eval_law(prediction.model.iceflow.A, prediction, 1, (;T = get_input(iAvgGriddedTemp(), prediction, 1, tstops[1])), nothing)
+A_ground_truth[1:(end - 1), 1:(end - 1)] .= eval_law(
+    prediction.model.iceflow.A, prediction, 1,
+    (; T = get_input(iAvgGriddedTemp(), prediction, 1, tstops[1])), nothing)
 A_ground_truth[prediction.glaciers[1].H₀ .== 0] .= NaN;
 
 # ## Step 3: Model specification to perform a classical inversion

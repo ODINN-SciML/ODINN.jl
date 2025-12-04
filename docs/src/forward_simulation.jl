@@ -19,19 +19,19 @@ rgi_paths = get_rgi_paths()
 ## Create the necessary parameters
 params = Parameters(
     simulation = SimulationParameters(
-        working_dir = working_dir,
-        tspan = (2010.0, 2015.0),
-        multiprocessing = true,
-        workers = 4,
-        rgi_paths = rgi_paths
-    )
+    working_dir = working_dir,
+    tspan = (2010.0, 2015.0),
+    multiprocessing = true,
+    workers = 4,
+    rgi_paths = rgi_paths
+)
 )
 
 ## Specify a model based on an iceflow model, a mass balance model,
 ## and a machine learning model
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
 
 ## We initialize the glaciers with all the necessary data
@@ -53,7 +53,6 @@ plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["di
 # forward models `Prediction` from the previous example. This first tutorial keeps things simple, and since
 # we are not using machine learning models, we will only use `Model` to specify the iceflow and mass balance models. These functionalities
 # are mainly included in [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl).
-
 
 # ### Step 1: Parameter initialization
 
@@ -79,12 +78,12 @@ rgi_paths = get_rgi_paths()
 
 params = Parameters(
     simulation = SimulationParameters(
-        working_dir = working_dir,
-        tspan = (2010.0, 2015.0),
-        multiprocessing = true,
-        workers = 4,
-        rgi_paths = rgi_paths
-    )
+    working_dir = working_dir,
+    tspan = (2010.0, 2015.0),
+    multiprocessing = true,
+    workers = 4,
+    rgi_paths = rgi_paths
+)
 )
 
 # ### Step 2: Model specification
@@ -103,9 +102,8 @@ params = Parameters(
 
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
-
 
 # ### Step 3: Glacier initialization
 
@@ -116,7 +114,6 @@ model = Model(
 
 # Then, we initialize those glaciers based on those RGI IDs and the parameters we previously specified.
 glaciers = initialize_glaciers(rgi_ids, params)
-
 
 # ### Step 4: Creating and running a simulation
 
@@ -133,7 +130,6 @@ prediction = Prediction(model, glaciers, params)
 run!(prediction)
 
 # There we go, we have successfully simulated the evolution of 3 glaciers for 5 years in around 1-2 seconds!
-
 
 # ### Step 5: Visualizing the results
 

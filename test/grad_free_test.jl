@@ -1,5 +1,4 @@
-function grad_free_test(;use_MB::Bool=false)
-
+function grad_free_test(; use_MB::Bool = false)
     println("> Testing dummy gradient.")
 
     rgi_ids = ["RGI60-11.03638"]
@@ -12,30 +11,30 @@ function grad_free_test(;use_MB::Bool=false)
 
     params = Parameters(
         simulation = SimulationParameters(
-            working_dir=working_dir,
-            use_MB=use_MB,
-            use_velocities=true,
-            tspan=tspan,
-            step_MB=δt,
-            multiprocessing=false,
-            test_mode=true,
-            rgi_paths=rgi_paths),
+            working_dir = working_dir,
+            use_MB = use_MB,
+            use_velocities = true,
+            tspan = tspan,
+            step_MB = δt,
+            multiprocessing = false,
+            test_mode = true,
+            rgi_paths = rgi_paths),
         hyper = Hyperparameters(
-            batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
-            epochs=10,
-            optimizer=ODINN.ADAM(0.005)),
+            batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
+            epochs = 10,
+            optimizer = ODINN.ADAM(0.005)),
         physical = PhysicalParameters(
             minA = 8e-21,
             maxA = 8e-18),
         UDE = UDEparameters(
-            sensealg=SciMLSensitivity.ZygoteAdjoint(),
-            optim_autoAD=ODINN.NoAD(),
-            grad=DummyAdjoint(),
-            optimization_method="AD+AD",
+            sensealg = SciMLSensitivity.ZygoteAdjoint(),
+            optim_autoAD = ODINN.NoAD(),
+            grad = DummyAdjoint(),
+            optimization_method = "AD+AD",
             target = :A),
         solver = Huginn.SolverParameters(
-            step=δt,
-            progress=true)
+            step = δt,
+            progress = true)
     )
 
     nn_model = NeuralNetwork(params)
@@ -45,12 +44,12 @@ function grad_free_test(;use_MB::Bool=false)
     A_law = ConstantA(2.21e-18)
     JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) ConstantA(2.21e-18)
     model = Model(
-        iceflow = SIA2Dmodel(params; A=A_law),
-        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+        iceflow = SIA2Dmodel(params; A = A_law),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
     )
     JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Model(
-        iceflow = SIA2Dmodel(params; A=A_law),
-        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+        iceflow = SIA2Dmodel(params; A = A_law),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
     )
 
     # We retrieve some glaciers for the simulation
@@ -65,14 +64,14 @@ function grad_free_test(;use_MB::Bool=false)
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) LawA(nn_model, params)
 
     model = Model(
-        iceflow = SIA2Dmodel(params; A=A_law),
-        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        regressors = (; A=nn_model)
+        iceflow = SIA2Dmodel(params; A = A_law),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+        regressors = (; A = nn_model)
     )
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Model(
-        iceflow = SIA2Dmodel(params; A=A_law),
-        mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-        regressors = (; A=nn_model)
+        iceflow = SIA2Dmodel(params; A = A_law),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+        regressors = (; A = nn_model)
     )
 
     # We create an ODINN prediction
@@ -87,5 +86,6 @@ function grad_free_test(;use_MB::Bool=false)
     # Check that losses change over iterations
     @test any(!=(first(functional_inversion.results.stats.losses)), functional_inversion.results.stats.losses)
     # Check parameter has changed
-    @test any(!=(first(functional_inversion.model.trainable_components.θ)),  functional_inversion.model.trainable_components.θ)
+    @test any(!=(first(functional_inversion.model.trainable_components.θ)),
+        functional_inversion.model.trainable_components.θ)
 end

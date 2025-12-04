@@ -36,11 +36,11 @@ params = Parameters(
         workers = 4,
         test_mode = false,
         rgi_paths = rgi_paths,
-        gridScalingFactor = 4, # Downscale the glacier grid to speed-up this example
-        ),
+        gridScalingFactor = 4 # Downscale the glacier grid to speed-up this example
+    ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
-        epochs = [25,20],
+        epochs = [25, 20],
         optimizer = [
             ODINN.ADAM(0.01),
             ODINN.LBFGS(
@@ -50,17 +50,17 @@ params = Parameters(
     physical = PhysicalParameters(
         minA = 8e-21,
         maxA = 8e-17
-        ),
+    ),
     UDE = UDEparameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
         empirical_loss_function = LossH() # Loss function based on ice thickness
-        ),
+    ),
     solver = Huginn.SolverParameters(
         step = 1 / 12, # Define the time step for the simulation output and for the adjoint
         progress = true
-        )
+    )
 )
 
 ## We define a synthetic law to generate the synthetic dataset.
@@ -69,7 +69,7 @@ A_law = CuffeyPaterson(scalar = true)
 
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
 
 ## We initialize the glaciers with all the necessary data
@@ -84,7 +84,7 @@ tstops = collect(2010:δt:2015)
 glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 ## After this forward simulation, we restart the iceflow model to be ready for the inversions
-nn_model = NeuralNetwork(params; seed=MersenneTwister(1))
+nn_model = NeuralNetwork(params; seed = MersenneTwister(1))
 A_law = LawA(nn_model, params)
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
@@ -130,11 +130,11 @@ params = Parameters(
         workers = 4,
         test_mode = false,
         rgi_paths = rgi_paths,
-        gridScalingFactor = 4, # Downscale the glacier grid to speed-up this example
-        ),
+        gridScalingFactor = 4 # Downscale the glacier grid to speed-up this example
+    ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
-        epochs = [25,20],
+        epochs = [25, 20],
         optimizer = [
             ODINN.ADAM(0.01),
             ODINN.LBFGS(
@@ -144,17 +144,17 @@ params = Parameters(
     physical = PhysicalParameters(
         minA = 8e-21,
         maxA = 8e-17
-        ),
+    ),
     UDE = UDEparameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
         empirical_loss_function = LossH() # Loss function based on ice thickness
-        ),
+    ),
     solver = Huginn.SolverParameters(
         step = 1 / 12, # Define the time step for the simulation output and for the adjoint
         progress = true
-        )
+    )
 )
 
 # Then, we initialize those glaciers based on those RGI IDs and the parameters we previously specified.
@@ -173,7 +173,7 @@ A_law = CuffeyPaterson(scalar = true)
 # The model is initialized using the `Model` constructor:
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
 
 # We define the time snapshots for transient inversion, i.e. the time steps at which we want to save the results, which will be used to compute the adjoint in reverse mode.
@@ -196,7 +196,7 @@ glaciers[1].thicknessData
 # After this forward simulation, we define a new iceflow model to be ready for the
 # inversions. The first step is to define a simple neural network that takes as
 # input a scalar and returns a scalar.
-nn_model = NeuralNetwork(params; seed=MersenneTwister(1))
+nn_model = NeuralNetwork(params; seed = MersenneTwister(1))
 
 # Then we define a law that uses this neural network to map the long term air temperature `T` to the creep coefficient `A`.
 # ODINN comes with a set of already defined laws. Only a few of them support functional inversion as the computation of the gradient needs to be carefully handled.
@@ -205,7 +205,7 @@ law_input = (; T = iAvgScalarTemp())
 A_law = LawA(nn_model, params, law_input)
 
 # Then we define an iceflow and ODINN tells us how the law is used in the iceflow equation.
-iceflow = SIA2Dmodel(params; A=A_law)
+iceflow = SIA2Dmodel(params; A = A_law)
 
 # Finally we define the model which needs to know the iceflow and mass balance models, and in comparison to Huginn, there is a third argument `regressors`.
 # The `regressors` argument tells how each regressor relates into the SIA. Although we already defined this in the law, this definition is mandatory for technical reasons.
@@ -238,4 +238,5 @@ plot_law(prediction.model.iceflow.A, functional_inversion, law_input, nothing)
 # Since we have a very limited range of temperature coverage with these 4 glaciers, we have only captured a small portion of the ground truth law, which has an almost linear form. If we wanted to learn the full dynamics of the Cuffey and Paterson synthetic law, we would need to have glaciers that cover a wider range of temperatures.
 
 # Just to have some additional context, here is how the synthetic law looks like for the full range of temperatures:
-plot_law(prediction.model.iceflow.A, functional_inversion, law_input, nothing; plot_full_input_range=true)
+plot_law(prediction.model.iceflow.A, functional_inversion,
+    law_input, nothing; plot_full_input_range = true)

@@ -9,4 +9,4 @@ run!(
     functional_inversion;
     path = joinpath(ODINN.root_dir, "scripts/MWEs/inversion_A/data"),
     file_name = "simulation_result.jld2"
-    )
+)

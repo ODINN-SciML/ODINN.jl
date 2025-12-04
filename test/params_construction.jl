@@ -1,17 +1,16 @@
 
 function params_constructor_specified(save_refs::Bool = false)
-
     rgi_paths = Sleipnir.get_rgi_paths()
 
     solver_params = SolverParameters(
         solver = Ralston(),
         reltol = 1e-8,
-        step= 1.0/12.0,
+        step = 1.0/12.0,
         save_everystep = false,
         tstops = Vector{Float64}(),
         progress = true,
         progress_steps = 10
-        )
+    )
 
     hyparams = Hyperparameters(
         current_epoch = 1,
@@ -20,7 +19,7 @@ function params_constructor_specified(save_refs::Bool = false)
         optimizer = BFGS(),
         epochs = 10,
         batch_size = 15
-        )
+    )
 
     physical_params = PhysicalParameters(
         ρ = 900.0,
@@ -32,7 +31,7 @@ function params_constructor_specified(save_refs::Bool = false)
         maxTlaw = 1.0,
         minTlaw = -25.0,
         noise_A_magnitude = 5e-18
-        )
+    )
 
     simulation_params = SimulationParameters(
         use_MB = true,
@@ -40,18 +39,18 @@ function params_constructor_specified(save_refs::Bool = false)
         plots = false,
         use_velocities = false,
         overwrite_climate = false,
-        tspan = (2010.0,2015.0),
+        tspan = (2010.0, 2015.0),
         multiprocessing = false,
         workers = 10,
         rgi_paths = rgi_paths
-        )
+    )
 
     ude_params = UDEparameters(
-        sensealg = InterpolatingAdjoint(autojacvec=ODINN.EnzymeVJP()),
+        sensealg = InterpolatingAdjoint(autojacvec = ODINN.EnzymeVJP()),
         optimization_method = "AD+AD",
         target = :A,
         initial_condition_filter = :Zang1980
-        )
+    )
 
     params = Parameters(
         physical = physical_params,
@@ -59,13 +58,14 @@ function params_constructor_specified(save_refs::Bool = false)
         solver = solver_params,
         UDE = ude_params,
         simulation = simulation_params
-        )
+    )
 
-    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Parameters(physical=physical_params,
-                        hyper=hyparams,
-                        solver=solver_params,
-                        UDE=ude_params,
-                        simulation=simulation_params)
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Parameters(
+        physical = physical_params,
+        hyper = hyparams,
+        solver = solver_params,
+        UDE = ude_params,
+        simulation = simulation_params)
 
     if save_refs
         jldsave(joinpath(Sleipnir.root_dir, "test/data/params/solver_params.jld2"); solver_params)
@@ -77,10 +77,7 @@ function params_constructor_specified(save_refs::Bool = false)
     end
 
     @test true
-
 end
 
 function params_constructor_default()
-
-
 end

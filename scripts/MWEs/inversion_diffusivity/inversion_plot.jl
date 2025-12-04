@@ -22,7 +22,8 @@ Pkg.activate(odinn_folder*"/scripts/")
 
 include("inversion_setup.jl")
 
-using Plots; pythonplot()
+using Plots;
+pythonplot()
 using LaTeXStrings
 using JLD2
 using ForwardDiff
@@ -30,7 +31,10 @@ using LinearAlgebra
 using Random, Distributions
 
 # res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_Halfar.jld2"), "res")
-res_load = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "simulation_result_Halfar_gridsize20.jld2"), "res")
+res_load = load(
+    joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data",
+        "simulation_result_Halfar_gridsize20.jld2"),
+    "res")
 
 # Load parameters of the trained neural network
 θ = res_load.θ
@@ -50,15 +54,16 @@ R_smooth = collect(0.0:10.0:(halfar_params.R₀))
 Function to generate predicion and true diffusivity used in diffusivity
 """
 function diffusivity_generate(functional_inversion, θ, Hs, ∇Ss)
-
     D_pred = zeros(length(Hs), length(∇Ss))
     D_true = zeros(length(Hs), length(∇Ss))
 
     for i in 1:length(Hs), j in 1:length(∇Ss)
+
         h = Hs[i]
         ∇s = ∇Ss[j]
-        inputs = (; H̄=h, ∇S=∇s)
-        U = eval_law(functional_inversion.model.iceflow.U, functional_inversion, 1, inputs, θ)
+        inputs = (; H̄ = h, ∇S = ∇s)
+        U = eval_law(
+            functional_inversion.model.iceflow.U, functional_inversion, 1, inputs, θ)
         D_pred[i, j] = only(unique(U)) * h # The cache is a matrix and the result of the NN evaluation has been broadcasted to a matrix, we retrieve the only value
         # Compute true diffusivity used for simulation
         (; A, ρ, g, n) = halfar_params
@@ -66,7 +71,6 @@ function diffusivity_generate(functional_inversion, θ, Hs, ∇Ss)
     end
 
     return D_true, D_pred
-
 end
 
 # Generate matrix of prediction and reference
@@ -87,9 +91,9 @@ for i in 1:length(only(glaciers).thicknessData.H)
     dSdy_edges = Huginn.diff_y(_S) ./ _Δy
     dSdx = zero(_S)
     dSdy = zero(_S)
-    Huginn.inn(dSdx) .= Huginn.avg_x(dSdx_edges)[:, 2:end-1]
-    Huginn.inn(dSdy) .= Huginn.avg_y(dSdy_edges)[2:end-1, :]
-    _∇S = (dSdx.^2 + dSdy.^2).^0.5
+    Huginn.inn(dSdx) .= Huginn.avg_x(dSdx_edges)[:, 2:(end - 1)]
+    Huginn.inn(dSdy) .= Huginn.avg_y(dSdy_edges)[2:(end - 1), :]
+    _∇S = (dSdx .^ 2 + dSdy .^ 2) .^ 0.5
     append!(H_flat, vec(_H))
     append!(∇S_flat, vec(_∇S))
 end
@@ -116,20 +120,20 @@ levels = floor(log10(min_level)):1.0:ceil(log10(max_level))
 D_pred[D_pred .< 0.1 .* minimum(D_true)] .= NaN
 
 plot_cont = Plots.contourf(
-    H_smooth, ∇S_smooth, log10.(D_pred'), color=:plasma, alpha = 0.5,
+    H_smooth, ∇S_smooth, log10.(D_pred'), color = :plasma, alpha = 0.5,
     levels = levels, lw = 1, grid = false,
-    clabels=true, cbar=true
-    )
+    clabels = true, cbar = true
+)
 Plots.contour!(
-    H_smooth, ∇S_smooth, log10.(D_true'), color=[:black],
+    H_smooth, ∇S_smooth, log10.(D_true'), color = [:black],
     levels = levels, lw = 0.4,
-    clabels=true, cbar=true
-    )
+    clabels = true, cbar = true
+)
 title!(L"Plot of $\log_{10}(D)$")
 xlabel!(L"Ice thickness $H$ [m]")
 ylabel!(L"Surface slope $\| \nabla S \|$")
-Plots.scatter!(H_flat, ∇S_flat, ms=0.2, color=:black, label=false)
-Plots.plot!(H_analytical, ∇S_analytical, color=:black, linewidth=1.0)
+Plots.scatter!(H_flat, ∇S_flat, ms = 0.2, color = :black, label = false)
+Plots.plot!(H_analytical, ∇S_analytical, color = :black, linewidth = 1.0)
 
 mkpath("scripts/MWEs/inversion_diffusivity/figures")
 Plots.savefig(plot_cont, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_contour.pdf")
@@ -164,52 +168,53 @@ Plots.savefig(plot_cont, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversi
 # The single Halfar solution has a very specific function for ∇S as a function of H.
 # We can plot along this trajectory
 
-_D_true, _D_pred = diffusivity_generate(functional_inversion, θ, H_analytical, ∇S_analytical)
+_D_true,
+_D_pred = diffusivity_generate(functional_inversion, θ, H_analytical, ∇S_analytical)
 D_true_analytical = diag(_D_true)
 D_pred_analytical = diag(_D_pred)
 
 plot_analytical = Plots.scatter(
-    H_analytical, D_pred_analytical, label="Neural network prediction", c=:lightsteelblue2
-    );
+    H_analytical, D_pred_analytical, label = "Neural network prediction", c = :lightsteelblue2
+);
 Plots.plot!(
-    H_analytical, D_true_analytical, label="Ground True Value",
-    xlabel="Ice thickness [m]",
+    H_analytical, D_true_analytical, label = "Ground True Value",
+    xlabel = "Ice thickness [m]",
     # yscale = :log10,
-    ylabel="Predicted Diffusivity", lw = 3, c=:dodgerblue4,
-    legend=:topleft
-    );
+    ylabel = "Predicted Diffusivity", lw = 3, c = :dodgerblue4,
+    legend = :topleft
+);
 Plots.plot!(
     twinx(), H_analytical, ∇S_analytical,
-    label="Surface slope", ylabel = "Slope", c=:orange, lw=1
-    );
-Plots.savefig(plot_analytical, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_test_analytical.pdf")
+    label = "Surface slope", ylabel = "Slope", c = :orange, lw = 1
+);
+Plots.savefig(plot_analytical,
+    "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_test_analytical.pdf")
 
 ### Figure: Value of D along specific values of H and ∇S
 
 idx_∇S = Int(size(D_true)[2] / 2)
 
-
 plot = Plots.scatter(
     H_smooth, D_pred[:, idx_∇S],
-    label="Neural network prediction", c=:lightsteelblue2
-    );
+    label = "Neural network prediction", c = :lightsteelblue2
+);
 Plots.plot!(
-    H_smooth, D_true[:, idx_∇S], label="Ground True Value",
-    xlabel="Ice thickness H [m]",
+    H_smooth, D_true[:, idx_∇S], label = "Ground True Value",
+    xlabel = "Ice thickness H [m]",
     # yscale = :log10,
-    ylabel="Predicted Diffusivity", lw = 3, c=:dodgerblue4,
-    legend=:topleft
-    );
+    ylabel = "Predicted Diffusivity", lw = 3, c = :dodgerblue4,
+    legend = :topleft
+);
 Plots.savefig(plot, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_test_H.pdf")
 
 idx_H = Int(size(D_true)[1] / 2)
 
-plot = Plots.scatter(∇S_smooth, D_pred[idx_H, :], label="Neural network prediction", c=:lightsteelblue2);
+plot = Plots.scatter(∇S_smooth, D_pred[idx_H, :], label = "Neural network prediction", c = :lightsteelblue2);
 Plots.plot!(
-    ∇S_smooth, D_true[idx_H, :], label="Ground True Value",
-    xlabel="Ice surface slope [ratio]",
+    ∇S_smooth, D_true[idx_H, :], label = "Ground True Value",
+    xlabel = "Ice surface slope [ratio]",
     # yscale = :log10,
-    ylabel="Predicted Diffusivity", lw = 3, c=:dodgerblue4,
-    legend=:topleft
-    );
+    ylabel = "Predicted Diffusivity", lw = 3, c = :dodgerblue4,
+    legend = :topleft
+);
 Plots.savefig(plot, "scripts/MWEs/inversion_diffusivity/figures/MWE_inversion_diffusion_test_S.pdf")

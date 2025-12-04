@@ -46,7 +46,7 @@ function test_adjoint_clamp_borders()
     size = (10, 11)
     fac = prod(size)
     Δ = 2.5
-    η₀ = 1.
+    η₀ = 1.0
 
     # Test clamp_borders_dx
     for i in range(1, 5)
@@ -57,8 +57,8 @@ function test_adjoint_clamp_borders()
         ∂dS = zero(dS)
         ∂H = zero(H)
         ODINN.clamp_borders_dx_adjoint!(∂dS, ∂H, v, η₀, Δ, H, dS)
-        a=sum(c.*v)/fac
-        b=sum(H.*∂H)/fac + sum(dS.*∂dS) / fac
+        a=sum(c .* v)/fac
+        b=sum(H .* ∂H)/fac + sum(dS .* ∂dS) / fac
         @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 
@@ -71,8 +71,8 @@ function test_adjoint_clamp_borders()
         ∂dS = zero(dS)
         ∂H = zero(H)
         ODINN.clamp_borders_dy_adjoint!(∂dS, ∂H, v, η₀, Δ, H, dS)
-        a=sum(c.*v)/fac
-        b=sum(H.*∂H)/fac + sum(dS.*∂dS)/fac
+        a=sum(c .* v)/fac
+        b=sum(H .* ∂H)/fac + sum(dS .* ∂dS)/fac
         @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 end
@@ -91,36 +91,36 @@ function test_adjoint_avg()
     # Test avg
     for i in range(1, 5)
         u = randn(size...)
-        v = randn(size[1]-1,size[2]-1)
-        Au = zeros(size[1]-1,size[2]-1)
+        v = randn(size[1]-1, size[2]-1)
+        Au = zeros(size[1]-1, size[2]-1)
         Huginn.avg!(Au, u)
         Aadjv = ODINN.avg_adjoint(v)
-        a=sum(Au.*v)/fac
-        b=sum(u.*Aadjv)/fac
+        a=sum(Au .* v)/fac
+        b=sum(u .* Aadjv)/fac
         @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 
     # Test avg_x
     for i in range(1, 5)
         u = randn(size...)
-        v = randn(size[1]-1,size[2])
-        Au = zeros(size[1]-1,size[2])
+        v = randn(size[1]-1, size[2])
+        Au = zeros(size[1]-1, size[2])
         Huginn.avg_x!(Au, u)
         Aadjv = ODINN.avg_x_adjoint(v)
-        a=sum(Au.*v)/fac
-        b=sum(u.*Aadjv)/fac
+        a=sum(Au .* v)/fac
+        b=sum(u .* Aadjv)/fac
         @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 
     # Test avg_y
     for i in range(1, 5)
         u = randn(size...)
-        v = randn(size[1],size[2]-1)
-        Au = zeros(size[1],size[2]-1)
+        v = randn(size[1], size[2]-1)
+        Au = zeros(size[1], size[2]-1)
         Huginn.avg_y!(Au, u)
         Aadjv = ODINN.avg_y_adjoint(v)
-        a=sum(Au.*v)/fac
-        b=sum(u.*Aadjv)/fac
+        a=sum(Au .* v)/fac
+        b=sum(u .* Aadjv)/fac
         @test a≈b rtol=(Sleipnir.doublePrec ? 1e-11 : 1e-5)
     end
 end
