@@ -9,6 +9,7 @@
 # ## Running the whole code
 
 using ODINN
+using Random
 
 ## Define the working directory
 working_dir = joinpath(ODINN.root_dir, "demos")
@@ -39,9 +40,9 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
-        epochs = [15,10],
+        epochs = [25,20],
         optimizer = [
-            ODINN.ADAM(0.05),
+            ODINN.ADAM(0.01),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 5)
             )
@@ -83,7 +84,7 @@ tstops = collect(2010:δt:2015)
 glaciers = generate_ground_truth(glaciers, params, model, tstops)
 
 ## After this forward simulation, we restart the iceflow model to be ready for the inversions
-nn_model = NeuralNetwork(params)
+nn_model = NeuralNetwork(params; seed=MersenneTwister(1))
 A_law = LawA(nn_model, params)
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
@@ -133,9 +134,9 @@ params = Parameters(
         ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
-        epochs = [15,10],
+        epochs = [25,20],
         optimizer = [
-            ODINN.ADAM(0.05),
+            ODINN.ADAM(0.01),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 5)
             )
@@ -195,7 +196,7 @@ glaciers[1].thicknessData
 # After this forward simulation, we define a new iceflow model to be ready for the
 # inversions. The first step is to define a simple neural network that takes as
 # input a scalar and returns a scalar.
-nn_model = NeuralNetwork(params)
+nn_model = NeuralNetwork(params; seed=MersenneTwister(1))
 
 # Then we define a law that uses this neural network to map the long term air temperature `T` to the creep coefficient `A`.
 # ODINN comes with a set of already defined laws. Only a few of them support functional inversion as the computation of the gradient needs to be carefully handled.
