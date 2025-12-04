@@ -84,14 +84,14 @@ include(joinpath(root_dir, "src/parameters/Hyperparameters.jl"))
 include(joinpath(root_dir, "src/parameters/UDEparameters.jl"))
 # Simulations
 include(joinpath(root_dir, "src/simulations/results/Results.jl"))
-include(joinpath(root_dir, "src/simulations/functional_inversions/FunctionalInversion.jl"))
 include(joinpath(root_dir, "src/simulations/inversions/Inversion.jl"))
 # ML models
-include(joinpath(root_dir, "src/models/machine_learning/ML_utils.jl"))
-include(joinpath(root_dir, "src/models/machine_learning/NN_utils.jl"))
+include(joinpath(root_dir, "src/models/trainable_components/ML_utils.jl"))
+include(joinpath(root_dir, "src/models/trainable_components/NN_utils.jl"))
 include(joinpath(root_dir, "src/models/target/Target.jl"))
-include(joinpath(root_dir, "src/models/machine_learning/MLmodel.jl"))
+include(joinpath(root_dir, "src/models/trainable_components/Model.jl"))
 # Parameterizations
+include(joinpath(root_dir, "src/laws/Cache.jl"))
 include(joinpath(root_dir, "src/laws/Laws.jl"))
 
 # Inversion for SIA equation

@@ -25,6 +25,7 @@ Compute the output of a neural network model on the input vector `inp`.
 ```julia
 mymodel = StatefulLuxLayer{true}(archi, nothing, st)
 y = _pred_NN([1.0, 2.0], mymodel, θ, prescale_fn, postscale_fn)
+```
 """
 function _pred_NN(inp::Vector{F}, smodel, θ, prescale, postscale) where {F <: AbstractFloat}
     return only(postscale(smodel(prescale(inp), θ)))
@@ -55,6 +56,10 @@ See also `SIA2D_D_target`.
 - `prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing}`: Vector of tuples where each
     tuple defines the lower and upper bounds of the input for scaling.
     If set to `nothing`, no prescaling is applied.
+- `precompute_interpolation::Bool`: Determines which cache to use depending if interpolation
+    is used or not for the evaluation of gradients.
+- `precompute_VJPs::Bool`: Determines is VJPs are stored in the cache during the reverse
+    step.
 
 # Returns
 - `U_law`: A `Law{Array{Float64, 2}}` instance that computes the diffusive velocity `U`
@@ -78,13 +83,16 @@ nn_model = NeuralNetwork(params)
 bounds_H = (0.0, 300.0)
 bounds_∇S = (0.0, 0.5)
 U_law = LawU(nn_model, params; max_NN = 50.0, prescale_bounds = [bounds_H, bounds_∇S])
+```
 """
 function LawU(
     nn_model::NeuralNetwork,
     params::Sleipnir.Parameters;
-    max_NN::Union{F, Nothing} = 50.0,
-    prescale_bounds::Union{Vector{Tuple{F,F}}, Nothing} = [(0.0, 300.0), (0.0, 0.5)],
-) where {F <: AbstractFloat}
+    max_NN::Union{<: AbstractFloat, Nothing} = nothing,
+    prescale_bounds::Union{Vector{Tuple{<:AbstractFloat, <:AbstractFloat}}, Nothing} = nothing,
+    precompute_interpolation::Bool = true,
+    precompute_VJPs::Bool = true,
+)
     prescale = !isnothing(prescale_bounds) ? X -> _ml_model_prescale(X, prescale_bounds) : identity
     # The value of max_NN should correspond to maximum of Umax * dSdx
     postscale = !isnothing(max_NN) ? Y -> _ml_model_postscale(Y, max_NN) : identity
@@ -93,21 +101,69 @@ function LawU(
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
-    U_law = let smodel = smodel, prescale = prescale, postscale = postscale
-    Law{MatrixCache}(;
-        inputs = (; H̄=iH̄(), ∇S=i∇S()),
-        f! = function (cache, inp, θ)
-            D = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
-
-            # Flag the in-place assignment as non differented and return D instead in
+    f! = let smodel = smodel, prescale = prescale, postscale = postscale
+        function (cache, inp, θ)
+            U = ((h, ∇s) -> _pred_NN([h, ∇s], smodel, θ.U, prescale, postscale)).(inp.H̄, inp.∇S)
+            # Flag the in-place assignment as non differentiated and return D instead in
             # order to be able to compute ∂D∂θ with Zygote
-            Zygote.@ignore_derivatives cache.value .= D
-            return D
-        end,
-        init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
-            (; nx, ny) = simulation.glaciers[glacier_idx]
-            return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
-        end,
+            # We introduce the extra dependency w.r.t H
+            Zygote.@ignore_derivatives cache.value .= U
+            return U
+        end
+    end
+
+    init_cache_interp = function (simulation, glacier_idx, θ)
+        glacier = simulation.glaciers[glacier_idx]
+        (; nx, ny) = glacier
+
+        # Create template interpolation based on half-interpolation range
+        # The values are overwritten later on
+        n_nodes = 2 * simulation.model.trainable_components.target.n_interp_half
+        H_nodes = LinRange(0.0, 100, n_nodes) |> collect
+        ∇S_nodes = LinRange(0.0, 0.2, n_nodes) |> collect
+
+        θvec = ODINN.ComponentVector2Vector(θ)
+        grads = [zero(θvec) for i = 1:length(H_nodes), j = 1:length(∇S_nodes)]
+        grad_itp = interpolate((H_nodes, H_nodes), grads, Gridded(Linear()))
+
+        # Return cache for a custom interpolation
+        return MatrixCacheInterp(
+            zeros(nx - 1, ny - 1),
+            H_nodes,
+            H_nodes,
+            grad_itp
+            )
+    end
+    init_cache_matrix = function (simulation, glacier_idx, θ)
+        glacier = simulation.glaciers[glacier_idx]
+        (; nx, ny) = glacier
+        return MatrixCache(zeros(nx - 1, ny - 1), zeros(nx - 1, ny - 1), zero(θ))
+    end
+
+    p_VJP! = let smodel = smodel, prescale = prescale, postscale = postscale
+        function (cache, vjpsPrepLaw, inputs, θ)
+            (; nodes_H, nodes_∇S) = cache
+            # Compute exact gradient in certain values of H̄ and ∇S
+            grads = [zeros(only(size(θ))) for i = 1:length(nodes_H), j = 1:length(nodes_∇S)]
+            # Evaluate gradients in nodes
+            for (i, h) in enumerate(nodes_H), (j, ∇s) in enumerate(nodes_∇S)
+                # We don't do this evaluation with f! since this evaluates a matrix
+                grad, = Zygote.gradient(_θ -> _pred_NN([h, ∇s], smodel, _θ.U, prescale, postscale), θ)
+                grads[i, j] .= ODINN.ComponentVector2Vector(grad)
+            end
+            cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
+        end
+    end
+
+    # Determine right type of cache depending of interpolation or not
+    LawCache = precompute_interpolation ? MatrixCacheInterp : MatrixCache
+
+    U_law = let smodel = smodel, prescale = prescale, postscale = postscale
+    Law{LawCache}(;
+        inputs = (; H̄ = iH̄(), ∇S = i∇S()),
+        f! = f!,
+        init_cache = precompute_interpolation ? init_cache_interp : init_cache_matrix,
+        p_VJP! = precompute_VJPs ? p_VJP! : nothing,
     )
     end
     return U_law
@@ -163,6 +219,7 @@ nn_model = NeuralNetwork(params)
 bounds_T = (-25.0, 0.0)
 bounds_H = (0.0, 500.0)
 Y_law = LawY(nn_model, params; prescale_bounds = [bounds_T, bounds_H])
+```
 """
 function LawY(
     nn_model::NeuralNetwork,
@@ -180,11 +237,11 @@ function LawY(
 
     Y_law = let smodel = smodel, prescale = prescale, postscale = postscale
     Law{MatrixCache}(;
-        inputs = (; T=iTemp(), H̄=iH̄()),
+        inputs = (; T=iAvgScalarTemp(), H̄=iH̄()),
         f! = function (cache, inp, θ)
             Y = map(h -> _pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
 
-            # Flag the in-place assignment as non differented and return Y instead in
+            # Flag the in-place assignment as non differentiated and return Y instead in
             # order to be able to compute ∂Y∂θ with Zygote
             Zygote.@ignore_derivatives cache.value .= Y
             return Y
@@ -239,15 +296,20 @@ See also `SIA2D_A_target`.
 ```julia
 nn_model = NeuralNetwork(params)
 A_law = LawA(nn_model, params; precompute_VJPs=false)
+```
 """
 function LawA(
     nn_model::NeuralNetwork,
-    params::Sleipnir.Parameters;
+    params::Sleipnir.Parameters,
+    input::NamedTuple = (; T=iAvgScalarTemp());
     precompute_VJPs::Bool = true,
+    scalar::Bool = true
 )
     archi = nn_model.architecture
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
+
+    @assert (typeof(input.T) == iAvgScalarTemp && scalar)|| (typeof(input.T) == iAvgGriddedTemp && !scalar) "Input type not supported. Use either `iAvgScalarTemp` when `scalar=true` or `iAvgGriddedTemp` when `scalar=false`."
 
     min_NN = params.physical.minA
     max_NN = params.physical.maxA
@@ -263,7 +325,7 @@ function LawA(
             inp = collect(values(inp))
             A = only(scale(smodel(inp, θ.A), (min_NN, max_NN)))
 
-            # Flag the in-place assignment as non differented and return A instead in
+            # Flag the in-place assignment as non differentiated and return A instead in
             # order to be able to compute ∂A∂θ with Zygote
             Zygote.@ignore_derivatives cache.value .= A
             return A
@@ -273,17 +335,104 @@ function LawA(
         ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
         cache.vjp_θ .= ret
     end
-    A_law = Law{ScalarCache}(;
-        inputs = (; T=iTemp()),
-        f! = f!,
-        init_cache = function (simulation, glacier_idx, θ)
-            return ScalarCache(zeros(), zeros(), zero(θ))
-        end,
-        p_VJP! = precompute_VJPs ? p_VJP! : nothing,
-        callback_freq = callback_freq,
-    )
+    A_law = if scalar
+            Law{ScalarCache}(;
+                name = :NN_A,
+                inputs = input,
+                f! = f!,
+                init_cache = function (simulation, glacier_idx, θ)
+                    return ScalarCache(zeros(), zeros(), zero(θ))
+                end,
+                p_VJP! = precompute_VJPs ? p_VJP! : nothing,
+                callback_freq = callback_freq,
+            )
+        else
+            Law{MatrixCache}(;
+                name = :NN_A,
+                inputs = input,
+                f! = f!,
+                init_cache = function (simulation, glacier_idx, θ)
+                    (; nx, ny) = simulation.glaciers[glacier_idx]
+                    return MatrixCache(zeros(nx, ny), zeros(nx, ny), zero(θ))
+                end,
+            )
+        end
     return A_law
 end
+
+"""
+    LawA(params::Sleipnir.Parameters; scalar::Bool=true)
+
+Construct a law that defines an ice rheology A per glacier to invert.
+This can be either a spatially varying A or a scalar value per glacier based on the
+value of `scalar`.
+
+# Arguments
+- `params::Sleipnir.Parameters`: Parameters struct used to retrieve the minimum and
+    maximum values of A for scaling the parameter to invert.
+- `scalar::Bool`: Whether the ice rheology to invert is a scalar per glacier, or a
+    spatially varying `A` per glacier (matrix to invert).
+"""
+function LawA(params::Sleipnir.Parameters; scalar::Bool=true)
+    min_A = params.physical.minA
+    max_A = params.physical.maxA
+    if scalar
+        f! = let min_A = min_A, max_A = max_A
+            function (cache, inp, θ)
+                val = @. min_A+(max_A-min_A)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
+                Zygote.@ignore_derivatives cache.value .= val
+                return val
+            end
+        end
+        init_cache = function (simulation, glacier_idx, θ)
+                ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
+        end
+
+        p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+            ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
+            cache.vjp_θ[1] = only(ret.A[Symbol("$(cache.glacier_id)")])
+        end
+
+        A_law = Law{ScalarCacheGlacierId}(;
+                inputs = (;),
+                f! = f!,
+                init_cache = init_cache,
+                p_VJP! = p_VJP!,
+                callback_freq = 0
+                )
+    else
+        f! = let min_A = min_A, max_A = max_A
+            function (cache, inp, θ)
+                val = @. min_A+(max_A-min_A)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
+                Zygote.@ignore_derivatives cache.value .= val
+                return val
+            end
+        end
+
+        init_cache = function (simulation, glacier_idx, θ)
+                (; nx, ny) = simulation.glaciers[glacier_idx]
+                MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ), glacier_idx)
+        end
+
+        p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+            # In this function we compute the diagonal of the Jacobian since `f!` applies element-wise
+            # We do so by using the `sum` trick below
+            ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ)
+            cache.vjp_θ .= vec(ret.A[Symbol("$(cache.glacier_id)")])
+        end
+
+        A_law = Law{MatrixCacheGlacierId}(;
+                inputs = (;),
+                f! = f!,
+                init_cache = init_cache,
+                p_VJP! = p_VJP!,
+                callback_freq = 0
+                )
+    end
+
+    return A_law
+end
+
 
 include("auto_VJP.jl")
 include("laws_utils.jl")

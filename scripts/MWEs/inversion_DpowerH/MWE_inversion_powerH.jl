@@ -46,7 +46,6 @@ params = Parameters(
         use_MB = false,
         use_velocities = true,
         tspan = (2010.0, 2015.0),
-        step = δt,
         multiprocessing = false,
         workers = 1,
         test_mode = false,
@@ -70,7 +69,6 @@ params = Parameters(
         ),
     solver = Huginn.SolverParameters(
         step = δt,
-        save_everystep = true,
         progress = true
         )
     )
@@ -106,7 +104,7 @@ min_H, max_H = 0.0, H_max
 
 # We define the prescale and postscale of quantities.
 model = Model(
-    iceflow = SIA2Dmodel(params; A=CuffeyPaterson()),
+    iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=true)),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
 )
 
@@ -144,7 +142,7 @@ model = Model(
 )
 
 # We create an ODINN prediction
-functional_inversion = FunctionalInversion(model, glaciers, params)
+functional_inversion = Inversion(model, glaciers, params)
 
 # We run the simulation with ADAM and then LBFGS
 run!(functional_inversion)
@@ -160,7 +158,7 @@ H_smooth = collect(0.0:1.0:max_H)
 
 AtimesH_pred = zeros(length(Temps_smooth), length(H_smooth))
 
-θ = functional_inversion.model.machine_learning.θ
+θ = functional_inversion.model.trainable_components.θ
 for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
     temp = Temps_smooth[i]
     H = H_smooth[j]

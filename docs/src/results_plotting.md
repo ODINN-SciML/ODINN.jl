@@ -2,7 +2,7 @@
 
 ## Results
 
-Every `Simulation` type has an associated `Results` object(s), one for each one of the glaciers in the simulation. This object, as its name indicates, stores all the results of the simulation, which can be used for data anlysis and plotting. These types are handled by `Sleipnir.jl`.
+Every `Simulation` type has an associated `Results` object(s), one for each one of the glaciers in the simulation. This object, as its name indicates, stores all the results of the simulation, which can be used for data analysis and plotting. These types are handled by `Sleipnir.jl`.
 
 ```@docs
 Sleipnir.Results
@@ -21,4 +21,10 @@ Another option is to generate a video of the evolution of the glacier's ice thic
 
 ```@docs
 Sleipnir.plot_glacier_vid
+```
+
+And finally, it is also possible to plot various gridded data on a glacier with the following function:
+
+```@docs
+Sleipnir.plot_gridded_data
 ```

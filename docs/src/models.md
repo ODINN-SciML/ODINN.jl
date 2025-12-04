@@ -1,6 +1,6 @@
 # Models
 
-There are 3 main types of models in `ODINN.jl`, iceflow models, mass balance models and machine learning models. These three families are determined by abstract types, with specific types being declared as subtypes of these abstract types to ensure compatibility through the ODINN ecosystem.
+There are 3 main types of models in `ODINN.jl`, iceflow models, mass balance models, and machine learning models. These three families are determined by abstract types, with specific types being declared as subtypes of these abstract types to ensure compatibility through the ODINN ecosystem.
 
 The three main types of models are gathered in a parent type `Model` in the following way:
 
@@ -33,13 +33,13 @@ Muninn.TImodel1
 Muninn.TImodel1(params::Sleipnir.Parameters)
 ```
 
-Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specificly prescribed time steps determined in the `steps`field in [`Sleipnir.SimulationParameters`](@ref).
+Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps`field in [`Sleipnir.SimulationParameters`](@ref).
 
 We soon plan to add compatibility with neural networks coming from the [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine), which should become the *de facto* surface mass balance model in the `ODINN.jl` ecosystem.
 
 ## Regressors
 
-Regressors (e.g. machine learning models) are used in the context of Universal Differential Equations (UDEs, *Rackauckas et al., 2020*) to parametrize or learn specific parts of differential equations. Machine Learning models are managed by `ODINN.jl`. Virtually all available regressors in Julia can be used inside ODINN, but they need to be correctly interfaced. Here is an example of a simple neural network (multilayer perceptron) using `Lux.jl`:
+Regressors (e.g. machine learning models) are used in the context of Universal Differential Equations [rackauckas_universal_2020](@cite) to parametrize or learn specific parts of differential equations. Machine Learning models are managed by `ODINN.jl`. Virtually all available regressors in Julia can be used inside ODINN, but they need to be correctly interfaced. Here is an example of a simple neural network (multilayer perceptron) using `Lux.jl`:
 
 ```@docs
 ODINN.NeuralNetwork

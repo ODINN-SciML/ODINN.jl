@@ -42,7 +42,7 @@ function VJP_λ_∂SIA∂H_discrete(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    target = simulation.model.machine_learning.target
+    target = simulation.model.trainable_components.target
 
     B = glacier.B
     Δx = glacier.Δx
@@ -70,7 +70,7 @@ function VJP_λ_∂SIA∂H_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
     Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Compute diffusivity based on target objective
@@ -183,7 +183,7 @@ function VJP_λ_∂SIA∂θ_discrete(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    target = simulation.model.machine_learning.target
+    target = simulation.model.trainable_components.target
 
     B = glacier.B
     Δx = glacier.Δx
@@ -211,7 +211,7 @@ function VJP_λ_∂SIA∂θ_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
     Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Compute flux components
@@ -275,8 +275,7 @@ function VJP_λ_∂surface_V∂H_discrete(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.trainable_components.target
 
     B = glacier.B
     Δx = glacier.Δx
@@ -302,18 +301,18 @@ function VJP_λ_∂surface_V∂H_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
     Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Equals ∂Dꜛ/∂H
-    α = ∂Diffusivityꜛ∂H(
+    α = ∂Velocityꜛ∂H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
     # Equals ∂Dꜛ/∂(∇H)
-    β = ∂Diffusivityꜛ∂∇H(
+    β = ∂Velocityꜛ∂∇H(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,
@@ -329,7 +328,7 @@ function VJP_λ_∂surface_V∂H_discrete(
     βy = β .* ∇Sy
     ∂D∂H = avg_adjoint(α .* ∇S∂V) .+ diff_x_adjoint(avg_y_adjoint(βx .* ∇S∂V), Δx) + diff_y_adjoint(avg_x_adjoint(βy .* ∇S∂V), Δy)
 
-    Dꜛ = Diffusivityꜛ(
+    Dꜛ = Velocityꜛ(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,
@@ -357,8 +356,7 @@ function VJP_λ_∂surface_V∂θ_discrete(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    ml_model = simulation.model.machine_learning
-    target = ml_model.target
+    target = simulation.model.trainable_components.target
 
     B = glacier.B
     Δx = glacier.Δx
@@ -384,13 +382,13 @@ function VJP_λ_∂surface_V∂θ_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
     Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     ∇S∂V = (∇Sx .* inn1(∂Vx) .+ ∇Sy .* inn1(∂Vy))
 
     # Gradient wrt θ
-    ∂D∂θ = ∂Diffusivityꜛ∂θ(
+    ∂D∂θ = ∂Velocityꜛ∂θ(
         target;
         H̄ = H̄, ∇S = ∇S, θ = θ,
         simulation = simulation, glacier_idx = glacier_idx, t = t,
@@ -445,7 +443,7 @@ function VJP_λ_∂SIA∂H_continuous(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    target = simulation.model.machine_learning.target
+    target = simulation.model.trainable_components.target
 
     # Retrieve parameters
     B = glacier.B
@@ -473,7 +471,7 @@ function VJP_λ_∂SIA∂H_continuous(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
     Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Compute diffusivity based on target objective
@@ -582,7 +580,7 @@ function VJP_λ_∂SIA∂θ_continuous(
 
     # Retrieve models and parameters
     params = simulation.parameters
-    target = simulation.model.machine_learning.target
+    target = simulation.model.trainable_components.target
 
     # Retrieve parameters
     B = glacier.B
@@ -613,7 +611,7 @@ function VJP_λ_∂SIA∂θ_continuous(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.machine_learning) ? nothing : simulation.model.machine_learning.θ
+    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
     Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Gradient wrt θ

@@ -24,7 +24,7 @@ function test_MB_VJP(
             use_MB=true,
             use_velocities=false,
             tspan=tspan,
-            step=δt,
+            step_MB=δt,
             multiprocessing=false,
             test_mode=true,
             rgi_paths=rgi_paths,
@@ -51,8 +51,8 @@ function test_MB_VJP(
 
     H = glaciers[glacier_idx].H₀
 
-    simulation = FunctionalInversion(model, glaciers, params)
-    θ = simulation.model.machine_learning.θ
+    simulation = Inversion(model, glaciers, params)
+    θ = simulation.model.trainable_components.θ
     simulation.cache = init_cache(model, simulation, glacier_idx, θ)
 
     t = mean(tspan)

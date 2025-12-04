@@ -4,6 +4,8 @@ function test_adjoint_SIA2D(
     thres = [2e-4, 2e-4, 2e-2],
     target = :A,
     C = 0.0,
+    functional_inv = true,
+    scalar = true,
 ) where {ADJ<:AbstractAdjointMethod}
 
     Random.seed!(1234)
@@ -33,13 +35,13 @@ function test_adjoint_SIA2D(
             use_MB=false,
             use_velocities=true,
             tspan=tspan,
-            step=δt,
             multiprocessing=false,
             test_mode=true,
-            rgi_paths=rgi_paths),
+            rgi_paths=rgi_paths,
+            gridScalingFactor = (functional_inv || scalar) ? 1 : 4),
         physical = PhysicalParameters(
             minA = 8e-21,
-            maxA = 8e-18),
+            maxA = 8e-17),
         UDE = UDEparameters(
             sensealg=SciMLSensitivity.ZygoteAdjoint(),
             optim_autoAD=ODINN.NoAD(),
@@ -48,48 +50,60 @@ function test_adjoint_SIA2D(
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 
-    nn_model = NeuralNetwork(params)
+    glaciers = initialize_glaciers(rgi_ids, params)
+
+    trainable_model = if functional_inv
+        NeuralNetwork(params)
+    elseif scalar
+        GlacierWideInv(params, glaciers, target)
+    else
+        GriddedInv(params, glaciers, target)
+    end
 
     model = if target==:A
-        iceflow_model = SIA2Dmodel(params; A=LawA(nn_model, params; precompute_VJPs=false))
+        law = if functional_inv
+            LawA(trainable_model, params; precompute_VJPs=false, scalar=scalar)
+        else
+            LawA(params; scalar=scalar)
+        end
+        iceflow_model = SIA2Dmodel(params; A=law)
         Model(
             iceflow = iceflow_model,
             mass_balance = nothing,
-            regressors = (; A=nn_model),
+            regressors = (; A=trainable_model),
         )
     elseif target==:D_hybrid
-        iceflow_model = SIA2Dmodel(params; Y=LawY(nn_model, params))
+        @assert functional_inv
+        iceflow_model = SIA2Dmodel(params; Y=LawY(trainable_model, params))
         Model(
             iceflow = iceflow_model,
             mass_balance = nothing,
-            regressors = (; A=nn_model),
+            regressors = (; A=trainable_model),
         )
     elseif target==:D
-        iceflow_model = SIA2Dmodel(params; U=LawU(nn_model, params))
+        @assert functional_inv
+        iceflow_model = SIA2Dmodel(params; U=LawU(trainable_model, params))
         Model(
             iceflow = iceflow_model,
             mass_balance = nothing,
-            regressors = (; U=nn_model),
+            regressors = (; U=trainable_model),
         )
     else
         throw("Unsupported target $(target)")
     end
-
-    glaciers = initialize_glaciers(rgi_ids, params)
 
     glacier_idx = 1
 
     H = glaciers[glacier_idx].H₀
     glaciers[glacier_idx].C = C
 
-    simulation = FunctionalInversion(model, glaciers, params)
+    simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     cache = init_cache(model, simulation, glacier_idx, θ)
     simulation.cache = cache
 
@@ -101,6 +115,7 @@ function test_adjoint_SIA2D(
     Huginn.SIA2D!(dH, H, simulation, t, θ)
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(dH, H, simulation, t, θ)
 
+    precompute_all_VJPs_laws!(model.iceflow, cache.iceflow, simulation, glacier_idx, t, θ)
     ∂H, = ODINN.VJP_λ_∂SIA∂H(
         adjointFlavor.VJP_method,
         vecBackwardSIA2D,
@@ -122,7 +137,7 @@ function test_adjoint_SIA2D(
     # Check gradient wrt H
     function f_H(H, args)
         simulation, t, vecBackwardSIA2D, glacier_idx = args
-        θ = simulation.model.machine_learning.θ
+        θ = simulation.model.trainable_components.θ
         return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []
@@ -199,7 +214,7 @@ function test_adjoint_surface_V(
     thres_relerr = thres[3]
 
     function _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
-        simulation.model.machine_learning.θ = θ
+        simulation.model.trainable_components.θ = θ
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, glacier_idx, t, θ)
         Vx, Vy = Huginn.surface_V(H, simulation, t, θ)
         return sum(Vx.*inn1(vecBackwardSIA2D[1])+Vy.*inn1(vecBackwardSIA2D[2]))
@@ -219,7 +234,6 @@ function test_adjoint_surface_V(
             use_MB=false,
             use_velocities=true,
             tspan=tspan,
-            step=δt,
             multiprocessing=false,
             test_mode=true,
             rgi_paths=rgi_paths,
@@ -235,7 +249,6 @@ function test_adjoint_surface_V(
             target = target),
         solver = Huginn.SolverParameters(
             step=δt,
-            save_everystep=true,
             progress=true)
     )
 
@@ -257,10 +270,10 @@ function test_adjoint_surface_V(
     glacier_idx = 1
 
     H = glaciers[glacier_idx].H₀
-    simulation = FunctionalInversion(model, glaciers, params)
+    simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     cache = init_cache(model, simulation, glacier_idx, θ)
     simulation.cache = cache
 
@@ -293,7 +306,7 @@ function test_adjoint_surface_V(
     # Check gradient wrt H
     function f_H(H, args)
         simulation, t, vecBackwardSIA2D, glacier_idx = args
-        θ = simulation.model.machine_learning.θ
+        θ = simulation.model.trainable_components.θ
         return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []
