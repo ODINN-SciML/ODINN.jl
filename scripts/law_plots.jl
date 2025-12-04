@@ -81,11 +81,11 @@ prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
 ODINN.connect_electron_backend() # If you want to visualize the plots below properly on Ubuntu 24.04
 
-fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing)
+fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing)
 ODINN.PlotlyJS.display(fig)
 
-fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing; idx_fixed_input=1)
+fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input=1)
 ODINN.PlotlyJS.display(fig)
 
-fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing; idx_fixed_input=2)
+fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input=2)
 ODINN.PlotlyJS.display(fig)

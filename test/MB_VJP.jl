@@ -52,7 +52,7 @@ function test_MB_VJP(
     H = glaciers[glacier_idx].H₀
 
     simulation = Inversion(model, glaciers, params)
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     simulation.cache = init_cache(model, simulation, glacier_idx, θ)
 
     t = mean(tspan)

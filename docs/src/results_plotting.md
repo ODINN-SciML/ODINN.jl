@@ -22,3 +22,9 @@ Another option is to generate a video of the evolution of the glacier's ice thic
 ```@docs
 Sleipnir.plot_glacier_vid
 ```
+
+And finally, it is also possible to plot various gridded data on a glacier with the following function:
+
+```@docs
+Sleipnir.plot_gridded_data
+```

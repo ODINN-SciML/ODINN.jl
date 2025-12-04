@@ -30,6 +30,7 @@ Per glacier initial condition container.
 # Example
 ```julia
 InitialCondition(params, glaciers, :Farinotti2019)
+```
 """
 mutable struct InitialCondition{
     ComponentVectorType <: ComponentVector

@@ -103,7 +103,7 @@ function test_adjoint_SIA2D(
     simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     cache = init_cache(model, simulation, glacier_idx, θ)
     simulation.cache = cache
 
@@ -137,7 +137,7 @@ function test_adjoint_SIA2D(
     # Check gradient wrt H
     function f_H(H, args)
         simulation, t, vecBackwardSIA2D, glacier_idx = args
-        θ = simulation.model.machine_learning.θ
+        θ = simulation.model.trainable_components.θ
         return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []
@@ -214,7 +214,7 @@ function test_adjoint_surface_V(
     thres_relerr = thres[3]
 
     function _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
-        simulation.model.machine_learning.θ = θ
+        simulation.model.trainable_components.θ = θ
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow, simulation, glacier_idx, t, θ)
         Vx, Vy = Huginn.surface_V(H, simulation, t, θ)
         return sum(Vx.*inn1(vecBackwardSIA2D[1])+Vy.*inn1(vecBackwardSIA2D[2]))
@@ -273,7 +273,7 @@ function test_adjoint_surface_V(
     simulation = Inversion(model, glaciers, params)
 
     t = tspan[1]
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     cache = init_cache(model, simulation, glacier_idx, θ)
     simulation.cache = cache
 
@@ -306,7 +306,7 @@ function test_adjoint_surface_V(
     # Check gradient wrt H
     function f_H(H, args)
         simulation, t, vecBackwardSIA2D, glacier_idx = args
-        θ = simulation.model.machine_learning.θ
+        θ = simulation.model.trainable_components.θ
         return _loss(H, θ, simulation, t, vecBackwardSIA2D, glacier_idx)
     end
     ratio = []

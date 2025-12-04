@@ -5,9 +5,9 @@ Inverse with batch
 """
 function SIA2D_grad!(dθ, θ, simulation::Inversion)
 
-    simulation.model.machine_learning.θ = θ
+    simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
-    loss_grad = pmap(simulation -> SIA2D_grad_batch!(simulation.model.machine_learning.θ, simulation), simulations)
+    loss_grad = pmap(simulation -> SIA2D_grad_batch!(simulation.model.trainable_components.θ, simulation), simulations)
 
     # Retrieve loss function
     losses = getindex.(loss_grad, 1)
@@ -22,7 +22,7 @@ function SIA2D_grad!(dθ, θ, simulation::Inversion)
             @warn "Potential unstable gradient for glacier $(simulation.glaciers[id].rgi_id): ‖dθ‖=$(norm(dθs[id])) \n Try reducing the temporal stepsize Δt used for reverse simulation."
         end
     end
-    dθs = aggregate∇θ(dθs, θ, simulation.model.machine_learning)
+    dθs = aggregate∇θ(dθs, θ, simulation.model.trainable_components)
 
     @assert typeof(θ) == typeof(dθs)
     # @assert norm(sum(dθs)) > 0.0 "‖∑dθs‖=$(norm(sum(dθs))) but should be greater than 0"
@@ -64,7 +64,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
     for i in 1:length(simulation.glaciers)
 
         simulation.cache = init_cache(simulation.model, simulation, i, θ)
-        simulation.model.machine_learning.θ = θ
+        simulation.model.trainable_components.θ = θ
 
         result = simulation.results.simulation[i]
 
@@ -95,7 +95,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
         ## 3- Determine tstops in the same way as what is done in the forward and check that this matches
         tstops = Huginn.define_callback_steps(tspan, params.solver.step)
-        tstopsDiscreteLoss = discreteLossSteps(params.UDE.empirical_loss_function, tspan)
+        tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, tspan))
         tstops = sort(unique(vcat(tstops, params.solver.tstops, tH_ref, tV_ref, tstopsDiscreteLoss)))
 
         @assert length(t) == length(tstops) "The size of tstops does not match with the size of the reference times."

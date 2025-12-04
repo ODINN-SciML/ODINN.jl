@@ -1,5 +1,5 @@
 export TikhonovRegularization
-export InitialThicknessRegularization, VelocityRegularization, DiffusivityRegularization
+export InitialThicknessRegularization, VelocityRegularization, RheologyRegularization, DiffusivityRegularization
 
 # Abstract regularization type as subtype of loss
 abstract type AbstractRegularization <: AbstractLoss end
@@ -66,11 +66,23 @@ Regularization for velocity fields, combining a spatial smoothing operator with 
 - `components::Symbol = :abs`: Determines which velocity components to regularize (e.g. `:abs`, `:x`, `:y`).
 - `distance::Integer = 3`: Distance to glacier margin.
 """
-
 @kwdef struct VelocityRegularization{R <: AbstractSimpleRegularization, I <: Integer} <: AbstractRegularization
     reg::R = TikhonovRegularization()
     components::Symbol = :abs
     distance::I = 3
+end
+
+"""
+    RheologyRegularization(; reg = TikhonovRegularization())
+
+Regularization of the gridded rheology `A` in the context of classical inversions.
+It can include a spatial smoothing operator through the field `reg`.
+
+# Keyword Arguments
+- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+"""
+@kwdef struct RheologyRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
+    reg::R = TikhonovRegularization()
 end
 
 """
@@ -186,8 +198,8 @@ function loss(
     glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
-    if !isnothing(simulation.model.machine_learning)
-        simulation.model.machine_learning.θ = θ
+    if !isnothing(simulation.model.trainable_components)
+        simulation.model.trainable_components.θ = θ
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
@@ -214,8 +226,8 @@ function backward_loss(
     glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
-    if !isnothing(simulation.model.machine_learning)
-        simulation.model.machine_learning.θ = θ
+    if !isnothing(simulation.model.trainable_components)
+        simulation.model.trainable_components.θ = θ
     end
     Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
     mask = is_in_glacier(H, regType.distance) .& (V .> 0.0)
@@ -232,6 +244,64 @@ function backward_loss(
     ∂Reg∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
 
     return ∂Reg∂H * Δt.V, ∂Reg∂θ * Δt.V
+end
+
+
+function loss(
+    regType::RheologyRegularization,
+    H::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
+    t::F,
+    glacier_idx::Integer,
+    θ,
+    simulation,
+    normalization::F,
+    Δt,
+) where {F <: AbstractFloat}
+    if t == simulation.parameters.simulation.tspan[1]
+        glacier = simulation.glaciers[glacier_idx]
+        Δx, Δy = glacier.Δx, glacier.Δy
+        min_A = simulation.parameters.physical.minA
+        max_A = simulation.parameters.physical.maxA
+
+        key = Symbol("$(glacier_idx)")
+        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        mask = trues(size(H).-1)
+
+        return loss(regType.reg, A, Δx, Δy, mask, normalization)
+    else
+        return 0.0
+    end
+end
+function backward_loss(
+    regType::RheologyRegularization,
+    H::Matrix{F},
+    H_ref,
+    V_ref, Vx_ref, Vy_ref,
+    t::F,
+    glacier_idx::Integer,
+    θ,
+    simulation,
+    normalization::F,
+    Δt,
+) where {F <: AbstractFloat}
+    if t == simulation.parameters.simulation.tspan[1]
+        glacier = simulation.glaciers[glacier_idx]
+        Δx, Δy = glacier.Δx, glacier.Δy
+        min_A = simulation.parameters.physical.minA
+        max_A = simulation.parameters.physical.maxA
+
+        key = Symbol("$(glacier_idx)")
+        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        mask = trues(size(H).-1)
+        ∂L∂θ = zero(θ)
+        ∂L∂θ.A[key] = backward_loss(regType.reg, A, Δx, Δy, mask, normalization) .* (max_A-min_A).*(1 .- (tanh.(θ.A[key])).^2)./2
+
+        return zero(H), ∂L∂θ
+    else
+        return zero(H), zero(θ)
+    end
 end
 
 """
@@ -304,3 +374,4 @@ end
 loss_uses_velocity(lossType::VelocityRegularization) = true
 loss_uses_velocity(lossType::Union{AbstractRegularization, AbstractSimpleRegularization}) = false
 discreteLossSteps(lossType::InitialThicknessRegularization, tspan) = [lossType.t₀]
+discreteLossSteps(lossType::RheologyRegularization, tspan) = [tspan[1]]

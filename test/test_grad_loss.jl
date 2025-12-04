@@ -164,9 +164,9 @@ function test_grad_finite_diff(
         if custom_NN
             architecture = Lux.Chain(
                 Lux.WrappedFunction(x -> LuxFunction(v -> ODINN.normalize(v; lims=([0.0, 0.0], [200.0, 0.6])), x)),
-                Lux.Dense(2, 5, x -> gelu.(x)),
-                Lux.Dense(5, 10, x -> gelu.(x)),
-                Lux.Dense(10, 5, x -> gelu.(x)),
+                Lux.Dense(2, 5, x -> Lux.gelu.(x)),
+                Lux.Dense(5, 10, x -> Lux.gelu.(x)),
+                Lux.Dense(10, 5, x -> Lux.gelu.(x)),
                 Lux.Dense(5, 1, sigmoid),
                 Lux.WrappedFunction(x -> LuxFunction(v -> v*1e2, x))
             )
@@ -226,8 +226,17 @@ function test_grad_finite_diff(
 
     # We create an ODINN prediction
     simulation = Inversion(model, glaciers, params)
-    θ = simulation.model.machine_learning.θ
+    θ = simulation.model.trainable_components.θ
     n_params = length(θ)
+
+    if (:A in keys(θ)) && (Symbol("1") in keys(θ.A)) # Classical inversion
+        if length(θ.A) != length(glaciers) # Gridded inversion
+            for i in 1:length(glaciers)
+                # Perturb the parameterization so that the value of the regularization is not zero (constant matrix is in the null space of the Tikhonov regularization)
+                θ.A[Symbol("$(i)")] .*= 0.5 .+ rand(Float64, size(θ.A[Symbol("$(i)")]))
+            end
+        end
+    end
 
     loss_iceflow_grad!(dθ, _θ, _simulation) = if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         ret = ODINN.grad_loss_iceflow!(_θ, simulation, map)
@@ -238,7 +247,7 @@ function test_grad_finite_diff(
     end
 
     function f(x, simulation)
-        simulation.model.machine_learning.θ = x
+        simulation.model.trainable_components.θ = x
         return ODINN.loss_iceflow_transient(x, simulation, map)
     end
 
@@ -279,7 +288,6 @@ function test_grad_finite_diff(
             for key in keys(θ)
                 if key == :IC
                     # Initial condition
-                    # for glacier in glaciers
                     for i in 1:length(glaciers)
                         glacier = glaciers[i]
                         M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter, i)
@@ -289,6 +297,18 @@ function test_grad_finite_diff(
                         mask[idxs] .= 1
                         key_glacier = Symbol("$(i)")
                         θ_mask.IC[key_glacier] .= mask
+                    end
+                elseif (key == :A) && (Symbol("1") in keys(θ.A)) && length(θ.A) != length(glaciers)
+                    # Gridded classical inversion
+                    for i in 1:length(glaciers)
+                        glacier = glaciers[i]
+                        M = glacier.H₀
+                        non_zero = M .> 1.0
+                        idxs = rand(findall(non_zero), max_params)
+                        mask = falses(size(M).-1)
+                        mask[idxs] .= 1
+                        key_glacier = Symbol("$(i)")
+                        θ_mask.A[key_glacier] .= mask
                     end
                 else
                     # Mask parameter vector
@@ -526,12 +546,12 @@ function test_grad_Halfar(
     model = Model(
         iceflow = SIA2Dmodel(parameters),#; A=A_law),
         mass_balance = nothing,
-        machine_learning = NeuralNetwork(parameters)
+        trainable_components = NeuralNetwork(parameters)
     )
 
-    θ = model.machine_learning.θ
-    modelNN = model.machine_learning.architecture
-    st = model.machine_learning.st
+    θ = model.trainable_components.θ
+    modelNN = model.trainable_components.architecture
+    st = model.trainable_components.st
     smodel = StatefulLuxLayer{true}(modelNN, θ.θ, st)
     min_NN = parameters.physical.minA
     max_NN = parameters.physical.maxA
@@ -586,9 +606,9 @@ function test_grad_Halfar(
     # Retrieve apply parametrization from inversion
     # TODO: replace function below
     ∇θ, = Zygote.gradient(_θ -> apply_parametrization(
-        model.machine_learning.target;
+        model.trainable_components.target;
         H = nothing, ∇S = nothing, θ = _θ,
-        iceflow_model = only(model.iceflow), ml_model = model.machine_learning,
+        iceflow_model = only(model.iceflow), trainable_components = model.trainable_components,
         glacier = only(glaciers), params = parameters),
         θ)
     dθ_halfar = ∂A_enzyme[1] * ∇θ
