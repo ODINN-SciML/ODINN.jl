@@ -41,7 +41,7 @@ params = Parameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
         epochs = [15,10],
         optimizer = [
-            ODINN.ADAM(0.01),
+            ODINN.ADAM(0.05),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 5)
             )
@@ -135,7 +135,7 @@ params = Parameters(
         batch_size = length(rgi_ids), # Set batch size equals size of the dataset
         epochs = [15,10],
         optimizer = [
-            ODINN.ADAM(0.01),
+            ODINN.ADAM(0.05),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 5)
             )
