@@ -86,7 +86,7 @@ function plot_law_1d(
         xvals = get_xvals(input_name, inputs, simulation, plot_full_input_range)
         input_tuples = [NamedTuple{(input_name,)}((xval,) ) for xval in xvals]
         outputs = [only(eval_law(law, simulation, i, input_tuples[i], θ)) for i in 1:length(xvals)]
-        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:blue)
+        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:blue, ylims=(minimum(outputs)*0.9, maximum(outputs)*1.1))
 
     else
         xname = input_names[glacier_idx]
