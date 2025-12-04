@@ -13,16 +13,16 @@ rgi_paths = get_rgi_paths()
 
 params = Parameters(
     simulation = SimulationParameters(
-        working_dir = working_dir,
-        tspan = (2010.0, 2015.0),
-        multiprocessing = false,
-        rgi_paths = rgi_paths
-    )
+    working_dir = working_dir,
+    tspan = (2010.0, 2015.0),
+    multiprocessing = false,
+    rgi_paths = rgi_paths
+)
 )
 
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
 
 glaciers = initialize_glaciers(rgi_ids, params)

@@ -14,7 +14,7 @@
 #         @warn """
 #         A system image for ODINN exists but is not in use!
 #         Restart Julia with:
-        
+
 #         julia --sysimage=$SYSIMAGE_PATH
 
 #         This will greatly reduce startup time.
@@ -40,7 +40,7 @@
 #     end
 
 #     @info "Building system image in a separate process..."
-    
+
 #     log_file = joinpath(SYSIMAGE_DIR, "sysimage_build.log")
 #     script_file = joinpath(SYSIMAGE_DIR, "build_sysimage.jl")
 
@@ -69,25 +69,30 @@
 Configures and enables multiprocessing based on the provided simulation parameters.
 
 # Arguments
-- `params::Sleipnir.Parameters`: A parameter object containing simulation settings,
-  including the number of workers (`params.simulation.workers`) and whether multiprocessing
-  is enabled (`params.simulation.multiprocessing`).
+
+  - `params::Sleipnir.Parameters`: A parameter object containing simulation settings,
+    including the number of workers (`params.simulation.workers`) and whether multiprocessing
+    is enabled (`params.simulation.multiprocessing`).
 
 # Behavior
-- If multiprocessing is enabled (`params.simulation.multiprocessing == true`) and the
-  specified number of workers (`params.simulation.workers`) is greater than 0:
-  - Adds the required number of worker processes if the current number of processes
-    (`nprocs()`) is less than the specified number of workers.
-  - Suppresses precompilation output on the worker processes and ensures the `ODINN`
-    module is loaded on all workers.
-  - If the specified number of workers is 1, removes all worker processes.
+
+  - If multiprocessing is enabled (`params.simulation.multiprocessing == true`) and the
+    specified number of workers (`params.simulation.workers`) is greater than 0:
+
+      + Adds the required number of worker processes if the current number of processes
+        (`nprocs()`) is less than the specified number of workers.
+      + Suppresses precompilation output on the worker processes and ensures the `ODINN`
+        module is loaded on all workers.
+      + If the specified number of workers is 1, removes all worker processes.
 
 # Returns
-- The number of worker processes (`nworkers()`) after configuration.
+
+  - The number of worker processes (`nworkers()`) after configuration.
 
 # Notes
-- This function uses `@eval` to dynamically add or remove worker processes.
-- Precompilation output is suppressed on workers to reduce noise in the console.
+
+  - This function uses `@eval` to dynamically add or remove worker processes.
+  - Precompilation output is suppressed on workers to reduce noise in the console.
 """
 function enable_multiprocessing(params::Sleipnir.Parameters)
     procs = params.simulation.workers
@@ -100,7 +105,7 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                     # if isfile(SYSIMAGE_PATH)
                     #     addprocs($procs - nprocs(); exeflags="--sysimage=$SYSIMAGE_PATH") # Use custom system image if available
                     # else
-                    addprocs($procs - nprocs(); exeflags="--project") # Fallback to default if system image is missing
+                    addprocs($procs - nprocs(); exeflags = "--project") # Fallback to default if system image is missing
                     # end
                     println("Number of cores: ", nprocs())
                     println("Number of workers: ", nworkers())
@@ -123,9 +128,9 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                 end
             elseif nprocs() != procs && procs == 1
                 @eval begin
-                rmprocs(workers(), waitfor=0)
-                @info "Number of cores: $(nprocs())"
-                @info "Number of workers: $(nworkers())"
+                    rmprocs(workers(), waitfor = 0)
+                    @info "Number of cores: $(nprocs())"
+                    @info "Number of workers: $(nworkers())"
                 end # @eval
             end
         end
@@ -160,7 +165,7 @@ function connect_electron_backend()
                     debug && inspector(dp)
                     dbg = debug ? "--debug=$dp" : []
                     proc = (debug ? run_rdr : run)(
-                        `$(electron()) --no-sandbox $dbg $mainjs port $p`; wait=false)
+                        `$(electron()) --no-sandbox $dbg $mainjs port $p`; wait = false)
                     conn = try_connect(ip"127.0.0.1", p)
                     shell = Electron(proc, conn)
                     initcbs(shell)

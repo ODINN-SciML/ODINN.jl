@@ -20,21 +20,21 @@ targetType(::SIA2D_D_hybrid_target) = :D_hybrid
 # TODO: D should be cap to its maximum physical value. This can be done with one extra
 # function and one extra differentiation.
 function Diffusivity(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     return compute_D(
         target;
         H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
-        )
+    )
 end
 
 function ∂Diffusivity∂H(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
 
@@ -46,8 +46,10 @@ function ∂Diffusivity∂H(
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
     ∂D∂H_no_NN = (
-        (p.value .- q.value .+ 1) .* S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value) .* ∇S.^(p.value .- 1)
-        + (n_H .+ 2) .* Y.value .* Γ_no_A .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
+        (p.value .- q.value .+ 1) .* S(iceflow_model, iceflow_cache, params) .*
+        H̄ .^ (p.value .- q.value) .* ∇S .^ (p.value .- 1)
+        +
+        (n_H .+ 2) .* Y.value .* Γ_no_A .* H̄ .^ (n_H .+ 1) .* ∇S .^ (n_∇S .- 1)
     )
 
     # Derivative of the output of the NN with respect to input layer
@@ -56,12 +58,12 @@ function ∂Diffusivity∂H(
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
     temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
-    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T = temp, H̄ = H̄+δH), θ)
     a = compute_D(
         target, iceflow_cache.Y.value;
         H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
-    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T = temp, H̄ = H̄), θ)
     b = compute_D(
         target, iceflow_cache.Y.value;
         H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
@@ -72,9 +74,9 @@ function ∂Diffusivity∂H(
 end
 
 function ∂Diffusivity∂∇H(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
 
@@ -83,17 +85,20 @@ function ∂Diffusivity∂∇H(
     n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n.value
 
     ∂D∂∇S_no_NN = (
-        S(iceflow_model, iceflow_cache, params) .* (p.value .- 1) .* H̄.^(p.value .- q.value .+ 1) .* ∇S.^(p.value .- 3)
-        + Γ(iceflow_model, iceflow_cache, params; include_A = false) .* Y.value .* (n_∇S .- 1) .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 3)
+        S(iceflow_model, iceflow_cache, params) .* (p.value .- 1) .*
+        H̄ .^ (p.value .- q.value .+ 1) .* ∇S .^ (p.value .- 3)
+        +
+        Γ(iceflow_model, iceflow_cache, params; include_A = false) .* Y.value .*
+        (n_∇S .- 1) .* H̄ .^ (n_H .+ 2) .* ∇S .^ (n_∇S .- 3)
     )
 
     return ∂D∂∇S_no_NN
 end
 
 function ∂Diffusivity∂θ(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     n = iceflow_cache.n
@@ -110,7 +115,7 @@ function ∂Diffusivity∂θ(
     n_∇S = iceflow_model.n_∇S_is_provided ? iceflow_cache.n_∇S : n.value
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 1)
+    ∂A_spatial = Γ_no_A .* H̄ .^ (n_H .+ 2) .* ∇S .^ (n_∇S .- 1)
 
     temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
 
@@ -123,7 +128,9 @@ function ∂Diffusivity∂θ(
         point in the glacier. Slower but more precise.
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=H̄[i,j]), θ)
+
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = H̄[i, j]), θ)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * iceflow_cache.Y.vjp_θ
         end
     elseif interpolation == :Linear
@@ -139,7 +146,8 @@ function ∂Diffusivity∂θ(
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=h), θ)
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = h), θ)
             push!(grads, deepcopy(iceflow_cache.Y.vjp_θ)) # Copy cache otherwise it points to the same place in memory
         end
         # Create interpolation for gradient
@@ -147,6 +155,7 @@ function ∂Diffusivity∂θ(
 
         # Compute spatial distributed gradient
         for i in axes(H̄, 1), j in axes(H̄, 2)
+
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H̄[i, j])
         end
     else
@@ -157,9 +166,9 @@ function ∂Diffusivity∂θ(
 end
 
 function compute_D(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
+)
     # Use the value of Y in the cache
 
     (; n, p, q, Y) = iceflow_cache
@@ -169,16 +178,18 @@ function compute_D(
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
     D = (
-        S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value .+ 1) .* ∇S.^(p.value .- 1)
-        + Y.value .* Γ_no_A .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 1)
+        S(iceflow_model, iceflow_cache, params) .* H̄ .^ (p.value .- q.value .+ 1) .*
+        ∇S .^ (p.value .- 1)
+        +
+        Y.value .* Γ_no_A .* H̄ .^ (n_H .+ 2) .* ∇S .^ (n_∇S .- 1)
     )
     return D
 end
 
 function compute_D(
-    target::SIA2D_D_hybrid_target, Y;
-    H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
-    )
+        target::SIA2D_D_hybrid_target, Y;
+        H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
+)
     # Use the value of Y provided as an argument
 
     (; n, p, q) = iceflow_cache
@@ -188,28 +199,30 @@ function compute_D(
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
     D = (
-        S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value .+ 1) .* ∇S.^(p.value .- 1)
-        + Y .* Γ_no_A .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 1)
+        S(iceflow_model, iceflow_cache, params) .* H̄ .^ (p.value .- q.value .+ 1) .*
+        ∇S .^ (p.value .- 1)
+        +
+        Y .* Γ_no_A .* H̄ .^ (n_H .+ 2) .* ∇S .^ (n_∇S .- 1)
     )
     return D
 end
 
 function Velocityꜛ(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     return compute_Velocityꜛ(
         target;
         H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
-        )
+    )
 end
 
 function ∂Velocityꜛ∂H(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     (; ρ, g) = params.physical
@@ -219,21 +232,23 @@ function ∂Velocityꜛ∂H(
     n_∇S = isnothing(iceflow_model.n_∇S) ? n.value : iceflow_model.n_∇S
 
     Γ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
-    S_surf = C.value .* (ρ * g).^(p.value - q.value)
+    S_surf = C.value .* (ρ * g) .^ (p.value - q.value)
     ∂D∂H_no_NN = (
-        (p.value .- q.value .+ 1) .* S_surf .* H̄.^(p.value .- q.value) .* ∇S .^ (p.value .- 1)
-        + (n_H .+ 1) .* Y.value .* Γ_no_A .* H̄.^n_H .* ∇S.^(n_∇S .- 1)
+        (p.value .- q.value .+ 1) .* S_surf .* H̄ .^ (p.value .- q.value) .*
+        ∇S .^ (p.value .- 1)
+        +
+        (n_H .+ 1) .* Y.value .* Γ_no_A .* H̄ .^ n_H .* ∇S .^ (n_∇S .- 1)
     )
 
     δH = 1e-4 .* ones(size(H̄))
     # We don't use apply_law! because we want to evaluate with custom inputs
     temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
-    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄+δH), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T = temp, H̄ = H̄+δH), θ)
     a = compute_D(
         target, iceflow_cache.Y.value;
         H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
     )
-    iceflow_model.Y.f.f(iceflow_cache.Y, (; T=temp, H̄=H̄), θ)
+    iceflow_model.Y.f.f(iceflow_cache.Y, (; T = temp, H̄ = H̄), θ)
     b = compute_D(
         target, iceflow_cache.Y.value;
         H̄ = H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
@@ -244,9 +259,9 @@ function ∂Velocityꜛ∂H(
 end
 
 function ∂Velocityꜛ∂∇H(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
 
@@ -255,17 +270,20 @@ function ∂Velocityꜛ∂∇H(
     n_∇S = isnothing(iceflow_model.n_∇S) ? n.value : iceflow_model.n_∇S
 
     ∂D∂∇S_no_NN = (
-        (p.value .- 1) .* S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value .+ 1) .* ∇S .^ (p.value .- 3)
-        + Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .* Y.value .* (n_∇S .- 1) .* H̄.^(n_H .+ 2) .* ∇S.^(n_∇S .- 3)
+        (p.value .- 1) .* S(iceflow_model, iceflow_cache, params) .*
+        H̄ .^ (p.value .- q.value .+ 1) .* ∇S .^ (p.value .- 3)
+        +
+        Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .* Y.value .*
+        (n_∇S .- 1) .* H̄ .^ (n_H .+ 2) .* ∇S .^ (n_∇S .- 3)
     )
 
     return ∂D∂∇S_no_NN
 end
 
 function ∂Velocityꜛ∂θ(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     n = iceflow_cache.n
@@ -282,7 +300,7 @@ function ∂Velocityꜛ∂θ(
     n_∇S = isnothing(iceflow_model.n_∇S) ? n.value : iceflow_model.n_∇S
 
     Γ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
-    ∂A_spatial = Γ_no_A .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
+    ∂A_spatial = Γ_no_A .* H̄ .^ (n_H .+ 1) .* ∇S .^ (n_∇S .- 1)
 
     temp = get_input(iAvgScalarTemp(), simulation, glacier_idx, t)
 
@@ -295,7 +313,9 @@ function ∂Velocityꜛ∂θ(
         point in the glacier. Slower but more precise.
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=H̄[i,j]), θ)
+
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = H̄[i, j]), θ)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * iceflow_cache.Y.vjp_θ
         end
     elseif interpolation == :Linear
@@ -311,7 +331,8 @@ function ∂Velocityꜛ∂θ(
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y, iceflow_cache.Y_prep_vjps, (; T=temp, H̄=h), θ)
+            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = h), θ)
             push!(grads, deepcopy(iceflow_cache.Y.vjp_θ)) # Copy cache otherwise it points to the same place in memory
         end
         # Create interpolation for gradient
@@ -319,6 +340,7 @@ function ∂Velocityꜛ∂θ(
 
         # Compute spatial distributed gradient
         for i in axes(H̄, 1), j in axes(H̄, 2)
+
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * grad_itp(H̄[i, j])
         end
     else
@@ -329,9 +351,9 @@ function ∂Velocityꜛ∂θ(
 end
 
 function compute_Velocityꜛ(
-    target::SIA2D_D_hybrid_target;
-    H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
-    )
+        target::SIA2D_D_hybrid_target;
+        H̄, ∇S, θ, iceflow_model, iceflow_cache, glacier, params
+)
     # Use the value of Y in the cache
 
     (; n, p, q, Y) = iceflow_cache
@@ -341,8 +363,10 @@ function compute_Velocityꜛ(
     Γꜛ_no_A = Γ(iceflow_model, iceflow_cache, params; include_A = false)
 
     D = (
-        S(iceflow_model, iceflow_cache, params) .* H̄.^(p.value .- q.value .+ 1) .* ∇S .^ (p.value .- 1)
-        + Y.value .* Γꜛ_no_A .* H̄.^(n_H .+ 1) .* ∇S.^(n_∇S .- 1)
+        S(iceflow_model, iceflow_cache, params) .* H̄ .^ (p.value .- q.value .+ 1) .*
+        ∇S .^ (p.value .- 1)
+        +
+        Y.value .* Γꜛ_no_A .* H̄ .^ (n_H .+ 1) .* ∇S .^ (n_∇S .- 1)
     )
     return D
 end

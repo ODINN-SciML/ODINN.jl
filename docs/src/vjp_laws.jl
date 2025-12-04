@@ -13,7 +13,7 @@ rgi_ids = ["RGI60-11.03638"]
 rgi_paths = get_rgi_paths()
 params = Parameters(
     simulation = SimulationParameters(rgi_paths = rgi_paths),
-    UDE = UDEparameters(grad = ContinuousAdjoint()),
+    UDE = UDEparameters(grad = ContinuousAdjoint())
 )
 nn_model = NeuralNetwork(params)
 
@@ -127,7 +127,6 @@ nn_model = NeuralNetwork(params)
 # - Inspect/validate cache content if you get inconsistent adjoints — a stale or incorrect cache entry is a common cause.
 # - Although the API is designed to provide everything you need as arguments, if your VJP needs anything from the forward pass, ensure it is stored in the cache.
 
-
 # ## Simple VJP customization
 
 # We will explore how we can customize the VJP computation of the law that is used in the [Laws](./laws.md) tutorial.
@@ -158,13 +157,12 @@ function init_cache(simulation, glacier_idx, θ)
     return ScalarCache(zeros(), zeros(), zero(θ))
 end
 
-
 # The declaration of the law without VJP customization would be:
 
 law = Law{ScalarCache}(;
     inputs = inputs,
     f! = f!,
-    init_cache = init_cache,
+    init_cache = init_cache
 )
 
 # !!! success
@@ -180,7 +178,7 @@ law = Law{ScalarCache}(;
     f_VJP_θ! = function (cache, inputs, θ)
         cache.vjp_θ .= ones(length(θ)) # The VJP is wrong on purpose to check that this function is properly called hereafter
     end,
-    init_cache = init_cache,
+    init_cache = init_cache
 )
 
 # In order to instantiate the cache, we need to define the model:
@@ -188,9 +186,9 @@ law = Law{ScalarCache}(;
 rgi_ids = ["RGI60-11.03638"]
 glaciers = initialize_glaciers(rgi_ids, params)
 model = Model(
-    iceflow = SIA2Dmodel(params; A=law),
+    iceflow = SIA2Dmodel(params; A = law),
     mass_balance = nothing,
-    regressors = (; A=nn_model)
+    regressors = (; A = nn_model)
 )
 simulation = Inversion(model, glaciers, params)
 
@@ -226,7 +224,7 @@ law = Law{ScalarCache}(;
     f! = f!,
     init_cache = init_cache,
     p_VJP! = DIVJP(),
-    callback_freq = 0,
+    callback_freq = 0
 )
 
 # !!! success
@@ -241,12 +239,11 @@ law = Law{ScalarCache}(;
     p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
         cache.vjp_θ .= ones(length(θ))
     end,
-    callback_freq = 0,
+    callback_freq = 0
 )
 
 # !!! success
 #     This law is applied only once before the beginning of the simulation, and the VJP are precomputed using our own implementation.
-
 
 # ## Simple cache customization
 
@@ -257,9 +254,9 @@ law = Law{ScalarCache}(;
 # The VJPs on the coarse grid are precomputed before solving the adjoint PDE and the evaluation at the exact points in the adjoint PDE are made using an interpolator that is stored inside the cache object.
 
 params = Parameters(
-    simulation = SimulationParameters(rgi_paths=rgi_paths),
-    UDE = UDEparameters(grad=ContinuousAdjoint(),
-    target = :D_hybrid),
+    simulation = SimulationParameters(rgi_paths = rgi_paths),
+    UDE = UDEparameters(grad = ContinuousAdjoint(),
+        target = :D_hybrid)
 )
 nn_model = NeuralNetwork(params)
 
@@ -271,7 +268,7 @@ archi = nn_model.architecture
 st = nn_model.st
 smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
 
-inputs = (; T=iAvgScalarTemp(), H̄=iH̄())
+inputs = (; T = iAvgScalarTemp(), H̄ = iH̄())
 
 f! = let smodel = smodel, prescale = prescale, postscale = postscale
     function (cache, inp, θ)
@@ -288,7 +285,10 @@ mutable struct MatrixCacheInterp <: Cache
     value::Array{Float64, 2}
     vjp_inp::Array{Float64, 2}
     vjp_θ::Array{Float64, 3}
-    interp_θ::Interpolations.GriddedInterpolation{Vector{Float64}, 1, Vector{Vector{Float64}}, Interpolations.Gridded{Interpolations.Linear{Interpolations.Throw{OnGrid}}}, Tuple{Vector{Float64}}}
+    interp_θ::Interpolations.GriddedInterpolation{
+        Vector{Float64}, 1, Vector{Vector{Float64}},
+        Interpolations.Gridded{Interpolations.Linear{Interpolations.Throw{OnGrid}}},
+        Tuple{Vector{Float64}}}
 end
 
 # !!! warning
@@ -297,7 +297,8 @@ end
 function init_cache_interp(simulation, glacier_idx, θ)
     glacier = simulation.glaciers[glacier_idx]
     (; nx, ny) = glacier
-    H_interp = ODINN.create_interpolation(glacier.H₀; n_interp_half = simulation.model.trainable_components.target.n_interp_half)
+    H_interp = ODINN.create_interpolation(glacier.H₀;
+        n_interp_half = simulation.model.trainable_components.target.n_interp_half)
     θvec = ODINN.ComponentVector2Vector(θ)
     grads = [zero(θvec) for i in 1:length(H_interp)]
     grad_itp = interpolate((H_interp,), grads, Gridded(Linear()))
@@ -310,10 +311,11 @@ end
 # Below we define the precomputation function which defines a coarse grid and differentiates the neural network at each of these points.
 
 function p_VJP!(cache, vjpsPrepLaw, inputs, θ)
-    H_interp = ODINN.create_interpolation(inputs.H̄; n_interp_half = simulation.model.trainable_components.target.n_interp_half)
+    H_interp = ODINN.create_interpolation(inputs.H̄;
+        n_interp_half = simulation.model.trainable_components.target.n_interp_half)
     grads = Vector{Float64}[]
     for h in H_interp
-        ret, = ODINN.Zygote.gradient(_θ -> f!(cache, (; T=inputs.T, H̄=h), _θ), θ)
+        ret, = ODINN.Zygote.gradient(_θ -> f!(cache, (; T = inputs.T, H̄ = h), _θ), θ)
         push!(grads, ODINN.ComponentVector2Vector(ret))
     end
     cache.interp_θ = interpolate((H_interp,), grads, Gridded(Linear()))
@@ -326,6 +328,7 @@ function f_VJP_θ!(cache, inputs, θ)
     H̄ = inputs.H̄
     zero_interp = cache.interp_θ(0.0)
     for i in axes(H̄, 1), j in axes(H̄, 2)
+
         cache.vjp_θ[i, j, :] = map(h -> ifelse(h == 0.0, zero_interp, cache.interp_θ(h)), H̄[i, j])
     end
 end
@@ -339,7 +342,7 @@ law = Law{MatrixCacheInterp}(;
     p_VJP! = p_VJP!,
     f_VJP_θ! = f_VJP_θ!,
     f_VJP_input! = function (cache, inputs, θ) # Not implemented in this example
-    end,
+    end
 )
 
 # As in the previous example, we need to define some objects and make the initialization manually to be able to call the internals of ODINN `ODINN.precompute_law_VJP` and `ODINN.∂law∂θ!`.
@@ -347,9 +350,9 @@ law = Law{MatrixCacheInterp}(;
 rgi_ids = ["RGI60-11.03638"]
 glaciers = initialize_glaciers(rgi_ids, params)
 model = Model(
-    iceflow = SIA2Dmodel(params; Y=law),
+    iceflow = SIA2Dmodel(params; Y = law),
     mass_balance = nothing,
-    regressors = (; Y=nn_model)
+    regressors = (; Y = nn_model)
 )
 simulation = Inversion(model, glaciers, params)
 θ = simulation.model.trainable_components.θ
@@ -375,12 +378,11 @@ ODINN.∂law∂θ!(
     simulation.model.iceflow.Y,
     simulation.cache.iceflow.Y,
     simulation.cache.iceflow.Y_prep_vjps,
-    (; T=1.0, H̄=simulation.cache.iceflow.H̄), θ)
+    (; T = 1.0, H̄ = simulation.cache.iceflow.H̄), θ)
 
 # Now let us check that the `vjp_θ` field of the cache, which is spatially varying, has been populated:
 
 simulation.cache.iceflow.Y.vjp_θ
-
 
 # ## Frequently Asked Questions
 # - Can I use the preparation object in the `p_VJP!`/`f_VJP_*` functions?

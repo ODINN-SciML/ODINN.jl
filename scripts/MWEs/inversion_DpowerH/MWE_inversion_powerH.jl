@@ -15,7 +15,8 @@ The neural network should learn the function NN(Temp, ρgH) ≈ (ρgH)^n
 with n the Glen exponent.
 """
 
-using Pkg; Pkg.activate(".")
+using Pkg;
+Pkg.activate(".")
 
 using Revise
 using ODINN
@@ -30,7 +31,6 @@ rgi_paths = get_rgi_paths()
 working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 # Re-set global constant for working directory
 # const global Sleipnir.prepro_dir = joinpath(homedir(),  ".OGGM/ODINN_tests")
-
 
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
@@ -50,28 +50,28 @@ params = Parameters(
         workers = 1,
         test_mode = false,
         rgi_paths = rgi_paths
-        ),
+    ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
         epochs = [100, 20],
         optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
-        ),
+    ),
     physical = PhysicalParameters(
         minA = 8e-21,
         maxA = 8e-17
-        ),
+    ),
     UDE = UDEparameters(
         sensealg = SciMLSensitivity.ZygoteAdjoint(), # QuadratureAdjoint(autojacvec=ODINN.EnzymeVJP()),
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
         target = :D_hybrid
-        ),
+    ),
     solver = Huginn.SolverParameters(
         step = δt,
         progress = true
-        )
     )
+)
 
 # We retrieve some glaciers for the simulation
 glaciers = initialize_glaciers(rgi_ids, params)
@@ -104,8 +104,8 @@ min_H, max_H = 0.0, H_max
 
 # We define the prescale and postscale of quantities.
 model = Model(
-    iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=true)),
-    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+    iceflow = SIA2Dmodel(params; A = CuffeyPaterson(scalar = true)),
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
 )
 
 # Time snapshots for transient inversion
@@ -131,14 +131,14 @@ end
 # TODO: This function does shit on the model variable, for now we do a clean restart
 nn_model = NeuralNetwork(
     params;
-    architecture = architecture,
+    architecture = architecture
 )
-Y_law = LawY(nn_model, params; max_NN=max_NN)
+Y_law = LawY(nn_model, params; max_NN = max_NN)
 model = Model(
-    iceflow = SIA2Dmodel(params; Y=Y_law, n_H=1.0),
+    iceflow = SIA2Dmodel(params; Y = Y_law, n_H = 1.0),
     mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
-    regressors = (; Y=nn_model),
-    target = SIA2D_D_hybrid_target(),
+    regressors = (; Y = nn_model),
+    target = SIA2D_D_hybrid_target()
 )
 
 # We create an ODINN prediction
@@ -160,32 +160,32 @@ AtimesH_pred = zeros(length(Temps_smooth), length(H_smooth))
 
 θ = functional_inversion.model.trainable_components.θ
 for i in 1:length(Temps_smooth), j in 1:length(H_smooth)
+
     temp = Temps_smooth[i]
     H = H_smooth[j]
 
-    A_pred = eval_law(functional_inversion.model.iceflow.Y, functional_inversion, 1, (;T=temp, H̄=H), θ)
+    A_pred = eval_law(functional_inversion.model.iceflow.Y,
+        functional_inversion, 1, (; T = temp, H̄ = H), θ)
     AtimesH_pred[i, j] = only(unique(A_pred)) # The cache is a matrix and the result of the NN evaluation has been broadcasted to a matrix, we retrieve the only value
 end
 
 A₀ = A_poly.(T₀)
 H_pred = AtimesH_pred[1, :] #./ A₀
 
-plot = Plots.scatter(H_smooth, H_pred, label="Neural network prediction", c=:lightsteelblue2)
-Plots.plot!(H_smooth, A₀ .* H_smooth.^2.0, label="Ground True Value",
-                    xlabel="Ice thickness H [m]",
-                    ylabel="Predicted output (= A(T) x H^2)", lw = 3, c=:dodgerblue4,
-                    legend=:topleft)
+plot = Plots.scatter(H_smooth, H_pred, label = "Neural network prediction", c = :lightsteelblue2)
+Plots.plot!(H_smooth, A₀ .* H_smooth .^ 2.0, label = "Ground True Value",
+    xlabel = "Ice thickness H [m]",
+    ylabel = "Predicted output (= A(T) x H^2)", lw = 3, c = :dodgerblue4,
+    legend = :topleft)
 Plots.savefig(plot, "MWE_inversion_diffusion_result_H_2.pdf")
 
 # T₀ = Temps[1]
-
 
 # Plots.scatter(Temps, As_fake, label="True A", c=:lightsteelblue2)
 # plot_epoch = Plots.plot!(Temps_smooth, As_pred, label="Predicted A", 
 #                     xlabel="Long-term air temperature (°C)", yticks=[0.0, 1e-17, 1e-18, params.physical.maxA],
 #                     ylabel=:A, ylims=(0.0, params.physical.maxA), lw = 3, c=:dodgerblue4,
 #                     legend=:topleft)
-
 
 # @test As_pred ≈ As_fake rtol=0.1
 # @test log10.(As_pred) ≈ log10.(As_fake) rtol=0.1

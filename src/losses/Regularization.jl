@@ -1,5 +1,6 @@
 export TikhonovRegularization
-export InitialThicknessRegularization, VelocityRegularization, RheologyRegularization, DiffusivityRegularization
+export InitialThicknessRegularization, VelocityRegularization, RheologyRegularization,
+       DiffusivityRegularization
 
 # Abstract regularization type as subtype of loss
 abstract type AbstractRegularization <: AbstractLoss end
@@ -19,15 +20,17 @@ This struct includes both the forward and reverse (adjoint) operators, which are
 for the computation of the gradients with respect to the model parameters.
 
 # Keyword Arguments (Constructor)
-- `operator::Symbol = :laplacian`: The regularization operator to use. Currently, only `:laplacian` is implemented, which penalizes large gradients by applying the Laplacian operator.
-- `distance::Integer = 3`: A width parameter to determine how far from the margin evaluate the loss.
+
+  - `operator::Symbol = :laplacian`: The regularization operator to use. Currently, only `:laplacian` is implemented, which penalizes large gradients by applying the Laplacian operator.
+  - `distance::Integer = 3`: A width parameter to determine how far from the margin evaluate the loss.
 
 # Fields (Struct)
-- `operator_forward::Function`: The forward regularization operator (e.g., `∇²`).
-- `operator_reverse::Function`: The reverse-mode (VJP) of the operator (e.g., `VJP_λ_∂∇²a_∂a`).
-- `distance::Integer`: The distance parameter controlling the extent of regularization.
+
+  - `operator_forward::Function`: The forward regularization operator (e.g., `∇²`).
+  - `operator_reverse::Function`: The reverse-mode (VJP) of the operator (e.g., `VJP_λ_∂∇²a_∂a`).
+  - `distance::Integer`: The distance parameter controlling the extent of regularization.
 """
-struct TikhonovRegularization{I<:Integer} <: AbstractSimpleRegularization
+struct TikhonovRegularization{I <: Integer} <: AbstractSimpleRegularization
     operator_forward::Function
     operator_reverse::Function
     distance::I
@@ -48,10 +51,12 @@ A composite regularization type designed for initial ice thickness.
 It combines a simple spatial regularization (e.g., `TikhonovRegularization`) with a reference initial time.
 
 # Keyword Arguments
-- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
-- `t₀::AbstractFloat = 1994.0`: The reference initial time (e.g., year) at which the regularization applies.
+
+  - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
+  - `t₀::AbstractFloat = 1994.0`: The reference initial time (e.g., year) at which the regularization applies.
 """
-@kwdef struct InitialThicknessRegularization{R <: AbstractSimpleRegularization, F <: AbstractFloat} <: AbstractRegularization
+@kwdef struct InitialThicknessRegularization{
+    R <: AbstractSimpleRegularization, F <: AbstractFloat} <: AbstractRegularization
     reg::R = TikhonovRegularization()
     t₀::F = 1994.0
 end
@@ -62,11 +67,13 @@ end
 Regularization for velocity fields, combining a spatial smoothing operator with optional component control.
 
 # Keyword Arguments
-- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
-- `components::Symbol = :abs`: Determines which velocity components to regularize (e.g. `:abs`, `:x`, `:y`).
-- `distance::Integer = 3`: Distance to glacier margin.
+
+  - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+  - `components::Symbol = :abs`: Determines which velocity components to regularize (e.g. `:abs`, `:x`, `:y`).
+  - `distance::Integer = 3`: Distance to glacier margin.
 """
-@kwdef struct VelocityRegularization{R <: AbstractSimpleRegularization, I <: Integer} <: AbstractRegularization
+@kwdef struct VelocityRegularization{R <: AbstractSimpleRegularization, I <: Integer} <:
+              AbstractRegularization
     reg::R = TikhonovRegularization()
     components::Symbol = :abs
     distance::I = 3
@@ -79,9 +86,11 @@ Regularization of the gridded rheology `A` in the context of classical inversion
 It can include a spatial smoothing operator through the field `reg`.
 
 # Keyword Arguments
-- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+
+  - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
 """
-@kwdef struct RheologyRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
+@kwdef struct RheologyRegularization{R <: AbstractSimpleRegularization} <:
+              AbstractRegularization
     reg::R = TikhonovRegularization()
 end
 
@@ -91,32 +100,34 @@ end
 Regularization for diffusivity fields using a specified spatial operator.
 
 # Keyword Arguments
-- `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator applied to diffusivity.
+
+  - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator applied to diffusivity.
 """
-@kwdef struct DiffusivityRegularization{R <: AbstractSimpleRegularization} <: AbstractRegularization
+@kwdef struct DiffusivityRegularization{R <: AbstractSimpleRegularization} <:
+              AbstractRegularization
     reg::R = TikhonovRegularization()
 end
 
 ### Definition of simple regularization functions
 
 function loss(
-    regType::TikhonovRegularization,
-    a::Matrix{F},
-    Δx::F,
-    Δy::F,
-    mask::BitMatrix,
-    normalization::F,
+        regType::TikhonovRegularization,
+        a::Matrix{F},
+        Δx::F,
+        Δy::F,
+        mask::BitMatrix,
+        normalization::F
 ) where {F <: AbstractFloat}
     operator_forward = regType.operator_forward
-    return sum(operator_forward(a, Δx, Δy)[mask].^2.0)
+    return sum(operator_forward(a, Δx, Δy)[mask] .^ 2.0)
 end
 function backward_loss(
-    regType::TikhonovRegularization,
-    a::Matrix{F},
-    Δx::F,
-    Δy::F,
-    mask::BitMatrix,
-    normalization::F,
+        regType::TikhonovRegularization,
+        a::Matrix{F},
+        Δx::F,
+        Δy::F,
+        mask::BitMatrix,
+        normalization::F
 ) where {F <: AbstractFloat}
     operator_forward = regType.operator_forward
     operator_reverse = regType.operator_reverse
@@ -127,22 +138,18 @@ function backward_loss(
 end
 
 function loss(
-    lossType::InitialThicknessRegularization,
-    H_pred::Matrix{F},
-    H_ref,
-    V_ref, Vx_ref, Vy_ref,
-    t::F,
-    glacier_idx::Integer,
-    θ,
-    simulation,
-    normalization::F,
-    Δt,
+        lossType::InitialThicknessRegularization,
+        H_pred::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
 ) where {F <: AbstractFloat}
-    @assert haskey(θ, :IC) """
-    Regularization with respect to initial condition requires to set initial condition
-    as a trainable parameter. If you want to calibrate the initial condition of the
-    glacier, set the initial condition as parameter in the definition of the regressor.
-    """
+    @assert haskey(θ, :IC) """Regularization with respect to initial condition requires to set initial condition as a trainable parameter. If you want to calibrate the initial condition of the glacier, set the initial condition as parameter in the definition of the regressor."""
     if t == lossType.t₀
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
@@ -155,16 +162,16 @@ function loss(
     end
 end
 function backward_loss(
-    lossType::InitialThicknessRegularization,
-    H_pred::Matrix{F},
-    H_ref,
-    V_ref, Vx_ref, Vy_ref,
-    t::F,
-    glacier_idx::Integer,
-    θ,
-    simulation,
-    normalization::F,
-    Δt,
+        lossType::InitialThicknessRegularization,
+        H_pred::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
 ) where {F <: AbstractFloat}
     # Regularization is only evaluated for the first time step of the simulation.
     glacier = simulation.glaciers[glacier_idx]
@@ -183,18 +190,17 @@ function backward_loss(
 end
 
 function loss(
-    regType::VelocityRegularization,
-    H::Matrix{F},
-    H_ref,
-    V_ref, Vx_ref, Vy_ref,
-    t::F,
-    glacier_idx::Integer,
-    θ,
-    simulation,
-    normalization::F,
-    Δt,
+        regType::VelocityRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
 ) where {F <: AbstractFloat}
-
     glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
@@ -211,18 +217,17 @@ function loss(
     end
 end
 function backward_loss(
-    regType::VelocityRegularization,
-    H::Matrix{F},
-    H_ref,
-    V_ref, Vx_ref, Vy_ref,
-    t::F,
-    glacier_idx::Integer,
-    θ,
-    simulation,
-    normalization::F,
-    Δt,
+        regType::VelocityRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
 ) where {F <: AbstractFloat}
-
     glacier = simulation.glaciers[glacier_idx]
     Δx, Δy = glacier.Δx, glacier.Δy
 
@@ -234,30 +239,31 @@ function backward_loss(
 
     if regType.components == :abs
         ∂Reg∂V = backward_loss(regType.reg, V, Δx, Δy, mask, normalization)
-        ∂Reg∂Vx = ifelse.(V.>0.0, ∂Reg∂V .* Vx ./ V, 0.0)
-        ∂Reg∂Vy = ifelse.(V.>0.0, ∂Reg∂V .* Vy ./ V, 0.0)
+        ∂Reg∂Vx = ifelse.(V .> 0.0, ∂Reg∂V .* Vx ./ V, 0.0)
+        ∂Reg∂Vy = ifelse.(V .> 0.0, ∂Reg∂V .* Vy ./ V, 0.0)
     else
         @error "Regularization $(regType) not implemented."
     end
 
-    ∂Reg∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
-    ∂Reg∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
+    ∂Reg∂H = VJP_λ_∂surface_V∂H(
+        simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
+    ∂Reg∂θ = VJP_λ_∂surface_V∂θ(
+        simulation.parameters.UDE.grad.VJP_method, ∂Reg∂Vx, ∂Reg∂Vy, H, θ, simulation, t)[1]
 
     return ∂Reg∂H * Δt.V, ∂Reg∂θ * Δt.V
 end
 
-
 function loss(
-    regType::RheologyRegularization,
-    H::Matrix{F},
-    H_ref,
-    V_ref, Vx_ref, Vy_ref,
-    t::F,
-    glacier_idx::Integer,
-    θ,
-    simulation,
-    normalization::F,
-    Δt,
+        regType::RheologyRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
 ) where {F <: AbstractFloat}
     if t == simulation.parameters.simulation.tspan[1]
         glacier = simulation.glaciers[glacier_idx]
@@ -267,7 +273,7 @@ function loss(
 
         key = Symbol("$(glacier_idx)")
         A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
-        mask = trues(size(H).-1)
+        mask = trues(size(H) .- 1)
 
         return loss(regType.reg, A, Δx, Δy, mask, normalization)
     else
@@ -275,16 +281,16 @@ function loss(
     end
 end
 function backward_loss(
-    regType::RheologyRegularization,
-    H::Matrix{F},
-    H_ref,
-    V_ref, Vx_ref, Vy_ref,
-    t::F,
-    glacier_idx::Integer,
-    θ,
-    simulation,
-    normalization::F,
-    Δt,
+        regType::RheologyRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
 ) where {F <: AbstractFloat}
     if t == simulation.parameters.simulation.tspan[1]
         glacier = simulation.glaciers[glacier_idx]
@@ -294,9 +300,10 @@ function backward_loss(
 
         key = Symbol("$(glacier_idx)")
         A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
-        mask = trues(size(H).-1)
+        mask = trues(size(H) .- 1)
         ∂L∂θ = zero(θ)
-        ∂L∂θ.A[key] = backward_loss(regType.reg, A, Δx, Δy, mask, normalization) .* (max_A-min_A).*(1 .- (tanh.(θ.A[key])).^2)./2
+        ∂L∂θ.A[key] = backward_loss(regType.reg, A, Δx, Δy, mask, normalization) .*
+                      (max_A-min_A) .* (1 .- (tanh.(θ.A[key])) .^ 2) ./ 2
 
         return zero(H), ∂L∂θ
     else
@@ -311,17 +318,19 @@ Computes the 2D Laplacian operator of a scalar field `a` on a regular grid
 using finite differences and staggered (dual–primal) averaging.
 
 # Arguments
-- `a::Matrix{F}`: 2D scalar field to differentiate.
-- `Δx::F`: Grid spacing in the x-direction.
-- `Δy::F`: Grid spacing in the y-direction.
+
+  - `a::Matrix{F}`: 2D scalar field to differentiate.
+  - `Δx::F`: Grid spacing in the x-direction.
+  - `Δy::F`: Grid spacing in the y-direction.
 
 # Returns
-- `Matrix{F}`: Approximation of the Laplacian ∇²a with boundary values set to `0.0`.
+
+  - `Matrix{F}`: Approximation of the Laplacian ∇²a with boundary values set to `0.0`.
 """
 function ∇²(
-    a::Matrix{F},
-    Δx::F,
-    Δy::F,
+        a::Matrix{F},
+        Δx::F,
+        Δy::F
 ) where {F <: AbstractFloat}
     # First derivative
     ∂a∂x = Huginn.diff_x(a, Δx)
@@ -337,7 +346,7 @@ function ∇²(
     ∂2a∂y2 = Huginn.avg_x(∂2a∂y2_dual)
 
     ∇²a = zero(a)
-    ∇²a[2:end-1, 2:end-1] = ∂2a∂x2 .+ ∂2a∂y2
+    ∇²a[2:(end - 1), 2:(end - 1)] = ∂2a∂x2 .+ ∂2a∂y2
     return ∇²a
 end
 
@@ -350,28 +359,32 @@ This function effectively propagates sensitivities (adjoints) `λ` backward
 through the Laplacian, as required in adjoint or reverse-mode differentiation.
 
 # Arguments
-- `λ::Matrix{R}`: Adjoint field associated with the Laplacian output.
-- `a::Matrix{R}`: Input scalar field to the Laplacian operator.
-- `Δx::R`: Grid spacing in the x-direction.
-- `Δy::R`: Grid spacing in the y-direction.
+
+  - `λ::Matrix{R}`: Adjoint field associated with the Laplacian output.
+  - `a::Matrix{R}`: Input scalar field to the Laplacian operator.
+  - `Δx::R`: Grid spacing in the x-direction.
+  - `Δy::R`: Grid spacing in the y-direction.
 
 # Returns
-- `Matrix{R}`: The adjoint (VJP) with respect to `a`, i.e. `∂⟨λ, ∇²a⟩/∂a`.
+
+  - `Matrix{R}`: The adjoint (VJP) with respect to `a`, i.e. `∂⟨λ, ∇²a⟩/∂a`.
 """
 function VJP_λ_∂∇²a_∂a(
-    λ::Matrix{R},
-    a::Matrix{R},
-    Δx::R,
-    Δy::R,
+        λ::Matrix{R},
+        a::Matrix{R},
+        Δx::R,
+        Δy::R
 ) where {R <: Real}
-    λ_inner = λ[2:end-1,2:end-1]
+    λ_inner = λ[2:(end - 1), 2:(end - 1)]
     ∂a∂x = diff_x_adjoint(avg_y_adjoint(diff_x_adjoint(avg_y_adjoint(λ_inner), Δx)), Δx)
     ∂a∂y = diff_y_adjoint(avg_x_adjoint(diff_y_adjoint(avg_x_adjoint(λ_inner), Δy)), Δy)
     return ∂a∂x + ∂a∂y
 end
 
-
 loss_uses_velocity(lossType::VelocityRegularization) = true
-loss_uses_velocity(lossType::Union{AbstractRegularization, AbstractSimpleRegularization}) = false
+function loss_uses_velocity(lossType::Union{
+        AbstractRegularization, AbstractSimpleRegularization})
+    false
+end
 discreteLossSteps(lossType::InitialThicknessRegularization, tspan) = [lossType.t₀]
 discreteLossSteps(lossType::RheologyRegularization, tspan) = [tspan[1]]

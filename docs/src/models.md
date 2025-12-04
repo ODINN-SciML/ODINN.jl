@@ -8,6 +8,7 @@ The three main types of models are gathered in a parent type `Model` in the foll
 ODINN.Model
 ODINN.Model()
 ```
+
 ## Ice flow models
 
 Ice flow models are used to solve the PDEs describing the gravitational flow of glaciers. All ice flow models must be a subtype of abstract type `IceflowModel`. Ice flow models are managed by the [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl) package.
@@ -51,8 +52,8 @@ In order to parametrize a given variable inside an (ice flow) model, one can do 
 nn_model = NeuralNetwork(params)
 A_law = LawA(nn_model, params)
 model = Model(
-    iceflow = SIA2Dmodel(params; A=A_law),
-    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
-    regressors = (; A=nn_model)
+    iceflow = SIA2Dmodel(params; A = A_law),
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+    regressors = (; A = nn_model)
 )
 ```

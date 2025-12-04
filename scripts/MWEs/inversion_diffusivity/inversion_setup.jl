@@ -58,7 +58,7 @@ t₁ = t₀ + Δt
 δt = Δt / 200
 tstops = Huginn.define_callback_steps((t₀, t₁), δt) |> collect
 
-B = zeros((nx,ny))
+B = zeros((nx, ny))
 # Construct a grid that includes the initial Dome
 η = 0.80
 Δx = R₀ / nx / (η / 2)
@@ -83,15 +83,13 @@ velocityData = Sleipnir.SurfaceVelocityData(
     isGridGlacierAligned = true
 )
 
-
 Hs_dome = map(x -> maximum(x), Hs)
 # Reduction in ice thickness during simulation
 frac_H = 100.0 * (Hs_dome[begin] - Hs_dome[end]) / Hs_dome[begin]
 println("Maximum ice thickness has been reduce by $(frac_H) after $(Δt) years of forward simulation.%")
-Rs_extent =  map(x -> sum(x .> 0.0), Hs)
+Rs_extent = map(x -> sum(x .> 0.0), Hs)
 frac_R = 100.0 * (Rs_extent[end] - Rs_extent[begin]) / Rs_extent[begin]
 println("Glacier extent has increased by $(frac_R)% after $(Δt) years of forward simulation.%")
-
 
 params = Parameters(
     simulation = SimulationParameters(
@@ -104,8 +102,8 @@ params = Parameters(
         workers = 1,
         test_mode = false,
         rgi_paths = rgi_paths,
-        gridScalingFactor = 1,
-        ),
+        gridScalingFactor = 1
+    ),
     hyper = Hyperparameters(
         batch_size = 1,
         epochs = [20, 60],
@@ -114,7 +112,7 @@ params = Parameters(
             # ODINN.ADAM(0.001),
             ODINN.Optimisers.Adam(0.001, (0.0, 0.999)),
             # ODINN.GradientDescent(
-                # linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
+            # linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
             # ),
             # ODINN.LBFGS(
             #     linesearch = ODINN.LineSearches.BackTracking(iterations = 10),
@@ -123,30 +121,23 @@ params = Parameters(
             ODINN.BFGS(
                 linesearch = ODINN.LineSearches.BackTracking()
             )
-                # ODINN.LineSearches.HagerZhang( # See https://github.com/JuliaNLSolvers/LineSearches.jl/blob/3259cd240144b96a5a3a309ea96dfb19181058b2/src/hagerzhang.jl#L37
-                #     linesearchmax = 10,
-                #     display = true,
-                #     delta = 0.01,
-                #     sigma = 0.1)
-                #     )
-                ]
-        ),
+        ]
+    ),
     UDE = UDEparameters(
         sensealg = ZygoteAdjoint(),
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(
             abstol = 1e-6,
-            reltol = 1e-6,
+            reltol = 1e-6
         ),
         optimization_method = "AD+AD",
-        target = :D,
-        # empirical_loss_function = LossV(), # TODO
-        ),
+        target = :D        # empirical_loss_function = LossV(), # TODO
+    ),
     solver = Huginn.SolverParameters(
         step = δt,
         progress = true
-        )
     )
+)
 
 # We are going to create a glacier using the Halfar solution
 # TODO: Downscalling of glacier grid does not seem to be working
@@ -163,15 +154,14 @@ glacier = Glacier2D(
     nx = nx,
     ny = ny,
     C = 0.0
-    )
+)
 glaciers = Vector{Sleipnir.AbstractGlacier}([glacier])
 
 # We add thickness data to Glacier object
 glaciers[1] = Glacier2D(
     glaciers[1],
-    thicknessData = thicknessData,
-    # velocityData = velocityData,
-    )
+    thicknessData = thicknessData    # velocityData = velocityData,
+)
 
 """
 We can define the architecture of the model directly, passing the prescale and postcale
@@ -179,9 +169,11 @@ directly to Lux using a WrappedFunction layer.
 """
 # n_fourier_feautures = 10
 
-function inv_normalize(v::Union{Vector,SubArray})
+function inv_normalize(v::Union{Vector, SubArray})
     @assert length(v) == 2
-    return [ODINN.normalize(v[1]; lims = (0.0, H_max)), ODINN.normalize(v[2]; lims = (0.0, 0.6))]
+    return [
+        ODINN.normalize(v[1]; lims = (0.0, H_max)), ODINN.normalize(v[2]; lims = (
+            0.0, 0.6))]
 end
 
 # function fourier_feature(v::Union{Vector,SubArray})
@@ -190,7 +182,7 @@ end
 
 # Maximum value of U velocity for neural network
 U₀ = 1e4
-function post_scale(v::Union{Vector,SubArray})
+function post_scale(v::Union{Vector, SubArray})
     @assert length(v) == 1
     @assert 0.0 <= v[1] <= 1.0
     return [U₀ .* exp.((v[1] .- 1.0) ./ v[1])]
@@ -207,8 +199,7 @@ architecture = Lux.Chain(
     Lux.Dense(30, 10, x -> softplus.(x)),
     Lux.Dense(10, 1, sigmoid),
     # Lux.WrappedFunction(y -> U₀ .* exp.((y .- 1.0) ./ y))
-    Lux.WrappedFunction(x -> LuxFunction(post_scale, x))
-    # WrappedFunction(y -> 10.0.^( 3.0 .* (y .- 1.0) .+ 1.0 .* (y .+ 1.0) ))
+    Lux.WrappedFunction(x -> LuxFunction(post_scale, x))    # WrappedFunction(y -> 10.0.^( 3.0 .* (y .- 1.0) .+ 1.0 .* (y .+ 1.0) ))
 )
 
 ### Pretraining
@@ -240,7 +231,9 @@ if pretrain & !saved_nn_pretrain
     X_samples = Matrix(X_samples)
     Y_samples = reshape(Y_samples, (1, :))
 
-    architecture, θ_pretrain, st_pretrain, losses = pretraining(
+    architecture, θ_pretrain,
+    st_pretrain,
+    losses = pretraining(
         architecture;
         X = X_samples, Y = Y_samples,
         nepochs = 5000, rng = rng
@@ -248,7 +241,8 @@ if pretrain & !saved_nn_pretrain
     jldsave("./scripts/MWEs/inversion_diffusivity/data/pretrained.jld2"; θ = θ_pretrain)
 elseif pretrain & saved_nn_pretrain
     # We read pretrained parameters of NN from memory
-    θ_pretrain = load(joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "pretrained.jld2"), "θ")
+    θ_pretrain = load(
+        joinpath(ODINN.root_dir, "scripts/MWEs/inversion_diffusivity/data", "pretrained.jld2"), "θ")
 else
     θ_pretrain, st_pretrain = Lux.setup(rng, architecture)
 end
@@ -270,19 +264,19 @@ law = LawU(
     max_NN = nothing,
     precompute_VJPs = true,
     precompute_interpolation = true
-    )
+)
 
 model = Model(
     iceflow = SIA2Dmodel(params; U = law),
     mass_balance = TImodel1(
         params; DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0
-        ),
+    ),
     regressors = (; U = nn_model),
     target = SIA2D_D_target(
         interpolation = :Linear,
-        n_interp_half = 60,
-    ),
+        n_interp_half = 60
+    )
 )
 
 # We create an ODINN prediction

@@ -1,5 +1,4 @@
-ODINN Code of Conduct
-======
+# ODINN Code of Conduct
 
 You can read our Code of Conduct by following [this link](../main/docs/src/code_of_conduct.md).
 

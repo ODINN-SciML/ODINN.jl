@@ -1,7 +1,6 @@
 export VJP_λ_∂SIA∂H_discrete, VJP_λ_∂SIA∂θ_discrete
 export VJP_λ_∂SIA∂H_continuous, VJP_λ_∂SIA∂θ_continuous
 
-
 #######################################
 ######     Discrete Adjoint      ######
 #######################################
@@ -19,22 +18,23 @@ Implementation of the discrete VJP of the SIA2D equation with respect to H.
 Given λ and H, it returns the VJP of λ^T * ∂(SIA2D)/∂H (H).
 
 Arguments:
-- `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
-- `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
-- `simulation::SIM`: Simulation parameters.
-- `t::R`: Time value, not used as SIA2D is time independent.
+
+  - `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
+  - `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
+  - `simulation::SIM`: Simulation parameters.
+  - `t::R`: Time value, not used as SIA2D is time independent.
 
 Returns:
-- `dλ::Matrix{R}`: Jacobian vector product, also called input gradient in reverse-mode AD.
+
+  - `dλ::Matrix{R}`: Jacobian vector product, also called input gradient in reverse-mode AD.
 """
 function VJP_λ_∂SIA∂H_discrete(
-    λ::Matrix{R},
-    H::Matrix{R},
-    θ,
-    simulation::SIM,
-    t::R,
-) where {R <:Real, SIM <: Simulation}
-
+        λ::Matrix{R},
+        H::Matrix{R},
+        θ,
+        simulation::SIM,
+        t::R
+) where {R <: Real, SIM <: Simulation}
     SIA2D_model = simulation.model.iceflow
     SIA2D_cache = simulation.cache.iceflow
     glacier_idx = SIA2D_cache.glacier_idx
@@ -61,7 +61,7 @@ function VJP_λ_∂SIA∂H_discrete(
     ∇Sy = Huginn.avg_x(dSdy)
 
     # Compute surface slope
-    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+    ∇S = (∇Sx .^ 2 .+ ∇Sy .^ 2) .^ (1/2)
 
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
@@ -70,8 +70,10 @@ function VJP_λ_∂SIA∂H_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
-    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+    θ = isnothing(simulation.model.trainable_components) ? nothing :
+        simulation.model.trainable_components.θ
+    Huginn.apply_all_non_callback_laws!(
+        SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Compute diffusivity based on target objective
     D = Diffusivity(
@@ -82,8 +84,8 @@ function VJP_λ_∂SIA∂H_discrete(
     )
 
     # Compute flux components
-    @views dSdx_edges = Huginn.diff_x(S[:,2:end - 1]) / Δx
-    @views dSdy_edges = Huginn.diff_y(S[2:end - 1,:]) / Δy
+    @views dSdx_edges = Huginn.diff_x(S[:, 2:(end - 1)]) / Δx
+    @views dSdy_edges = Huginn.diff_y(S[2:(end - 1), :]) / Δy
 
     # Cap surface elevaton differences with the upstream ice thickness to
     # imporse boundary condition of the SIA equation
@@ -94,7 +96,7 @@ function VJP_λ_∂SIA∂H_discrete(
     Dx = Huginn.avg_y(D)
     Dy = Huginn.avg_x(D)
 
-    λ_inn = λ[2:end-1,2:end-1]
+    λ_inn = λ[2:(end - 1), 2:(end - 1)]
     Fx_adjoint = diff_x_adjoint(-λ_inn, Δx)
     Fy_adjoint = diff_y_adjoint(-λ_inn, Δy)
     Dx_adjoint = avg_y_adjoint(-Fx_adjoint .* dSdx_edges_clamp)
@@ -120,7 +122,9 @@ function VJP_λ_∂SIA∂H_discrete(
 
     βx = β .* ∇Sx
     βy = β .* ∇Sy
-    ∂D∂H_adj = avg_adjoint(α .* D_adjoint) + diff_x_adjoint(avg_y_adjoint(βx .* D_adjoint), Δx) + diff_y_adjoint(avg_x_adjoint(βy .* D_adjoint), Δy)
+    ∂D∂H_adj = avg_adjoint(α .* D_adjoint) +
+               diff_x_adjoint(avg_y_adjoint(βx .* D_adjoint), Δx) +
+               diff_y_adjoint(avg_x_adjoint(βy .* D_adjoint), Δy)
 
     ### Second term
     ∂Cx = - Fx_adjoint .* Dx
@@ -131,19 +135,20 @@ function VJP_λ_∂SIA∂H_discrete(
     ∂Hlocy = zeros(Sleipnir.Float, size(H))
     clamp_borders_dx_adjoint!(∂dSx, ∂Hlocx, ∂Cx, η₀, Δx, H, dSdx_edges)
     clamp_borders_dy_adjoint!(∂dSy, ∂Hlocy, ∂Cy, η₀, Δy, H, dSdy_edges)
-    ∇adj∂dSx = zero(S); ∇adj∂dSx[:,2:end - 1] .= diff_x_adjoint(∂dSx, Δx)
+    ∇adj∂dSx = zero(S);
+    ∇adj∂dSx[:, 2:(end - 1)] .= diff_x_adjoint(∂dSx, Δx)
     ∂C∂H_adj_x = ∇adj∂dSx + ∂Hlocx
-    ∇adj∂dSy = zero(S); ∇adj∂dSy[2:end - 1,:] .= diff_y_adjoint(∂dSy, Δy)
+    ∇adj∂dSy = zero(S);
+    ∇adj∂dSy[2:(end - 1), :] .= diff_y_adjoint(∂dSy, Δy)
     ∂C∂H_adj_y = ∇adj∂dSy + ∂Hlocy
     ∂C∂H_adj = ∂C∂H_adj_x + ∂C∂H_adj_y
 
     # Sum contributions of diffusivity and clipping
     dλ = ∂D∂H_adj + ∂C∂H_adj
-    dλ .= dλ.*(H.>0)
+    dλ .= dλ .* (H .> 0)
 
     return dλ
 end
-
 
 """
     VJP_λ_∂SIA∂θ_discrete(
@@ -158,24 +163,25 @@ Implementation of the discrete VJP of the SIA2D equation with respect to θ.
 Given λ, H and θ, it returns the VJP of λ^T * ∂(SIA2D)/∂θ (θ).
 
 Arguments:
-- `θ`: Vector of parameters
-- `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
-- `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
-- `simulation::SIM`: Simulation parameters.
-- `t::R`: Time value, not used as SIA2D is time independent.
+
+  - `θ`: Vector of parameters
+  - `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
+  - `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
+  - `simulation::SIM`: Simulation parameters.
+  - `t::R`: Time value, not used as SIA2D is time independent.
 
 Returns:
-- `∂θ`: Jacobian vector product with respect to θ, also called input gradient in
+
+  - `∂θ`: Jacobian vector product with respect to θ, also called input gradient in
     reverse-mode AD. It has the same type as θ.
 """
 function VJP_λ_∂SIA∂θ_discrete(
-    λ::Matrix{R},
-    H::Matrix{R},
-    θ,
-    simulation::SIM,
-    t::R,
-) where {R <:Real, SIM <: Simulation}
-
+        λ::Matrix{R},
+        H::Matrix{R},
+        θ,
+        simulation::SIM,
+        t::R
+) where {R <: Real, SIM <: Simulation}
     SIA2D_model = simulation.model.iceflow
     SIA2D_cache = simulation.cache.iceflow
     glacier_idx = SIA2D_cache.glacier_idx
@@ -202,7 +208,7 @@ function VJP_λ_∂SIA∂θ_discrete(
     ∇Sy = Huginn.avg_x(dSdy)
 
     # Compute surface slope
-    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+    ∇S = (∇Sx .^ 2 .+ ∇Sy .^ 2) .^ (1/2)
 
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
@@ -211,12 +217,14 @@ function VJP_λ_∂SIA∂θ_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
-    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+    θ = isnothing(simulation.model.trainable_components) ? nothing :
+        simulation.model.trainable_components.θ
+    Huginn.apply_all_non_callback_laws!(
+        SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Compute flux components
-    @views dSdx_edges = Huginn.diff_x(S[:,2:end - 1]) / Δx
-    @views dSdy_edges = Huginn.diff_y(S[2:end - 1,:]) / Δy
+    @views dSdx_edges = Huginn.diff_x(S[:, 2:(end - 1)]) / Δx
+    @views dSdy_edges = Huginn.diff_y(S[2:(end - 1), :]) / Δy
 
     # Cap surface elevaton differences with the upstream ice thickness to
     # imporse boundary condition of the SIA equation
@@ -224,7 +232,7 @@ function VJP_λ_∂SIA∂θ_discrete(
     dSdx_edges_clamp = clamp_borders_dx(dSdx_edges, H, η₀, Δx)
     dSdy_edges_clamp = clamp_borders_dy(dSdy_edges, H, η₀, Δy)
 
-    λ_inn = λ[2:end-1,2:end-1]
+    λ_inn = λ[2:(end - 1), 2:(end - 1)]
     Fx_adjoint = diff_x_adjoint(-λ_inn, Δx)
     Fy_adjoint = diff_y_adjoint(-λ_inn, Δy)
     Dx_adjoint = avg_y_adjoint(-Fx_adjoint .* dSdx_edges_clamp)
@@ -246,28 +254,25 @@ function VJP_λ_∂SIA∂θ_discrete(
     return ∂θ
 end
 
-
 function VJP_λ_∂V∂Vxy(
-    ∂V::Matrix{R},
-    Vx::Matrix{R},
-    Vy::Matrix{R},
-) where {R <:Real}
-    V = (Vx.^2 .+ Vy.^2).^(1/2)
+        ∂V::Matrix{R},
+        Vx::Matrix{R},
+        Vy::Matrix{R}
+) where {R <: Real}
+    V = (Vx .^ 2 .+ Vy .^ 2) .^ (1/2)
     ∂Vx = Vx .* ∂V ./ V
     ∂Vy = Vy .* ∂V ./ V
     return ∂Vx, ∂Vy
 end
 
-
 function VJP_λ_∂surface_V∂H_discrete(
-    ∂Vx::Matrix{R},
-    ∂Vy::Matrix{R},
-    H::Matrix{R},
-    θ,
-    simulation::SIM,
-    t::R
-) where {R <:Real, SIM <: Simulation}
-
+        ∂Vx::Matrix{R},
+        ∂Vy::Matrix{R},
+        H::Matrix{R},
+        θ,
+        simulation::SIM,
+        t::R
+) where {R <: Real, SIM <: Simulation}
     SIA2D_model = simulation.model.iceflow
     SIA2D_cache = simulation.cache.iceflow
     glacier_idx = SIA2D_cache.glacier_idx
@@ -292,7 +297,7 @@ function VJP_λ_∂surface_V∂H_discrete(
     ∇Sy = Huginn.avg_x(dSdy)
 
     # Compute surface slope
-    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+    ∇S = (∇Sx .^ 2 .+ ∇Sy .^ 2) .^ (1/2)
 
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
@@ -301,8 +306,10 @@ function VJP_λ_∂surface_V∂H_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
-    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+    θ = isnothing(simulation.model.trainable_components) ? nothing :
+        simulation.model.trainable_components.θ
+    Huginn.apply_all_non_callback_laws!(
+        SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Equals ∂Dꜛ/∂H
     α = ∂Velocityꜛ∂H(
@@ -326,7 +333,8 @@ function VJP_λ_∂surface_V∂H_discrete(
 
     βx = β .* ∇Sx
     βy = β .* ∇Sy
-    ∂D∂H = avg_adjoint(α .* ∇S∂V) .+ diff_x_adjoint(avg_y_adjoint(βx .* ∇S∂V), Δx) + diff_y_adjoint(avg_x_adjoint(βy .* ∇S∂V), Δy)
+    ∂D∂H = avg_adjoint(α .* ∇S∂V) .+ diff_x_adjoint(avg_y_adjoint(βx .* ∇S∂V), Δx) +
+           diff_y_adjoint(avg_x_adjoint(βy .* ∇S∂V), Δy)
 
     Dꜛ = Velocityꜛ(
         target;
@@ -334,21 +342,21 @@ function VJP_λ_∂surface_V∂H_discrete(
         simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
-    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* inn1∂Vx), Δx) .+ diff_y_adjoint(avg_x_adjoint(Dꜛ .* inn1∂Vy), Δy)
+    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* inn1∂Vx), Δx) .+
+            diff_y_adjoint(avg_x_adjoint(Dꜛ .* inn1∂Vy), Δy)
     ∂H = ∂D∂H .+ ∂∇S∂H
 
     return -∂H
 end
 
 function VJP_λ_∂surface_V∂θ_discrete(
-    ∂Vx::Matrix{R},
-    ∂Vy::Matrix{R},
-    H::Matrix{R},
-    θ,
-    simulation::SIM,
-    t::R
-) where {R <:Real, SIM <: Simulation}
-
+        ∂Vx::Matrix{R},
+        ∂Vy::Matrix{R},
+        H::Matrix{R},
+        θ,
+        simulation::SIM,
+        t::R
+) where {R <: Real, SIM <: Simulation}
     SIA2D_model = simulation.model.iceflow
     SIA2D_cache = simulation.cache.iceflow
     glacier_idx = SIA2D_cache.glacier_idx
@@ -373,7 +381,7 @@ function VJP_λ_∂surface_V∂θ_discrete(
     ∇Sy = Huginn.avg_x(dSdy)
 
     # Compute surface slope
-    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+    ∇S = (∇Sx .^ 2 .+ ∇Sy .^ 2) .^ (1/2)
 
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
@@ -382,8 +390,10 @@ function VJP_λ_∂surface_V∂θ_discrete(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
-    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+    θ = isnothing(simulation.model.trainable_components) ? nothing :
+        simulation.model.trainable_components.θ
+    Huginn.apply_all_non_callback_laws!(
+        SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     ∇S∂V = (∇Sx .* inn1(∂Vx) .+ ∇Sy .* inn1(∂Vy))
 
@@ -402,7 +412,6 @@ function VJP_λ_∂surface_V∂θ_discrete(
     return -∂θ
 end
 
-
 #######################################
 #####     Contiuous Adjoint      ######
 #######################################
@@ -420,22 +429,23 @@ Implementation of the continuous VJP of the SIA2D equation with respect to H.
 Given λ and H, it returns the VJP of λ^T * ∂(SIA2D)/∂H (H).
 
 Arguments:
-- `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
-- `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
-- `simulation::SIM`: Simulation parameters.
-- `t::R`: Time value, not used as SIA2D is time independent.
+
+  - `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
+  - `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
+  - `simulation::SIM`: Simulation parameters.
+  - `t::R`: Time value, not used as SIA2D is time independent.
 
 Returns:
-- `dλ::Matrix{R}`: Jacobian vector product, also called input gradient in reverse-mode AD.
+
+  - `dλ::Matrix{R}`: Jacobian vector product, also called input gradient in reverse-mode AD.
 """
 function VJP_λ_∂SIA∂H_continuous(
-    λ::Matrix{R},
-    H::Matrix{R},
-    θ,
-    simulation::SIM,
-    t::R,
+        λ::Matrix{R},
+        H::Matrix{R},
+        θ,
+        simulation::SIM,
+        t::R
 ) where {R <: Real, SIM <: Simulation}
-
     SIA2D_model = simulation.model.iceflow
     SIA2D_cache = simulation.cache.iceflow
     glacier_idx = SIA2D_cache.glacier_idx
@@ -462,7 +472,7 @@ function VJP_λ_∂SIA∂H_continuous(
     ∇Sy = Huginn.avg_x(dSdy)
 
     # Compute surface slope
-    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+    ∇S = (∇Sx .^ 2 .+ ∇Sy .^ 2) .^ (1/2)
 
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
@@ -471,8 +481,10 @@ function VJP_λ_∂SIA∂H_continuous(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
-    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+    θ = isnothing(simulation.model.trainable_components) ? nothing :
+        simulation.model.trainable_components.θ
+    Huginn.apply_all_non_callback_laws!(
+        SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Compute diffusivity based on target objective
     D = Diffusivity(
@@ -507,8 +519,8 @@ function VJP_λ_∂SIA∂H_continuous(
     ### Computation of term ∇⋅(D⋅∇λ)
 
     # Compute flux components
-    @views dλdx_edges = Huginn.diff_x(λ[:,2:end - 1]) ./ Δx
-    @views dλdy_edges = Huginn.diff_y(λ[2:end - 1,:]) ./ Δy
+    @views dλdx_edges = Huginn.diff_x(λ[:, 2:(end - 1)]) ./ Δx
+    @views dλdy_edges = Huginn.diff_y(λ[2:(end - 1), :]) ./ Δy
 
     Fx = .-Huginn.avg_y(D) .* dλdx_edges
     Fy = .-Huginn.avg_x(D) .* dλdy_edges
@@ -555,24 +567,25 @@ Implementation of the continuous VJP of the SIA2D equation with respect to θ.
 Given λ, H and θ, it returns the VJP of λ^T * ∂(SIA2D)/∂θ (θ).
 
 Arguments:
-- `θ`: Vector of parameters
-- `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
-- `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
-- `simulation::SIM`: Simulation parameters.
-- `t::R`: Time value, not used as SIA2D is time independent.
+
+  - `θ`: Vector of parameters
+  - `λ::Matrix{R}`: Adjoint state, also called output gradient in reverse-mode AD.
+  - `H::Matrix{R}`: Ice thickness which corresponds to the input state of the SIA2D.
+  - `simulation::SIM`: Simulation parameters.
+  - `t::R`: Time value, not used as SIA2D is time independent.
 
 Returns:
-- `∂θ`: Jacobian vector product with respect to θ, also called input gradient in
+
+  - `∂θ`: Jacobian vector product with respect to θ, also called input gradient in
     reverse-mode AD. It has the same type as θ.
 """
 function VJP_λ_∂SIA∂θ_continuous(
-    λ::Matrix{R},
-    H::Matrix{R},
-    θ,
-    simulation::SIM,
-    t::R,
+        λ::Matrix{R},
+        H::Matrix{R},
+        θ,
+        simulation::SIM,
+        t::R
 ) where {R <: Real, SIM <: Simulation}
-
     SIA2D_model = simulation.model.iceflow
     SIA2D_cache = simulation.cache.iceflow
     glacier_idx = SIA2D_cache.glacier_idx
@@ -598,11 +611,11 @@ function VJP_λ_∂SIA∂θ_continuous(
     ∇Sx = Huginn.avg_y(dSdx)
     ∇Sy = Huginn.avg_x(dSdy)
 
-    @views dSdx_edges = Huginn.diff_x(S[:,2:end - 1]) ./ Δx
-    @views dSdy_edges = Huginn.diff_y(S[2:end - 1,:]) ./ Δy
+    @views dSdx_edges = Huginn.diff_x(S[:, 2:(end - 1)]) ./ Δx
+    @views dSdy_edges = Huginn.diff_y(S[2:(end - 1), :]) ./ Δy
 
     # Compute surface slope
-    ∇S = (∇Sx.^2 .+ ∇Sy.^2).^(1/2)
+    ∇S = (∇Sx .^ 2 .+ ∇Sy .^ 2) .^ (1/2)
 
     # Compute average ice thickness
     H̄ = Huginn.avg(H)
@@ -611,8 +624,10 @@ function VJP_λ_∂SIA∂θ_continuous(
     SIA2D_cache.∇S .= ∇S
     SIA2D_cache.H̄ .= H̄
 
-    θ = isnothing(simulation.model.trainable_components) ? nothing : simulation.model.trainable_components.θ
-    Huginn.apply_all_non_callback_laws!(SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
+    θ = isnothing(simulation.model.trainable_components) ? nothing :
+        simulation.model.trainable_components.θ
+    Huginn.apply_all_non_callback_laws!(
+        SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
     # Gradient wrt θ
     ∂D∂θ = ∂Diffusivity∂θ(
@@ -635,7 +650,8 @@ function VJP_λ_∂SIA∂θ_continuous(
     @tullio Fyy[i, j, k] := (Fy[i, j + 1, k] - Fy[i, j, k]) / Δy
 
     # Combine fluxes and pad contours
-    @tullio ∇_∂D∂θ_∇S[i, j, k] := Fxx[pad(i-1,1,1), pad(j-1,1,1), k] + Fyy[pad(i-1,1,1), pad(j-1,1,1), k]
+    @tullio ∇_∂D∂θ_∇S[i, j, k] := Fxx[pad(i-1, 1, 1), pad(j-1, 1, 1), k] +
+                                  Fyy[pad(i-1, 1, 1), pad(j-1, 1, 1), k]
 
     # Evaluate numerical integral for loss
     @tullio ∂θ_v[k] := ∇_∂D∂θ_∇S[i, j, k] * λ[i, j]
