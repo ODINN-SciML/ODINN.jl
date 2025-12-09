@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Laws VJP customization · ODINN.jl</title><meta name="title" content="Laws VJP customization · ODINN.jl"/><meta property="og:title" content="Laws VJP customization · ODINN.jl"/><meta property="twitter:title" content="Laws VJP customization · ODINN.jl"/><meta name="description" content="Documentation for ODINN.jl."/><meta property="og:description" content="Documentation for ODINN.jl."/><meta property="twitter:description" content="Documentation for ODINN.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="ODINN.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">ODINN.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../quick_start/">Quick start</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../forward_simulation/">Forward simulation</a></li><li><a class="tocitem" href="../classical_inversion/">Classical inversion</a></li><li><a class="tocitem" href="../functional_inversion/">Functional inversion</a></li><li><a class="tocitem" href="../laws/">Laws</a></li><li><a class="tocitem" href="../input_laws/">Laws inputs</a></li><li class="is-active"><a class="tocitem" href>Laws VJP customization</a><ul class="internal"><li><a class="tocitem" href="#Explanations"><span>Explanations</span></a></li><li><a class="tocitem" href="#Simple-VJP-customization"><span>Simple VJP customization</span></a></li><li><a class="tocitem" href="#VJP-precomputation"><span>VJP precomputation</span></a></li><li><a class="tocitem" href="#Simple-cache-customization"><span>Simple cache customization</span></a></li><li><a class="tocitem" href="#Frequently-Asked-Questions"><span>Frequently Asked Questions</span></a></li></ul></li></ul></li><li><span class="tocitem">How to use ODINN</span><ul><li><a class="tocitem" href="../parameters/">Parameters</a></li><li><a class="tocitem" href="../glaciers/">Glaciers</a></li><li><a class="tocitem" href="../models/">Models</a></li><li><a class="tocitem" href="../results_plotting/">Results and plotting</a></li><li><a class="tocitem" href="../api/">API</a></li></ul></li><li><span class="tocitem">Inversions</span><ul><li><a class="tocitem" href="../inversions/">Inversion types</a></li><li><a class="tocitem" href="../optimization/">Optimization</a></li><li><a class="tocitem" href="../sensitivity/">Sensitivity analysis</a></li></ul></li><li><span class="tocitem">Community</span><ul><li><a class="tocitem" href="../contribute/">How to contribute</a></li><li><a class="tocitem" href="../code_of_conduct/">Code of conduct</a></li></ul></li><li><a class="tocitem" href="../changes_plans/">Ongoing changes and future plans</a></li><li><a class="tocitem" href="../references/">References</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Laws VJP customization</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Laws VJP customization</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ODINN-SciML/ODINN.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ODINN-SciML/ODINN.jl/blob/main/docs/src/vjp_laws.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Law-VJP-customization"><a class="docs-heading-anchor" href="#Law-VJP-customization">Law VJP customization</a><a id="Law-VJP-customization-1"></a><a class="docs-heading-anchor-permalink" href="#Law-VJP-customization" title="Permalink"></a></h1><p>This tutorial explains how to customize VJP (vector-Jacobian product) computation of the laws in <code>ODINN.jl</code> and clarifies the runtime flow used internally by the library. It explains which functions are part of the public, user-facing customization API and which are internal helpers used by ODINN when an AD backend is required.</p><div class="admonition is-warning" id="Advanced-features-f3c01206d35199f1"><header class="admonition-header">Advanced features<a class="admonition-anchor" href="#Advanced-features-f3c01206d35199f1" title="Permalink"></a></header><div class="admonition-body"><p>The features presented in this section are considered as advanced features and this tutorial was written primarily for ODINN developers.</p></div></div><p>It assumes that you have followed the <a href="../laws/">Laws</a> tutorial.</p><pre><code class="language-julia hljs">using ODINN
+rgi_ids = [&quot;RGI60-11.03638&quot;]
+rgi_paths = get_rgi_paths()
+params = Parameters(
+    simulation = SimulationParameters(rgi_paths = rgi_paths),
+    UDE = UDEparameters(grad = ContinuousAdjoint())
+)
+nn_model = NeuralNetwork(params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">--- NeuralNetwork ---
+    architecture:
+      Chain(
+          layer_1 = Dense(1 =&gt; 3, #101),                # 6 parameters
+          layer_2 = Dense(3 =&gt; 10, #102),               # 40 parameters
+          layer_3 = Dense(10 =&gt; 3, #103),               # 33 parameters
+          layer_4 = Dense(3 =&gt; 1, σ),                   # 4 parameters
+      )         # Total: 83 parameters,
+                #        plus 0 states.
+    θ: ComponentVector of length 83</code></pre><h2 id="Explanations"><a class="docs-heading-anchor" href="#Explanations">Explanations</a><a id="Explanations-1"></a><a class="docs-heading-anchor-permalink" href="#Explanations" title="Permalink"></a></h2><h3 id="High-level-summary"><a class="docs-heading-anchor" href="#High-level-summary">High-level summary</a><a id="High-level-summary-1"></a><a class="docs-heading-anchor-permalink" href="#High-level-summary" title="Permalink"></a></h3><p>At the user level the customization can be made by implementing hand-written VJPs through the following functions:</p><ul><li><code>f_VJP_input!(...)</code>: VJP w.r.t. inputs</li><li><code>f_VJP_θ!(...)</code>: VJP w.r.t. parameters θ</li><li>You may also implement your own precompute function to cache expensive computations which is the purpose of <code>p_VJP!(...)</code>. This function is called before solving the adjoint iceflow PDE.</li></ul><p>Internally when the user does NOT provide VJPs, ODINN uses a default AD backend (via <a href="https://github.com/JuliaDiff/DifferentiationInterface.jl">DifferentiationInterface.jl</a>) to compute the VJPs of the laws. To support efficient reverse-mode execution, ODINN will:</p><ul><li>compile and precompute adjoint-related helper functions and</li><li>store preparation objects that are used later during the in adjoint PDE.</li></ul><p>This mechanism is triggered by <code>prepare_vjp_law</code>.</p><h3 id="Internal-function-roles"><a class="docs-heading-anchor" href="#Internal-function-roles">Internal function roles</a><a id="Internal-function-roles-1"></a><a class="docs-heading-anchor-permalink" href="#Internal-function-roles" title="Permalink"></a></h3><ul><li><p><code>prepare_vjp_law</code> (internal)</p><p>Signature used in the codebase:</p><pre><code class="nohighlight hljs">prepare_vjp_law(
+    simulation,
+    law::AbstractLaw,
+    law_cache,
+    θ,
+    glacier_idx,
+)</code></pre><ul><li>Intent and behavior:<ul><li>This is an internal routine. It is NOT intended to be called by users directly.</li><li>It is invoked when ODINN must fall back to the AD backend (with <a href="https://github.com/JuliaDiff/DifferentiationInterface.jl">DifferentiationInterface.jl</a>) because the law did not supply explicit VJP functions (<code>f_VJP_input!</code>/<code>f_VJP_θ!</code> or because <code>p_VJP!</code> is set to <code>DIVJP()</code>).</li><li>Its job is to precompile and prepare the AD-based VJP code for a given law and to produce <em>preparation</em> objects that store <a href="https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/explanation/operators/#Preparation">preparation</a> results from <a href="https://github.com/JuliaDiff/DifferentiationInterface.jl">DifferentiationInterface.jl</a>.</li><li><code>prepare_vjp_law</code> is typically called just after the iceflow model / law objects have been instantiated — i.e., early in the setup — so that preparations are ready before solving or adjoint runs.</li></ul></li></ul></li><li><p><code>precompute_law_VJP</code> (used before solving the adjoint PDE)</p><p>The typical signature in the codebase is:</p><pre><code class="nohighlight hljs">precompute_law_VJP(
+  law::AbstractLaw,
+  cache,
+  vjpsPrepLaw,
+  simulation,
+  glacier_idx,
+  t,
+  θ
+)</code></pre><ul><li>Intent and behavior:<ul><li>This function precomputes VJP-related artifacts <em>before</em> the adjoint iceflow PDE is solved for given time <code>t</code> and parameters <code>θ</code>.</li><li>It typically uses the <code>vjpsPrepLaw</code> (an <code>AbstractPrepVJP</code> instance produced earlier by <code>prepare_vjp_law</code>) together with the <code>cache</code> and <code>simulation</code> object. The produced results are cached in <code>cache</code> and are optionally consumed later by <code>law_VJP_input</code> / <code>law_VJP_θ</code> during the adjoint solve.</li></ul></li></ul></li><li><p>Entry points used in the adjoint PDE</p><p>These functions are the actual runtime entry points used when computing contributions of the laws to the gradient in the adjoint PDE:</p><pre><code class="nohighlight hljs">law_VJP_θ(law::AbstractLaw, cache, simulation, glacier_idx, t, θ)</code></pre><p>and</p><pre><code class="nohighlight hljs">law_VJP_input(law::AbstractLaw, cache, simulation, glacier_idx, t, θ)</code></pre><ul><li>Intent and behavior:<ul><li>These are called during the adjoint solve to compute parameter and input VJPs for the law at time <code>t</code> and for parameters <code>θ</code>.</li><li>They can either compute the VJPs directly or use cached VJP information that has been already computed in the user-supplied <code>p_VJP!</code> VJP function. The <code>cache</code> allows storing useful information from the forward or from the precomputation step.</li><li>They therefore carry the runtime context (simulation, glacier index, time, θ) which is necessary for adjoint calculations.</li></ul></li></ul></li></ul><h3 id="Workflow"><a class="docs-heading-anchor" href="#Workflow">Workflow</a><a id="Workflow-1"></a><a class="docs-heading-anchor-permalink" href="#Workflow" title="Permalink"></a></h3><p>For the wide audience we do not recommend to play with the VJPs. ODINN comes with default parameters and the average user does not need to customize the VJPs. Keeping the default values will work fine.</p><p>Advanced users seeking maximum performance can customize the VJPs which can significantly speed-up the code.</p><p>How do the pieces compose in practice?</p><ul><li>If you, as a user, provide custom VJP functions (through <code>f_VJP_input!</code>/<code>f_VJP_θ!</code>, or through <code>p_VJP!</code>), ODINN will use them directly in the adjoint and will skip the AD fallback path. You can also provide your own precompute wrapper and cache to optimize expensive computations.</li><li>If you do NOT provide VJP functions, ODINN runs the AD fallback:<ol><li><code>prepare_vjp_law</code> runs early (post-instantiation) to compile/prepare AD-based helpers and returns some <code>AbstractPrepVJP</code> object.</li><li><code>precompute_law_VJP</code> is skipped.</li><li>During the adjoint solve, <code>law_VJP_input</code> and <code>law_VJP_θ</code> use the preparation objects precompiled in <code>prepare_vjp_law</code> to automatically differentiate <code>f!</code> with <a href="https://github.com/JuliaDiff/DifferentiationInterface.jl">DifferentiationInterface.jl</a> and obtain the VJPs of the law with respect to the inputs and to the parameters <code>θ</code>.</li></ol></li></ul><div class="admonition is-info" id="Info-c7b818394f483dff"><header class="admonition-header">Info<a class="admonition-anchor" href="#Info-c7b818394f483dff" title="Permalink"></a></header><div class="admonition-body"><p>You can change the default AD backend for laws that do not have custom VJPs in the VJP type, for example by setting <code>VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote())</code> when you define the adjoint method.</p></div></div><h3 id="User-level-customization"><a class="docs-heading-anchor" href="#User-level-customization">User level customization</a><a id="User-level-customization-1"></a><a class="docs-heading-anchor-permalink" href="#User-level-customization" title="Permalink"></a></h3><p>What is user-visible and can be customized?</p><ul><li><code>f_VJP_input!(cache, inputs, θ)</code> — compute the VJP with respect to the inputs and store the result in <code>cache.vjp_inp</code></li><li><code>f_VJP_θ!(cache, inputs, θ)</code> — compute the VJP with respect to <code>θ</code> and store the result in <code>cache.vjp_θ</code></li><li><code>p_VJP!(cache, vjpsPrepLaw, inputs, θ)</code> — if you want to precompute some components (or even the whole VJPs when possible) before solving the adjoint iceflow PDE</li><li>custom cache implementations (described below)</li></ul><h3 id="Notes-on-cache-definition"><a class="docs-heading-anchor" href="#Notes-on-cache-definition">Notes on cache definition</a><a id="Notes-on-cache-definition-1"></a><a class="docs-heading-anchor-permalink" href="#Notes-on-cache-definition" title="Permalink"></a></h3><p>The <code>cache</code> parameter that is threaded through <code>p_VJP!</code>/<code>f_VJP_*</code> calls is the place to store artifacts useful for efficient computation as well as the results of the VJPs computation. The following fields are mandatory:</p><ul><li><code>value</code>: a placeholder to store the result of the forward evaluation, can be of any type</li><li><code>vjp_θ</code>: a placeholder to store the result of the VJP with respect to <code>θ</code>, depending on the type of law that is defined, it can be a vector or a 3 dimensional array</li><li><code>vjp_inp</code>: a placeholder to store the result of the VJP with respect to the inputs, must be of a type that matches the one of the inputs</li></ul><p>In order to know the type of the inputs, simply run <code>generate_inputs(law.f.inputs, simulation, glacier_idx, t)</code>.</p><h3 id="Using-the-preparation-object"><a class="docs-heading-anchor" href="#Using-the-preparation-object">Using the preparation object</a><a id="Using-the-preparation-object-1"></a><a class="docs-heading-anchor-permalink" href="#Using-the-preparation-object" title="Permalink"></a></h3><div class="admonition is-category-error" id="Error-1146bc15265c1fa1"><header class="admonition-header">Error<a class="admonition-anchor" href="#Error-1146bc15265c1fa1" title="Permalink"></a></header><div class="admonition-body"><p>For the moment, using the preparation object at the user level is not supported yet.</p></div></div><h3 id="Best-practices-and-debugging-tips"><a class="docs-heading-anchor" href="#Best-practices-and-debugging-tips">Best practices and debugging tips</a><a id="Best-practices-and-debugging-tips-1"></a><a class="docs-heading-anchor-permalink" href="#Best-practices-and-debugging-tips" title="Permalink"></a></h3><ul><li>If you supply custom VJPs, test them with finite-difference checks for both inputs and parameters. ODINN does not check the correctness of your implementation!</li><li>If you rely on ODINN&#39;s AD fallback, be aware that <code>prepare_vjp_law</code> will precompile and prepare AD helpers at model instantiation time — expect longer setup time but faster adjoint runs thereafter.</li><li>Inspect/validate cache content if you get inconsistent adjoints — a stale or incorrect cache entry is a common cause.</li><li>Although the API is designed to provide everything you need as arguments, if your VJP needs anything from the forward pass, ensure it is stored in the cache.</li></ul><h2 id="Simple-VJP-customization"><a class="docs-heading-anchor" href="#Simple-VJP-customization">Simple VJP customization</a><a id="Simple-VJP-customization-1"></a><a class="docs-heading-anchor-permalink" href="#Simple-VJP-customization" title="Permalink"></a></h2><p>We will explore how we can customize the VJP computation of the law that is used in the <a href="../laws/">Laws</a> tutorial. The cache used for this law is a <code>ScalarCache</code> since the output of this law is a scalar value <code>A</code>, the creep coefficient. We can confirm that this type defines the fields needed for the VJP computation:</p><pre><code class="language-julia hljs">fieldnames(ScalarCache)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:value, :vjp_inp, :vjp_θ)</code></pre><p>Before defining the law, we retrieve the model architecture, the physical parameters to be used inside the <code>f!</code> function of the law and we define the inputs:</p><pre><code class="language-julia hljs">archi = nn_model.architecture
+st = nn_model.st
+smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
+min_NN = params.physical.minA
+max_NN = params.physical.maxA
+inputs = (; T = iAvgScalarTemp())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(T = averaged_long_term_temperature: iAvgScalarTemp(),)</code></pre><p>And then the <code>f!</code> and <code>init_cache</code> functions:</p><pre><code class="language-julia hljs">f! = let smodel = smodel, min_NN = min_NN, max_NN = max_NN
+    function (cache, inp, θ)
+        inp = collect(values(inp))
+        A = only(ODINN.scale(smodel(inp, θ.A), (min_NN, max_NN)))
+        ODINN.Zygote.@ignore_derivatives cache.value .= A # We ignore this in-place affectation in order to be able to differentiate it with Zygote hereafter
+        return A
+    end
+end
+function init_cache(simulation, glacier_idx, θ)
+    return ScalarCache(zeros(), zeros(), zero(θ))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">init_cache (generic function with 1 method)</code></pre><p>The declaration of the law without VJP customization would be:</p><pre><code class="language-julia hljs">law = Law{ScalarCache}(;
+    inputs = inputs,
+    f! = f!,
+    init_cache = init_cache
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:T,) -&gt; Array{Float64, 0}   (⟳  auto VJP  ❌ precomputed)
+</code></pre><div class="admonition is-category-success" id="Success-236581acd8e73b9a"><header class="admonition-header">Success<a class="admonition-anchor" href="#Success-236581acd8e73b9a" title="Permalink"></a></header><div class="admonition-body"><p>We see from the output that the VJPs are inferred using <a href="https://github.com/JuliaDiff/DifferentiationInterface.jl">DifferentiationInterface.jl</a> and that ODINN does not use precomputation. Now let&#39;s try to customize the VJPs by manually implementing the AD step:</p></div></div><pre><code class="language-julia hljs">law = Law{ScalarCache}(;
+    inputs = inputs,
+    f! = f!,
+    f_VJP_input! = function (cache, inputs, θ)
+        nothing # The input does not depend on the glacier state
+    end,
+    f_VJP_θ! = function (cache, inputs, θ)
+        cache.vjp_θ .= ones(length(θ)) # The VJP is wrong on purpose to check that this function is properly called hereafter
+    end,
+    init_cache = init_cache
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:T,) -&gt; Array{Float64, 0}   (⟳  custom VJP  ❌ precomputed)
+</code></pre><p>In order to instantiate the cache, we need to define the model:</p><pre><code class="language-julia hljs">rgi_ids = [&quot;RGI60-11.03638&quot;]
+glaciers = initialize_glaciers(rgi_ids, params)
+model = Model(
+    iceflow = SIA2Dmodel(params; A = law),
+    mass_balance = nothing,
+    regressors = (; A = nn_model)
+)
+simulation = Inversion(model, glaciers, params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Inversion{Sleipnir.Model{SIA2Dmodel{Float64, Law{ScalarCache, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, Main.var&quot;#1#3&quot;{LuxCore.StatefulLuxLayerImpl.StatefulLuxLayer{Val{true}, Lux.Chain{@NamedTuple{layer_1::Lux.Dense{ODINN.var&quot;#101#105&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_2::Lux.Dense{ODINN.var&quot;#102#106&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_3::Lux.Dense{ODINN.var&quot;#103#107&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_4::Lux.Dense{typeof(NNlib.σ), Int64, Int64, Nothing, Nothing, Static.True}}, Nothing}, Nothing, @NamedTuple{layer_1::@NamedTuple{}, layer_2::@NamedTuple{}, layer_3::@NamedTuple{}, layer_4::@NamedTuple{}}}, Float64, Float64}}, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, Main.var&quot;#5#7&quot;}, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, Main.var&quot;#6#8&quot;}, typeof(Main.init_cache), Nothing, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, typeof(Sleipnir.emptyPrepVJPWithInputs)}, CustomVJP}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#9#10&quot;}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#11#12&quot;}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#13#14&quot;}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#15#16&quot;}, NullLaw, NullLaw}, Nothing, ODINN.TrainableComponents{NeuralNetwork{Lux.Chain{@NamedTuple{layer_1::Lux.Dense{ODINN.var&quot;#101#105&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_2::Lux.Dense{ODINN.var&quot;#102#106&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_3::Lux.Dense{ODINN.var&quot;#103#107&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_4::Lux.Dense{typeof(NNlib.σ), Int64, Int64, Nothing, Nothing, Static.True}}, Nothing}, ComponentArrays.ComponentVector{Float64, Vector{Float64}, Tuple{ComponentArrays.Axis{(θ = ViewAxis(1:83, Axis(layer_1 = ViewAxis(1:6, Axis(weight = ViewAxis(1:3, ShapedAxis((3, 1))), bias = ViewAxis(4:6, Shaped1DAxis((3,))))), layer_2 = ViewAxis(7:46, Axis(weight = ViewAxis(1:30, ShapedAxis((10, 3))), bias = ViewAxis(31:40, Shaped1DAxis((10,))))), layer_3 = ViewAxis(47:79, Axis(weight = ViewAxis(1:30, ShapedAxis((3, 10))), bias = ViewAxis(31:33, Shaped1DAxis((3,))))), layer_4 = ViewAxis(80:83, Axis(weight = ViewAxis(1:3, ShapedAxis((1, 3))), bias = ViewAxis(4:4, Shaped1DAxis((1,))))))),)}}}, @NamedTuple{layer_1::@NamedTuple{}, layer_2::@NamedTuple{}, layer_3::@NamedTuple{}, layer_4::@NamedTuple{}}}, ODINN.emptyTrainableModel, ODINN.emptyTrainableModel, ODINN.emptyTrainableModel, ODINN.emptyTrainableModel, ODINN.emptyIC, SIA2D_A_target, ComponentArrays.ComponentVector{Float64, Vector{Float64}, Tuple{ComponentArrays.Axis{(A = ViewAxis(1:83, Axis(layer_1 = ViewAxis(1:6, Axis(weight = ViewAxis(1:3, ShapedAxis((3, 1))), bias = ViewAxis(4:6, Shaped1DAxis((3,))))), layer_2 = ViewAxis(7:46, Axis(weight = ViewAxis(1:30, ShapedAxis((10, 3))), bias = ViewAxis(31:40, Shaped1DAxis((10,))))), layer_3 = ViewAxis(47:79, Axis(weight = ViewAxis(1:30, ShapedAxis((3, 10))), bias = ViewAxis(31:33, Shaped1DAxis((3,))))), layer_4 = ViewAxis(80:83, Axis(weight = ViewAxis(1:3, ShapedAxis((1, 3))), bias = ViewAxis(4:4, Shaped1DAxis((1,))))))),)}}}}}, Sleipnir.ModelCache{SIA2DCache{Float64, Int64, ScalarCache, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, Array{Float64, 0}, Array{Float64, 0}, ScalarCacheNoVJP, ScalarCacheNoVJP}, Nothing}, Glacier2D{Float64, Int64, Climate2D{Rasters.RasterStack{(:prcp, :temp, :gradient), @NamedTuple{prcp::Float64, temp::Float64, gradient::Float64}, 1, @NamedTuple{prcp::Vector{Float64}, temp::Vector{Float64}, gradient::Vector{Float64}}, Tuple{DimensionalData.Dimensions.Ti{DimensionalData.Dimensions.Lookups.Sampled{Dates.DateTime, Vector{Dates.DateTime}, DimensionalData.Dimensions.Lookups.ForwardOrdered, DimensionalData.Dimensions.Lookups.Irregular{Tuple{Nothing, Nothing}}, DimensionalData.Dimensions.Lookups.Points, DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}}}}, Tuple{}, @NamedTuple{prcp::Tuple{DimensionalData.Dimensions.Ti{Colon}}, temp::Tuple{DimensionalData.Dimensions.Ti{Colon}}, gradient::Tuple{DimensionalData.Dimensions.Ti{Colon}}}, DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}, @NamedTuple{prcp::DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}, temp::DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}, gradient::DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}}, Nothing}, Rasters.RasterStack{(:prcp, :temp, :gradient), @NamedTuple{prcp::Float64, temp::Float64, gradient::Float64}, 1, @NamedTuple{prcp::Vector{Float64}, temp::Vector{Float64}, gradient::Vector{Float64}}, Tuple{DimensionalData.Dimensions.Ti{DimensionalData.Dimensions.Lookups.Sampled{Dates.DateTime, Vector{Dates.DateTime}, DimensionalData.Dimensions.Lookups.ForwardOrdered, DimensionalData.Dimensions.Lookups.Irregular{Tuple{Nothing, Nothing}}, DimensionalData.Dimensions.Lookups.Points, DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}}}}, Tuple{}, @NamedTuple{prcp::Tuple{DimensionalData.Dimensions.Ti{Colon}}, temp::Tuple{DimensionalData.Dimensions.Ti{Colon}}, gradient::Tuple{DimensionalData.Dimensions.Ti{Colon}}}, DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}, @NamedTuple{prcp::DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}, temp::DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}, gradient::DimensionalData.Dimensions.Lookups.Metadata{Rasters.NCDsource, Dict{String, Any}}}, Nothing}, Sleipnir.ClimateStep{Float64}, Climate2Dstep{Float64}, Float64}, Nothing, Nothing}, Results{Sleipnir.Results{Float64, Int64}, TrainingStats{Float64, Int64}}}(Sleipnir.Model{SIA2Dmodel{Float64, Law{ScalarCache, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, Main.var&quot;#1#3&quot;{LuxCore.StatefulLuxLayerImpl.StatefulLuxLayer{Val{true}, Lux.Chain{@NamedTuple{layer_1::Lux.Dense{ODINN.var&quot;#101#105&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_2::Lux.Dense{ODINN.var&quot;#102#106&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_3::Lux.Dense{ODINN.var&quot;#103#107&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_4::Lux.Dense{typeof(NNlib.σ), Int64, Int64, Nothing, Nothing, Static.True}}, Nothing}, Nothing, @NamedTuple{layer_1::@NamedTuple{}, layer_2::@NamedTuple{}, layer_3::@NamedTuple{}, layer_4::@NamedTuple{}}}, Float64, Float64}}, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, Main.var&quot;#5#7&quot;}, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, Main.var&quot;#6#8&quot;}, typeof(Main.init_cache), Nothing, Sleipnir.GenInputsAndApply{@NamedTuple{T::iAvgScalarTemp}, typeof(Sleipnir.emptyPrepVJPWithInputs)}, CustomVJP}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#9#10&quot;}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#11#12&quot;}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#13#14&quot;}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#15#16&quot;}, NullLaw, NullLaw}, Nothing, ODINN.TrainableComponents{NeuralNetwork{Lux.Chain{@NamedTuple{layer_1::Lux.Dense{ODINN.var&quot;#101#105&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_2::Lux.Dense{ODINN.var&quot;#102#106&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_3::Lux.Dense{ODINN.var&quot;#103#107&quot;, Int64, Int64, Nothing, Nothing, Static.True}, layer_4::Lux.Dense{typeof(NNlib.σ), Int64, Int64, Nothing, Nothing, Static.True}}, Nothing}, ComponentArrays.ComponentVector{Float64, Vector{Float64}, Tuple{ComponentArrays.Axis{(θ = ViewAxis(1:83, Axis(layer_1 = ViewAxis(1:6, Axis(weight = ViewAxis(1:3, ShapedAxis((3, 1))), bias = ViewAxis(4:6, Shaped1DAxis((3,))))), layer_2 = ViewAxis(7:46, Axis(weight = ViewAxis(1:30, ShapedAxis((10, 3))), bias = ViewAxis(31:40, Shaped1DAxis((10,))))), layer_3 = ViewAxis(47:79, Axis(weight = ViewAxis(1:30, ShapedAxis((3, 10))), bias = ViewAxis(31:33, Shaped1DAxis((3,))))), layer_4 = ViewAxis(80:83, Axis(weight = ViewAxis(1:3, ShapedAxis((1, 3))), bias = ViewAxis(4:4, Shaped1DAxis((1,))))))),)}}}, @NamedTuple{layer_1::@NamedTuple{}, layer_2::@NamedTuple{}, layer_3::@NamedTuple{}, layer_4::@NamedTuple{}}}, ODINN.emptyTrainableModel, ODINN.emptyTrainableModel, ODINN.emptyTrainableModel, ODINN.emptyTrainableModel, ODINN.emptyIC, SIA2D_A_target, ComponentArrays.ComponentVector{Float64, Vector{Float64}, Tuple{ComponentArrays.Axis{(A = ViewAxis(1:83, Axis(layer_1 = ViewAxis(1:6, Axis(weight = ViewAxis(1:3, ShapedAxis((3, 1))), bias = ViewAxis(4:6, Shaped1DAxis((3,))))), layer_2 = ViewAxis(7:46, Axis(weight = ViewAxis(1:30, ShapedAxis((10, 3))), bias = ViewAxis(31:40, Shaped1DAxis((10,))))), layer_3 = ViewAxis(47:79, Axis(weight = ViewAxis(1:30, ShapedAxis((3, 10))), bias = ViewAxis(31:33, Shaped1DAxis((3,))))), layer_4 = ViewAxis(80:83, Axis(weight = ViewAxis(1:3, ShapedAxis((1, 3))), bias = ViewAxis(4:4, Shaped1DAxis((1,))))))),)}}}}}(SIA2D iceflow equation  = ∇(<span class="sgr32">D</span> ∇S)  with <span class="sgr32">D</span> = <span class="sgr31">U</span> H̄
+  and <span class="sgr31">U</span> = <span class="sgr35">C</span> (ρg)^(<span class="sgr33">pq</span>) H̄^(<span class="sgr33">pq</span>+1) ∇S^(<span class="sgr33">p</span>-1) + <span class="sgr36">Γ</span> H̄^(<span class="sgr33">n</span>+2) ∇S^(<span class="sgr33">n</span>-1)
+<span class="sgr36">      Γ</span> = 2<span class="sgr34">A</span> (ρg)^<span class="sgr33">n</span> /(<span class="sgr33">n</span>+2)
+<span class="sgr34">      A: </span>(:T,) -&gt; Array{Float64, 0}   (⟳  custom VJP  ❌ precomputed)
+<span class="sgr35">      C: </span>ConstantLaw -&gt; Array{Float64, 0}
+<span class="sgr33">      n: </span>ConstantLaw -&gt; Array{Float64, 0}
+<span class="sgr33">      p: </span>ConstantLaw -&gt; Array{Float64, 0}
+<span class="sgr33">      q: </span>ConstantLaw -&gt; Array{Float64, 0}
+  where
+      T =&gt; averaged_long_term_temperature
+, nothing,   A: --- NeuralNetwork ---
+    architecture:
+      Chain(
+          layer_1 = Dense(1 =&gt; 3, #101),                # 6 parameters
+          layer_2 = Dense(3 =&gt; 10, #102),               # 40 parameters
+          layer_3 = Dense(10 =&gt; 3, #103),               # 33 parameters
+          layer_4 = Dense(3 =&gt; 1, σ),                   # 4 parameters
+      )         # Total: 83 parameters,
+                #        plus 0 states.
+    θ: ComponentVector of length 83
+), nothing, 1-element Vector{Glacier2D} distributed over regions 11 (x1)
+RGI60-11.03638
+, Sleipnir.Parameters{PhysicalParameters{Float64}, SimulationParameters{Int64, Float64, MeanDateVelocityMapping}, Hyperparameters{Float64, Int64}, SolverParameters{Float64, Int64}, UDEparameters{ContinuousAdjoint{Float64, Int64, DiscreteVJP{ADTypes.AutoMooncake{Nothing}}, EnzymeVJP}}, InversionParameters{Float64}}(PhysicalParameters{Float64}(900.0, 9.81, 1.0e-10, 1.0, 8.0e-17, 8.5e-20, 8.0e-17, 8.5e-20, 1.0, -25.0, 5.0e-18), SimulationParameters{Int64, Float64, MeanDateVelocityMapping}(true, true, true, true, 1.0, false, false, (2010.0, 2015.0), 0.08333333333333333, true, 4, &quot;&quot;, false, Dict(&quot;RGI60-11.00897&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.00/RGI60-11.00897&quot;, &quot;RGI60-08.00213&quot; =&gt; &quot;per_glacier/RGI60-08/RGI60-08.00/RGI60-08.00213&quot;, &quot;RGI60-08.00147&quot; =&gt; &quot;per_glacier/RGI60-08/RGI60-08.00/RGI60-08.00147&quot;, &quot;RGI60-11.01270&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.01/RGI60-11.01270&quot;, &quot;RGI60-11.03646&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.03/RGI60-11.03646&quot;, &quot;RGI60-11.03232&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.03/RGI60-11.03232&quot;, &quot;RGI60-01.22174&quot; =&gt; &quot;per_glacier/RGI60-01/RGI60-01.22/RGI60-01.22174&quot;, &quot;RGI60-07.00274&quot; =&gt; &quot;per_glacier/RGI60-07/RGI60-07.00/RGI60-07.00274&quot;, &quot;RGI60-03.04207&quot; =&gt; &quot;per_glacier/RGI60-03/RGI60-03.04/RGI60-03.04207&quot;, &quot;RGI60-04.04351&quot; =&gt; &quot;per_glacier/RGI60-04/RGI60-04.04/RGI60-04.04351&quot;…), &quot;Farinotti19&quot;, MeanDateVelocityMapping(:nearest), 1), Hyperparameters{Float64, Int64}(1, 1, Float64[], Optim.BFGS{LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Nothing, Float64, Optim.Flat}(LineSearches.InitialStatic{Float64}(1.0, false), LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}(0.1, 0.9, Inf, 5.0, 1.0e-6, 0.66, 50, 0.1, 0, Base.RefValue{Bool}(false), nothing, false), nothing, 0.001, Optim.Flat()), 0.0, 50, 15), SolverParameters{Float64, Int64}(OrdinaryDiffEqLowStorageRK.RDPK3Sp35{typeof(OrdinaryDiffEqCore.trivial_limiter!), typeof(OrdinaryDiffEqCore.trivial_limiter!), Static.False}(OrdinaryDiffEqCore.trivial_limiter!, OrdinaryDiffEqCore.trivial_limiter!, static(false)), 1.0e-12, 0.08333333333333333, Float64[], false, true, 10, 100000), UDEparameters{ContinuousAdjoint{Float64, Int64, DiscreteVJP{ADTypes.AutoMooncake{Nothing}}, EnzymeVJP}}(SciMLSensitivity.GaussAdjoint{0, true, Val{:central}, SciMLSensitivity.EnzymeVJP}(SciMLSensitivity.EnzymeVJP(0), false), ADTypes.AutoEnzyme(), ContinuousAdjoint{Float64, Int64, DiscreteVJP{ADTypes.AutoMooncake{Nothing}}, EnzymeVJP}(DiscreteVJP{ADTypes.AutoMooncake{Nothing}}(ADTypes.AutoMooncake()), OrdinaryDiffEqLowStorageRK.RDPK3Sp35{typeof(OrdinaryDiffEqCore.trivial_limiter!), typeof(OrdinaryDiffEqCore.trivial_limiter!), Static.False}(OrdinaryDiffEqCore.trivial_limiter!, OrdinaryDiffEqCore.trivial_limiter!, static(false)), 1.0e-8, 1.0e-8, 0.08333333333333333, :Linear, 200, EnzymeVJP()), &quot;AD+AD&quot;, MultiLoss{Tuple{LossH{L2Sum{Int64}}}, Vector{Float64}}((LossH{L2Sum{Int64}}(L2Sum{Int64}(3)),), [1.0]), :A, :identity), InversionParameters{Float64}([1.0], [0.0], [Inf], [1, 1], 0.001, 0.001, Optim.BFGS{LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Nothing, Nothing, Optim.Flat}(LineSearches.InitialStatic{Float64}(1.0, false), LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}(0.1, 0.9, Inf, 5.0, 1.0e-6, 0.66, 50, 0.1, 0, Base.RefValue{Bool}(false), nothing, false), nothing, nothing, Optim.Flat()))), Results{Sleipnir.Results{Float64, Int64}, TrainingStats{Float64, Int64}}(Sleipnir.Results{Float64, Int64}[], TrainingStats{Float64, Int64}(nothing, Float64[], 0, nothing, ComponentArrays.ComponentVector[], ComponentArrays.ComponentVector[], nothing, Dates.DateTime(&quot;0000-01-01T00:00:00&quot;))))</code></pre><p>We will also need <code>θ</code> in order to call the VJPs of the law manually although in practice we do not have to worry about retrieving this:</p><pre><code class="language-julia hljs">θ = simulation.model.trainable_components.θ</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComponentVector{Float64}(A = (layer_1 = (weight = [-0.206559956073761; -0.5560190081596375; -1.624756097793579;;], bias = [0.1391124725341797, -0.6567966938018799, 0.3310384750366211]), layer_2 = (weight = [0.026965618133544922 0.7515738010406494 -0.7434771060943604; -0.9224939346313477 0.6211857795715332 0.6744678020477295; … ; -0.5732729434967041 -0.16946196556091309 0.6235699653625488; -0.9148321151733398 -0.46260619163513184 -0.5166316032409668], bias = [0.10900626331567764, 0.13164696097373962, -0.22048336267471313, -0.10826941579580307, -0.20583660900592804, -0.5592323541641235, -0.3280256986618042, -0.24063409864902496, -0.15558598935604095, -0.3062073290348053]), layer_3 = (weight = [0.41199973225593567 0.5245338082313538 … 0.4106042683124542 0.5015260577201843; -0.34935665130615234 -0.3589525818824768 … -0.5235913395881653 -0.08577283471822739; -0.43845435976982117 -0.4837602972984314 … -0.2922854423522949 0.17420873045921326], bias = [-0.28604868054389954, 0.0878324955701828, -0.2242458611726761]), layer_4 = (weight = [-0.49367260932922363 -0.6222386360168457 -0.5545613765716553], bias = [-0.20377019047737122])))</code></pre><p>We then create the cache, and again all of this is handled internally in ODINN. We need to instantiate manually here to demonstrate how the VJPs can be customized.</p><pre><code class="language-julia hljs">glacier_idx = 1
+simulation.cache = ODINN.init_cache(model, simulation, glacier_idx, θ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Sleipnir.ModelCache{SIA2DCache{Float64, Int64, ScalarCache, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, Array{Float64, 0}, Array{Float64, 0}, ScalarCacheNoVJP, ScalarCacheNoVJP}, Nothing}(SIA2DCache{Float64, Int64, ScalarCache, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, Array{Float64, 0}, Array{Float64, 0}, ScalarCacheNoVJP, ScalarCacheNoVJP}(ScalarCache(fill(0.0), fill(0.0), [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), ScalarCacheNoVJP(fill(3.0)), fill(1.0), fill(1.0), ScalarCacheNoVJP(fill(0.0)), ScalarCacheNoVJP(fill(3.0)), ScalarCacheNoVJP(fill(2.0)), ScalarCacheNoVJP(fill(0.0)), ScalarCacheNoVJP(fill(0.0)), [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [1444.0 1415.0 … 2009.0 2016.0; 1462.0 1428.0 … 2011.0 2016.0; … ; 3049.0 3034.0 … 3202.0 3151.0; 3041.0 3027.0 … 3211.0 3171.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], ScalarCache(fill(6.92887114639047e-310), fill(6.928740968718e-310), [6.9288737218875e-310, 6.9289310915911e-310, 6.9288737218883e-310, 6.9289310915911e-310, 6.92887372188907e-310, 6.9289310915911e-310, 6.92892464441623e-310, 6.9289310915919e-310, 6.92892464441623e-310, 6.9289310915919e-310  …  6.9289310915919e-310, 6.92892464441623e-310, 6.9289310915919e-310, 6.92892464441623e-310, 6.9289310915919e-310, 0.0, 0.0, 0.0, 0.0, 0.0]), [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], Bool[0 0 … 0 0; 0 0 … 0 0; … ; 0 0 … 0 0; 0 0 … 0 0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], 1, nothing, nothing, nothing, nothing, nothing), nothing)</code></pre><p>Finally we demonstrate that this is our custom implementation that is being called:</p><pre><code class="language-julia hljs">ODINN.∂law∂θ!(
+    params.UDE.grad.VJP_method.regressorADBackend,
+    simulation.model.iceflow.A,
+    simulation.cache.iceflow.A,
+    simulation.cache.iceflow.A_prep_vjps,
+    (; T = 1.0), θ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">83-element Vector{Float64}:
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ ⋮
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0</code></pre><h2 id="VJP-precomputation"><a class="docs-heading-anchor" href="#VJP-precomputation">VJP precomputation</a><a id="VJP-precomputation-1"></a><a class="docs-heading-anchor-permalink" href="#VJP-precomputation" title="Permalink"></a></h2><p>Since the law that we have been using so far does not depend on the glacier state, it could be computed once for all at the beginning of the simulation and the VJPs could be precomputed before solving the adjoint iceflow PDE. The definition of the law below illustrates how we can do this in two ways:</p><ul><li>by using <a href="https://github.com/JuliaDiff/DifferentiationInterface.jl">DifferentiationInterface.jl</a> to automatically compute the VJPs;</li><li>by manually precomputing the VJPs in the <code>p_VJP</code> function.</li></ul><h3 id="Automatic-precomputation-with-DI"><a class="docs-heading-anchor" href="#Automatic-precomputation-with-DI">Automatic precomputation with DI</a><a id="Automatic-precomputation-with-DI-1"></a><a class="docs-heading-anchor-permalink" href="#Automatic-precomputation-with-DI" title="Permalink"></a></h3><pre><code class="language-julia hljs">law = Law{ScalarCache}(;
+    inputs = inputs,
+    f! = f!,
+    init_cache = init_cache,
+    p_VJP! = DIVJP(),
+    callback_freq = 0
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:T,) -&gt; Array{Float64, 0}   (↧@start  custom VJP  ✅ precomputed (DI))
+</code></pre><div class="admonition is-category-success" id="Success-56952dd3e9fb383c"><header class="admonition-header">Success<a class="admonition-anchor" href="#Success-56952dd3e9fb383c" title="Permalink"></a></header><div class="admonition-body"><p>This law is applied only once before the beginning of the simulation, and the VJP are precomputed automatically.</p></div></div><h3 id="Manual-precomputation"><a class="docs-heading-anchor" href="#Manual-precomputation">Manual precomputation</a><a id="Manual-precomputation-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-precomputation" title="Permalink"></a></h3><pre><code class="language-julia hljs">law = Law{ScalarCache}(;
+    inputs = inputs,
+    f! = f!,
+    init_cache = init_cache,
+    p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+        cache.vjp_θ .= ones(length(θ))
+    end,
+    callback_freq = 0
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:T,) -&gt; Array{Float64, 0}   (↧@start  custom VJP  ✅ precomputed)
+</code></pre><div class="admonition is-category-success" id="Success-3aa901fc6b1a5679"><header class="admonition-header">Success<a class="admonition-anchor" href="#Success-3aa901fc6b1a5679" title="Permalink"></a></header><div class="admonition-body"><p>This law is applied only once before the beginning of the simulation, and the VJP are precomputed using our own implementation.</p></div></div><h2 id="Simple-cache-customization"><a class="docs-heading-anchor" href="#Simple-cache-customization">Simple cache customization</a><a id="Simple-cache-customization-1"></a><a class="docs-heading-anchor-permalink" href="#Simple-cache-customization" title="Permalink"></a></h2><p>In this last section we illustrate how we can define our own cache to store additional information. Our use case is the interpolation of the VJP on a coarse grid. By coarse grid we mean that in order to evaluate the VJP we do not need the differentiate the law for every value of ice thickness we have on the 2D grid at each time step. We only need to pre-evaluate the VJP for a few values of H (this set of values corresponds to the coarse grid), and then we can interpolate the precomputed VJP at the required values of H. The VJPs on the coarse grid are precomputed before solving the adjoint PDE and the evaluation at the exact points in the adjoint PDE are made using an interpolator that is stored inside the cache object.</p><pre><code class="language-julia hljs">params = Parameters(
+    simulation = SimulationParameters(rgi_paths = rgi_paths),
+    UDE = UDEparameters(grad = ContinuousAdjoint(),
+        target = :D_hybrid)
+)
+nn_model = NeuralNetwork(params)
+
+prescale_bounds = [(-25.0, 0.0), (0.0, 500.0)]
+prescale = X -&gt; ODINN._ml_model_prescale(X, prescale_bounds)
+postscale = Y -&gt; ODINN._ml_model_postscale(Y, params.physical.maxA)
+
+archi = nn_model.architecture
+st = nn_model.st
+smodel = ODINN.StatefulLuxLayer{true}(archi, nothing, st)
+
+inputs = (; T = iAvgScalarTemp(), H̄ = iH̄())
+
+f! = let smodel = smodel, prescale = prescale, postscale = postscale
+    function (cache, inp, θ)
+        Y = map(h -&gt; ODINN._pred_NN([inp.T, h], smodel, θ.Y, prescale, postscale), inp.H̄)
+        ODINN.Zygote.@ignore_derivatives cache.value .= Y # # We ignore this in-place affectation in order to be able to differentiate it with Zygote hereafter
+        return Y
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">#15 (generic function with 1 method)</code></pre><p>We define a new cache struct to store the interpolator:</p><pre><code class="language-julia hljs">using Interpolations
+mutable struct MatrixCacheInterp &lt;: Cache
+    value::Array{Float64, 2}
+    vjp_inp::Array{Float64, 2}
+    vjp_θ::Array{Float64, 3}
+    interp_θ::Interpolations.GriddedInterpolation{
+        Vector{Float64}, 1, Vector{Vector{Float64}},
+        Interpolations.Gridded{Interpolations.Linear{Interpolations.Throw{OnGrid}}},
+        Tuple{Vector{Float64}}}
+end</code></pre><div class="admonition is-warning" id="Warning-aa301054f9751a7a"><header class="admonition-header">Warning<a class="admonition-anchor" href="#Warning-aa301054f9751a7a" title="Permalink"></a></header><div class="admonition-body"><p>The <code>cache</code> must of concrete type.</p></div></div><pre><code class="language-julia hljs">function init_cache_interp(simulation, glacier_idx, θ)
+    glacier = simulation.glaciers[glacier_idx]
+    (; nx, ny) = glacier
+    H_interp = ODINN.create_interpolation(glacier.H₀;
+        n_interp_half = simulation.model.trainable_components.target.n_interp_half)
+    θvec = ODINN.ComponentVector2Vector(θ)
+    grads = [zero(θvec) for i in 1:length(H_interp)]
+    grad_itp = interpolate((H_interp,), grads, Gridded(Linear()))
+    return MatrixCacheInterp(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zeros(nx-1, ny-1, length(θ)), grad_itp)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">init_cache_interp (generic function with 1 method)</code></pre><p>In order to initialize the cache, we created a fake interpolation grid above. However, this interpolation grid will be computed during the precomputation step based on the provided inputs at the beginning of the adjoint PDE.</p><p>Below we define the precomputation function which defines a coarse grid and differentiates the neural network at each of these points.</p><pre><code class="language-julia hljs">function p_VJP!(cache, vjpsPrepLaw, inputs, θ)
+    H_interp = ODINN.create_interpolation(inputs.H̄;
+        n_interp_half = simulation.model.trainable_components.target.n_interp_half)
+    grads = Vector{Float64}[]
+    for h in H_interp
+        ret, = ODINN.Zygote.gradient(_θ -&gt; f!(cache, (; T = inputs.T, H̄ = h), _θ), θ)
+        push!(grads, ODINN.ComponentVector2Vector(ret))
+    end
+    cache.interp_θ = interpolate((H_interp,), grads, Gridded(Linear()))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">p_VJP! (generic function with 1 method)</code></pre><p>Then at each iteration of the adjoint PDE, we use the interpolator that we evaluate with the values in <code>inputs.H̄</code>. Since many of the points are zeros (outside of the glacier), we evaluate the interpolator for <code>H̄=0</code> only once.</p><pre><code class="language-julia hljs">function f_VJP_θ!(cache, inputs, θ)
+    H̄ = inputs.H̄
+    zero_interp = cache.interp_θ(0.0)
+    for i in axes(H̄, 1), j in axes(H̄, 2)
+
+        cache.vjp_θ[i, j, :] = map(h -&gt; ifelse(h == 0.0, zero_interp, cache.interp_θ(h)), H̄[i, j])
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">f_VJP_θ! (generic function with 1 method)</code></pre><p>Finally we can define the law:</p><pre><code class="language-julia hljs">law = Law{MatrixCacheInterp}(;
+    inputs = inputs,
+    f! = f!,
+    init_cache = init_cache_interp,
+    p_VJP! = p_VJP!,
+    f_VJP_θ! = f_VJP_θ!,
+    f_VJP_input! = function (cache, inputs, θ) # Not implemented in this example
+    end
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:T, :H̄) -&gt; Matrix{Float64}   (⟳  custom VJP  ✅ precomputed)
+</code></pre><p>As in the previous example, we need to define some objects and make the initialization manually to be able to call the internals of ODINN <code>ODINN.precompute_law_VJP</code> and <code>ODINN.∂law∂θ!</code>.</p><pre><code class="language-julia hljs">rgi_ids = [&quot;RGI60-11.03638&quot;]
+glaciers = initialize_glaciers(rgi_ids, params)
+model = Model(
+    iceflow = SIA2Dmodel(params; Y = law),
+    mass_balance = nothing,
+    regressors = (; Y = nn_model)
+)
+simulation = Inversion(model, glaciers, params)
+θ = simulation.model.trainable_components.θ
+glacier_idx = 1
+t = simulation.parameters.simulation.tspan[1]
+simulation.cache = ODINN.init_cache(model, simulation, glacier_idx, θ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Sleipnir.ModelCache{SIA2DCache{Float64, Int64, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, Array{Float64, 0}, Array{Float64, 0}, Main.MatrixCacheInterp, ScalarCacheNoVJP}, Nothing}(SIA2DCache{Float64, Int64, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, ScalarCacheNoVJP, Array{Float64, 0}, Array{Float64, 0}, Main.MatrixCacheInterp, ScalarCacheNoVJP}(ScalarCacheNoVJP(fill(0.0)), ScalarCacheNoVJP(fill(3.0)), fill(1.0), fill(1.0), ScalarCacheNoVJP(fill(0.0)), ScalarCacheNoVJP(fill(3.0)), ScalarCacheNoVJP(fill(2.0)), Main.MatrixCacheInterp([0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;;; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;;; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;;; … ;;; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;;; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;;; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], 150-element interpolate((::Vector{Float64},), ::Vector{Vector{Float64}}, Gridded(Linear())) with element type Vector{Float64}:
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ ⋮
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), ScalarCacheNoVJP(fill(0.0)), [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [1444.0 1415.0 … 2009.0 2016.0; 1462.0 1428.0 … 2011.0 2016.0; … ; 3049.0 3034.0 … 3202.0 3151.0; 3041.0 3027.0 … 3211.0 3171.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], ScalarCacheNoVJP(fill(2.123648005936e-312)), [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], Bool[0 0 … 0 0; 0 0 … 0 0; … ; 0 0 … 0 0; 0 0 … 0 0], [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; … ; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0], 1, nothing, nothing, nothing, nothing, nothing), nothing)</code></pre><p>Apply once to be able to retrieve the inputs</p><pre><code class="language-julia hljs">dH = zero(simulation.cache.iceflow.H)
+ODINN.Huginn.SIA2D!(dH, simulation.cache.iceflow.H, simulation, t, θ);</code></pre><p>Finally we call the precompute function and the VJP function called at each iteration of the adjoint PDE.</p><pre><code class="language-julia hljs">ODINN.precompute_law_VJP(
+    simulation.model.iceflow.Y,
+    simulation.cache.iceflow.Y,
+    simulation.cache.iceflow.Y_prep_vjps,
+    simulation,
+    glacier_idx, t, θ)
+
+ODINN.∂law∂θ!(
+    params.UDE.grad.VJP_method.regressorADBackend,
+    simulation.model.iceflow.Y,
+    simulation.cache.iceflow.Y,
+    simulation.cache.iceflow.Y_prep_vjps,
+    (; T = 1.0, H̄ = simulation.cache.iceflow.H̄), θ)</code></pre><p>Now let us check that the <code>vjp_θ</code> field of the cache, which is spatially varying, has been populated:</p><pre><code class="language-julia hljs">simulation.cache.iceflow.Y.vjp_θ</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">137×128×86 Array{Float64, 3}:
+[:, :, 1] =
+ 1.29585e-19  1.29585e-19  1.29585e-19  …  1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19  …  1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ ⋮                                      ⋱               
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19  …  1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19  …  1.29585e-19  1.29585e-19
+ 1.29585e-19  1.29585e-19  1.29585e-19     1.29585e-19  1.29585e-19
+
+[:, :, 2] =
+ -1.03158e-19  -1.03158e-19  -1.03158e-19  …  -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19  …  -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+  ⋮                                        ⋱                
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19  …  -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19  …  -1.03158e-19  -1.03158e-19
+ -1.03158e-19  -1.03158e-19  -1.03158e-19     -1.03158e-19  -1.03158e-19
+
+[:, :, 3] =
+ 7.21833e-19  7.21833e-19  7.21833e-19  …  7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19  …  7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ ⋮                                      ⋱               
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19  …  7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19  …  7.21833e-19  7.21833e-19
+ 7.21833e-19  7.21833e-19  7.21833e-19     7.21833e-19  7.21833e-19
+
+;;; … 
+
+[:, :, 84] =
+ 7.40594e-18  7.40594e-18  7.40594e-18  …  7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18  …  7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ ⋮                                      ⋱               
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18  …  7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18  …  7.40594e-18  7.40594e-18
+ 7.40594e-18  7.40594e-18  7.40594e-18     7.40594e-18  7.40594e-18
+
+[:, :, 85] =
+ 4.2713e-18  4.2713e-18  4.2713e-18  …  4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18  …  4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ ⋮                                   ⋱  ⋮                       
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18  …  4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18  …  4.2713e-18  4.2713e-18  4.2713e-18
+ 4.2713e-18  4.2713e-18  4.2713e-18     4.2713e-18  4.2713e-18  4.2713e-18
+
+[:, :, 86] =
+ 1.34754e-17  1.34754e-17  1.34754e-17  …  1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17  …  1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ ⋮                                      ⋱               
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17  …  1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17  …  1.34754e-17  1.34754e-17
+ 1.34754e-17  1.34754e-17  1.34754e-17     1.34754e-17  1.34754e-17</code></pre><h2 id="Frequently-Asked-Questions"><a class="docs-heading-anchor" href="#Frequently-Asked-Questions">Frequently Asked Questions</a><a id="Frequently-Asked-Questions-1"></a><a class="docs-heading-anchor-permalink" href="#Frequently-Asked-Questions" title="Permalink"></a></h2><ul><li>Can I use the preparation object in the <code>p_VJP!</code>/<code>f_VJP_*</code> functions?</li></ul><p>No it is not possible for the moment to use the preparation object inside these functions. The preparation object is used to store things precompiled by <a href="https://github.com/JuliaDiff/DifferentiationInterface.jl">DifferentiationInterface.jl</a> when <code>p_VJP!=DIVJP()</code> and hence it excludes its use in <code>p_VJP!</code>. As for <code>f_VJP_*</code>, the preparation object cannot be accessed for the moment. If there is a need, we might add it as an argument in the future.</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../input_laws/">« Laws inputs</a><a class="docs-footer-nextpage" href="../parameters/">Parameters »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Tuesday 9 December 2025 14:46">Tuesday 9 December 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
