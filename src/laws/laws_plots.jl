@@ -52,13 +52,14 @@ function plot_law(
     θ;
     glacier_idx::Integer = 1,
     idx_fixed_input::Integer = 0,
-    plot_full_input_range::Bool = false
+    plot_full_input_range::Bool = false,
+    ground_truth_law::Union{AbstractLaw, Nothing} = nothing
 )
     n_inputs = length(keys(inputs))
     input_names = sort(collect(keys(inputs)))
 
     if n_inputs == 1
-        fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names[1], plot_full_input_range)
+        fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names[1], plot_full_input_range, ground_truth_law)
         save_law_plot(fig, n_inputs, input_names, law, simulation, idx_fixed_input)
     elseif n_inputs == 2
         fig = plot_law_2d(law, simulation, inputs, glacier_idx, θ, input_names, idx_fixed_input)
@@ -76,7 +77,8 @@ function plot_law_1d(
     glacier_idx::Integer,
     θ,
     input_name::Symbol,
-    plot_full_input_range::Bool
+    plot_full_input_range::Bool,
+    ground_truth_law::Union{AbstractLaw, Nothing} = nothing
 )
     xlabel = replace(string(input_name), "_" => " ")
     ylabel = replace(string(law.name), "_" => " ")
@@ -86,14 +88,24 @@ function plot_law_1d(
         xvals = get_xvals(input_name, inputs, simulation, plot_full_input_range)
         input_tuples = [NamedTuple{(input_name,)}((xval,) ) for xval in xvals]
         outputs = [only(eval_law(law, simulation, i, input_tuples[i], θ)) for i in 1:length(xvals)]
-        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:blue, ylims=(minimum(outputs)*0.9, maximum(outputs)*1.1))
+        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:purple, ylims=(minimum(outputs)*0.9, maximum(outputs)*1.1))
+
+        if ground_truth_law !== nothing
+            gt_outputs = [only(eval_law(ground_truth_law, simulation, i, input_tuples[i], nothing)) for i in 1:length(xvals)]
+            fig = Plots.plot!(fig, xvals, gt_outputs, label="Ground Truth", linewidth=3, color=:black, linestyle=:dash)
+        end
 
     else
         xname = input_names[glacier_idx]
         xvals = get_input(inputs[xname], simulation, glacier_idx, 2010.0)
         input_tuple = NamedTuple{(xname,)}((xvals,))
         outputs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
-        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:blue)
+        fig = Plots.plot(xvals, outputs, xlabel=xlabel, ylabel=ylabel, title="Law Function Plot", label=ylabel, linewidth=3, color=:purple, ylims=(minimum(outputs)*0.9, maximum(outputs)*1.1))
+
+        if ground_truth_law !== nothing
+            gt_outputs = eval_law(ground_truth_law, simulation, glacier_idx, input_tuple, nothing)
+            fig = Plots.plot!(fig, xvals, gt_outputs, label="Ground Truth", linewidth=3, color=:black, linestyle=:dash)
+        end
     end
 
     return fig
