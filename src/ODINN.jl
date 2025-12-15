@@ -29,7 +29,8 @@ using Enzyme
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
-using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers, LineSearches
+using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers,
+      LineSearches
 using ComponentArrays
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet

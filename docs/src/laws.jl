@@ -42,7 +42,7 @@ A_law = LawA(nn_model, params)
 # It is then possible to visualize how the law integrates into the iceflow PDE:
 
 model = Model(
-    iceflow = SIA2Dmodel(params; A=A_law),
+    iceflow = SIA2Dmodel(params; A = A_law),
     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
     regressors = (; A = nn_model)
 )
@@ -61,7 +61,7 @@ A_law = CuffeyPaterson(scalar = true)
 
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
 
 # In this ice flow model, the Glen coefficient `A` is defined by the `CuffeyPaterson` law, which is a non-learnable law that maps the long term air temperature `T` to `A`.
@@ -78,7 +78,8 @@ rgi_ids = ["RGI60-11.03638"]
 
 # The key part here is the definition of the law inputs, which are the variables that will be used to compute the basal sliding coefficient `C`. In this case, we use the CPDD and the topographical roughness as inputs. As you can see, there are different options to customize the way the inputs are computed. For exampe, for the CPDD, we can specify a time window over which the CPDD is integrated. For the topographical roughness, we can specify a spatial window and the type of curvature to be used.
 
-law_inputs = (; CPDD = iCPDD(window=Week(1)), topo_roughness = iTopoRough(window = 200.0, curvature_type = :variability))
+law_inputs = (; CPDD = iCPDD(window = Week(1)),
+    topo_roughness = iTopoRough(window = 200.0, curvature_type = :variability))
 
 # Then, we define the parameters as for any other simulation.
 
@@ -100,7 +101,7 @@ params = Parameters(
 
 model = Huginn.Model(
     iceflow = SIA2Dmodel(params; C = SyntheticC(params; inputs = law_inputs)),
-    mass_balance = nothing,
+    mass_balance = nothing
 )
 
 # We retrieve some glaciers for the simulation

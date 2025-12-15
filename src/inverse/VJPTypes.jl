@@ -16,19 +16,21 @@ Discrete manual implementation of the VJP required inside the adjoint calculatio
 This implements the pullback function for the function to differentiate.
 
 # Fields
-- `regressorADBackend::ADTYPE`: Specifies the AD backend used for the laws when
+
+  - `regressorADBackend::ADTYPE`: Specifies the AD backend used for the laws when
     their associated VJPs functions are not provided. The type parameter `ADTYPE`
     must be a subtype of `DI.AbstractADType`.
 
 # Constructor
-- The default constructor allows specifying the backend via the `regressorADBackend`
+
+  - The default constructor allows specifying the backend via the `regressorADBackend`
     keyword argument, defaulting to `DI.AutoMooncake()`.
 """
 struct DiscreteVJP{ADTYPE <: DI.AbstractADType} <: AbstractVJPMethod
     regressorADBackend::ADTYPE
 
     function DiscreteVJP(;
-        regressorADBackend = DI.AutoMooncake(),
+            regressorADBackend = DI.AutoMooncake(),
     )
         new{typeof(regressorADBackend)}(regressorADBackend)
     end
@@ -42,19 +44,21 @@ It relies in the continuous expresion for the adjoint operation based on the fun
 formula of the forward PDE.
 
 # Fields
-- `regressorADBackend::ADTYPE`: Specifies the AD backend used for the laws when
+
+  - `regressorADBackend::ADTYPE`: Specifies the AD backend used for the laws when
     their associated VJPs functions are not provided. The type parameter `ADTYPE`
     must be a subtype of `DI.AbstractADType`.
 
 # Constructor
-- The default constructor allows specifying the backend via the `regressorADBackend`
+
+  - The default constructor allows specifying the backend via the `regressorADBackend`
     keyword argument, defaulting to `DI.AutoMooncake()`.
 """
 struct ContinuousVJP{ADTYPE <: DI.AbstractADType} <: AbstractVJPMethod
     regressorADBackend::ADTYPE
 
     function ContinuousVJP(;
-        regressorADBackend = DI.AutoMooncake(),
+            regressorADBackend = DI.AutoMooncake(),
     )
         new{typeof(regressorADBackend)}(regressorADBackend)
     end

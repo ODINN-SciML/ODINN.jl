@@ -1,7 +1,6 @@
 function save_simulation_test!(;
-    multiglacier = false
+        multiglacier = false
 )
-
     rgi_ids = multiglacier ? ["RGI60-11.03638", "RGI60-11.01450"] : ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
     working_dir = joinpath(ODINN.root_dir, "test/data")
@@ -17,13 +16,13 @@ function save_simulation_test!(;
             multiprocessing = false,
             workers = 1,
             test_mode = true,
-            rgi_paths = rgi_paths,
+            rgi_paths = rgi_paths
         ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
             epochs = 1,
-            optimizer = ODINN.ADAM(0.01),
-            ),
+            optimizer = ODINN.ADAM(0.01)
+        ),
         UDE = UDEparameters(
             optim_autoAD = ODINN.NoAD(),
             grad = ContinuousAdjoint(),
@@ -32,12 +31,12 @@ function save_simulation_test!(;
         solver = Huginn.SolverParameters(
             step = δt,
             progress = true
-            )
+        )
     )
 
     model = Model(
-        iceflow = SIA2Dmodel(params, A=CuffeyPaterson(scalar=true)),
-        mass_balance = TImodel1(params),
+        iceflow = SIA2Dmodel(params, A = CuffeyPaterson(scalar = true)),
+        mass_balance = TImodel1(params)
     )
 
     glaciers = initialize_glaciers(rgi_ids, params)
@@ -47,9 +46,9 @@ function save_simulation_test!(;
 
     nn_model = NeuralNetwork(params)
     model = Model(
-        iceflow = SIA2Dmodel(params, A=LawA(nn_model, params)),
+        iceflow = SIA2Dmodel(params, A = LawA(nn_model, params)),
         mass_balance = TImodel1(params),
-        regressors = (; A=nn_model)
+        regressors = (; A = nn_model)
     )
 
     functional_inversion = Inversion(model, glaciers, params)
@@ -71,5 +70,3 @@ function save_simulation_test!(;
     @test length(losses_load) == functional_inversion.results.stats.niter
     @test params_load.hyper.epochs == params.hyper.epochs
 end
-
-

@@ -14,7 +14,6 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 # Re-set global constant for working directory
 # const global Sleipnir.prepro_dir = joinpath(homedir(),  ".OGGM/ODINN_tests")
 
-
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
 # rgi_ids = ["RGI60-11.03638"]
@@ -48,16 +47,16 @@ params = Parameters(
         test_mode = false,
         rgi_paths = rgi_paths,
         gridScalingFactor = 4 # We reduce the size of glacier for simulation
-        ),
+    ),
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
         epochs = [2, 2],
         optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
-        ),
+    ),
     physical = PhysicalParameters(
         minA = 8e-21,
         maxA = 8e-17
-        ),
+    ),
     UDE = UDEparameters(
         optim_autoAD = ODINN.NoAD(),
         grad = ContinuousAdjoint(),
@@ -65,19 +64,19 @@ params = Parameters(
         empirical_loss_function = MultiLoss(
             losses = (LossH(), InitialThicknessRegularization()),
             λs = (1.0, 1e-4)
-            ),
+        ),
         target = :A,
         initial_condition_filter = :Zang1980
-        ),
+    ),
     solver = Huginn.SolverParameters(
         step = δt,
         progress = true
-        )
     )
+)
 
 model = Model(
-    iceflow = SIA2Dmodel(params; A=CuffeyPaterson(scalar=true)),
-    mass_balance = nothing, #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    iceflow = SIA2Dmodel(params; A = CuffeyPaterson(scalar = true)),
+    mass_balance = nothing #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
 
 # We retrieve some glaciers for the simulation
@@ -108,8 +107,6 @@ else
         regressors = (; A = nn_model)
     )
 end
-
-
 
 # We create an ODINN prediction
 functional_inversion = Inversion(model, glaciers, params)

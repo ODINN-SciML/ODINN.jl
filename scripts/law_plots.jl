@@ -15,11 +15,9 @@ working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
 # Re-set global constant for working directory
 # const global Sleipnir.prepro_dir = joinpath(homedir(),  ".OGGM/ODINN_tests")
 
-
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
 rgi_ids = ["RGI60-11.03638"]
-
 
 # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint
 δt = 1/12
@@ -27,7 +25,8 @@ time_window = Week(1)
 topo_window = 200.0
 # curvature_type = :scalar
 curvature_type = :variability
-law_inputs = (; CPDD=iCPDD(window=time_window), topo_roughness=iTopoRough(window=topo_window, curvature_type=curvature_type))
+law_inputs = (; CPDD = iCPDD(window = time_window),
+    topo_roughness = iTopoRough(window = topo_window, curvature_type = curvature_type))
 
 params = Parameters(
     simulation = SimulationParameters(
@@ -40,7 +39,7 @@ params = Parameters(
         test_mode = false,
         rgi_paths = rgi_paths,
         gridScalingFactor = 4 # We reduce the size of glacier for simulation
-        ),
+    ),
     # hyper = Hyperparameters(
     #     batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
     #     epochs = [100,50],
@@ -50,8 +49,8 @@ params = Parameters(
         minA = 8e-21,
         maxA = 8e-17,
         minC = 8e-21,
-        maxC = 8e-17, # This is the default value in Sleipnir
-        ),
+        maxC = 8e-17 # This is the default value in Sleipnir
+    ),
     # UDE = UDEparameters(
     #     optim_autoAD = ODINN.NoAD(),
     #     grad = ContinuousAdjoint(),
@@ -61,12 +60,12 @@ params = Parameters(
     solver = Huginn.SolverParameters(
         step = δt,
         progress = true
-        )
     )
+)
 
 model = Model(
-    iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
-    mass_balance = nothing, #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    iceflow = SIA2Dmodel(params; C = SyntheticC(params; inputs = law_inputs)),
+    mass_balance = nothing #TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
 )
 
 # We retrieve some glaciers for the simulation
@@ -84,8 +83,10 @@ ODINN.connect_electron_backend() # If you want to visualize the plots below prop
 fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing)
 ODINN.PlotlyJS.display(fig)
 
-fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input=1)
+fig = plot_law(
+    prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input = 1)
 ODINN.PlotlyJS.display(fig)
 
-fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input=2)
+fig = plot_law(
+    prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input = 2)
 ODINN.PlotlyJS.display(fig)

@@ -14,14 +14,14 @@ Struct used for the binding with SciMLSensitivity.
 It is defined as a SciMLStructure and it contains the inversion structure and the vector of parameters to differentiate.
 
 # Fields
-- `simulation::FI`: Inversion instance.
-- `θ::CA`: ComponentArray that contains the parameters used to differentiate the iceflow.
+
+  - `simulation::FI`: Inversion instance.
+  - `θ::CA`: ComponentArray that contains the parameters used to differentiate the iceflow.
 """
 mutable struct InversionBinder{FI <: Inversion, CA <: ComponentArray} <: Container
     simulation::FI
     θ::CA
 end
-
 
 # Mark the struct as a SciMLStructure
 SS.isscimlstructure(::InversionBinder) = true
@@ -67,7 +67,6 @@ function SS.replace!(::SS.Tunable, p::InversionBinder, newbuffer)
     return p
 end
 
-
 """
     Base.zero(
         p::InversionBinder{FI, CA},
@@ -77,7 +76,7 @@ Overload Base.zero as we need a way to copy the SciMLStructure.
 It is used in SciMLSensitivity to differentiate the callbacks.
 """
 function Base.zero(
-    p::InversionBinder{FI, CA},
+        p::InversionBinder{FI, CA},
 ) where {FI <: Inversion, CA <: ComponentArray}
     return InversionBinder(p.simulation, zero(p.θ))
 end
@@ -92,8 +91,8 @@ Overload Base.copyto! as we need a way to copy the SciMLStructure.
 It is used in SciMLSensitivity to differentiate the callbacks.
 """
 function Base.copyto!(
-    dest::InversionBinder{FI, CA},
-    src::InversionBinder{FI, CA},
+        dest::InversionBinder{FI, CA},
+        src::InversionBinder{FI, CA}
 ) where {FI <: Inversion, CA <: ComponentArray}
     dest.θ .= src.θ
 end

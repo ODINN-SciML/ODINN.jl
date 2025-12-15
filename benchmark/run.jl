@@ -2,7 +2,7 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 # Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
-Pkg.develop(url="https://github.com/albangossard/SciMLSensitivity.jl/")
+Pkg.develop(url = "https://github.com/albangossard/SciMLSensitivity.jl/")
 
 using ODINN
 using BenchmarkTools
@@ -22,28 +22,28 @@ tspan = (2010.0, 2015.0)
 δt = 1/12
 params = Parameters(
     simulation = SimulationParameters(
-        use_MB=false,
-        use_velocities=true,
-        tspan=tspan,
-        multiprocessing=false,
-        test_mode=true,
-        rgi_paths=rgi_paths),
+        use_MB = false,
+        use_velocities = true,
+        tspan = tspan,
+        multiprocessing = false,
+        test_mode = true,
+        rgi_paths = rgi_paths),
     UDE = UDEparameters(
-        sensealg=SciMLSensitivity.ZygoteAdjoint(),
-        optim_autoAD=ODINN.NoAD(),
-        grad=DiscreteAdjoint(VJP_method=ODINN.EnzymeVJP()),
-        optimization_method="AD+AD",
+        sensealg = SciMLSensitivity.ZygoteAdjoint(),
+        optim_autoAD = ODINN.NoAD(),
+        grad = DiscreteAdjoint(VJP_method = ODINN.EnzymeVJP()),
+        optimization_method = "AD+AD",
         target = :A),
     solver = Huginn.SolverParameters(
-        step=δt,
-        progress=true)
+        step = δt,
+        progress = true)
 )
 
 nn_model = NeuralNetwork(params)
 model = Model(
-    iceflow = SIA2Dmodel(params; A=LawA(nn_model, params)),
+    iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
     mass_balance = nothing,
-    regressors = (; A=nn_model)
+    regressors = (; A = nn_model)
 )
 
 glaciers = initialize_glaciers(rgi_ids, params)

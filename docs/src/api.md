@@ -6,4 +6,3 @@ This is an exhaustive list of all the types and functions in `ODINN.jl`, `Huginn
 Modules = [ODINN, Huginn, Muninn, Sleipnir]
 Order = [:type, :function]
 ```
-

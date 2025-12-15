@@ -36,24 +36,25 @@ Continuous adjoint of SIA2D with manual implementation of the backward in the OD
 scheme.
 
 # Fields
-- `VJP_method::VJP`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
+
+  - `VJP_method::VJP`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
     calculation.
-- `solver::Any`: The solver to be used for adjoint.
-- `reltol::F`: Relative tolerance to be used in the ODE solver of the adjoint.
-- `abstol::F`: Absolute tolerance to be used in the ODE solver of the adjoint.
-- `dtmax::F`: Maximum time step to be used in the ODE solver of the adjoint.
-- `interpolation`: Interpolation method to be used to interpolate the variables in
+  - `solver::Any`: The solver to be used for adjoint.
+  - `reltol::F`: Relative tolerance to be used in the ODE solver of the adjoint.
+  - `abstol::F`: Absolute tolerance to be used in the ODE solver of the adjoint.
+  - `dtmax::F`: Maximum time step to be used in the ODE solver of the adjoint.
+  - `interpolation`: Interpolation method to be used to interpolate the variables in
     the computation of the adjoint. Currently only `:Linear` is supported.
-- `n_quadrature::I`: Number of nodes used in the Gauss quadrature for the numerical
+  - `n_quadrature::I`: Number of nodes used in the Gauss quadrature for the numerical
     integration of the loss function.
-- `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
+  - `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
     calculation.
 """
 @kwdef struct ContinuousAdjoint{
     F <: AbstractFloat,
     I <: Integer,
     VJP <: AbstractVJPMethod,
-    MBVJP <: AbstractVJPMethod,
+    MBVJP <: AbstractVJPMethod
 } <: AbstractAdjointMethod
     VJP_method::VJP = DiscreteVJP()
     solver::Any = RDPK3Sp35()
@@ -75,14 +76,15 @@ Discrete adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
 # Fields
-- `VJP_method`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
+
+  - `VJP_method`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
     calculation.
-- `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
+  - `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
     calculation.
 """
 @kwdef struct DiscreteAdjoint{
     VJP <: AbstractVJPMethod,
-    MBVJP <: AbstractVJPMethod,
+    MBVJP <: AbstractVJPMethod
 } <: AbstractAdjointMethod
     VJP_method::VJP = DiscreteVJP()
     MB_VJP::MBVJP = EnzymeVJP()
@@ -96,7 +98,8 @@ gradient calculation.
 `DummyAdjoint`
 
 # Fields:
-- `grad::Function`: In-place function `f(du, u; kwargs)` that fills the first
+
+  - `grad::Function`: In-place function `f(du, u; kwargs)` that fills the first
     argument `du` with the gradient values.
 """
 @kwdef struct DummyAdjoint <: AbstractAdjointMethod
