@@ -1,28 +1,5 @@
 export plot_law
 
-function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw,
-        simulation::Simulation, idx_fixed_input = 0)
-    # Build filename based on law name, input names, and fixed input info
-    filename = "law_plot_" * string(law.name)
-    if n_inputs == 1
-        filename *= "_" * string(input_names[1])
-    elseif n_inputs == 2
-        if idx_fixed_input != 0
-            fixed_name = string(input_names[idx_fixed_input])
-            filename *= "_fixed_" * fixed_name * "_" *
-                        string(input_names[3 - idx_fixed_input])
-        else
-            filename *= "_" * string(input_names[1]) * "_" * string(input_names[2])
-        end
-    end
-
-    folder = joinpath(simulation.parameters.simulation.working_dir, "laws")
-    mkpath(folder)
-    filepath = joinpath(folder, filename * ".pdf")
-    @info "Saving law plot to $filepath"
-    Plots.savefig(fig, filepath)
-end
-
 """
     plot_law(law::AbstractLaw, simulation::Simulation, inputs::NamedTuple, θ; glacier_idx=1, idx_fixed_input=0)
 
@@ -238,6 +215,29 @@ function plot_law_2d_surface(
             )
         )
     )
+end
+
+function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw,
+        simulation::Simulation, idx_fixed_input = 0)
+    # Build filename based on law name, input names, and fixed input info
+    filename = "law_plot_" * string(law.name)
+    if n_inputs == 1
+        filename *= "_" * string(input_names[1])
+    elseif n_inputs == 2
+        if idx_fixed_input != 0
+            fixed_name = string(input_names[idx_fixed_input])
+            filename *= "_fixed_" * fixed_name * "_" *
+                        string(input_names[3 - idx_fixed_input])
+        else
+            filename *= "_" * string(input_names[1]) * "_" * string(input_names[2])
+        end
+    end
+
+    folder = joinpath(simulation.parameters.simulation.working_dir, "laws")
+    mkpath(folder)
+    filepath = joinpath(folder, filename * ".pdf")
+    @info "Saving law plot to $filepath"
+    Plots.savefig(fig, filepath)
 end
 
 function get_xvals(input_name::Symbol, inputs::NamedTuple, simulation::Simulation, plot_full_input_range::Bool)
