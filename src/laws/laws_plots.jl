@@ -1,28 +1,5 @@
 export plot_law
 
-function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw,
-        simulation::Simulation, idx_fixed_input = 0)
-    # Build filename based on law name, input names, and fixed input info
-    filename = "law_plot_" * string(law.name)
-    if n_inputs == 1
-        filename *= "_" * string(input_names[1])
-    elseif n_inputs == 2
-        if idx_fixed_input != 0
-            fixed_name = string(input_names[idx_fixed_input])
-            filename *= "_fixed_" * fixed_name * "_" *
-                        string(input_names[3 - idx_fixed_input])
-        else
-            filename *= "_" * string(input_names[1]) * "_" * string(input_names[2])
-        end
-    end
-
-    folder = joinpath(simulation.parameters.simulation.working_dir, "laws")
-    mkpath(folder)
-    filepath = joinpath(folder, filename * ".pdf")
-    @info "Saving law plot to $filepath"
-    Plots.savefig(fig, filepath)
-end
-
 """
     plot_law(law::AbstractLaw, simulation::Simulation, inputs::NamedTuple, θ; glacier_idx=1, idx_fixed_input=0)
 
@@ -39,6 +16,8 @@ Plot a law function with one or two input variables.
 
   - `glacier_idx::Integer=1`: Index of the glacier to use for extracting input values (for 2D inputs).
   - `idx_fixed_input::Integer=0`: For two-input laws, index (1 or 2) of the input to fix at its mean value. If `0`, plots a 3D surface.
+  - `plot_full_input_range::Bool=false`: If true and plotting a 1D law, uses the full physical range for that input.
+  - `ground_truth_law::Union{AbstractLaw, Nothing}=nothing`: Optional ground truth law to overlay on the plot for comparison.
 
 # Returns
 
@@ -58,14 +37,15 @@ function plot_law(
         θ;
         glacier_idx::Integer = 1,
         idx_fixed_input::Integer = 0,
-        plot_full_input_range::Bool = false
+        plot_full_input_range::Bool = false,
+        ground_truth_law::Union{AbstractLaw, Nothing} = nothing
 )
     n_inputs = length(keys(inputs))
     input_names = sort(collect(keys(inputs)))
 
     if n_inputs == 1
-        fig = plot_law_1d(
-            law, simulation, inputs, glacier_idx, θ, input_names[1], plot_full_input_range)
+        fig = plot_law_1d(law, simulation, inputs, glacier_idx, θ, input_names[1],
+            plot_full_input_range, ground_truth_law)
         save_law_plot(fig, n_inputs, input_names, law, simulation, idx_fixed_input)
     elseif n_inputs == 2
         fig = plot_law_2d(
@@ -84,7 +64,8 @@ function plot_law_1d(
         glacier_idx::Integer,
         θ,
         input_name::Symbol,
-        plot_full_input_range::Bool
+        plot_full_input_range::Bool,
+        ground_truth_law::Union{AbstractLaw, Nothing} = nothing
 )
     xlabel = replace(string(input_name), "_" => " ")
     ylabel = replace(string(law.name), "_" => " ")
@@ -98,7 +79,15 @@ function plot_law_1d(
                    for i in 1:length(xvals)]
         fig = Plots.plot(xvals, outputs, xlabel = xlabel, ylabel = ylabel,
             title = "Law Function Plot", label = ylabel, linewidth = 3,
-            color = :blue, ylims = (minimum(outputs)*0.9, maximum(outputs)*1.1))
+            color = :purple, ylims = (minimum(outputs)*0.9, maximum(outputs)*1.1))
+
+        if ground_truth_law !== nothing
+            gt_outputs = [only(eval_law(
+                              ground_truth_law, simulation, i, input_tuples[i], nothing))
+                          for i in 1:length(xvals)]
+            fig = Plots.plot!(fig, xvals, gt_outputs, label = "Ground Truth",
+                linewidth = 3, color = :black, linestyle = :dash)
+        end
 
     else
         xname = input_names[glacier_idx]
@@ -106,7 +95,15 @@ function plot_law_1d(
         input_tuple = NamedTuple{(xname,)}((xvals,))
         outputs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
         fig = Plots.plot(xvals, outputs, xlabel = xlabel, ylabel = ylabel,
-            title = "Law Function Plot", label = ylabel, linewidth = 3, color = :blue)
+            title = "Law Function Plot", label = ylabel, linewidth = 3,
+            color = :purple, ylims = (minimum(outputs)*0.9, maximum(outputs)*1.1))
+
+        if ground_truth_law !== nothing
+            gt_outputs = eval_law(
+                ground_truth_law, simulation, glacier_idx, input_tuple, nothing)
+            fig = Plots.plot!(fig, xvals, gt_outputs, label = "Ground Truth",
+                linewidth = 3, color = :black, linestyle = :dash)
+        end
     end
 
     return fig
@@ -218,6 +215,29 @@ function plot_law_2d_surface(
             )
         )
     )
+end
+
+function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw,
+        simulation::Simulation, idx_fixed_input = 0)
+    # Build filename based on law name, input names, and fixed input info
+    filename = "law_plot_" * string(law.name)
+    if n_inputs == 1
+        filename *= "_" * string(input_names[1])
+    elseif n_inputs == 2
+        if idx_fixed_input != 0
+            fixed_name = string(input_names[idx_fixed_input])
+            filename *= "_fixed_" * fixed_name * "_" *
+                        string(input_names[3 - idx_fixed_input])
+        else
+            filename *= "_" * string(input_names[1]) * "_" * string(input_names[2])
+        end
+    end
+
+    folder = joinpath(simulation.parameters.simulation.working_dir, "laws")
+    mkpath(folder)
+    filepath = joinpath(folder, filename * ".pdf")
+    @info "Saving law plot to $filepath"
+    Plots.savefig(fig, filepath)
 end
 
 function get_xvals(input_name::Symbol, inputs::NamedTuple, simulation::Simulation, plot_full_input_range::Bool)
