@@ -1,9 +1,7 @@
 export AbstractTarget, AbstractSIA2DTarget
-export SIA2D_target
 
 # Export all functions defined for each custom target type
 export Diffusivity, ∂Diffusivity∂H, ∂Diffusivity∂∇H, ∂Diffusivity∂θ
-export apply_parametrization, apply_parametrization!
 
 abstract type AbstractTarget end
 abstract type AbstractSIA2DTarget <: AbstractTarget end

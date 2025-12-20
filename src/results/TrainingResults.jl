@@ -1,4 +1,4 @@
-export Result
+export TrainingResult
 export save_inversion_file!
 
 abstract type AbstractResult end
