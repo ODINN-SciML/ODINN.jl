@@ -1,6 +1,6 @@
 function test_Aqua()
     Aqua.test_ambiguities(ODINN)
-    Aqua.test_undefined_exports(ODINN; broken = true)
+    Aqua.test_undefined_exports(ODINN)
     Aqua.test_project_extras(ODINN)
     Aqua.test_stale_deps(ODINN; ignore = [:JET, :Test, :BenchmarkTools, :Revise])
     Aqua.test_deps_compat(ODINN)
