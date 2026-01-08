@@ -314,7 +314,11 @@ function loss(
     Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
     # TODO: in the future we should dispatch wrt the iceflow model
 
-    mask = (V_ref .> 0.0)
+    mask = if length(simulation.glaciers[1].mask_loss) > 0
+        simulation.glaciers[1].mask_loss
+    else
+        V_ref .> 0.0
+    end
 
     ℓ = if lossType.component == :xy
         loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization) +
@@ -358,7 +362,11 @@ function backward_loss(
     Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
     # TODO: in the future we should dispatch wrt the iceflow model
 
-    mask = (V_ref .> 0.0)
+    mask = if length(simulation.glaciers[1].mask_loss) > 0
+        simulation.glaciers[1].mask_loss
+    else
+        V_ref .> 0.0
+    end
 
     if lossType.component == :xy
         ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization)
