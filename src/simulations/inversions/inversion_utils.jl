@@ -29,20 +29,28 @@ function run!(
             Dates.format(now(), "yyyy-mm-dd_HH:MM:SS")
         )
 )
+    n_optimizers = if !(typeof(simulation.parameters.hyper.optimizer) <: Vector)
+        1
+    else
+        length(simulation.parameters.hyper.epochs)
+    end
+
     # Set expected total number of epochs from beginning for the callback
-    simulation.results.stats.niter = sum(simulation.parameters.hyper.epochs)
+    # Each optimizer makes one extra step to store the final parameter, so we include one
+    # extra epoch per used optimizer
+    simulation.results.stats.niter = sum(simulation.parameters.hyper.epochs) + n_optimizers
 
     logger = isnothing(path_tb_logger) || simulation.parameters.simulation.test_mode ?
              nothing : TBLogger(path_tb_logger)
-    if !(typeof(simulation.parameters.hyper.optimizer) <: Vector)
+    if n_optimizers == 1
         # One single optimizer
         sol = train_UDE!(simulation; save_every_iter = save_every_iter, logger = logger)
     else
         # Multiple optimizers
         optimizers = simulation.parameters.hyper.optimizer
         epochs = simulation.parameters.hyper.epochs
-        @assert length(optimizers) == length(epochs) "Provide number of epochs as a vector with the same length of optimizers"
-        for i in 1:length(epochs)
+        @assert length(optimizers) == n_optimizers "Provide number of epochs as a vector with the same length of optimizers"
+        for i in 1:n_optimizers
             # Construct a new simulation for each optimizer
             simulation.parameters.hyper.optimizer = optimizers[i]
             simulation.parameters.hyper.epochs = epochs[i]
@@ -52,7 +60,7 @@ function run!(
             end
             sol = train_UDE!(simulation; save_every_iter = save_every_iter, logger = logger)
             # Clear results of previous simulation for fresh start
-            if i < length(epochs)
+            if i < n_optimizers
                 simulation.results.simulation = Sleipnir.Results{Float64, Int64}[]
             end
         end
