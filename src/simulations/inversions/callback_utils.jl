@@ -80,7 +80,7 @@ function callback_diagnosis(θ, l, simulation; save::Bool = false,
             improvement = (l - simulation.results.stats.losses[end - step]) /
                           simulation.results.stats.losses[end - step]
         end
-        printProgressLoss(iter,
+        printProgressLoss(length(simulation.results.stats.losses),
             simulation.results.stats.niter, l, improvement)
     end
 
