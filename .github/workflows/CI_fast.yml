@@ -74,6 +74,7 @@ jobs:
           - Core9
           - Core10
           - Core11
+          - Aqua
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

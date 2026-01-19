@@ -79,7 +79,7 @@ function ∂Diffusivity∂θ(
                  isa(simulation.model.iceflow.A.f_VJP_θ.f, typeof(Sleipnir.emptyVJPWithInputs))
     inputs = skipInputs ? nothing :
              generate_inputs(iceflow_model.A.f.inputs, simulation, glacier_idx, t)
-    ∂law∂θ!(backend, iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, inputs, θ)
+    ∂law∂θ!(iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, backend, inputs, θ)
 
     # Create a tensor with both elements
     if isa(iceflow_cache.A, Union{ScalarCache, ScalarCacheGlacierId})
@@ -157,7 +157,7 @@ function ∂Velocityꜛ∂θ(
                  isa(simulation.model.iceflow.A.f_VJP_θ.f, typeof(Sleipnir.emptyVJPWithInputs))
     inputs = skipInputs ? nothing :
              generate_inputs(iceflow_model.A.f.inputs, simulation, glacier_idx, t)
-    ∂law∂θ!(backend, iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, inputs, θ)
+    ∂law∂θ!(iceflow_model.A, iceflow_cache.A, iceflow_cache.A_prep_vjps, backend, inputs, θ)
 
     # Create a tensor with both elements
     if isa(iceflow_cache.A, Union{ScalarCache, ScalarCacheGlacierId})
