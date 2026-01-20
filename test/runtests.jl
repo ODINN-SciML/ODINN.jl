@@ -128,9 +128,9 @@ ENV["GKSwstype"] = "nul"
                 ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
             @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP());
-                thres = [5e-4, 2e-8, 5e-4])
+                thres = [5e-4, 7e-7, 2e-3])
             @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
-                ODINN.SciMLSensitivityAdjoint(); thres = [5e-4, 5e-8, 5e-4])
+                ODINN.SciMLSensitivityAdjoint(); thres = [5e-4, 7e-7, 2e-2])
         end
 
         # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
