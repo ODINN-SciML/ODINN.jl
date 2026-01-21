@@ -495,6 +495,9 @@ function _batch_iceflow_UDE(
     tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
     tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan))
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity, tstopsDiscreteLoss)))
+    # Filter tstops outside range of simulation
+    tmin, tmax = params.simulation.tspan
+    tstops = tstops[tmin .<= tstops .<= tmax]
 
     # Create mass balance callback
     cb_MB = if params.simulation.use_MB
