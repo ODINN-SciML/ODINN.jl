@@ -137,7 +137,7 @@ function loss(
         mask::BitMatrix,
         normalization::F
 ) where {F <: AbstractFloat}
-    return sum(((a .- b)[mask]) .^ 2)/normalization
+    return Sleipnir.nansum(((a .- b)[mask]) .^ 2)/normalization
 end
 function backward_loss(
         lossType::L2Sum,
@@ -148,6 +148,8 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     d = zero(a)
     d[mask] = a[mask] .- b[mask]
+    # We replace nan values coming from missing data
+    d = replace(d, NaN => 0)
     return 2.0 .* d ./ normalization
 end
 
