@@ -249,7 +249,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             Notice this should not be an issue since t ≈ tH_ref
             """
             if simulation.parameters.UDE.grad.interpolation == :Linear
-                H_itp = interpolate((t,), H, Gridded(Linear()))
+                # We use duplicated_knots since sometimes the solution of the solver includes
+                # t values too close to each other.
+                H_itp = interpolate((Interpolations.deduplicate_knots!(t),), H, Gridded(Linear()))
                 H_ref_itp = useThickness ?
                             interpolate((tH_ref,), H_ref, Gridded(Linear())) : nothing
                 Vabs_ref_itp = useVelocity ?
