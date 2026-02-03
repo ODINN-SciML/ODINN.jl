@@ -2,7 +2,7 @@ import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
 # Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
-Pkg.develop(url = "https://github.com/albangossard/SciMLSensitivity.jl/")
+# Pkg.develop(url = "https://github.com/albangossard/SciMLSensitivity.jl/")
 
 const GROUP = get(ENV, "GROUP", "All")
 const CI = parse(Bool, get(ENV, "CI", "false"))
