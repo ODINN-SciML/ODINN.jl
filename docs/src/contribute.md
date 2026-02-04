@@ -51,6 +51,14 @@ pre-commit install
     
     When committing changes, you don't need to be in the Python environment where `pre-commit` has been installed. This environment is used only for the installation of the hook.
 
+Finally, you need to make sure that the Julia package `JuliaFormatter.jl` is installed in your main Julia environment. To do so, run:
+
+```bash
+julia  -e 'using Pkg; Pkg.add(PackageSpec(name="JuliaFormatter"))'
+```
+
+This only needs to be done once for each one of the repositories (i.e. `ODINN.jl`, `Huginn.jl`, `Muninn.jl` and `Sleipnir.jl`. Then you're good to go!
+
 ### Commit changes
 
 Once you have staged your changes, when running the `git commit` command, the hook will trigger and the JuliaFormatter will ask you to confirm the formatting that have been applied (if changes to the code format were necessary).
