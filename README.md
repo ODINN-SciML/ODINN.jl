@@ -26,7 +26,7 @@ Global glacier evolution model using Universal Differential Equations to model a
 In order to install `ODINN` in a given environment, just do in the REPL:
 ```julia
 julia> ] # enter Pkg mode
-(@v1.10) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
+(@v1.11) pkg> activate MyEnvironment # or activate whatever path for the Julia environment
 (MyEnvironment) pkg> add ODINN
 ```
 

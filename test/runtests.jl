@@ -1,8 +1,21 @@
 import Pkg
-Pkg.activate(dirname(Base.current_project()))
+function is_included_in_repl()
+    for frame in StackTraces.stacktrace()
+        if occursin("start_repl_backend", string(frame.func))
+            return true
+        end
+    end
+    return false
+end
+
+if is_included_in_repl()
+    # The Project.toml of the test environment to be used when running with include is in a subfolder to avoid that Julia uses this file in test mode
+    Pkg.instantiate()
+    Pkg.activate(dirname(Base.current_project())*"/test/test_env/")
+end
 
 # Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
-# Pkg.develop(url = "https://github.com/albangossard/SciMLSensitivity.jl/")
+Pkg.develop(url = "https://github.com/albangossard/SciMLSensitivity.jl/")
 
 const GROUP = get(ENV, "GROUP", "All")
 const CI = parse(Bool, get(ENV, "CI", "false"))
