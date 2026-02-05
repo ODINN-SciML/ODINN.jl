@@ -115,7 +115,7 @@ function test_grad_finite_diff(
         ),
         physical = PhysicalParameters(
             # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
-            minA = use_MB ? 1e-21 : 8e-21,
+            minA = use_MB ? 1e-21 : 2e-18,
             maxA = use_MB ? 2e-21 : 8e-18
         ),
         UDE = UDEparameters(
