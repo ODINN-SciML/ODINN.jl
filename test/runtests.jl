@@ -34,6 +34,7 @@ using JLD2
 using Plots
 using Infiltrator
 using OrdinaryDiffEq
+using LinearAlgebra
 using Optim
 using SciMLSensitivity
 using Statistics
