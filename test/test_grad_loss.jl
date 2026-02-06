@@ -63,7 +63,7 @@ function test_grad_finite_diff(
         @assert target == :A "When testing classical inversion, only target A is supported"
     end
 
-    print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
+    print("> Testing target $(target) with $(adjointFlavor) and $(Base.typename(typeof(loss)).name)")
     println(use_MB ? " and with MB" : "")
 
     # Determine if we are working with a velocity loss
@@ -115,7 +115,7 @@ function test_grad_finite_diff(
         ),
         physical = PhysicalParameters(
             # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
-            minA = use_MB ? 1e-21 : 8e-21,
+            minA = use_MB ? 1e-21 : 2e-18,
             maxA = use_MB ? 2e-21 : 8e-18
         ),
         UDE = UDEparameters(
@@ -261,16 +261,17 @@ function test_grad_finite_diff(
         # Computation of the gradient with SciMLSensitivity can fail with a fresh REPL
         # Running the same code a second or third time usually works
         # More information in https://github.com/ODINN-SciML/ODINN.jl/issues/354
-        try
-            loss_iceflow_grad!(dθ, θ, simulation)
-        catch
+        loss_iceflow_grad!(dθ, θ, simulation)
+        norm_dθ = norm(dθ)
+        if isnan(norm_dθ) || norm_dθ==0
             @warn "Computation of gradient with SciMLSensitivity fail with first run due to compilation errors. Trying for a second time..."
-            try
-                loss_iceflow_grad!(dθ, θ, simulation)
-                @warn "Computation of gradient with SciMLSensitivity succeded in a second run after compilation."
-            catch
+            loss_iceflow_grad!(dθ, θ, simulation)
+            norm_dθ = norm(dθ)
+            if isnan(norm_dθ) || norm_dθ==0
                 @warn "Computation of gradient with SciMLSensitivity fail after second run due to compilation errors. Trying one last time..."
                 loss_iceflow_grad!(dθ, θ, simulation)
+            else
+                @warn "Computation of gradient with SciMLSensitivity succeded in a second run after compilation."
             end
         end
     end

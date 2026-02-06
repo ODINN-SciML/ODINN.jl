@@ -204,10 +204,10 @@ simulation.cache = ODINN.init_cache(model, simulation, glacier_idx, θ)
 # Finally we demonstrate that this is our custom implementation that is being called:
 
 ODINN.∂law∂θ!(
-    params.UDE.grad.VJP_method.regressorADBackend,
     simulation.model.iceflow.A,
     simulation.cache.iceflow.A,
     simulation.cache.iceflow.A_prep_vjps,
+    params.UDE.grad.VJP_method.regressorADBackend,
     (; T = 1.0), θ)
 
 # ## VJP precomputation
@@ -374,10 +374,10 @@ ODINN.precompute_law_VJP(
     glacier_idx, t, θ)
 
 ODINN.∂law∂θ!(
-    params.UDE.grad.VJP_method.regressorADBackend,
     simulation.model.iceflow.Y,
     simulation.cache.iceflow.Y,
     simulation.cache.iceflow.Y_prep_vjps,
+    params.UDE.grad.VJP_method.regressorADBackend,
     (; T = 1.0, H̄ = simulation.cache.iceflow.H̄), θ)
 
 # Now let us check that the `vjp_θ` field of the cache, which is spatially varying, has been populated:

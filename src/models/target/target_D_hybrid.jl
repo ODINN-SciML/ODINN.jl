@@ -129,8 +129,8 @@ function ∂Diffusivity∂θ(
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
 
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
-                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = H̄[i, j]), θ)
+            ∂law∂θ!(iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, backend, (; T = temp, H̄ = H̄[i, j]), θ)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * iceflow_cache.Y.vjp_θ
         end
     elseif interpolation == :Linear
@@ -146,8 +146,8 @@ function ∂Diffusivity∂θ(
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
-                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = h), θ)
+            ∂law∂θ!(iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, backend, (; T = temp, H̄ = h), θ)
             push!(grads, deepcopy(iceflow_cache.Y.vjp_θ)) # Copy cache otherwise it points to the same place in memory
         end
         # Create interpolation for gradient
@@ -314,8 +314,8 @@ function ∂Velocityꜛ∂θ(
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
 
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
-                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = H̄[i, j]), θ)
+            ∂law∂θ!(iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, backend, (; T = temp, H̄ = H̄[i, j]), θ)
             ∂D∂θ[i, j, :] .= ∂A_spatial[i, j] * iceflow_cache.Y.vjp_θ
         end
     elseif interpolation == :Linear
@@ -331,8 +331,8 @@ function ∂Velocityꜛ∂θ(
         grads = []
         # TODO: Check if all these gradints cannot be computed at once withing Lux
         for h in H_interp
-            ∂law∂θ!(backend, iceflow_model.Y, iceflow_cache.Y,
-                iceflow_cache.Y_prep_vjps, (; T = temp, H̄ = h), θ)
+            ∂law∂θ!(iceflow_model.Y, iceflow_cache.Y,
+                iceflow_cache.Y_prep_vjps, backend, (; T = temp, H̄ = h), θ)
             push!(grads, deepcopy(iceflow_cache.Y.vjp_θ)) # Copy cache otherwise it points to the same place in memory
         end
         # Create interpolation for gradient
