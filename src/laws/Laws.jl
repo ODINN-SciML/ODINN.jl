@@ -141,7 +141,8 @@ function LawU(
             zeros(nx - 1, ny - 1),
             H_nodes,
             H_nodes,
-            grad_itp
+            grad_itp,
+            Array{Sleipnir.Float64}(undef, nx - 1, ny - 1, length(θ)),
         )
     end
     init_cache_matrix = function (simulation, glacier_idx, θ)
@@ -168,6 +169,15 @@ function LawU(
         end
     end
 
+    f_VJP_θ! = function (cache, inp, θ)
+        # Unpack gradient interpolation
+        grad_itp = cache.interp_θ
+        (; H̄, ∇S) = inp
+        for i in axes(H̄, 1), j in axes(H̄, 2)
+            cache.vjp_θ[i, j, :] = grad_itp(H̄[i, j], ∇S[i, j])
+        end
+    end
+
     # Determine right type of cache depending of interpolation or not
     LawCache = precompute_interpolation ? MatrixCacheInterp : MatrixCache
 
@@ -176,7 +186,9 @@ function LawU(
             inputs = (; H̄ = iH̄(), ∇S = i∇S()),
             f! = f!,
             init_cache = precompute_interpolation ? init_cache_interp : init_cache_matrix,
-            p_VJP! = precompute_VJPs ? p_VJP! : nothing
+            p_VJP! = precompute_VJPs ? p_VJP! : nothing,
+            f_VJP_θ! = f_VJP_θ!, # When providing with one of these, also need to provide the next one!!!
+            f_VJP_input! = function () end,
         )
     end
     return U_law
