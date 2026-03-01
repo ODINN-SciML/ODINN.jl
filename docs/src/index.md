@@ -14,7 +14,7 @@ julia> Pkg.add("ODINN")
 ```
 
 !!! info
-    
+
     `ODINN.jl` and the rest of the ODINN ecosystem packages require Julia v1.11 or later, which are the ones used and tested during continuous integration (CI).
 
 ## Documentation overview
