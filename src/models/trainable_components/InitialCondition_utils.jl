@@ -14,11 +14,13 @@ Evaluate the initial ice thickness `H₀` for a given glacier, optionally applyi
   - `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
 
   - `glacier::Glacier2D`: Glacier for which to evaluate `H₀`.
+
   - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
 
       + `:identity`: applies the identity function (no change).
       + `:softplus`: applies the softplus function `log(1 + exp(x))` to ensure positivity.
       + `:Zang1980`: applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
+
   - `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
 
 # Returns
@@ -58,11 +60,13 @@ Evaluate the derivative of the initial ice thickness `H₀` for a given glacier,
   - `θ::ComponentArray`: A `ComponentArray` containing glacier parameters.
 
   - `glacier::Glacier2D`: Glacier for which to evaluate `∂H₀`.
+
   - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
 
       + `:identity`: applies the identity function (no change).
       + `:softplus` — applies the softplus function `log(1 + exp(x))` to ensure positivity.
       + `:Zang1980` — applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
+
   - `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
 
 # Returns

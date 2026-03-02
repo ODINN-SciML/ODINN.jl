@@ -82,7 +82,7 @@ model = Model(
 In this piece of code, we are selecting cumulative positive degree days (CPDDs) and topographical roughness as inputs for a law/parametrization named `SyntheticC`. Then, when declaring the ice flow model, we associate it to the parameter `C` of the iceflow model (i.e. the basal sliding). Using this simple interface, we can easily combine all sorts of input variables, with different laws and targets/subparts of mechanistic models.
 
 !!! warning
-    
+
     It is important to bear in mind that new input types and laws cannot be created on the fly, they need to be specified/added by a user beforehand. For input variables, it is generally a matter of fetching the right data and processing it to the right format for the law/function. For laws, one just needs to specify which function is applied to the different input variables. If the law and input variables involve a regressor (that is a learnable component), then the new types for the law and inputs must be added to `ODINN.jl` [here](https://github.com/ODINN-SciML/ODINN.jl/blob/main/src/laws/Laws.jl); if the law doesn't include any regressors, they can be added directly to `Huginn.jl` [here](https://github.com/ODINN-SciML/Huginn.jl/blob/main/src/laws/Laws.jl).
 
 Here is an example of how the code of an input variable looks like:

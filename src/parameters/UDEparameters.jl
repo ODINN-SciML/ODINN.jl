@@ -37,7 +37,7 @@ Create a `UDEparameters` object for configuring the sensitivity analysis and opt
 
 # Keyword Arguments
 
-  - `sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm`: The sensitivity algorithm to use for adjoint calculations. Defaults to `GaussAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP())`.
+  - `sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm`: The sensitivity algorithm to use for adjoint calculations. Defaults to `InterpolatingAdjoint(autojacvec=SciMLSensitivity.EnzymeVJP())`.
   - `optim_autoAD::AbstractADType`: The automatic differentiation type for optimization. Defaults to `Optimization.AutoEnzyme()`.
   - `grad::ADJ`: The adjoint gradient computation method. Defaults to `ContinuousAdjoint()`.
   - `optimization_method::String`: The optimization method to use. Must be either `"AD+AD"` or `"AD+Diff"`. Defaults to `"AD+AD"`.
@@ -58,7 +58,7 @@ This function creates a `UDEparameters` object that encapsulates the configurati
   - The `empirical_loss_function` determines how the loss is computed during optimization.
 """
 function UDEparameters(;
-        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = GaussAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
+        sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
         optim_autoAD::AbstractADType = Optimization.AutoEnzyme(),
         grad::ADJ = ContinuousAdjoint(),
         optimization_method::String = "AD+AD",

@@ -8,14 +8,12 @@ function is_included_in_repl()
     return false
 end
 
+Pkg.instantiate()
 if is_included_in_repl()
     # The Project.toml of the test environment to be used when running with include is in a subfolder to avoid that Julia uses this file in test mode
-    Pkg.instantiate()
     Pkg.activate(dirname(Base.current_project())*"/test/test_env/")
+    Pkg.resolve()
 end
-
-# Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
-Pkg.develop(url = "https://github.com/albangossard/SciMLSensitivity.jl/")
 
 const GROUP = get(ENV, "GROUP", "All")
 const CI = parse(Bool, get(ENV, "CI", "false"))
@@ -144,7 +142,7 @@ ENV["GKSwstype"] = "nul"
                 ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP());
                 thres = [5e-4, 7e-7, 2e-3])
             @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
-                ODINN.SciMLSensitivityAdjoint(); thres = [5e-4, 7e-7, 2e-2])
+                ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-7, 1e-5])
         end
 
         # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])

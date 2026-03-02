@@ -83,7 +83,7 @@ Here, we compile the main considerations and things that need to be taken into a
   - **Make sure that the input variables of the ice flow equation (e.g. `SIA2D!`) are not mutated**. As calls to `Enzyme.jl` in `SciMLSensitivity.jl` use [`Enzyme.Const`](https://enzymead.github.io/Enzyme.jl/stable/api/#EnzymeCore.Const) for the input variable `H` when computing the VJP with respect to the parameters, it expects `H` to not be modified in-place. A typical example is `SIA2D!` where in the first lines, `H` is copied even though this is an in-place implementation because we need to clip the negative values of the input variable `H`. Failing to respect this constraint will result in the following error:
 
 !!! danger "ERROR"
-    
+
     ```
     Constant memory is stored (or returned) to a differentiable variable.
     As a result, Enzyme cannot provably ensure correctness and throws this error.

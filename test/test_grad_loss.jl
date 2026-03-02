@@ -86,9 +86,10 @@ function test_grad_finite_diff(
     δt = 1/12
     tspan = use_MB ? (1980.0, 2019.0) : (2010.0, 2012.0)
 
-    if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+    useSciMLSenseAlg = isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+    if useSciMLSenseAlg
         optim_autoAD = Optimization.AutoEnzyme()
-        sensealg = GaussAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
+        sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
     else
         optim_autoAD = ODINN.NoAD()
         sensealg = SciMLSensitivity.ZygoteAdjoint()
@@ -129,7 +130,8 @@ function test_grad_finite_diff(
         ),
         solver = Huginn.SolverParameters(
             step = δt,
-            progress = true
+            progress = true,
+            solver = useSciMLSenseAlg ? ROCK4() : RDPK3Sp35() # Use another solver when using SciMLSensitivity because `InterpolatingAdjoint` is not stable with our ODE in backward mode
         )
     )
 
@@ -258,22 +260,7 @@ function test_grad_finite_diff(
     if !isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         loss_iceflow_grad!(dθ, θ, simulation)
     else
-        # Computation of the gradient with SciMLSensitivity can fail with a fresh REPL
-        # Running the same code a second or third time usually works
-        # More information in https://github.com/ODINN-SciML/ODINN.jl/issues/354
         loss_iceflow_grad!(dθ, θ, simulation)
-        norm_dθ = norm(dθ)
-        if isnan(norm_dθ) || norm_dθ==0
-            @warn "Computation of gradient with SciMLSensitivity fail with first run due to compilation errors. Trying for a second time..."
-            loss_iceflow_grad!(dθ, θ, simulation)
-            norm_dθ = norm(dθ)
-            if isnan(norm_dθ) || norm_dθ==0
-                @warn "Computation of gradient with SciMLSensitivity fail after second run due to compilation errors. Trying one last time..."
-                loss_iceflow_grad!(dθ, θ, simulation)
-            else
-                @warn "Computation of gradient with SciMLSensitivity succeded in a second run after compilation."
-            end
-        end
     end
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) loss_iceflow_grad!(
         dθ, θ, simulation)
