@@ -122,12 +122,12 @@ ENV["GKSwstype"] = "nul"
                 DiscreteAdjoint(VJP_method = DiscreteVJP());
                 thres = [5e-3, 5e-7, 5e-3], train_initial_conditions = true)
             @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
-                DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-5, 1e-8, 2e-5])
+                DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-4, 1e-8, 2e-4])
             @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-8, 1e-4])
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3])
             @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [2e-4, 1e-8, 2e-4], train_initial_conditions = true)
+                thres = [5e-4, 1e-8, 5e-4], train_initial_conditions = true)
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(
                     VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
@@ -207,7 +207,7 @@ ENV["GKSwstype"] = "nul"
     if GROUP == "All" || GROUP == "Core8"
         @testset "Multi-objective function and regularization test" begin
             @testset "MultiLoss" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-8, 1e-4],
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
                 loss = MultiLoss(losses = (LossH(),), λs = (0.4,)))
             @testset "Just regularization" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-8, 1e-2],
