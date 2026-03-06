@@ -14,6 +14,12 @@ __precompile__() # this module is safe to precompile
 # """
 module ODINN
 
+# Check Julia version
+if !(v"1.10.0" <= VERSION <= v"1.11.999")
+    # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/463
+    error("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
+end
+
 # ##############################################
 # ###########       PACKAGES     ##############
 # ##############################################
