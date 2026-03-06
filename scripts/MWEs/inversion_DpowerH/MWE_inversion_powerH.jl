@@ -54,7 +54,7 @@ params = Parameters(
     hyper = Hyperparameters(
         batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
         epochs = [100, 20],
-        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+        optimizer = [ODINN.Adam(0.01), ODINN.LBFGS()]
     ),
     physical = PhysicalParameters(
         minA = 8e-21,

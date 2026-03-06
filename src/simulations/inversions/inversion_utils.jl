@@ -111,7 +111,7 @@ BFGS optim
 """
 function train_UDE!(
         simulation::Inversion,
-        optimizer::Optim.FirstOrderOptimizer;
+        optimizer::Union{Optim.LBFGS, Optim.BFGS};
         save_every_iter::Bool = false,
         logger::Union{<: TBLogger, Nothing} = nothing
 )
@@ -176,10 +176,10 @@ ADAM optim
 """
 function train_UDE!(
         simulation::Inversion,
-        optimizer::AR;
+        optimizer::Union{Optim.Adam, Optimisers.Adam};
         save_every_iter::Bool = false,
         logger::Union{<: TBLogger, Nothing} = nothing
-) where {AR <: Optimisers.AbstractRule}
+)
     @info "Optimizing with ADAM"
 
     # Create batches for inversion training

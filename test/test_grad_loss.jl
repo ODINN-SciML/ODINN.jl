@@ -112,7 +112,7 @@ function test_grad_finite_diff(
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
             epochs = 100,
-            optimizer = ODINN.ADAM(0.005)
+            optimizer = ODINN.Adam(0.005)
         ),
         physical = PhysicalParameters(
             # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
