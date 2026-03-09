@@ -15,22 +15,22 @@ function inversion_test(;
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
         # Multiprocessing is especially slow in the CI, so we perform a very short optimization
         epochs = 3
-        optimizer = ODINN.ADAM(0.01)
+        optimizer = ODINN.Adam(0.01)
     elseif functional_inv # Singleprocessing functional inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
         epochs = [20, 20]
-        optimizer = [ODINN.ADAM(0.005), ODINN.LBFGS()]
+        optimizer = [ODINN.Adam(0.005), ODINN.LBFGS()]
     elseif scalar # Scalar classical inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
         epochs = [5, 7]
-        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+        optimizer = [ODINN.Adam(0.01), ODINN.LBFGS()]
     else # Gridded classical inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
         epochs = [20, 20]
-        optimizer = [ODINN.ADAM(0.01), ODINN.LBFGS()]
+        optimizer = [ODINN.Adam(0.01), ODINN.LBFGS()]
     end
 
     # TODO: Currently there are two different steps defined in params.simulationa and params.solver which need to coincide for manual discrete adjoint

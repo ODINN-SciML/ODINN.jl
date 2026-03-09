@@ -35,8 +35,9 @@ using Enzyme
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
-using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers,
+using Optimization, Optim, Optimisers, OptimizationOptimisers, OptimizationOptimJL,
       LineSearches
+using Optimisers: Adam # Import manually because this conflicts with Optim.Adam
 using ComponentArrays
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet

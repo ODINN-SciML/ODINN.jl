@@ -34,7 +34,7 @@ using Plots
 using Infiltrator
 using OrdinaryDiffEq
 using LinearAlgebra
-using Optim
+using Optim, Optimisers, OptimizationOptimisers, OptimizationOptimJL
 using SciMLSensitivity
 using Statistics
 using Zygote

@@ -109,7 +109,7 @@ params = Parameters(
         epochs = [20, 60],
         # epochs = 100,
         optimizer = [
-            # ODINN.ADAM(0.001),
+            # ODINN.Adam(0.001),
             ODINN.Optimisers.Adam(0.001, (0.0, 0.999)),
             # ODINN.GradientDescent(
             # linesearch = ODINN.LineSearches.BackTracking(iterations = 10)
