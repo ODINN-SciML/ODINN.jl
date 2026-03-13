@@ -97,6 +97,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, tspan))
         tstops = sort(unique(vcat(
             tstops, params.solver.tstops, tH_ref, tV_ref, tstopsDiscreteLoss)))
+        tstops = tstops[tspan[1] .<= tstops .<= tspan[2]]
 
         @assert length(t) == length(tstops) "The size of tstops does not match with the size of the reference times."
         @assert isapprox(t, tstops, rtol = 1e-7) "Times in tstops and reference times in result do not coincide. Maximum difference is $(maximum(abs.(t-tstops)))"
@@ -248,7 +249,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             Notice this should not be an issue since t ≈ tH_ref
             """
             if simulation.parameters.UDE.grad.interpolation == :Linear
-                H_itp = interpolate((t,), H, Gridded(Linear()))
+                # We use duplicated_knots since sometimes the solution of the solver includes
+                # t values too close to each other.
+                H_itp = interpolate((Interpolations.deduplicate_knots!(t),), H, Gridded(Linear()))
                 H_ref_itp = useThickness ?
                             interpolate((tH_ref,), H_ref, Gridded(Linear())) : nothing
                 Vabs_ref_itp = useVelocity ?

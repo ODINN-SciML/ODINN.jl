@@ -95,11 +95,16 @@ function Diffusivity(
     return D
 end
 
-function eval_U(target::SIA2D_D_target, H̄, ∇S, θ, simulation)
-    iceflow_cache = simulation.cache.iceflow
-    iceflow_model = simulation.model.iceflow
-    iceflow_model.U.f.f(iceflow_cache.U, (; H̄ = H̄, ∇S = ∇S), θ)
-    return iceflow_cache.U.value
+function eval_U(
+    target::SIA2D_D_target;
+    H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+)
+    iceflow_cache = simulation.cache.iceflow.U
+    iceflow_model = simulation.model.iceflow.U
+
+    apply_law!(iceflow_model, iceflow_cache, simulation, glacier_idx, t, θ)
+
+    return iceflow_cache.value
 end
 
 function ∂Diffusivity∂H(
@@ -112,8 +117,8 @@ function ∂Diffusivity∂H(
     δH = 1e-4 .* ones(size(H̄))
 
     # TODO: This can also be replace by interpolation
-    D₊ = eval_U(target, H̄ + δH, ∇S, θ, simulation) .* (H̄ + δH)
-    D₋ = eval_U(target, H̄ - δH, ∇S, θ, simulation) .* (H̄ - δH)
+    D₊ = eval_U(target; H̄ = H̄ + δH, ∇S = ∇S, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params) .* (H̄ + δH)
+    D₋ = eval_U(target; H̄ = H̄ - δH, ∇S = ∇S, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params) .* (H̄ - δH)
 
     # Compute central difference derivative
     ∂D∂H_NN = (D₊ .- D₋) ./ (2.0 .* δH)
@@ -128,8 +133,8 @@ function ∂Diffusivity∂∇H(
     δ∇H = 1e-6 .* ones(size(∇S))
 
     # TODO: This can also be replaced by interpolation
-    D₊ = eval_U(target, H̄, ∇S + δ∇H, θ, simulation) .* H̄
-    D₋ = eval_U(target, H̄, ∇S - δ∇H, θ, simulation) .* H̄
+    D₊ = eval_U(target; H̄ = H̄, ∇S = ∇S + δ∇H, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params) .* H̄
+    D₋ = eval_U(target; H̄ = H̄, ∇S = ∇S - δ∇H, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params) .* H̄
 
     # Compute central difference derivative
     ∂D∂∇S = (D₊ .- D₋) ./ (2.0 .* δ∇H)
@@ -184,12 +189,12 @@ function ∂U∂θ(
         the desired level of precision for the gradients.
         We construct an interpolator with quantiles and equal-spaced points.
         """
-        # Unpack gradient interpolation
-        grad_itp = iceflow_cache.U.interp_θ
         # Compute spatial distributed gradient
+        inputs = generate_inputs(iceflow_model.U.f.inputs, simulation, glacier_idx, t)
+        ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U,
+            iceflow_cache.U_prep_vjps, inputs, θ)
         for i in axes(H̄, 1), j in axes(H̄, 2)
-            # Include extra contribution of ice thickness H
-            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * grad_itp(H̄[i, j], ∇S[i, j])
+            ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ[i, j, :]
         end
     else
         throw("Method to spatially compute gradient with respect to H̄ not specified.")
@@ -221,8 +226,8 @@ function ∂Velocityꜛ∂H(
 )
     f = simulation.parameters.simulation.f_surface_velocity_factor
     δH = 1e-4 .* ones(size(H̄))
-    U₊ = eval_U(target, H̄ + δH, ∇S, θ, simulation)
-    U₋ = eval_U(target, H̄ - δH, ∇S, θ, simulation)
+    U₊ = eval_U(target; H̄ = H̄ + δH, ∇S = ∇S, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params)
+    U₋ = eval_U(target; H̄ = H̄ - δH, ∇S = ∇S, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params)
 
     # Compute central difference derivative
     ∂D∂Hꜛ = (1/f) * (U₊ .- U₋) ./ (2.0 .* δH)
@@ -235,8 +240,8 @@ function ∂Velocityꜛ∂∇H(
 )
     f = simulation.parameters.simulation.f_surface_velocity_factor
     δ∇H = 1e-6 .* ones(size(∇S))
-    U₊ = eval_U(target, H̄, ∇S + δ∇H, θ, simulation)
-    U₋ = eval_U(target, H̄, ∇S - δ∇H, θ, simulation)
+    U₊ = eval_U(target; H̄ = H̄, ∇S = ∇S + δ∇H, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params)
+    U₋ = eval_U(target; H̄ = H̄, ∇S = ∇S - δ∇H, θ = θ, simulation = simulation, glacier_idx = glacier_idx, t = t, glacier = glacier, params = params)
 
     # Compute central difference derivative
     ∂D∂∇Hꜛ = (1/f) * (U₊ .- U₋) ./ (2.0 .* δ∇H)
