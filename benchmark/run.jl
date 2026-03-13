@@ -1,9 +1,6 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
-# Use a fork of SciMLSensitivity until https://github.com/SciML/SciMLSensitivity.jl/issues/1238 is fixed
-Pkg.develop(url = "https://github.com/albangossard/SciMLSensitivity.jl/")
-
 using ODINN
 using BenchmarkTools
 using Logging

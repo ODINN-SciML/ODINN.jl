@@ -298,7 +298,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                         H = isnothing(indThickness) ? 0.0 :
                             safe_slice(Δt_HV.H, indThickness - 1),
                         V = isnothing(indVelocity) ? 0.0 :
-                            safe_slice(Δt_HV.H, indVelocity - 1)
+                            safe_slice(Δt_HV.V, indVelocity - 1)
                     )
                     ∂ℓ∂H,
                     ∂ℓ∂θ = backward_loss(

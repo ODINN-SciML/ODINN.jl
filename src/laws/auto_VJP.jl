@@ -82,41 +82,41 @@ function prepare_vjp_law(
     return VJPsPrepLaw(f_θ_first, f_inp_first, prep_θ, prep_inp)
 end
 
-function ∂law∂inp!(backend::DI.AutoZygote, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
+function ∂law∂inp!(vjpsPrepLaw::AbstractPrepVJP, backend::DI.AutoZygote, inp, θ)
     tmp = DI.gradient(
         vjpsPrepLaw.f_inp_first, vjpsPrepLaw.prep_inp, backend, inp, DI.Constant(θ))
     values(tmp)
 end
-function ∂law∂θ!(backend::DI.AutoZygote, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
+function ∂law∂θ!(vjpsPrepLaw::AbstractPrepVJP, backend::DI.AutoZygote, inp, θ)
     DI.gradient(vjpsPrepLaw.f_θ_first, vjpsPrepLaw.prep_θ, backend, θ, DI.Constant(inp))
 end
 
-function ∂law∂inp!(backend::DI.AutoMooncake, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
+function ∂law∂inp!(vjpsPrepLaw::AbstractPrepVJP, backend::DI.AutoMooncake, inp, θ)
     tmp = DI.gradient(
         vjpsPrepLaw.f_inp_first, vjpsPrepLaw.prep_inp, backend, inp, DI.Constant(θ)) #.fields.data
     values(tmp)
 end
-function ∂law∂θ!(backend::DI.AutoMooncake, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
+function ∂law∂θ!(vjpsPrepLaw::AbstractPrepVJP, backend::DI.AutoMooncake, inp, θ)
     DI.gradient(vjpsPrepLaw.f_θ_first, vjpsPrepLaw.prep_θ, backend, θ, DI.Constant(inp)).fields.data
 end
 
 function ∂law∂inp!(
-        backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP},
-        law_cache, vjpsPrepLaw, inp, θ)
+        law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP},
+        law_cache, vjpsPrepLaw, backend, inp, θ)
     law.f_VJP_input.f(law_cache, inp, θ)
 end
 function ∂law∂inp!(
-        backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP},
-        law_cache, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
-    law_cache.vjp_inp .= ∂law∂inp!(backend, vjpsPrepLaw, inp, θ)
+        law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP},
+        law_cache, vjpsPrepLaw::AbstractPrepVJP, backend, inp, θ)
+    law_cache.vjp_inp .= ∂law∂inp!(vjpsPrepLaw, backend, inp, θ)
 end
 
 function ∂law∂θ!(
-        backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP},
-        law_cache, vjpsPrepLaw, inp, θ)
+        law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, CustomVJP},
+        law_cache, vjpsPrepLaw, backend, inp, θ)
     law.f_VJP_θ.f(law_cache, inp, θ)
 end
-function ∂law∂θ!(backend, law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP},
-        law_cache, vjpsPrepLaw::AbstractPrepVJP, inp, θ)
-    law_cache.vjp_θ .= ∂law∂θ!(backend, vjpsPrepLaw, inp, θ)
+function ∂law∂θ!(law::Law{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, DIVJP},
+        law_cache, vjpsPrepLaw::AbstractPrepVJP, backend, inp, θ)
+    law_cache.vjp_θ .= ∂law∂θ!(vjpsPrepLaw, backend, inp, θ)
 end

@@ -14,6 +14,12 @@ __precompile__() # this module is safe to precompile
 # """
 module ODINN
 
+# Check Julia version
+if !(v"1.10.0" <= VERSION <= v"1.11.999")
+    # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/463
+    error("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
+end
+
 # ##############################################
 # ###########       PACKAGES     ##############
 # ##############################################
@@ -29,8 +35,9 @@ using Enzyme
 using JLD2
 using OrdinaryDiffEq
 using SciMLSensitivity
-using Optimization, Optim, OptimizationOptimJL, Optimisers, OptimizationOptimisers,
+using Optimization, Optim, Optimisers, OptimizationOptimisers, OptimizationOptimJL,
       LineSearches
+using Optimisers: Adam # Import manually because this conflicts with Optim.Adam
 using ComponentArrays
 using ChainRules: @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet

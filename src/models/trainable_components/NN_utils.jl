@@ -132,7 +132,7 @@ function pretraining(
     st_pretrain,
     losses = train_model!(
         architecture, θ_setup, st_setup,
-        ODINN.ADAM(), nepochs
+        Adam(), nepochs
     )
 
     return _architecture, θ_pretrain, st_pretrain, losses

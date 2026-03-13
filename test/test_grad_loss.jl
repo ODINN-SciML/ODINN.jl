@@ -63,7 +63,7 @@ function test_grad_finite_diff(
         @assert target == :A "When testing classical inversion, only target A is supported"
     end
 
-    print("> Testing target $(target) with adjoint $(adjointFlavor) and loss $(Base.typename(typeof(loss)).name)")
+    print("> Testing target $(target) with $(adjointFlavor) and $(Base.typename(typeof(loss)).name)")
     println(use_MB ? " and with MB" : "")
 
     # Determine if we are working with a velocity loss
@@ -86,9 +86,10 @@ function test_grad_finite_diff(
     δt = 1/12
     tspan = use_MB ? (1980.0, 2019.0) : (2010.0, 2012.0)
 
-    if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+    useSciMLSenseAlg = isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+    if useSciMLSenseAlg
         optim_autoAD = Optimization.AutoEnzyme()
-        sensealg = GaussAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
+        sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
     else
         optim_autoAD = ODINN.NoAD()
         sensealg = SciMLSensitivity.ZygoteAdjoint()
@@ -111,11 +112,11 @@ function test_grad_finite_diff(
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
             epochs = 100,
-            optimizer = ODINN.ADAM(0.005)
+            optimizer = ODINN.Adam(0.005)
         ),
         physical = PhysicalParameters(
             # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
-            minA = use_MB ? 1e-21 : 8e-21,
+            minA = use_MB ? 1e-21 : 2e-18,
             maxA = use_MB ? 2e-21 : 8e-18
         ),
         UDE = UDEparameters(
@@ -129,7 +130,8 @@ function test_grad_finite_diff(
         ),
         solver = Huginn.SolverParameters(
             step = δt,
-            progress = true
+            progress = true,
+            solver = useSciMLSenseAlg ? ROCK4() : RDPK3Sp35() # Use another solver when using SciMLSensitivity because `InterpolatingAdjoint` is not stable with our ODE in backward mode
         )
     )
 
@@ -258,21 +260,7 @@ function test_grad_finite_diff(
     if !isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
         loss_iceflow_grad!(dθ, θ, simulation)
     else
-        # Computation of the gradient with SciMLSensitivity can fail with a fresh REPL
-        # Running the same code a second or third time usually works
-        # More information in https://github.com/ODINN-SciML/ODINN.jl/issues/354
-        try
-            loss_iceflow_grad!(dθ, θ, simulation)
-        catch
-            @warn "Computation of gradient with SciMLSensitivity fail with first run due to compilation errors. Trying for a second time..."
-            try
-                loss_iceflow_grad!(dθ, θ, simulation)
-                @warn "Computation of gradient with SciMLSensitivity succeded in a second run after compilation."
-            catch
-                @warn "Computation of gradient with SciMLSensitivity fail after second run due to compilation errors. Trying one last time..."
-                loss_iceflow_grad!(dθ, θ, simulation)
-            end
-        end
+        loss_iceflow_grad!(dθ, θ, simulation)
     end
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) loss_iceflow_grad!(
         dθ, θ, simulation)

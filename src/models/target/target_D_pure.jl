@@ -172,8 +172,8 @@ function ∂U∂θ(
             if H̄[i, j] == 0.0
                 continue
             end
-            ∂law∂θ!(backend, iceflow_model.U, iceflow_cache.U,
-                iceflow_cache.U_prep_vjps, (; H̄ = H̄[i, j], ∇S = ∇S[i, j]), θ)
+            ∂law∂θ!(iceflow_model.U, iceflow_cache.U,
+                iceflow_cache.U_prep_vjps, backend, (; H̄ = H̄[i, j], ∇S = ∇S[i, j]), θ)
             ∂D∂θ[i, j, :] .= ∂spatial[i, j] * iceflow_cache.U.vjp_θ[i, j, :]
         end
 

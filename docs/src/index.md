@@ -14,8 +14,12 @@ julia> Pkg.add("ODINN")
 ```
 
 !!! info
-    
-    `ODINN.jl` and the rest of the ODINN ecosystem packages require Julia v1.10 or later, which are the ones used and tested during continuous integration (CI).
+
+    `ODINN.jl` and the rest of the ODINN ecosystem packages require Julia v1.11 or later, which are the ones used and tested during continuous integration (CI).
+
+!!! info
+
+    For the moment the full CI tests in `ODINN.jl` are broken with Julia v1.11, and therefore they are tested with Julia v1.10 (in contrast to the other packages). The split tests (`CI_fast`) still run with Julia v1.11. This comes from a segmentation fault from Enzyme in the test environment.
 
 ## Documentation overview
 
