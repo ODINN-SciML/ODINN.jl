@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
-authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 version = "1.1.0"
+authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
@@ -80,7 +80,7 @@ Huginn = "0.12.8"
 ImageFiltering = "0.7"
 Infiltrator = "1.8, 1.9"
 Interpolations = "0.15, 0.16"
-JET = "0.9, 0.10"
+JET = "0.9, 0.10, 0.11"
 JLD2 = "0.4, 0.5, 0.6"
 LineSearches = "7"
 LinearAlgebra = "1.10, 1.11"
