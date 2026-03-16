@@ -62,7 +62,7 @@ params = Parameters(
     )
 )
 
-# Specify a model based on an iceflow model, a mass balance model, and a machine learning model
+# Specify a model based on an iceflow model and a mass balance model
 model = Model(
     iceflow = SIA2Dmodel(params),
     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
