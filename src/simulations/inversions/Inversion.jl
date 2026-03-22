@@ -48,6 +48,7 @@ function Inversion(
 
     # We perform this check here to avoid having to provide the parameters when creating the model
     @assert targetType(model.trainable_components.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
+    Muninn.validate_model_simulation_compatibility(model, parameters)
 
     # Build the results struct based on input values
     emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
