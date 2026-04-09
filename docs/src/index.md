@@ -14,11 +14,11 @@ julia> Pkg.add("ODINN")
 ```
 
 !!! info
-
+    
     `ODINN.jl` and the rest of the ODINN ecosystem packages require Julia v1.11 or later, which are the ones used and tested during continuous integration (CI).
 
 !!! info
-
+    
     For the moment the full CI tests in `ODINN.jl` are broken with Julia v1.11, and therefore they are tested with Julia v1.10 (in contrast to the other packages). The split tests (`CI_fast`) still run with Julia v1.11. This comes from a segmentation fault from Enzyme in the test environment.
 
 ## Documentation overview
@@ -46,7 +46,7 @@ Rather than focusing on global-scale simulations and sea-level rise contribution
 
   - [`ODINN.j`](https://github.com/ODINN-SciML/ODINN.jl) is the high-level interface to the whole ODINN ecosystem, containing the SciML functionalities related to automatic differentiation and sensitivity of hybrid models, mixing differential equations and data-driven regressors.
   - [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl) is the ice flow dynamics module of ODINN. It contains all the information regarding glacier ice flow models, including the numerical methods to solve the PDEs using [`OrdinaryDiffEq.jl`](https://github.com/SciML/OrdinaryDiffEq.jl).
-  - [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl) is the surface mass balance module of ODINN. It  contains all the information regarding glacier interactions with the atmosphere (i.e. surface mass balance processes). For now we support simple temperature-index models, but soon we are planning to incorporate machine learning models coming from the [`MassBalanceMachine`](https://github.com/ODINN-SciML/MassBalanceMachine).
+  - [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl) is the surface mass balance module of ODINN. It contains all the information regarding glacier interactions with the atmosphere (i.e. surface mass balance processes). It supports simple temperature-index models as well as neural network models via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) extension, which ports pre-trained PyTorch models from [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) into `Lux.jl`.
   - [`Sleipnir.jl`](https://github.com/ODINN-SciML/Sleipnir.jl) is the core package of ODINN, holding all the basic data structures and functions, common to the whole ecosystem. It directly reads the files provided by [`Gungnir`](https://github.com/ODINN-SciML/Gungnir).
   - [`Gungnir`](https://github.com/ODINN-SciML/Gungnir) is a Python package, using [OGGM](https://github.com/OGGM/oggm) to retrieve all the necessary files (i.e. rasters and climate data) for the initial conditions and simulations in all the ODINN ecosystem. The user has the possibility to either store those files locally, or to use the ones we provide in a server. This is work in progress, so we will progressively cover more and more glaciers and regions in the near future.
 

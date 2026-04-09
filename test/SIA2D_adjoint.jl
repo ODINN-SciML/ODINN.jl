@@ -116,7 +116,8 @@ function test_adjoint_SIA2D(
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(
         dH, H, simulation, t, θ)
 
-    precompute_all_VJPs_laws!(model.iceflow, cache.iceflow, simulation, glacier_idx, t, θ)
+    Huginn.precompute_all_VJPs_laws!(
+        model.iceflow, cache.iceflow, simulation, glacier_idx, t, θ)
     ∂H, = ODINN.VJP_λ_∂SIA∂H(
         adjointFlavor.VJP_method,
         vecBackwardSIA2D,
