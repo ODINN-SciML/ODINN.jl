@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
-authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 version = "1.1.0"
+authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
@@ -76,7 +76,7 @@ FastGaussQuadrature = "1"
 FiniteDifferences = "0.12"
 GR = "0.71, 0.72, 0.73"
 GeoStats = "0.78, 0.79, 0.80, 0.81, 0.82, 0.83, 0.84"
-Huginn = "0.12.8"
+Huginn = "0.12.8, 0.13"
 ImageFiltering = "0.7"
 Infiltrator = "1.8, 1.9"
 Interpolations = "0.15, 0.16"
