@@ -22,6 +22,12 @@ jobs:
         julia  -e 'using Pkg; Pkg.add(PackageSpec(name="JuliaFormatter", version="2.3.0"))'
         julia  -e 'using JuliaFormatter; format(".", verbose=true)'
 
+    - name: Showing diff
+      run: |
+        julia -e '
+        out = Cmd(`git diff --color=always`) |> read |> String
+        write(stdout, out)'
+
     - name: Format check
       run: |
         julia -e '
