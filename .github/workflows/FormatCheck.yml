@@ -19,7 +19,7 @@ jobs:
 
     - name: Install JuliaFormatter and format
       run: |
-        julia  -e 'using Pkg; Pkg.add(PackageSpec(name="JuliaFormatter"))'
+        julia  -e 'using Pkg; Pkg.add(PackageSpec(name="JuliaFormatter", version="2.3.0"))'
         julia  -e 'using JuliaFormatter; format(".", verbose=true)'
 
     - name: Format check
