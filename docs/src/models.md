@@ -49,7 +49,7 @@ model = Model(
 )
 ```
 
-`CustomMLP` is a subtype of `MBmodel` and wraps a `Lux.jl` feedforward network whose architecture, input feature normalisation bounds, and pre-trained weights are all read directly from the JSON export. The network takes monthly ERA5 climate features as inputs (e.g. `t2m`, `tp`, `ssrd`, …) and outputs a surface mass balance rate in m w.e. per time step. It is the *de facto* data-driven surface mass balance model in the ODINN ecosystem.
+`CustomMLP` is a subtype of `MBmodel` and wraps a `Lux.jl` feedforward network whose architecture, input feature normalisation bounds, and pre-trained weights are all read directly from the JSON export. The network takes monthly ERA5 climate features as inputs (e.g. `t2m`, `tp`, `ssrd`, …) and outputs a surface mass balance rate in m w.e. per time step. For now, only monthly time steps are supported. It is the *de facto* data-driven surface mass balance model in the ODINN ecosystem.
 
 Once loaded, models can be saved to a local registry to avoid re-parsing JSON on subsequent runs:
 
