@@ -49,7 +49,7 @@ function VJP_λ_∂SIA∂H_discrete(
     Δy = glacier.Δy
 
     # First, enforce values to be positive
-    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    H = map(x -> ifelse(x > 0.0, x, 0.0), H)
     # Update glacier surface altimetry
     S = B .+ H
 
@@ -196,7 +196,7 @@ function VJP_λ_∂SIA∂θ_discrete(
     Δy = glacier.Δy
 
     # First, enforce values to be positive
-    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    H = map(x -> ifelse(x > 0.0, x, 0.0), H)
     # Update glacier surface altimetry
     S = B .+ H
 
@@ -287,7 +287,7 @@ function VJP_λ_∂surface_V∂H_discrete(
     Δy = glacier.Δy
 
     # First, enforce values to be positive
-    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    H = map(x -> ifelse(x > 0.0, x, 0.0), H)
     # Update glacier surface altimetry
     S = B .+ H
 
@@ -371,7 +371,7 @@ function VJP_λ_∂surface_V∂θ_discrete(
     Δy = glacier.Δy
 
     # First, enforce values to be positive
-    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    H = map(x -> ifelse(x > 0.0, x, 0.0), H)
     # Update glacier surface altimetry
     S = B .+ H
 
@@ -461,7 +461,7 @@ function VJP_λ_∂SIA∂H_continuous(
     Δy = glacier.Δy
 
     # First, enforce values to be positive
-    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    H = map(x -> ifelse(x > 0.0, x, 0.0), H)
     # Update glacier surface altimetry
     S = B .+ H
 
@@ -601,7 +601,7 @@ function VJP_λ_∂SIA∂θ_continuous(
     Δy = glacier.Δy
 
     # First, enforce values to be positive
-    map!(x -> ifelse(x > 0.0, x, 0.0), H, H)
+    H = map(x -> ifelse(x > 0.0, x, 0.0), H)
     # Update glacier surface altimetry
     S = B .+ H
 

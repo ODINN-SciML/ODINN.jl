@@ -89,13 +89,14 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
 
     _simulation = Enzyme.make_zero(simulation)
     _glacier = Enzyme.make_zero(glacier)
+    _H = deepcopy(H) # Copy H since it is modified in-place
     λ_∂MB∂H = Enzyme.make_zero(H)
     MB = Enzyme.make_zero(H)
     λH = deepcopy(λ) # Need to copy because Enzyme changes the backward gradient in-place
     Enzyme.autodiff(
         Reverse, MB_wrapper!, Const,
         Duplicated(MB, λH),
-        Duplicated(H, λ_∂MB∂H),
+        Duplicated(_H, λ_∂MB∂H),
         Duplicated(simulation, _simulation),
         Duplicated(glacier, _glacier),
         Const(step_MB)
