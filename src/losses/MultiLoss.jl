@@ -172,7 +172,8 @@ function backward_loss(
         lossType.losses
     )
     # Combine contribution of each gradient
-    ∂L∂Hs, ∂L∂θs = map(x -> collect(x), zip(res_backward_losses...))
+    ∂L∂Hs = first.(res_backward_losses)
+    ∂L∂θs = last.(res_backward_losses)
     ∂L∂H = sum(lossType.λs .* ∂L∂Hs)
     ∂L∂θ = sum(lossType.λs .* ∂L∂θs)
     return ∂L∂H, ∂L∂θ

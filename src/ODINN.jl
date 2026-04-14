@@ -86,6 +86,7 @@ include(joinpath(root_dir, "src/setup/config.jl"))
 include(joinpath(root_dir, "src/losses/Losses.jl"))
 include(joinpath(root_dir, "src/losses/Regularization.jl"))
 include(joinpath(root_dir, "src/losses/MultiLoss.jl"))
+include(joinpath(root_dir, "src/losses/AggregatedLosses.jl"))
 # All parameters needed for the models
 include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
 include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))

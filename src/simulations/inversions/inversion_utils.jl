@@ -454,7 +454,10 @@ function batch_loss_iceflow_transient(
             Δtj
         )
     end
-    return sum(losses), result
+    aggregated_losses = aggregated_loss(
+        loss_function, H, nothing, nothing, nothing, nothing, t,
+        glacier_idx, container.θ, container.simulation, 0.0, (;))
+    return sum(losses) + aggregated_losses, result
 end
 
 """
@@ -486,7 +489,10 @@ function _batch_iceflow_UDE(
     tstopsIceThickness = tdata(glacier.thicknessData)
     tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
     tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan))
-    tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity, tstopsDiscreteLoss)))
+    tstopsAggregatedLoss = unique(discretePostIntegralLossSteps(
+        params.UDE.empirical_loss_function, container.simulation, glacier_idx))
+    tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
+        tstopsDiscreteLoss, tstopsAggregatedLoss)))
 
     # Create mass balance callback
     cb_MB = if params.simulation.use_MB
@@ -503,7 +509,7 @@ function _batch_iceflow_UDE(
         end
         # A simulation period is sliced in time windows that are separated by `step_MB`
         # The mass balance is applied at the end of each of the windows
-        PeriodicCallback(mb_action!, step_MB; initial_affect = false)
+        PeriodicCallback(mb_action!, step_MB; initial_affect = false, final_affect = true)
     else
         CallbackSet()
     end

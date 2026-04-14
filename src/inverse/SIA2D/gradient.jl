@@ -95,8 +95,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         ## 3- Determine tstops in the same way as what is done in the forward and check that this matches
         tstops = Huginn.define_callback_steps(tspan, params.solver.step)
         tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, tspan))
+        tstopsAggregatedLoss = unique(discretePostIntegralLossSteps(
+            params.UDE.empirical_loss_function, simulation, i))
         tstops = sort(unique(vcat(
-            tstops, params.solver.tstops, tH_ref, tV_ref, tstopsDiscreteLoss)))
+            tstops, params.solver.tstops, tH_ref, tV_ref,
+            tstopsDiscreteLoss, tstopsAggregatedLoss)))
 
         @assert length(t) == length(tstops) "The size of tstops does not match with the size of the reference times."
         @assert isapprox(t, tstops, rtol = 1e-7) "Times in tstops and reference times in result do not coincide. Maximum difference is $(maximum(abs.(t-tstops)))"
@@ -129,7 +132,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             end
 
             tstopsMB = if simulation.parameters.simulation.use_MB
-                tstopsMB = Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)
+                tstopsMB = Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)[2:end] # Discard first time step to be aligned with the forward
                 @assert all(map(ti -> ti in t, tstopsMB)) "When using the DiscreteAdjoint the tstops of the MB callback must all be included in the tstops from the results."
                 tstopsMB
             else
@@ -164,7 +167,30 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 )
             end
             # Unzip ∂L∂H, ∂L∂θ at each timestep
-            ∂L∂H, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
+            ∂L∂H = first.(res_backward_loss)
+            ∂L∂θ = last.(res_backward_loss)
+
+            # Contribution of aggregated losses
+            ∂L∂H_aggregated_loss,
+            ∂L∂θ_aggregated_loss = if length(tstopsAggregatedLoss)>0
+                indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
+                backward_aggregated_loss(
+                    loss_function,
+                    H[indPostIntegralLoss],
+                    nothing,
+                    nothing,
+                    nothing,
+                    nothing,
+                    t[indPostIntegralLoss],
+                    i,
+                    θ,
+                    simulation,
+                    0.0,
+                    (;)
+                )
+            else
+                Vector{Matrix{typeof(H[begin])}}(), Vector{typeof(θ)}()
+            end
 
             for j in reverse(1:k)
                 tj = t[j]
@@ -184,6 +210,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 # Compute derivative of local contribution to loss function
                 ∂ℓ∂H = ∂L∂H[j]
                 ∂ℓ∂θ = ∂L∂θ[j]
+                if tj in tstopsAggregatedLoss
+                    idx = findfirst(==(tj), tstopsAggregatedLoss)
+                    ∂ℓ∂H .+= ∂L∂H_aggregated_loss[idx]
+                    ∂ℓ∂θ .+= ∂L∂θ_aggregated_loss[idx]
+                end
 
                 # Compute loss function for verification purpose
                 ℓi = loss(
@@ -222,6 +253,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 # For ∂ℓ∂θ, time discretization is already included in the loss, so no need to multiply by Δt
                 dLdθ .+= something(∂ℓ∂θ, 0.0)
             end
+            ℓ_agg_loss = aggregated_loss(loss_function, H, nothing, nothing, nothing,
+                nothing, t, i, θ, simulation, 0.0, (;))
+            ℓ += ℓ_agg_loss
 
             ### Check consistency between forward and reverse
             @assert isapprox(ℓ, loss_per_glacier[i]; atol = 0, rtol = 1e-8) "Loss in forward and reverse do not coincide: $(ℓ) (reverse) != $(loss_per_glacier[i]) (forward)"
@@ -285,11 +319,35 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             t_ref_inv = .-reverse(tstops)
             stop_condition_loss(λ, t,
                 integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
+            # Contribution of aggregated losses
+            ∂L∂H_aggregated_loss,
+            ∂L∂θ_aggregated_loss = if length(tstopsAggregatedLoss)>0
+                indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
+                backward_aggregated_loss(
+                    loss_function,
+                    H[indPostIntegralLoss],
+                    nothing,
+                    nothing,
+                    nothing,
+                    nothing,
+                    t[indPostIntegralLoss],
+                    i,
+                    θ,
+                    simulation,
+                    0.0,
+                    (;)
+                )
+            else
+                Vector{Matrix{typeof(H[begin])}}(), Vector{typeof(θ)}()
+            end
+
             effect_loss! = let loss_function=loss_function, H_itp=H_itp,
                 useThickness=useThickness, useVelocity=useVelocity, H_ref_itp=H_ref_itp,
                 Vabs_ref_itp=Vabs_ref_itp, Vx_ref_itp=Vx_ref_itp, Vy_ref_itp=Vy_ref_itp,
                 i=i, θ=θ, simulation=simulation, normalization=normalization, N=N,
-                tH_ref=tH_ref, tV_ref=tV_ref
+                tH_ref=tH_ref, tV_ref=tV_ref, ∂L∂H_aggregated_loss=∂L∂H_aggregated_loss,
+                ∂L∂θ_aggregated_loss=∂L∂θ_aggregated_loss,
+                tstopsAggregatedLoss=tstopsAggregatedLoss
 
                 function (t, u)
                     indThickness = findfirst(==(t), tH_ref)
@@ -315,12 +373,21 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                         prod(N) * normalization,
                         Δtj
                     )
+                    if length(tstopsAggregatedLoss)>0 &&
+                       any(isapprox.(t, tstopsAggregatedLoss))
+                        ind = Sleipnir.indFromT(
+                            simulation.parameters.simulation.tspan, [t], tstopsAggregatedLoss)[1]
+                        ∂ℓ∂H .+= ∂L∂H_aggregated_loss[ind]
+                        ∂ℓ∂θ .+= ∂L∂θ_aggregated_loss[ind]
+                    end
                     # For ∂ℓ∂H, time discretization is already included in the loss, so no need to multiply by the time step
                     u .+= ∂ℓ∂H
                 end
             end
             cb_adjoint_loss = DiscreteCallback(
                 stop_condition_loss, integrator -> effect_loss!(-integrator.t, integrator.u))
+
+            # Mass balance contribution
             effect_MB! = let simulation=simulation, glacier=glacier, H_itp=H_itp
                 function (integrator)
                     t = - integrator.t
@@ -330,14 +397,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 end
             end
             cb_adjoint_MB = if simulation.parameters.simulation.use_MB
-                tstopsMB = - Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)
-                function stop_condition_MB(λ, t, integrator)
-                    Sleipnir.stop_condition_tstops(λ, t, integrator, tstopsMB)
-                end
                 # For the moment the time stepping used in the loss, and the one for the MB gradient computation must match
                 # The plan in the future is to be able to customize the time stepping for the MB gradient computation
                 # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/373
-                DiscreteCallback(stop_condition_MB, effect_MB!)
+                PeriodicCallback(effect_MB!, simulation.parameters.simulation.step_MB;
+                    initial_affect = true, final_affect = false)
             else
                 CallbackSet()
             end
@@ -374,7 +438,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
             ### Numerical integration using quadrature to compute gradient
             # Contribution of the loss function due to ∂l∂θ
-            Δtj = (; H = 1.0, V = 1.0) # /!\ Not sure about this
+            Δtj = (; H = 1.0, V = 1.0) # Don't need to provide the time steps since we are using a quadrature and this is weighted
             res_backward_loss = map(
                 t -> backward_loss(
                     loss_function,
@@ -391,8 +455,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     Δtj
                 ),
                 t_nodes)
-            # Unzip ∂L∂H, ∂L∂θ at each timestep
-            _, ∂L∂θ = map(x -> collect(x), zip(res_backward_loss...))
+            # Unzip ∂L∂θ at each timestep
+            ∂L∂θ = last.(res_backward_loss)
 
             # Final integration of the loss
             if typeof(simulation.parameters.UDE.grad.VJP_method) <:
@@ -437,6 +501,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     prod(N) * normalization,
                     Δtj
                 )[2]
+            end
+
+            # Contributions of aggregated loss function terms
+            for i in 1:length(tstopsAggregatedLoss)
+                dLdθ .+= ∂L∂θ_aggregated_loss[i]
             end
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
