@@ -27,6 +27,7 @@ end
 # ODINN subpackages
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
+using MassBalanceMachine
 
 using Statistics, LinearAlgebra
 using Random, Distributions
