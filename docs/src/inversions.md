@@ -101,10 +101,10 @@ default_name(::iCPDD) = :CPDD
 function get_input(cpdd::iCPDD, simulation, glacier_idx, t)
     window = cpdd.window
     glacier = simulation.glaciers[glacier_idx]
-    # We trim only the time period between `t` and `t - x`, where `x` is the PDD time window defined in the input attributes. 
+    # We trim only the time period between `t` and `t - x`, where `x` is the PDD time window defined in the input attributes.
     period = (partial_year(Day, t) - window):Day(1):partial_year(Day, t)
     get_cumulative_climate!(glacier.climate, period)
-    # Convert climate dataset to 2D based on the glacier's DEM  
+    # Convert climate dataset to 2D based on the glacier's DEM
     climate_2D_step = downscale_2D_climate(glacier.climate.climate_step, glacier.S, glacier.Coords)
 
     return climate_2D_step.PDD

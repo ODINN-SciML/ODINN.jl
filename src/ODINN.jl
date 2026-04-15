@@ -14,10 +14,10 @@ __precompile__() # this module is safe to precompile
 # """
 module ODINN
 
-# Check Julia version
+# Check Julia version during precompilation
 if !(v"1.10.0" <= VERSION <= v"1.11.999")
     # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/463
-    error("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
+    @warn("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
 end
 
 # ##############################################
@@ -27,6 +27,7 @@ end
 # ODINN subpackages
 using Reexport
 @reexport using Huginn # imports Muninn and Sleipnir
+using MassBalanceMachine
 
 using Statistics, LinearAlgebra
 using Random, Distributions
