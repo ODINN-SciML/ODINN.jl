@@ -34,6 +34,24 @@ function backward_loss(
     (FillArrays.Zeros(size(H_pred)...), zero(θ))
 end
 
+"""
+    LossDhdt <: AggregatedLoss
+
+A loss function that penalizes the difference between predicted and observed glacier surface elevation change rates (dh/dt).
+
+This loss works with time-aggregated quantities, comparing the mean rate of height change computed from ice thickness predictions against reference dh/dt observations over a specified time interval.
+
+# Details
+
+The loss is computed as:
+L = (dhdt_pred - dhdt_ref)²
+
+where:
+
+  - `dhdt_pred`: Predicted mean rate of height change (computed from model ice thickness outputs)
+  - `dhdt_ref`: Reference/observed rate of height change from data
+  - The rate is computed using masked ice thickness differences by masking out pixels without ice based on the ice thickness at the beginning of the time window
+"""
 @kwdef struct LossDhdt <: AggregatedLoss
 end
 
@@ -92,6 +110,31 @@ end
 
 loss_uses_velocity(lossType::LossDhdt) = false
 
+"""
+    LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: AggregatedLoss
+
+A loss function that penalizes the difference between predicted and observed time-averaged glacier surface velocities.
+
+This loss type computes a time-weighted average of predicted velocities over a specified time interval and compares it against reference velocity observations.
+It is particularly useful for constraining glacier flow dynamics when velocity data is annual for example (single snapshot inversions).
+
+# Fields
+
+  - `loss::L = L2Sum()`: The underlying loss function type used to compare predicted and reference velocities
+  - `component::Symbol = :xy`: Which velocity component(s) to use in the loss:
+      + `:xy`: Compare x and y velocity components separately (sum of losses)
+      + `:abs`: Compare absolute velocity magnitude
+  - `step::F = 1/12`: Time stepping for velocity aggregation (default: 1 month in yearly units)
+
+# Details
+
+The loss computation involves:
+
+ 1. Creating a time grid from `t1` to `t2` with spacing `lossType.step`
+ 2. Computing predicted velocities at each time step via ice thickness predictions
+ 3. Time-averaging the velocities with weights proportional to time intervals
+ 4. Comparing the averaged velocity to reference observations using the specified loss function
+"""
 @kwdef struct LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: AggregatedLoss
     loss::L = L2Sum()
     component::Symbol = :xy

@@ -41,12 +41,16 @@ In the following sections, we introduce how to define empirical and regularizati
 The empirical error can be as simple as the sum of squares of the error between model and observations, but it can also involve more complex cost functions.
 The complete description of the different losses are available in their corresponding docstrings (see the [API](./api.md)) but we provide here a brief summary for each of them.
 
+#### Simple loss functions
+
 There are very simple types which are agnostic to the nature of the variables whose error is being computed (that is $H$ or $V$). These are:
 
   - `L2Sum`: $L^2$ sum of the error inside the glacier.
   - `LogSum`: Logarithmic sum of the ratio between ice surface velocities (see [morlighem_inversion_2013](@cite)).
 
-These types which define very simple operations are used in more complex loss functions:
+#### Time integrated loss functions
+
+These simple loss functions which define very simple operations are used in more complex loss functions:
 
   - `LossH`: Loss function over the ice thickness only.
   - `LossV`: Loss function over the ice surface velocity only.
@@ -83,6 +87,15 @@ For this setting, the empirical error term can be defined as
 ```
 
 with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node of the simulation grid $x_j$.
+
+#### Time aggregated loss functions
+
+There are cost functions which cannot be written as $\int_{t\in\Tau}\int_{x\in\Omega} \ell(...)$ but which are rather of the form $\ell(\int_{t\in\Tau} ...)$.
+These functions need special treatment and they are defined as a subtype of `AggregatedLoss`.
+This class of losses include:
+
+  - `LossDhdt`: Loss function for the mean glacier surface elevation change computed over a given time window.
+  - `LossAvgV`: Loss function for the mean ice surface velocity computed over a given time window.
 
 ### Regularization
 
