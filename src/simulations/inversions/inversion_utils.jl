@@ -456,7 +456,7 @@ function batch_loss_iceflow_transient(
     end
     aggregated_losses = aggregated_loss(
         loss_function, H, nothing, nothing, nothing, nothing, t,
-        glacier_idx, container.θ, container.simulation, 0.0, (;))
+        glacier_idx, container.θ, container.simulation, prod(size(H[begin]))*1.0, (;))
     return sum(losses) + aggregated_losses, result
 end
 

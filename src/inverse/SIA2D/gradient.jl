@@ -127,10 +127,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
-            if useThickness && useVelocity && tH_ref != tV_ref
-                @warn "Correctness of the gradient is not guaranteed when using the discrete adjoint with different time steps for H and V terms! Use the continuous adjoint instead."
-            end
-
             tstopsMB = if simulation.parameters.simulation.use_MB
                 tstopsMB = Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)[2:end] # Discard first time step to be aligned with the forward
                 @assert all(map(ti -> ti in t, tstopsMB)) "When using the DiscreteAdjoint the tstops of the MB callback must all be included in the tstops from the results."
@@ -185,11 +181,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     i,
                     θ,
                     simulation,
-                    0.0,
+                    prod(N) * normalization,
                     (;)
                 )
             else
-                Vector{Matrix{typeof(H[begin])}}(), Vector{typeof(θ)}()
+                Vector{Matrix{typeof(H[begin])}}(), zero(θ)
             end
 
             for j in reverse(1:k)
@@ -213,7 +209,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 if tj in tstopsAggregatedLoss
                     idx = findfirst(==(tj), tstopsAggregatedLoss)
                     ∂ℓ∂H .+= ∂L∂H_aggregated_loss[idx]
-                    ∂ℓ∂θ .+= ∂L∂θ_aggregated_loss[idx]
                 end
 
                 # Compute loss function for verification purpose
@@ -254,7 +249,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 dLdθ .+= something(∂ℓ∂θ, 0.0)
             end
             ℓ_agg_loss = aggregated_loss(loss_function, H, nothing, nothing, nothing,
-                nothing, t, i, θ, simulation, 0.0, (;))
+                nothing, t, i, θ, simulation, prod(N) * normalization, (;))
             ℓ += ℓ_agg_loss
 
             ### Check consistency between forward and reverse
@@ -272,6 +267,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 dLdθ.IC[Symbol("$(i)")] .+= λ₀ .* s₀
             end
 
+            # Contributions of aggregated loss function terms
+            dLdθ .+= ∂L∂θ_aggregated_loss
+
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
             """
             Construct continuous interpolator for solution of forward PDE
@@ -285,12 +283,19 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 H_itp = interpolate((t,), H, Gridded(Linear()))
                 H_ref_itp = useThickness ?
                             interpolate((tH_ref,), H_ref, Gridded(Linear())) : nothing
+                # When there is only one reference velocity data we use a constant interpolator
                 Vabs_ref_itp = useVelocity ?
-                               interpolate((tV_ref,), Vabs_ref, Gridded(Linear())) : nothing
+                               (length(tV_ref)>1 ?
+                                interpolate((tV_ref,), Vabs_ref, Gridded(Linear())) :
+                                t -> only(Vabs_ref)) : nothing
                 Vx_ref_itp = useVelocity ?
-                             interpolate((tV_ref,), Vx_ref, Gridded(Linear())) : nothing
+                             (length(tV_ref)>1 ?
+                              interpolate((tV_ref,), Vx_ref, Gridded(Linear())) :
+                              t -> only(Vx_ref)) : nothing
                 Vy_ref_itp = useVelocity ?
-                             interpolate((tV_ref,), Vy_ref, Gridded(Linear())) : nothing
+                             (length(tV_ref)>1 ?
+                              interpolate((tV_ref,), Vy_ref, Gridded(Linear())) :
+                              t -> only(Vy_ref)) : nothing
             else
                 throw("Interpolation method for continuous adjoint not defined.")
             end
@@ -334,11 +339,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     i,
                     θ,
                     simulation,
-                    0.0,
+                    prod(N) * normalization,
                     (;)
                 )
             else
-                Vector{Matrix{typeof(H[begin])}}(), Vector{typeof(θ)}()
+                Vector{Matrix{typeof(H[begin])}}(), zero(θ)
             end
 
             effect_loss! = let loss_function=loss_function, H_itp=H_itp,
@@ -346,7 +351,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 Vabs_ref_itp=Vabs_ref_itp, Vx_ref_itp=Vx_ref_itp, Vy_ref_itp=Vy_ref_itp,
                 i=i, θ=θ, simulation=simulation, normalization=normalization, N=N,
                 tH_ref=tH_ref, tV_ref=tV_ref, ∂L∂H_aggregated_loss=∂L∂H_aggregated_loss,
-                ∂L∂θ_aggregated_loss=∂L∂θ_aggregated_loss,
                 tstopsAggregatedLoss=tstopsAggregatedLoss
 
                 function (t, u)
@@ -378,7 +382,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                         ind = Sleipnir.indFromT(
                             simulation.parameters.simulation.tspan, [t], tstopsAggregatedLoss)[1]
                         ∂ℓ∂H .+= ∂L∂H_aggregated_loss[ind]
-                        ∂ℓ∂θ .+= ∂L∂θ_aggregated_loss[ind]
                     end
                     # For ∂ℓ∂H, time discretization is already included in the loss, so no need to multiply by the time step
                     u .+= ∂ℓ∂H
@@ -401,7 +404,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 # The plan in the future is to be able to customize the time stepping for the MB gradient computation
                 # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/373
                 PeriodicCallback(effect_MB!, simulation.parameters.simulation.step_MB;
-                    initial_affect = true, final_affect = false)
+                    initial_affect = true, final_affect = false) # Exchange the role of initial_affect/final_affect in comparison to the forward
             else
                 CallbackSet()
             end
@@ -504,9 +507,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             end
 
             # Contributions of aggregated loss function terms
-            for i in 1:length(tstopsAggregatedLoss)
-                dLdθ .+= ∂L∂θ_aggregated_loss[i]
-            end
+            dLdθ .+= ∂L∂θ_aggregated_loss
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint
             if isnothing(simulation.parameters.UDE.grad.grad_function)

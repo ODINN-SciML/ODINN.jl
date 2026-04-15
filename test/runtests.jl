@@ -226,6 +226,9 @@ ENV["GKSwstype"] = "nul"
             @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [2e-2, 1e-8, 2e-2],
                 functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+            @testset "AvgV loss with continuous adjoint" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-6, 1e-8, 5e-6],
+                functional_inv = false, scalar = true, loss = LossAvgV(), aggregated_loss = :avgV)
         end
     end
 

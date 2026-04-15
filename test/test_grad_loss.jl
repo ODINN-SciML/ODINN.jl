@@ -79,6 +79,7 @@ function test_grad_finite_diff(
         (false, false, nothing) => ["RGI60-11.03638"]
         (false, true, nothing) => ["RGI60-11.03638", "RGI60-11.01450"]
         (false, false, :dhdt) => ["RGI60-11.03638"]
+        (true, false, :avgV) => ["RGI60-11.03646"]
     end
 
     rgi_paths = get_rgi_paths()
@@ -97,7 +98,7 @@ function test_grad_finite_diff(
         sensealg = SciMLSensitivity.ZygoteAdjoint()
     end
 
-    minA, maxA = if aggregated_loss == :dhdt
+    minA, maxA = if aggregated_loss == :dhdt || aggregated_loss == :avgV
         (2e-18, 8e-18)
     else
         # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
@@ -168,6 +169,8 @@ function test_grad_finite_diff(
     # Generate ground truth based on the loss that will be used hereafter
     store = if aggregated_loss == :dhdt
         (:H, :dhdt)
+    elseif aggregated_loss == :avgV
+        (:H, :avgV)
     else
         ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)
     end
