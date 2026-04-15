@@ -105,19 +105,37 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
 end
 
 function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, glacier, t)
+    model = simulation.model
+    cache = simulation.cache
+    step_MB = simulation.parameters.simulation.step_MB
     glacier.S .= glacier.B .+ H
-    get_cumulative_climate!(glacier.climate, t, simulation.parameters.simulation.step_MB)
+    get_cumulative_climate!(glacier.climate, t, step_MB)
 
     mb_model = simulation.model.mass_balance
     λ_∂MB∂H = if isa(mb_model, TImodel1)
         downscale_2D_climate!(glacier)
         climate_2D_step = glacier.climate.climate_2D_step
 
-        PDD_jac = climate_2D_step.avg_gradient .* λ
-        PDD_jac .= ifelse.(climate_2D_step.PDD .< 0.0, 0.0, PDD_jac)
+        PDD = glacier.climate.climate_step.temp .+
+              climate_2D_step.gradient .* (glacier.S .- climate_2D_step.ref_hgt)
+        PDD_jac = climate_2D_step.gradient .* λ
+        PDD_jac .= ifelse.(PDD .< 0.0, 0.0, PDD_jac)
+
+        cache.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step, step_MB)
+        MB = cache.iceflow.MB
+        MB_mask = cache.iceflow.MB_mask
+
+        # MB, MB_mask, MB_total = ifm.MB, ifm.MB_mask, ifm.MB_total
+        MB_mask .= ((H .> 0.0) .&& (MB .< 0.0)) .|| ((H .> 10.0) .&& (MB .>= 0.0))
+        mask_ice_disappear = (H[MB_mask] + MB[MB_mask]) .< 0.0 # Mask of where the ice will disappear after MB application
 
         # The snow term doesn't depend on the ice thickness, hence it is null
-        .- (mb_model.DDF .* PDD_jac)
+        tmp = ((.- (mb_model.DDF .* PDD_jac)) ./ (step_MB / (1 / 12)))[MB_mask]
+        tmp[mask_ice_disappear] .= -1.0
+
+        λ_∂MB∂H = zero(λ)
+        λ_∂MB∂H[MB_mask] .= tmp
+        λ_∂MB∂H
     else
         throw("The discrete VJP for model $(typeof(mb_model)) is not supported yet.")
     end
