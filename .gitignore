@@ -11,6 +11,7 @@ scripts/.DS_Store
 benchmark/results.txt
 plots/MB/
 plots/training/
+plots/visual_tests_realistic/
 data/
 
 # Generated documentation
