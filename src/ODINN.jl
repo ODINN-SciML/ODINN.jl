@@ -48,8 +48,7 @@ using Base: @kwdef
 using Lux
 using Tullio
 using Infiltrator
-using Plots, PlotThemes, PlotlyJS
-Plots.theme(:wong2) # sets overall theme for Plots
+using CairoMakie
 import Pkg
 using Distributed
 using ProgressMeter
