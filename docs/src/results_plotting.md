@@ -28,3 +28,23 @@ And finally, it is also possible to plot various gridded data on a glacier with 
 ```@docs
 Sleipnir.plot_gridded_data
 ```
+
+It is also possible to accumulate gridded data over time and plot cumulative fields with the following functions:
+
+```@docs
+Sleipnir.accumulate_gridded_data
+Sleipnir.plot_cumulative_gridded_data
+Sleipnir.plot_cumulative_mb
+```
+
+For quick DEM visualizations from either a `Results` object or a glacier object, the following function is available:
+
+```@docs
+Sleipnir.plot_glacier_dem
+```
+
+And finally, figures can be saved with a unified utility function:
+
+```@docs
+Sleipnir.save_figure
+```

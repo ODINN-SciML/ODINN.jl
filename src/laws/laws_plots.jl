@@ -72,21 +72,23 @@ function plot_law_1d(
     scalar = length(get_input(inputs[input_name], simulation, 1, 2010.0)) == 1 ? true :
              false
 
+    fig = Figure()
+    ax = Makie.Axis(fig[1, 1]; xlabel = xlabel, ylabel = ylabel, title = "Law Function Plot")
+
     if scalar
         xvals = get_xvals(input_name, inputs, simulation, plot_full_input_range)
         input_tuples = [NamedTuple{(input_name,)}((xval,)) for xval in xvals]
         outputs = [only(eval_law(law, simulation, i, input_tuples[i], θ))
                    for i in 1:length(xvals)]
-        fig = Plots.plot(xvals, outputs, xlabel = xlabel, ylabel = ylabel,
-            title = "Law Function Plot", label = ylabel, linewidth = 3,
-            color = :purple, ylims = (minimum(outputs)*0.9, maximum(outputs)*1.1))
+        lines!(ax, xvals, outputs; linewidth = 3, color = :purple, label = ylabel)
+        ylims!(ax, minimum(outputs) * 0.9, maximum(outputs) * 1.1)
 
         if ground_truth_law !== nothing
             gt_outputs = [only(eval_law(
                               ground_truth_law, simulation, i, input_tuples[i], nothing))
                           for i in 1:length(xvals)]
-            fig = Plots.plot!(fig, xvals, gt_outputs, label = "Ground Truth",
-                linewidth = 3, color = :black, linestyle = :dash)
+            lines!(ax, xvals, gt_outputs; linewidth = 3, color = :black,
+                linestyle = :dash, label = "Ground Truth")
         end
 
     else
@@ -94,18 +96,18 @@ function plot_law_1d(
         xvals = get_input(inputs[xname], simulation, glacier_idx, 2010.0)
         input_tuple = NamedTuple{(xname,)}((xvals,))
         outputs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
-        fig = Plots.plot(xvals, outputs, xlabel = xlabel, ylabel = ylabel,
-            title = "Law Function Plot", label = ylabel, linewidth = 3,
-            color = :purple, ylims = (minimum(outputs)*0.9, maximum(outputs)*1.1))
+        lines!(ax, xvals, outputs; linewidth = 3, color = :purple, label = ylabel)
+        ylims!(ax, minimum(outputs) * 0.9, maximum(outputs) * 1.1)
 
         if ground_truth_law !== nothing
             gt_outputs = eval_law(
                 ground_truth_law, simulation, glacier_idx, input_tuple, nothing)
-            fig = Plots.plot!(fig, xvals, gt_outputs, label = "Ground Truth",
-                linewidth = 3, color = :black, linestyle = :dash)
+            lines!(ax, xvals, gt_outputs; linewidth = 3, color = :black,
+                linestyle = :dash, label = "Ground Truth")
         end
     end
 
+    axislegend(ax; position = :lt)
     return fig
 end
 
@@ -161,9 +163,15 @@ function plot_law_2d_fixed(
     zs = eval_law(law, simulation, glacier_idx, input_tuple, θ)
     println("plotting 2D scatter with fixed input $(fixed_input_name) at mean value $(fixed_mean)")
 
-    return Plots.scatter(
-        non_fixed_vals, zs; xlabel = string(non_fixed_name), ylabel = string(law.name),
+    if size(zs) != size(non_fixed_vals)
+        non_fixed_vals = inn1(non_fixed_vals)
+    end
+
+    fig = Figure()
+    ax = Makie.Axis(fig[1, 1]; xlabel = string(non_fixed_name), ylabel = string(law.name),
         title = "Law Function 2D Plot (Fixed $(fixed_input_name))")
+    scatter!(ax, vec(non_fixed_vals), vec(zs))
+    return fig
 end
 
 function plot_law_2d_surface(
@@ -184,37 +192,18 @@ function plot_law_2d_surface(
         yvals = inn1(yvals)
     end
 
-    # Ensure xvals, yvals, zs are vectors of equal length for scatter3d
+    # Ensure xvals, yvals, zs are vectors of equal length for scatter
     xv = vec(xvals)
     yv = vec(yvals)
     zv = vec(zs)
 
-    cmin = minimum(zv)
-    cmax = maximum(zv)
-    return PlotlyJS.plot(
-        PlotlyJS.scatter3d(
-            x = xv,
-            y = yv,
-            z = zv,
-            mode = "markers",
-            marker = attr(
-                size = 8,
-                color = zv,
-                colorscale = "Viridis",
-                colorbar = attr(title = string(law.name)),
-                cmin = cmin,
-                cmax = cmax
-            )
-        ),
-        PlotlyJS.Layout(
-            title = "Law Function Surface",
-            scene = attr(
-                xaxis = attr(title = string(xname)),
-                yaxis = attr(title = string(yname)),
-                zaxis = attr(title = string(law.name))
-            )
-        )
-    )
+    fig = Figure()
+    ax = Makie.Axis3(fig[1, 1]; xlabel = string(xname), ylabel = string(yname),
+        zlabel = string(law.name), title = "Law Function Surface")
+    scatter!(ax, xv, yv, zv; markersize = 8, color = zv, colormap = :viridis)
+    Makie.Colorbar(fig[1, 2]; colormap = :viridis, limits = extrema(zv),
+        label = string(law.name))
+    return fig
 end
 
 function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw,
@@ -237,7 +226,7 @@ function save_law_plot(fig, n_inputs, input_names, law::AbstractLaw,
     mkpath(folder)
     filepath = joinpath(folder, filename * ".pdf")
     @info "Saving law plot to $filepath"
-    Plots.savefig(fig, filepath)
+    CairoMakie.save(filepath, fig)
 end
 
 function get_xvals(input_name::Symbol, inputs::NamedTuple, simulation::Simulation, plot_full_input_range::Bool)
