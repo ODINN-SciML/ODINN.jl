@@ -30,9 +30,9 @@ function backward_loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    # zero(H_pred), zero(θ)
+    zero(H_pred), zero(θ)
     # Use FillArrays to declare a matrix full of zeros without allocation
-    (FillArrays.Zeros(size(H_pred)...), zero(θ))
+    # (FillArrays.Zeros(size(H_pred)...), zero(θ))
 end
 
 """
@@ -156,34 +156,16 @@ function time_aggregated_loss(
 ) where {F <: AbstractFloat}
     @assert length(simulation.glaciers[glacier_idx].velocityData.date1)==1 "With LossAvgV the velocity data should contain exactly one sample."
 
-    # 1. Determine indices in prediction that will be used for average velocity estimation
     t1 = Sleipnir.datetime_to_floatyear(only(simulation.glaciers[glacier_idx].velocityData.date1))
     t2 = Sleipnir.datetime_to_floatyear(only(simulation.glaciers[glacier_idx].velocityData.date2))
-    tLoss = collect(t1:lossType.step:t2)
-    dt = diff(tLoss)
-    tLoss = tLoss[begin:(end - 1)] # Discard last point t=t2
-    ind_pred = Sleipnir.indFromT(simulation.parameters.simulation.tspan, tLoss, t)
-    T = sum(dt)
 
-    # 2. Get the reference velocity
+    # Get the reference velocity
     V_ref = only(simulation.glaciers[glacier_idx].velocityData.vabs)
     Vx_ref = only(simulation.glaciers[glacier_idx].velocityData.vx)
     Vy_ref = only(simulation.glaciers[glacier_idx].velocityData.vy)
 
-    # 3. Compute the predicted velocity Vx_pred, Vy_pred, V_pred
-    if !isnothing(simulation.model.trainable_components)
-        simulation.model.trainable_components.θ = θ
-    end
-    res = map(i -> Huginn.V_from_H(simulation, H_pred[ind_pred[i]], tLoss[i], θ),
-        1:length(dt)
-    )
-    Vx_pred = first.(res)
-    Vy_pred = getindex.(res, 2)
-
-    # 4. Aggregate the velocities
-    avg_Vx_pred = sum((Vx_pred .* dt)/T)
-    avg_Vy_pred = sum((Vy_pred .* dt)/T)
-    avg_V_pred = (avg_Vx_pred .^ 2 .+ avg_Vy_pred .^ 2) .^ (1/2)
+    avg_Vx_pred, avg_Vy_pred,
+    avg_V_pred = Huginn.averageV(θ, simulation, (t1, t2), lossType.step, t, H_pred)
     mask = (V_ref .> 0.0)
 
     ℓ = if lossType.component == :xy
