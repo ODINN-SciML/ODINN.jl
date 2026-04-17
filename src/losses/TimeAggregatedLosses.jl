@@ -1,8 +1,9 @@
 export LossDhdt, LossAvgV
 
 # Losses that depend on time aggregated quantities
-abstract type AggregatedLoss <: AbstractLoss end
+abstract type TimeAggregatedLoss <: AbstractLoss end
 
+# Fallback methods for subtypes of `AbstractLoss` that do not implement `loss` and `backward_loss`, which is typically the case of subtypes of `TimeAggregatedLoss`
 function loss(
         lossType::AbstractLoss,
         H_pred::Matrix{F},
@@ -35,7 +36,7 @@ function backward_loss(
 end
 
 """
-    LossDhdt <: AggregatedLoss
+    LossDhdt <: TimeAggregatedLoss
 
 A loss function that penalizes the difference between predicted and observed glacier surface elevation change rates (dh/dt).
 
@@ -52,10 +53,10 @@ where:
   - `dhdt_ref`: Reference/observed rate of height change from data
   - The rate is computed using masked ice thickness differences by masking out pixels without ice based on the ice thickness at the beginning of the time window
 """
-@kwdef struct LossDhdt <: AggregatedLoss
+@kwdef struct LossDhdt <: TimeAggregatedLoss
 end
 
-function aggregated_loss(
+function time_aggregated_loss(
         lossType::LossDhdt,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -78,7 +79,7 @@ function aggregated_loss(
     dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
     return (dhdt-dhdt_ref)^2
 end
-function backward_aggregated_loss(
+function backward_time_aggregated_loss(
         lossType::LossDhdt,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -111,7 +112,7 @@ end
 loss_uses_velocity(lossType::LossDhdt) = false
 
 """
-    LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: AggregatedLoss
+    LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: TimeAggregatedLoss
 
 A loss function that penalizes the difference between predicted and observed time-averaged glacier surface velocities.
 
@@ -135,13 +136,13 @@ The loss computation involves:
  3. Time-averaging the velocities with weights proportional to time intervals
  4. Comparing the averaged velocity to reference observations using the specified loss function
 """
-@kwdef struct LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: AggregatedLoss
+@kwdef struct LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: TimeAggregatedLoss
     loss::L = L2Sum()
     component::Symbol = :xy
     step::F = 1/12
 end
 
-function aggregated_loss(
+function time_aggregated_loss(
         lossType::LossAvgV,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -173,13 +174,13 @@ function aggregated_loss(
     if !isnothing(simulation.model.trainable_components)
         simulation.model.trainable_components.θ = θ
     end
-
-    # 4. Aggregate the velocities
     res = map(i -> Huginn.V_from_H(simulation, H_pred[ind_pred[i]], tLoss[i], θ),
         1:length(dt)
     )
     Vx_pred = first.(res)
     Vy_pred = getindex.(res, 2)
+
+    # 4. Aggregate the velocities
     avg_Vx_pred = sum((Vx_pred .* dt)/T)
     avg_Vy_pred = sum((Vy_pred .* dt)/T)
     avg_V_pred = (avg_Vx_pred .^ 2 .+ avg_Vy_pred .^ 2) .^ (1/2)
@@ -196,7 +197,7 @@ function aggregated_loss(
 
     return ℓ
 end
-function backward_aggregated_loss(
+function backward_time_aggregated_loss(
         lossType::LossAvgV,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -227,13 +228,13 @@ function backward_aggregated_loss(
     if !isnothing(simulation.model.trainable_components)
         simulation.model.trainable_components.θ = θ
     end
-
-    # 4. Aggregate the velocities
     res = map(i -> Huginn.V_from_H(simulation, H_pred[ind_pred[i]], tLoss[i], θ),
         1:length(dt)
     )
     Vx_pred = first.(res)
     Vy_pred = getindex.(res, 2)
+
+    # 4. Aggregate the velocities
     avg_Vx_pred = sum((Vx_pred .* dt)/T)
     avg_Vy_pred = sum((Vy_pred .* dt)/T)
     avg_V_pred = (avg_Vx_pred .^ 2 .+ avg_Vy_pred .^ 2) .^ (1/2)
@@ -272,7 +273,8 @@ end
 
 loss_uses_velocity(lossType::LossAvgV) = true
 
-function aggregated_loss(
+# Fallback methods for subtypes of `AbstractLoss` that do not implement `time_aggregated_loss` and `backward_time_aggregated_loss`, which is typically the case of all losses which are not subtypes of `TimeAggregatedLoss`
+function time_aggregated_loss(
         lossType::AbstractLoss,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -286,7 +288,7 @@ function aggregated_loss(
 ) where {F <: AbstractFloat}
     0.0
 end
-function backward_aggregated_loss(
+function backward_time_aggregated_loss(
         lossType::AbstractLoss,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -303,7 +305,7 @@ function backward_aggregated_loss(
     (FillArrays.Fill(FillArrays.Zeros(size(H_pred[1])...), length(H_pred)), zero(θ))
 end
 
-function aggregated_loss(
+function time_aggregated_loss(
         lossType::MultiLoss,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -316,7 +318,7 @@ function aggregated_loss(
         Δt
 ) where {F <: AbstractFloat}
     losses = map(
-        sub_loss -> aggregated_loss(
+        sub_loss -> time_aggregated_loss(
             sub_loss,
             H_pred,
             H_ref,
@@ -333,7 +335,7 @@ function aggregated_loss(
     # Combine contribution of each loss
     return sum(lossType.λs .* losses)
 end
-function backward_aggregated_loss(
+function backward_time_aggregated_loss(
         lossType::MultiLoss,
         H_pred::Vector{Matrix{F}},
         H_ref,
@@ -345,9 +347,8 @@ function backward_aggregated_loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    # TODO: check that we handle ∂L∂H as vectors properly
     res_backward_losses = map(
-        sub_loss -> backward_aggregated_loss(
+        sub_loss -> backward_time_aggregated_loss(
             sub_loss,
             H_pred,
             H_ref,

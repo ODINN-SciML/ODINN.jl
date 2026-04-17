@@ -166,11 +166,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             ∂L∂H = first.(res_backward_loss)
             ∂L∂θ = last.(res_backward_loss)
 
-            # Contribution of aggregated losses
+            # Contribution of time aggregated losses
             ∂L∂H_aggregated_loss,
             ∂L∂θ_aggregated_loss = if length(tstopsAggregatedLoss)>0
                 indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
-                backward_aggregated_loss(
+                backward_time_aggregated_loss(
                     loss_function,
                     H[indPostIntegralLoss],
                     nothing,
@@ -248,7 +248,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 # For ∂ℓ∂θ, time discretization is already included in the loss, so no need to multiply by Δt
                 dLdθ .+= something(∂ℓ∂θ, 0.0)
             end
-            ℓ_agg_loss = aggregated_loss(loss_function, H, nothing, nothing, nothing,
+            ℓ_agg_loss = time_aggregated_loss(loss_function, H, nothing, nothing, nothing,
                 nothing, t, i, θ, simulation, prod(N) * normalization, (;))
             ℓ += ℓ_agg_loss
 
@@ -267,7 +267,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 dLdθ.IC[Symbol("$(i)")] .+= λ₀ .* s₀
             end
 
-            # Contributions of aggregated loss function terms
+            # Contributions of time aggregated loss function terms
             dLdθ .+= ∂L∂θ_aggregated_loss
 
         elseif typeof(simulation.parameters.UDE.grad) <: ContinuousAdjoint
@@ -328,7 +328,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             ∂L∂H_aggregated_loss,
             ∂L∂θ_aggregated_loss = if length(tstopsAggregatedLoss)>0
                 indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
-                backward_aggregated_loss(
+                backward_time_aggregated_loss(
                     loss_function,
                     H[indPostIntegralLoss],
                     nothing,
@@ -506,7 +506,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 )[2]
             end
 
-            # Contributions of aggregated loss function terms
+            # Contributions of time aggregated loss function terms
             dLdθ .+= ∂L∂θ_aggregated_loss
 
         elseif typeof(simulation.parameters.UDE.grad) <: DummyAdjoint

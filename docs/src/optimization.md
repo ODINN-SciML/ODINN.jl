@@ -91,7 +91,7 @@ with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node
 #### Time aggregated loss functions
 
 There are cost functions which cannot be written as $\int_{t\in\Tau}\int_{x\in\Omega} \ell(...)$ but which are rather of the form $\ell(\int_{t\in\Tau} ...)$.
-These functions need special treatment and they are defined as a subtype of `AggregatedLoss`.
+These functions need special treatment and they are defined as a subtype of `TimeAggregatedLoss`.
 This class of losses include:
 
   - `LossDhdt`: Loss function for the mean glacier surface elevation change computed over a given time window.
