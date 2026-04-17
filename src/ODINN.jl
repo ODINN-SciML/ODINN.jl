@@ -49,8 +49,7 @@ using Lux
 using Tullio
 using FillArrays
 using Infiltrator
-using Plots, PlotThemes, PlotlyJS
-Plots.theme(:wong2) # sets overall theme for Plots
+using CairoMakie
 import Pkg
 using Distributed
 using ProgressMeter
