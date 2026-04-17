@@ -30,7 +30,6 @@ using Enzyme
 using ODINN
 using Test
 using JLD2
-using Plots
 using Infiltrator
 using OrdinaryDiffEq
 using LinearAlgebra
