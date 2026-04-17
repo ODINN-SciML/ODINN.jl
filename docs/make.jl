@@ -43,7 +43,8 @@ tutorial_files = [
     "./src/laws.jl",
     "./src/vjp_laws.jl",
     "./src/input_laws.jl",
-    "./src/quick_start.jl"
+    "./src/quick_start.jl",
+    "./src/results_plotting_tutorial.jl"
 ]
 
 # Generate independent Markdown files for each tutorial
@@ -81,6 +82,7 @@ makedocs(
             "Glaciers" => "glaciers.md",
             "Models" => "models.md",
             "Results and plotting" => "results_plotting.md",
+            "Plotting tutorial" => "results_plotting_tutorial.md",
             "API" => "api.md"
         ],
         "Inversions" => [
