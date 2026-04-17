@@ -60,8 +60,9 @@ save_model(mlp, "norway_nongeo")  # saves to ~/.MassBalanceMachine/models/
 mlp = load_model("norway_nongeo") # fast retrieval by name
 ```
 
-We also provide an API to download pre-trained models which are stored on our [HuggingFace MLP repository](https://huggingface.co/MassBalanceMachine/MLP).
-This API simply retrieve the `params.json` and `model.json` files associated to one pre-trained model.
+Internally, `MassBalanceMachine.jl` converts those exported Pytorch MLPs into `Lux.jl`, to be compatible with the whole Julia and `ODINN.jl` ecosystem.
+We also provide an API to download pre-trained models which are stored in our [HuggingFace MLP repository](https://huggingface.co/MassBalanceMachine/MLP).
+This API simply retrieves the `params.json` and `model.json` files associated to a pre-trained model.
 The list of available pre-trained models and their characteristics are given in this repository.
 For example you can load one very simple model trained with the WGMS on region 11 (European Alps) and register it in your local registry by running:
 
