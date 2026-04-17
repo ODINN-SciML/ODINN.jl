@@ -36,7 +36,9 @@ Muninn.TImodel1(params::Sleipnir.Parameters)
 
 Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps` field in [`Sleipnir.SimulationParameters`](@ref).
 
-Neural network-based surface mass balance models trained with [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) can be loaded via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) package and used directly as drop-in `MBmodel`s. Pre-trained models are exported from Python as a pair of JSON files (`params.json` and `model.json`) and loaded as follows:
+Neural network-based surface mass balance models trained with [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) are also supported.
+They can be loaded via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) package and used directly as drop-in `MBmodel`s.
+Pre-trained models are exported from Python as a pair of JSON files (`params.json` and `model.json`) and loaded as follows:
 
 ```julia
 using MassBalanceMachine
@@ -58,7 +60,16 @@ save_model(mlp, "norway_nongeo")  # saves to ~/.MassBalanceMachine/models/
 mlp = load_model("norway_nongeo") # fast retrieval by name
 ```
 
-See the [`MassBalanceMachine.jl` repository](https://github.com/ODINN-SciML/MassBalanceMachine.jl) for details on model training, the full registry API, and available pre-trained models.
+We also provide an API to download pre-trained models which are stored on our [HuggingFace MLP repository](https://huggingface.co/MassBalanceMachine/MLP).
+This API simply retrieve the `params.json` and `model.json` files associated to one pre-trained model.
+The list of available pre-trained models and their characteristics are given in this repository.
+For example you can load one very simple model trained with the WGMS on region 11 (European Alps) and register it in your local registry by running:
+
+```julia
+download_MLP("mlp_noSvf_wgms11_small_0.1")
+```
+
+See the [`MassBalanceMachine.jl` repository](https://github.com/ODINN-SciML/MassBalanceMachine.jl) for more details on model training, and the full registry API.
 
 ## Regressors
 
