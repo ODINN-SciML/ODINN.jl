@@ -48,15 +48,14 @@ using Base: @kwdef
 using Lux
 using Tullio
 using Infiltrator
-using Plots, PlotThemes, PlotlyJS
-Plots.theme(:wong2) # sets overall theme for Plots
+using CairoMakie
 import Pkg
 using Distributed
 using ProgressMeter
 using Downloads
 using ImageFiltering
 using Printf
-using Interpolations, GeoStats
+using Interpolations
 using FastGaussQuadrature
 using Zygote
 using TensorBoardLogger

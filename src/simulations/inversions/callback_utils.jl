@@ -24,28 +24,42 @@ function callback_plots_A(θ, l, simulation)
 
         training_path = joinpath(simulation.parameters.simulation.working_dir, "training")
 
-        Plots.scatter(avg_temps, true_A, label = "True A", c = :lightsteelblue2)
-        plot_epoch = Plots.plot!(Tvec, pred_A, label = "Predicted A",
-            xlabel = "Long-term air temperature (°C)", yticks = yticks,
-            ylabel = :A, ylims = (0.0, simulation.parameters.physical.maxA), lw = 3, c = :dodgerblue4,
-            legend = :topleft)
+        fig_epoch = Figure()
+        ax_epoch = Axis(fig_epoch[1, 1];
+            xlabel = "Long-term air temperature (°C)", ylabel = "A",
+            yticks = yticks,
+            limits = (nothing, (0.0, simulation.parameters.physical.maxA)))
+        scatter!(ax_epoch, avg_temps, true_A; label = "True A", color = :lightsteelblue2)
+        lines!(ax_epoch, Tvec, pred_A; label = "Predicted A", linewidth = 3,
+            color = :dodgerblue4)
+        axislegend(ax_epoch; position = :lt)
+
         if !isdir(joinpath(training_path, "png")) || !isdir(joinpath(training_path, "pdf"))
             mkpath(joinpath(training_path, "png"))
             mkpath(joinpath(training_path, "pdf"))
         end
-        # Plots.savefig(plot_epoch,joinpath(root_plots,"training","epoch$current_epoch.svg"))
-        Plots.savefig(plot_epoch,
-            joinpath(training_path, "png", "epoch$(simulation.parameters.hyper.current_epoch).png"))
-        Plots.savefig(plot_epoch,
-            joinpath(training_path, "pdf", "epoch$(simulation.parameters.hyper.current_epoch).pdf"))
+        CairoMakie.save(
+            joinpath(training_path, "png",
+                "epoch$(simulation.parameters.hyper.current_epoch).png"),
+            fig_epoch)
+        CairoMakie.save(
+            joinpath(training_path, "pdf",
+                "epoch$(simulation.parameters.hyper.current_epoch).pdf"),
+            fig_epoch)
 
-        plot_loss = Plots.plot(simulation.parameters.hyper.loss_history,
-            label = "", xlabel = "Epoch", yaxis = :log10,
-            ylabel = "Loss (V)", lw = 3, c = :darkslategray3)
-        Plots.savefig(plot_loss,
-            joinpath(training_path, "png", "loss$(simulation.parameters.hyper.current_epoch).png"))
-        Plots.savefig(plot_loss,
-            joinpath(training_path, "pdf", "loss$(simulation.parameters.hyper.current_epoch).pdf"))
+        fig_loss = Figure()
+        ax_loss = Axis(fig_loss[1, 1]; xlabel = "Epoch", ylabel = "Loss (V)",
+            yscale = log10)
+        lines!(ax_loss, simulation.parameters.hyper.loss_history;
+            linewidth = 3, color = :darkslategray3)
+        CairoMakie.save(
+            joinpath(training_path, "png",
+                "loss$(simulation.parameters.hyper.current_epoch).png"),
+            fig_loss)
+        CairoMakie.save(
+            joinpath(training_path, "pdf",
+                "loss$(simulation.parameters.hyper.current_epoch).pdf"),
+            fig_loss)
     end #@ignore_derivatives 
 
     return false

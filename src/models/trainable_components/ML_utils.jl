@@ -65,8 +65,8 @@ function set_NN(architecture; θ_trained = nothing, ft = nothing, seed = nothing
 end
 
 function save_plot(plot, path, filename)
-    Plots.savefig(plot, joinpath(path, "png", "$filename-$(current_epoch[]).png"))
-    Plots.savefig(plot, joinpath(path, "pdf", "epoch$(current_epoch[]).pdf"))
+    CairoMakie.save(joinpath(path, "png", "$filename-$(current_epoch[]).png"), plot)
+    CairoMakie.save(joinpath(path, "pdf", "epoch$(current_epoch[]).pdf"), plot)
 end
 
 function generate_plot_folders(path)
