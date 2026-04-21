@@ -55,7 +55,7 @@ using ProgressMeter
 using Downloads
 using ImageFiltering
 using Printf
-using Interpolations, GeoStats
+using Interpolations
 using FastGaussQuadrature
 using Zygote
 using TensorBoardLogger
