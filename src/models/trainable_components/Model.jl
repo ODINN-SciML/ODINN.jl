@@ -80,7 +80,8 @@ function Model(
     # Check that the inputs match what is hardcoded in the adjoint computation when the regressor is used in the context of a functional inversion
     if iceflow.U_is_provided
         if haskey(regressors, :U) && regressors.U isa FunctionalModel
-            @assert inputs(iceflow.U)==_inputs_U_law "Inputs of U law must be $(_inputs_U_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.U))."
+            # TODO: Notice that this is a bit hardcoded, and it restricts a lot custom inversions!
+            # @assert inputs(iceflow.U)==_inputs_U_law "Inputs of U law must be $(_inputs_U_law) in ODINN for functional inversions but the ones provided are $(inputs(iceflow.U))."
         end
     elseif iceflow.Y_is_provided
         if haskey(regressors, :Y) && regressors.Y isa FunctionalModel

@@ -65,9 +65,12 @@ function callback_diagnosis(θ, l, simulation; save::Bool = false,
     # See if we want to change this or leave it
     # update_training_state!(simulation, l)
 
-    push!(simulation.results.stats.losses, l)
-    push!(simulation.results.stats.θ_hist, θ.u)
-    push!(simulation.results.stats.∇θ_hist, θ.grad)
+    iter = θ.iter
+
+    # We save a copy of the state parameters as these are stored as a reference
+    push!(simulation.results.stats.losses, copy(l))
+    push!(simulation.results.stats.θ_hist, copy(θ.u))
+    push!(simulation.results.stats.∇θ_hist, copy(θ.grad))
 
     step = 1
     if length(simulation.results.stats.losses) % step == 0

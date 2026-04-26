@@ -35,6 +35,7 @@ mutable struct MatrixCacheInterp <: Cache
         },
         Tuple{Vector{Float64}, Vector{Float64}}
     }
+    vjp_θ::Array{Float64, 3}
 end
 
 """
