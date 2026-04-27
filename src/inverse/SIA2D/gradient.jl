@@ -363,10 +363,10 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 stop_condition_loss, integrator -> effect_loss!(-integrator.t, integrator.u))
 
             # Contribution of aggregated losses
-            cb_adjoint_aggregated_loss = if length(tstopsAggregatedLoss)>0
+            ∂L∂H_aggregated_loss,
+            ∂L∂θ_aggregated_loss = if length(tstopsAggregatedLoss)>0
                 indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
-                ∂L∂H_aggregated_loss,
-                ∂L∂θ_aggregated_loss = backward_time_aggregated_loss(
+                backward_time_aggregated_loss(
                     loss_function,
                     H[indPostIntegralLoss],
                     nothing,
@@ -380,7 +380,10 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     prod(N) * normalization,
                     (;)
                 )
-
+            else
+                Vector{Matrix{typeof(H[begin])}}(), zero(θ)
+            end
+            cb_adjoint_aggregated_loss = if length(tstopsAggregatedLoss)>0
                 effect_aggregated_loss! = let θ=θ, simulation=simulation,
                     ∂L∂H_aggregated_loss=∂L∂H_aggregated_loss,
                     tstopsAggregatedLoss=tstopsAggregatedLoss
@@ -432,6 +435,10 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             if tspan[2] ∈ tstops
                 effect_loss!(tspan[2], λ₁)
             end
+            if tspan[2] ∈ tstopsAggregatedLoss
+                effect_aggregated_loss!(tspan[2], λ₁)
+            end
+
             # Define ODE Problem with time in reverse
             adjoint_PDE_rev = ODEProblem(
                 f_adjoint_rev,
