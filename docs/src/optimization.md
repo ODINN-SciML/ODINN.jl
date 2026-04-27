@@ -91,11 +91,33 @@ with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node
 #### Time aggregated loss functions
 
 There are cost functions which cannot be written as $\int_{t\in\Tau}\int_{x\in\Omega} \ell(...)$ but which are rather of the form $\ell(\int_{t\in\Tau} ...)$.
-These functions need special treatment and they are defined as a subtype of `TimeAggregatedLoss`.
-This class of losses include:
+These functions need special treatment because they cannot be differentiated at every time step during the manual adjoint computation (see note below).
+They are defined as a subtype of `TimeAggregatedLoss` and this class of losses include:
 
-  - `LossDhdt`: Loss function for the mean glacier surface elevation change computed over a given time window.
+  - `LossDhdt`: Loss function for the mean glacier surface elevation change computed between the beginning and the end of a given time window.
   - `LossAvgV`: Loss function for the mean ice surface velocity computed over a given time window.
+
+!!! warning "Advanced features"
+
+    If we consider the case of the average ice surface velocity loss function `LossAvgV`, it is mathematically defined as:
+
+    ```math
+    \int_{x\in\Omega}\ell\left(\int_{t\in\tau} \hat V(t,x) d\mu_t(t), V(x) \right)d\mu_x(x)
+    ```
+
+    Since $\ell$ is non linear, during the manual adjoint computation, we cannot integrate this contribution using a quadrature in the time reversed solve.
+    Hence, it has to be differentiated beforehand and this is why `TimeAggregatedLoss` are handled in a different way than the classical loss functions described in the previous sections.
+    This allows keeping numerical efficiency for most applications, but when subtype loss functions of `TimeAggregatedLoss` are being used, we precompute the contributions of these specific loss function terms, which is more computationally expensive if comparison to a classical quadrature.
+
+!!! warning "Advanced features"
+
+    The `LossDhdt` loss function could be writen in a similar form as in the remark above:
+
+    ```math
+    \ell\left(\int_{t\in\tau}\int_{x\in\Omega} \hat H(t,x) d\mu_t(t)d\mu_x(x), \text{dhdt}(x) \right)
+    ```
+
+    with $d\mu_x(t)=\frac{1}{|\Omega|}$ and $d\mu_t(t)=\delta_{t_1}-\delta_{t_0}$ where $t_0$ and $t_1$ are defined in the loss function and represent the time window used to compute the difference in ice thickness.
 
 ### Regularization
 

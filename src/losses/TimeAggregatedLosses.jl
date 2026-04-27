@@ -40,7 +40,7 @@ end
 
 A loss function that penalizes the difference between predicted and observed glacier surface elevation change rates (dh/dt).
 
-This loss works with time-aggregated quantities, comparing the mean rate of height change computed from ice thickness predictions against reference dh/dt observations over a specified time interval.
+This loss works with time-aggregated quantities, comparing the mean rate of height change computed from ice thickness predictions against reference dh/dt observations between the beginning and the end of a specified time interval.
 
 # Details
 
