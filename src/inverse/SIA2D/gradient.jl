@@ -324,34 +324,12 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             t_ref_inv = .-reverse(tstops)
             stop_condition_loss(λ, t,
                 integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
-            # Contribution of aggregated losses
-            ∂L∂H_aggregated_loss,
-            ∂L∂θ_aggregated_loss = if length(tstopsAggregatedLoss)>0
-                indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
-                backward_time_aggregated_loss(
-                    loss_function,
-                    H[indPostIntegralLoss],
-                    nothing,
-                    nothing,
-                    nothing,
-                    nothing,
-                    t[indPostIntegralLoss],
-                    i,
-                    θ,
-                    simulation,
-                    prod(N) * normalization,
-                    (;)
-                )
-            else
-                Vector{Matrix{typeof(H[begin])}}(), zero(θ)
-            end
 
             effect_loss! = let loss_function=loss_function, H_itp=H_itp,
                 useThickness=useThickness, useVelocity=useVelocity, H_ref_itp=H_ref_itp,
                 Vabs_ref_itp=Vabs_ref_itp, Vx_ref_itp=Vx_ref_itp, Vy_ref_itp=Vy_ref_itp,
                 i=i, θ=θ, simulation=simulation, normalization=normalization, N=N,
-                tH_ref=tH_ref, tV_ref=tV_ref, ∂L∂H_aggregated_loss=∂L∂H_aggregated_loss,
-                tstopsAggregatedLoss=tstopsAggregatedLoss
+                tH_ref=tH_ref, tV_ref=tV_ref
 
                 function (t, u)
                     indThickness = findfirst(==(t), tH_ref)
@@ -377,18 +355,55 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                         prod(N) * normalization,
                         Δtj
                     )
-                    if length(tstopsAggregatedLoss)>0 &&
-                       any(isapprox.(t, tstopsAggregatedLoss))
-                        ind = Sleipnir.indFromT(
-                            simulation.parameters.simulation.tspan, [t], tstopsAggregatedLoss)[1]
-                        ∂ℓ∂H .+= ∂L∂H_aggregated_loss[ind]
-                    end
                     # For ∂ℓ∂H, time discretization is already included in the loss, so no need to multiply by the time step
                     u .+= ∂ℓ∂H
                 end
             end
             cb_adjoint_loss = DiscreteCallback(
                 stop_condition_loss, integrator -> effect_loss!(-integrator.t, integrator.u))
+
+            # Contribution of aggregated losses
+            cb_adjoint_aggregated_loss = if length(tstopsAggregatedLoss)>0
+                indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
+                ∂L∂H_aggregated_loss,
+                ∂L∂θ_aggregated_loss = backward_time_aggregated_loss(
+                    loss_function,
+                    H[indPostIntegralLoss],
+                    nothing,
+                    nothing,
+                    nothing,
+                    nothing,
+                    t[indPostIntegralLoss],
+                    i,
+                    θ,
+                    simulation,
+                    prod(N) * normalization,
+                    (;)
+                )
+
+                effect_aggregated_loss! = let θ=θ, simulation=simulation,
+                    ∂L∂H_aggregated_loss=∂L∂H_aggregated_loss,
+                    tstopsAggregatedLoss=tstopsAggregatedLoss
+
+                    function (t, u)
+                        ind = Sleipnir.indFromT(
+                            simulation.parameters.simulation.tspan, [t], tstopsAggregatedLoss)[1]
+                        u .+= ∂L∂H_aggregated_loss[ind]
+                    end
+                end
+
+                stop_condition_aggregated_loss = let tstopsAggregatedLoss=tstopsAggregatedLoss
+                    function (λ, t, integrator)
+                        Sleipnir.stop_condition_tstops(λ, t, integrator, .-reverse(tstopsAggregatedLoss))
+                    end
+                end
+
+                DiscreteCallback(
+                    stop_condition_aggregated_loss, integrator -> effect_aggregated_loss!(
+                        -integrator.t, integrator.u))
+            else
+                CallbackSet()
+            end
 
             # Mass balance contribution
             effect_MB! = let simulation=simulation, glacier=glacier, H_itp=H_itp
@@ -408,7 +423,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             else
                 CallbackSet()
             end
-            cb = CallbackSet(cb_adjoint_MB, cb_adjoint_loss)
+            cb = CallbackSet(cb_adjoint_MB, cb_adjoint_loss, cb_adjoint_aggregated_loss)
 
             # Final condition
             λ₁ = zero(H[end])
