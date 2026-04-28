@@ -47,6 +47,7 @@ using MLUtils: DataLoader
 using Base: @kwdef
 using Lux
 using Tullio
+using FillArrays
 using Infiltrator
 using Plots, PlotThemes, PlotlyJS
 Plots.theme(:wong2) # sets overall theme for Plots
@@ -86,6 +87,7 @@ include(joinpath(root_dir, "src/setup/config.jl"))
 include(joinpath(root_dir, "src/losses/Losses.jl"))
 include(joinpath(root_dir, "src/losses/Regularization.jl"))
 include(joinpath(root_dir, "src/losses/MultiLoss.jl"))
+include(joinpath(root_dir, "src/losses/TimeAggregatedLosses.jl"))
 # All parameters needed for the models
 include(joinpath(root_dir, "src/inverse/VJPTypes.jl"))
 include(joinpath(root_dir, "src/inverse/AdjointTypes.jl"))
