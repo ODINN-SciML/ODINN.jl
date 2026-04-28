@@ -136,7 +136,7 @@ ENV["GKSwstype"] = "nul"
                 use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [2e-2, 2e-5, 2e-2], use_MB = true)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true)
             @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
             @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
@@ -220,6 +220,15 @@ ENV["GKSwstype"] = "nul"
             @testset "Rheology regularization" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-8, 1e-8, 1e-8],
                 functional_inv = false, scalar = false, loss = RheologyRegularization())
+            @testset "Dhdt loss with discrete adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
+                DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [2e-2, 1e-8, 2e-2],
+                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+            @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [2e-2, 1e-8, 2e-2],
+                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+            @testset "AvgV loss with continuous adjoint" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
+                functional_inv = false, scalar = true, loss = LossAvgV(), aggregated_loss = :avgV)
         end
     end
 

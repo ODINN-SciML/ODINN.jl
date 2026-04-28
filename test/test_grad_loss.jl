@@ -57,7 +57,8 @@ function test_grad_finite_diff(
         scalar = true,
         custom_NN = false,
         max_params = 60,
-        mask_parameter_vector = false
+        mask_parameter_vector = false,
+        aggregated_loss = nothing
 ) where {ADJ <: AbstractAdjointMethod}
     if !functional_inv
         @assert target == :A "When testing classical inversion, only target A is supported"
@@ -73,10 +74,12 @@ function test_grad_finite_diff(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    rgi_ids = @match (velocityLoss, multiglacier) begin
-        (true, false) => ["RGI60-11.03646"]
-        (false, false) => ["RGI60-11.03638"]
-        (false, true) => ["RGI60-11.03638", "RGI60-11.01450"]
+    rgi_ids = @match (velocityLoss, multiglacier, aggregated_loss) begin
+        (true, false, nothing) => ["RGI60-11.03646"]
+        (false, false, nothing) => ["RGI60-11.03638"]
+        (false, true, nothing) => ["RGI60-11.03638", "RGI60-11.01450"]
+        (false, false, :dhdt) => ["RGI60-11.03638"]
+        (true, false, :avgV) => ["RGI60-11.03646"]
     end
 
     rgi_paths = get_rgi_paths()
@@ -93,6 +96,13 @@ function test_grad_finite_diff(
     else
         optim_autoAD = ODINN.NoAD()
         sensealg = SciMLSensitivity.ZygoteAdjoint()
+    end
+
+    minA, maxA = if aggregated_loss == :dhdt || aggregated_loss == :avgV
+        (2e-18, 8e-18)
+    else
+        # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
+        use_MB ? (1e-21, 2e-21) : (2e-18, 8e-18)
     end
 
     params = Parameters(
@@ -115,9 +125,8 @@ function test_grad_finite_diff(
             optimizer = ODINN.Adam(0.005)
         ),
         physical = PhysicalParameters(
-            # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
-            minA = use_MB ? 1e-21 : 2e-18,
-            maxA = use_MB ? 2e-21 : 8e-18
+            minA = minA,
+            maxA = maxA
         ),
         UDE = UDEparameters(
             sensealg = sensealg,
@@ -158,7 +167,13 @@ function test_grad_finite_diff(
     end
 
     # Generate ground truth based on the loss that will be used hereafter
-    store = ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)
+    store = if aggregated_loss == :dhdt
+        (:H, :dhdt)
+    elseif aggregated_loss == :avgV
+        (:H, :avgV)
+    else
+        ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)
+    end
     glaciers = generate_ground_truth(glaciers, params, model, tstops; store = store)
 
     # Neural network model
@@ -206,20 +221,26 @@ function test_grad_finite_diff(
         (:D, true) => LawU(trainable_model, params)
     end
 
+    mass_balance = if aggregated_loss==:dhdt
+        # Intensify melting to make dhdt negative
+        TImodel1(params; DDF = 15.0/1000.0, acc_factor = 0.4/1000.0)
+    else
+        TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    end
     model = @match target begin
         :A => Model(
             iceflow = SIA2Dmodel(params; A = law),
-            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+            mass_balance = mass_balance,
             regressors = regressors
         )
         :D_hybrid => Model(
             iceflow = SIA2Dmodel(params; Y = law),
-            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+            mass_balance = mass_balance,
             regressors = regressors
         )
         :D => Model(
             iceflow = SIA2Dmodel(params; U = law),
-            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+            mass_balance = mass_balance,
             regressors = regressors,
             target = SIA2D_D_target(
                 interpolation = :Linear,
