@@ -1,6 +1,6 @@
 export TikhonovRegularization
 export InitialThicknessRegularization, VelocityRegularization, RheologyRegularization,
-       DiffusivityRegularization
+       DiffusivityRegularization, SlidingRegularization
 
 # Abstract regularization type as subtype of loss
 abstract type AbstractRegularization <: AbstractLoss end
@@ -90,6 +90,21 @@ It can include a spatial smoothing operator through the field `reg`.
   - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
 """
 @kwdef struct RheologyRegularization{R <: AbstractSimpleRegularization} <:
+              AbstractRegularization
+    reg::R = TikhonovRegularization()
+end
+
+"""
+        SlidingRegularization(; reg = TikhonovRegularization())
+
+Regularization of the gridded sliding coefficient `C` in the context of classical inversions.
+It can include a spatial smoothing operator through the field `reg`.
+
+# Keyword Arguments
+
+    - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+"""
+@kwdef struct SlidingRegularization{R <: AbstractSimpleRegularization} <:
               AbstractRegularization
     reg::R = TikhonovRegularization()
 end

@@ -1,4 +1,4 @@
-export LawA, LawY, LawU
+export LawA, LawC, LawY, LawU
 
 """
     _pred_NN(inp::Vector{F}, smodel, θ, prescale, postscale) where {F <: AbstractFloat}
@@ -402,10 +402,23 @@ value of `scalar`.
 function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
     min_A = params.physical.minA
     max_A = params.physical.maxA
+    # SciMLSensitivity's InterpolatingAdjoint computes VJPs by replaying the RHS at each
+    # adjoint step, so the law must be evaluated at every RHS call for the gradient to flow
+    # through θ → A → D. callback_freq=nothing ensures this. For manual adjoints (e.g.
+    # ContinuousAdjoint), callback_freq=0 applies A once via a callback and the gradient
+    # is handled analytically via p_VJP!.
+    callback_freq = if isa(params.UDE.grad, DummyAdjoint) ||
+                       isa(params.UDE.grad, SciMLSensitivityAdjoint)
+        nothing
+    else
+        0
+    end
     if scalar
         f! = let min_A = min_A, max_A = max_A
             function (cache, inp, θ)
-                val = @. min_A+(max_A-min_A)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
+                val = @. min_A +
+                         (max_A - min_A) * (tanh.(θ.A[Symbol("$(cache.glacier_id)")]) + 1) /
+                         2
                 Zygote.@ignore_derivatives cache.value .= val
                 return val
             end
@@ -424,12 +437,14 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
             f! = f!,
             init_cache = init_cache,
             p_VJP! = p_VJP!,
-            callback_freq = 0
+            callback_freq = callback_freq
         )
     else
         f! = let min_A = min_A, max_A = max_A
             function (cache, inp, θ)
-                val = @. min_A+(max_A-min_A)*(tanh.(θ.A[Symbol("$(cache.glacier_id)")])+1)/2
+                val = @. min_A +
+                         (max_A - min_A) * (tanh.(θ.A[Symbol("$(cache.glacier_id)")]) + 1) /
+                         2
                 Zygote.@ignore_derivatives cache.value .= val
                 return val
             end
@@ -452,11 +467,86 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
             f! = f!,
             init_cache = init_cache,
             p_VJP! = p_VJP!,
-            callback_freq = 0
+            callback_freq = callback_freq
         )
     end
 
     return A_law
+end
+
+"""
+    LawC(params::Sleipnir.Parameters; scalar::Bool=true)
+
+Construct a law that defines a sliding coefficient C per glacier to invert.
+This can be either a spatially varying C or a scalar value per glacier based on the
+value of `scalar`.
+
+The tanh-based parameterisation ensures C stays within `[params.physical.minC, params.physical.maxC]`
+and is differentiable through `θ.C` at every RHS call (required by `SciMLSensitivityAdjoint`).
+
+# Arguments
+
+  - `params::Sleipnir.Parameters`: Parameters struct used to retrieve the minimum and
+    maximum values of C for scaling the parameter to invert.
+  - `scalar::Bool`: Whether the sliding coefficient to invert is a scalar per glacier, or a
+    spatially varying `C` per glacier (matrix to invert).
+"""
+function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
+    min_C = params.physical.minC
+    max_C = params.physical.maxC
+    # Same rationale as LawA: SciMLSensitivityAdjoint replays the RHS during the backward
+    # pass, so the law must run at every step for gradients to flow through θ → C → D.
+    callback_freq = if isa(params.UDE.grad, DummyAdjoint) ||
+                       isa(params.UDE.grad, SciMLSensitivityAdjoint)
+        nothing
+    else
+        0
+    end
+    if scalar
+        f! = let min_C = min_C, max_C = max_C
+            function (cache, inp, θ)
+                val = @. min_C +
+                         (max_C - min_C) * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) /
+                         2
+                Zygote.@ignore_derivatives cache.value .= val
+                return val
+            end
+        end
+        init_cache = function (simulation, glacier_idx, θ)
+            ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
+        end
+
+        C_law = Law{ScalarCacheGlacierId}(;
+            inputs = (;),
+            f! = f!,
+            init_cache = init_cache,
+            callback_freq = callback_freq
+        )
+    else
+        f! = let min_C = min_C, max_C = max_C
+            function (cache, inp, θ)
+                val = @. min_C +
+                         (max_C - min_C) * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) /
+                         2
+                Zygote.@ignore_derivatives cache.value .= val
+                return val
+            end
+        end
+
+        init_cache = function (simulation, glacier_idx, θ)
+            (; nx, ny) = simulation.glaciers[glacier_idx]
+            MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ), glacier_idx)
+        end
+
+        C_law = Law{MatrixCacheGlacierId}(;
+            inputs = (;),
+            f! = f!,
+            init_cache = init_cache,
+            callback_freq = callback_freq
+        )
+    end
+
+    return C_law
 end
 
 include("auto_VJP.jl")

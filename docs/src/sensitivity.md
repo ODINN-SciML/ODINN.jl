@@ -98,3 +98,89 @@ Here, we compile the main considerations and things that need to be taken into a
   - **No closures are used to provide the `Simulation` object to the iceflow equation**. The [SciMLStructures.jl](https://github.com/SciML/SciMLStructures.jl) package has been especially implemented for this use case where one wants to provide both a vector of parameters to optimize, and a complex struct. This struct is designed to store some intermediate results through a cache and simulation parameters that are used to store physical quantities. The documentation provides [an example of how to implement the interface](https://sciml.github.io/SciMLStructures.jl/stable/example/). Special attention should be given to the definition of the `replace` function which should deepcopy the whole struct and zero the fields that are not used to differentiate parameters.
   - **At the loss function level, all the operations need to be out-of-place** as [`Zygote.jl`](https://fluxml.ai/Zygote.jl/stable/) is used to differentiate this part of the computational graph. This means for example that one cannot affect the `results` in `simulation` and this has to be done outside of the functions that are called by `Zygote.gradient`. The error raised in case an in-place affectation is done is rather explicit.
   - Parts of the computational graph are not needed to compute the true gradient and they can be bypassed thanks to the `@ignore_derivatives` macro. This is the case for example of the reference ice thickness.
+
+## Configuring gradient computation via `UDEparameters`
+
+All gradient-related choices are expressed through three independent fields of [`UDEparameters`](@ref ODINN.UDEparameters):
+
+| Field | Type | Role |
+|---|---|---|
+| `grad` | `AbstractAdjointMethod` | Which adjoint engine handles the ODE backward pass |
+| `sensealg` | `SciMLBase.AbstractAdjointSensitivityAlgorithm` | Which SciMLSensitivity algorithm to use (only active when `grad = SciMLSensitivityAdjoint()`) |
+| `optim_autoAD` | `AbstractADType` | How Optimization.jl differentiates the outer loss (set to `NoAD()` when ODINN or SciMLSensitivity already supplies the gradient) |
+
+### Layer 1 — `grad`: choosing the adjoint engine
+
+This is the top-level switch that selects which adjoint implementation computes the gradient through the ODE solver.
+
+  - `SciMLSensitivityAdjoint()`: Delegates the entire adjoint computation to [SciMLSensitivity.jl](https://docs.sciml.ai/SciMLSensitivity/). The `sensealg` field is then active and forwarded directly to the ODE solver's `solve` call. This path skips ODINN's internal VJP precompilation callbacks.
+  - `ContinuousAdjoint(...)`: Uses ODINN's hand-written continuous adjoint. The `sensealg` field is ignored.
+  - `DiscreteAdjoint(...)`: Uses ODINN's hand-written discrete adjoint. The `sensealg` field is ignored.
+  - `DummyAdjoint()`: Provides a synthetic gradient for pipeline testing. Does not compute a real gradient.
+
+### Layer 2 — `sensealg`: choosing the SciMLSensitivity algorithm
+
+Only relevant when `grad = SciMLSensitivityAdjoint()`. Any `SciMLBase.AbstractAdjointSensitivityAlgorithm` can be provided here. Typical choices include:
+
+```julia
+# Default — interpolating adjoint with Enzyme VJPs.
+# Checkpoints the forward solution and reuses it during the backward pass.
+# Good balance between memory and accuracy for the SIA.
+sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
+
+# Gauss adjoint — evaluates the adjoint integral via Gauss quadrature.
+# Often more accurate than InterpolatingAdjoint for stiff problems.
+sensealg = GaussAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
+
+# Quadrature adjoint — similar to GaussAdjoint but uses a dedicated
+# quadrature library for the time integral. Can be more accurate for
+# smooth solutions but requires more memory than the interpolating variant.
+sensealg = QuadratureAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
+
+# Backsolve adjoint — reconstructs the forward solution on the fly during
+# the backward pass instead of storing it. Lowest memory footprint but
+# numerically unstable for the SIA; not recommended in practice.
+sensealg = BacksolveAdjoint(autojacvec = SciMLSensitivity.ZygoteVJP())
+```
+
+### Layer 3 — `optim_autoAD`: outer AD signal
+
+`optim_autoAD` acts as a required signal that tells ODINN which outer differentiation approach is being used. Importantly, ODINN always builds the `OptimizationFunction` internally with `NoAD()` and a custom `grad!` function — `optim_autoAD` is never passed directly to the optimizer machinery. Its role is to validate that the configuration is self-consistent:
+
+  - `Optimization.AutoZygote()` **must** be used with `SciMLSensitivityAdjoint()`. ODINN enforces this with an assertion at runtime. Internally, the custom `grad!` calls `Zygote.gradient` on the loss, which differentiates through the `solve(...)` call; SciMLSensitivity intercepts the ODE adjoint via the `sensealg`.
+  - `ODINN.NoAD()` must be used with the manual adjoint methods (`ContinuousAdjoint`, `DiscreteAdjoint`). In this case the custom `grad!` calls `SIA2D_grad!` directly, which runs the hand-written adjoint without any outer AD.
+
+### Inner VJP for the manual adjoints
+
+When using `ContinuousAdjoint` or `DiscreteAdjoint`, the `VJP_method` field inside those structs controls how the Jacobian of each law is evaluated during the backward pass. The available options are `AbstractVJPMethod` subtypes:
+
+  - `DiscreteVJP(regressorADBackend = DI.AutoMooncake())` (default): Manual pullback implementation, with an AD backend for the regressor VJPs.
+  - `EnzymeVJP()`: Calls Enzyme directly to evaluate the VJP, without going through DifferentiationInterface.
+  - `ContinuousVJP(regressorADBackend = DI.AutoMooncake())`: Uses the continuous spatial formula for the SIA diffusion operator before discretization.
+  - `NoVJP()`: Skips the contribution of a given term entirely (e.g. when the mass balance VJP should not be back-propagated).
+
+### Quick-reference configuration examples
+
+**Using the automatic SciMLSensitivity adjoint:**
+
+```julia
+# optim_autoAD = AutoZygote() is required — ODINN asserts this at runtime.
+# Zygote differentiates through the loss; SciMLSensitivity handles the ODE adjoint via sensealg.
+UDE = UDEparameters(
+    grad         = SciMLSensitivityAdjoint(),
+    sensealg     = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
+    optim_autoAD = Optimization.AutoZygote(),
+)
+```
+
+**Using ODINN's continuous adjoint with Enzyme VJPs:**
+
+```julia
+# optim_autoAD = NoAD() because SIA2D_grad! provides the gradient directly.
+UDE = UDEparameters(
+    grad         = ContinuousAdjoint(VJP_method = EnzymeVJP()),
+    optim_autoAD = ODINN.NoAD(),
+)
+```
+
+
