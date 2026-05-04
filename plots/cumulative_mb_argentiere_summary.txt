@@ -1,5 +1,0 @@
-has_mb_history=true
-mean=-4.4876144350767
-min=-4.737467721104622
-max=-4.091712474822998
-n_callbacks=23
