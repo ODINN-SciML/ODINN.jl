@@ -1,6 +1,6 @@
 export AbstractAdjointMethod
 export ContinuousAdjoint, DiscreteAdjoint
-export DummyAdjoint
+export DummyAdjoint, SciMLSensitivityAdjoint
 
 """
     AbstractAdjointMethod

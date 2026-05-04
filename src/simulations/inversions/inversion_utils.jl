@@ -202,11 +202,11 @@ function train_UDE!(
     # _glacier_data_batch has a simulation!
     loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
-    if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
-    else
-        @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
-    end
+    # if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
+    #     @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
+    # else
+    #     @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
+    # end
     loss_function_grad!(_dθ, _θ, simulation_loader) =
         if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
             grad_loss_iceflow!(_dθ, _θ, simulation_loader[1], pmap)

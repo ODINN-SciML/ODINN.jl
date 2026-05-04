@@ -40,7 +40,9 @@ mutable struct GriddedInv{
     function GriddedInv(
             params::Sleipnir.Parameters,
             glaciers::Vector{<: AbstractGlacier},
-            var::Symbol
+            var::Symbol;
+            minval::Union{Nothing, Float64} = nothing,
+            maxval::Union{Nothing, Float64} = nothing
     )
         inv_param_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
         inv_param = NamedTuple{inv_param_type}(
@@ -49,10 +51,26 @@ mutable struct GriddedInv{
         )
         θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
 
-        # Invert parameterization
-        minA = params.physical.minA
-        maxA = params.physical.maxA
-        θ = atanh.((θ .- minA) .* (2/(maxA-minA)) .- 1.0)
+        # Select bounds based on var
+        if var == :A
+            minv = isnothing(minval) ? params.physical.minA : minval
+            maxv = isnothing(maxval) ? params.physical.maxA : maxval
+        elseif var == :C
+            minv = isnothing(minval) ? params.physical.minC : minval
+            maxv = isnothing(maxval) ? params.physical.maxC : maxval
+            minv < maxv ||
+                error("GriddedInv: expected minC < maxC, got minC=$(minv), maxC=$(maxv)")
+            vals = collect(θ)
+            minθ = minimum(vals)
+            maxθ = maximum(vals)
+            if any(x -> x <= minv || x >= maxv, vals)
+                error("[GriddedInv] ERROR: C value out of bounds before atanh mapping! min=$(minθ), max=$(maxθ), allowed ($(minv), $(maxv)). Initialize glacier.C within open bounds first (e.g. via target=:C glacier initialization).")
+            end
+        else
+            error("GriddedInv: Only :A or :C are supported for var (got $(var))")
+        end
+
+        θ = atanh.((θ .- minv) .* (2/(maxv-minv)) .- 1.0)
 
         new{typeof(θ)}(θ)
     end
