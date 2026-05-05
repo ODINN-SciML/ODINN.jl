@@ -141,8 +141,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
             res_backward_loss = map(1:k) do j
                 tj = t[j]
-                indThickness = findfirst(==(tj), tH_ref)
-                indVelocity = findfirst(==(tj), tV_ref)
+                indThickness = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tH_ref)
+                indVelocity = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tV_ref)
                 Δtj = (;
                     H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
                     V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
@@ -191,8 +191,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             for j in reverse(1:k)
                 tj = t[j]
 
-                indThickness = findfirst(==(tj), tH_ref)
-                indVelocity = findfirst(==(tj), tV_ref)
+                indThickness = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tH_ref)
+                indVelocity = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tV_ref)
                 Δtj = (;
                     H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
                     V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)

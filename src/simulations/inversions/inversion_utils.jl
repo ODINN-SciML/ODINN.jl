@@ -428,8 +428,8 @@ function batch_loss_iceflow_transient(
         # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
 
         tj = t[τ]
-        indThickness = findfirst(==(tj), tH_ref)
-        indVelocity = findfirst(==(tj), tV_ref)
+        indThickness = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tH_ref)
+        indVelocity = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tV_ref)
 
         # Ignore these parts of the computational graph, otherwise AD fails
         Hr = @ignore_derivatives(isnothing(indThickness) ? nothing : H_ref[indThickness])

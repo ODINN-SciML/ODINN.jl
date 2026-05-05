@@ -60,11 +60,17 @@ mutable struct GriddedInv{
             maxv = isnothing(maxval) ? params.physical.maxC : maxval
             minv < maxv ||
                 error("GriddedInv: expected minC < maxC, got minC=$(minv), maxC=$(maxv)")
-            vals = collect(θ)
-            minθ = minimum(vals)
-            maxθ = maximum(vals)
-            if any(x -> x <= minv || x >= maxv, vals)
-                error("[GriddedInv] ERROR: C value out of bounds before atanh mapping! min=$(minθ), max=$(maxθ), allowed ($(minv), $(maxv)). Initialize glacier.C within open bounds first (e.g. via target=:C glacier initialization).")
+            # If any glacier.C value is outside the open interval (minv, maxv), seed from
+            # the midpoint. This mirrors GriddedInv(:A) where glacier.A is always in-bounds
+            # by construction; glacier.C defaults to 0 (no sliding), which is physically
+            # correct but out-of-range for the atanh mapping.
+            if any(x -> x <= minv || x >= maxv, collect(θ))
+                midv = Sleipnir.Float((minv + maxv) / 2)
+                inv_param = NamedTuple{inv_param_type}(
+                    Tuple(fill(midv, size(glaciers[i].H₀) .- 1)
+                for i in 1:length(glaciers))
+                )
+                θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
             end
         else
             error("GriddedInv: Only :A or :C are supported for var (got $(var))")
