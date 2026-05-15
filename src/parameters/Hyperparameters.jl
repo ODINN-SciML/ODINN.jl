@@ -79,3 +79,57 @@ function Base.:(==)(a::Hyperparameters, b::Hyperparameters)
         a.loss_epoch == b.loss_epoch &&
         a.batch_size == b.batch_size
 end
+
+# Display setup
+Base.show(io::IO, ::MIME"text/plain", params::Hyperparameters) = Base.show(io, params)
+function Base.show(io::IO, params::Hyperparameters)
+    label(s) = printstyled(io, rpad(s, 11); color = :light_black)
+    sep() = printstyled(io, " · "; color = :light_black)
+    field(s) = printstyled(io, s; color = :light_black)
+    val(s) = print(io, s)
+    hint(s) = printstyled(io, s; color = :light_black)
+
+    println(io, "Hyperparameters")
+
+    # Training
+    label("  Training")
+    field("epochs");
+    print(io, " = ")
+    val("$(params.epochs)")
+    sep()
+    field("batch_size");
+    print(io, " = ");
+    val("$(params.batch_size)")
+    sep()
+    field("optimizer");
+    print(io, " = ")
+    if params.optimizer isa Vector
+        opt_names = join([nameof(typeof(o)) for o in params.optimizer], ", ")
+        val("[$(opt_names)]")
+    else
+        val("$(nameof(typeof(params.optimizer)))")
+    end
+    println(io)
+
+    # State
+    label("  State")
+    field("epoch");
+    print(io, " = ");
+    val("$(params.current_epoch)")
+    total_epochs = params.epochs isa Vector ? sum(params.epochs) : params.epochs
+    hint(" / $total_epochs")
+    sep()
+    field("minibatch");
+    print(io, " = ");
+    val("$(params.current_minibatch)")
+    sep()
+    field("loss");
+    print(io, " = ");
+    val("$(params.loss_epoch)")
+    sep()
+    field("loss_history");
+    print(io, " = ")
+    n = length(params.loss_history)
+    n == 0 ? hint("(empty)") : hint("$n $(n == 1 ? "entry" : "entries")")
+    println(io)
+end

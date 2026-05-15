@@ -79,6 +79,57 @@ function UDEparameters(;
     return UDE_parameters
 end
 
+# Display setup
+Base.show(io::IO, ::MIME"text/plain", params::UDEparameters) = Base.show(io, params)
+function Base.show(io::IO, params::UDEparameters)
+    label(s) = printstyled(io, rpad(s, 15); color = :light_black)
+    sep() = printstyled(io, " · "; color = :light_black)
+    field(s) = printstyled(io, s; color = :light_black)
+    val(s) = print(io, s)
+    hint(s) = printstyled(io, s; color = :light_black)
+    nullable(x) = isnothing(x) ? hint("(nothing)") : val("$(nameof(typeof(x)))")
+
+    println(io, "UDEparameters")
+
+    # Target
+    label("  Target")
+    field("target");
+    print(io, " = ")
+    isnothing(params.target) ? hint("(nothing)") : val(":$(params.target)")
+    sep()
+    field("ic_filter");
+    print(io, " = ")
+    isnothing(params.initial_condition_filter) ? hint("(nothing)") :
+    val(":$(params.initial_condition_filter)")
+    println(io)
+
+    # Optimization
+    label("  Optimization")
+    field("method");
+    print(io, " = ");
+    val("\"$(params.optimization_method)\"")
+    sep()
+    field("autoAD");
+    print(io, " = ");
+    val("$(nameof(typeof(params.optim_autoAD)))")
+    sep()
+    field("loss");
+    print(io, " = ");
+    val("$(nameof(typeof(params.empirical_loss_function)))")
+    println(io)
+
+    # Adjoint
+    label("  Adjoint")
+    field("grad");
+    print(io, " = ");
+    nullable(params.grad)
+    sep()
+    field("sensealg");
+    print(io, " = ");
+    val("$(nameof(typeof(params.sensealg)))")
+    println(io)
+end
+
 include("InversionParameters.jl")
 
 """
