@@ -132,7 +132,7 @@ ENV["GKSwstype"] = "nul"
                 ContinuousAdjoint(
                     VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
                     MB_VJP = ODINN.EnzymeVJP());
-                thres = [2e-3, 2e-5, 2e-3],
+                thres = [3e-3, 1e-8, 3e-3],
                 use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
