@@ -130,8 +130,6 @@ function Base.show(io::IO, params::UDEparameters)
     println(io)
 end
 
-include("InversionParameters.jl")
-
 """
 Constructor for the `Parameters` type. Since some of the subtypes of parameters are defined
 in different packages of the ODINN ecosystem, this constructor will call the constructors of
@@ -145,7 +143,6 @@ later on defined in the different packages of the ODINN ecosystem.
             solver::SolverParameters = SolverParameters(),
             hyper::Hyperparameters = Hyperparameters(),
             UDE::UDEparameters = UDEparameters()
-            inversion::InversionParameters = InversionParameters()
             )
 
 # Keyword arguments
@@ -155,15 +152,13 @@ later on defined in the different packages of the ODINN ecosystem.
   - `solver::SolverParameters`: Parameters for the solver configuration.
   - `hyper::Hyperparameters`: Hyperparameters for the model.
   - `UDE::UDEparameters`: Parameters specific to the UDE (Universal Differential Equation).
-  - `inversion::InversionParameters`: Parameters for inversion processes.
 """
 function Parameters(;
         physical::PhysicalParameters = PhysicalParameters(),
         simulation::SimulationParameters = SimulationParameters(),
         solver::SolverParameters = SolverParameters(),
         hyper::Hyperparameters = Hyperparameters(),
-        UDE::UDEparameters = UDEparameters(),
-        inversion::InversionParameters = InversionParameters()
+        UDE::UDEparameters = UDEparameters()
 )
     # Check Julia version during runtime (in addition to the precompilation check in ODINN.jl) to ensure that users are aware of compatibility issues when they run the code.
     if !(v"1.10.0" <= VERSION <= v"1.11.999")
@@ -171,7 +166,7 @@ function Parameters(;
         error("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
     end
 
-    parameters = Sleipnir.Parameters(physical, simulation, hyper, solver, UDE, inversion)
+    parameters = Sleipnir.Parameters(physical, simulation, hyper, solver, UDE)
 
     enable_multiprocessing(parameters)
 
