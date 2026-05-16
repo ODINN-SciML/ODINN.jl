@@ -56,6 +56,9 @@ function run!(
                 simulation.results.simulation = Sleipnir.Results{Float64, Int64}[]
             end
         end
+        # Put back the original epochs and optimizer values
+        simulation.parameters.hyper.optimizer = optimizers
+        simulation.parameters.hyper.epochs = epochs
     end
 
     # Setup final results
