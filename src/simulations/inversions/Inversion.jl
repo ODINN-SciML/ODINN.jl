@@ -61,6 +61,97 @@ function Inversion(
     return inversion
 end
 
+# Display setup
+Base.show(io::IO, ::MIME"text/plain", inversion::Inversion) = Base.show(io, inversion)
+function Base.show(io::IO, inversion::Inversion)
+    label(s) = printstyled(io, rpad(s, 14); color = :light_black)
+    sep() = printstyled(io, " · "; color = :light_black)
+    field(s) = printstyled(io, s; color = :light_black)
+    val(s) = print(io, s)
+    hint(s) = printstyled(io, s; color = :light_black)
+    check(b) = b ? "\e[32m✓\e[0m" : "\e[31m✗\e[0m"
+
+    println(io, "Inversion")
+
+    # ── glaciers ──────────────────────────────────────────────────────────────
+    label("  glaciers")
+    n = length(inversion.glaciers)
+    val("$n");
+    hint(" $(n == 1 ? "glacier" : "glaciers")")
+    println(io)
+
+    # ── model ─────────────────────────────────────────────────────────────────
+    label("  model")
+    field("iceflow");
+    print(io, " = ")
+    val("$(nameof(typeof(inversion.model.iceflow)))")
+    sep()
+    field("mass_balance");
+    print(io, " = ")
+    val("$(nameof(typeof(inversion.model.mass_balance)))")
+    sep()
+    field("learnable");
+    print(io, " =")
+    if isnothing(inversion.model.trainable_components)
+        hint(" (nothing)")
+        println(io)
+    else
+        println(io)
+        tc_str = sprint(show, inversion.model.trainable_components)
+        for line in split(tc_str, "\n")
+            isempty(line) && continue
+            printstyled(io, "    "; color = :light_black)
+            println(io, line)
+        end
+    end
+
+    # ── parameters ────────────────────────────────────────────────────────────
+    label("  parameters")
+    println(io)
+    params_str = sprint(show, inversion.parameters)
+    for line in split(params_str, "\n")
+        isempty(line) && continue
+        occursin(r"^Parameters$", line) && continue
+        printstyled(io, "    "; color = :light_black)
+        println(io, line)
+    end
+
+    # ── cache ─────────────────────────────────────────────────────────────────
+    label("  cache")
+    if isnothing(inversion.cache)
+        hint("(nothing)")
+    else
+        val("$(nameof(typeof(inversion.cache)))")
+    end
+    println(io)
+
+    # ── results ───────────────────────────────────────────────────────────────
+    label("  results")
+    stats = inversion.results.stats
+    if stats.niter == 0
+        print(io, check(false));
+        hint(" not yet run")
+    else
+        total_epochs = inversion.parameters.hyper.epochs isa Vector ?
+                       sum(inversion.parameters.hyper.epochs) :
+                       inversion.parameters.hyper.epochs
+        print(io, check(true))
+        field(" epoch");
+        print(io, " = ");
+        val("$(stats.niter)")
+        hint(" / $total_epochs")
+        sep()
+        field("loss");
+        print(io, " = ");
+        val("$(last(stats.losses))")
+        sep()
+        field("#(simulation)");
+        print(io, " = ")
+        val("$(length(inversion.results.simulation))")
+    end
+    println(io)
+end
+
 ###############################################
 ################### UTILS #####################
 ###############################################
