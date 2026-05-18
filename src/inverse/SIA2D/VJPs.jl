@@ -127,14 +127,21 @@ function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, g
 
         # MB, MB_mask, MB_total = ifm.MB, ifm.MB_mask, ifm.MB_total
         MB_mask .= ((H .> 0.0) .&& (MB .< 0.0)) .|| ((H .> 10.0) .&& (MB .>= 0.0))
-        mask_ice_disappear = (H[MB_mask] + MB[MB_mask]) .< 0.0 # Mask of where the ice will disappear after MB application
-
-        # The snow term doesn't depend on the ice thickness, hence it is null
-        tmp = ((.- (mb_model.DDF .* PDD_jac)) ./ (step_MB / (1 / 12)))[MB_mask]
-        tmp[mask_ice_disappear] .= -1.0
+        # Set MB to zero outside of MB_mask
+        MB[.!MB_mask] .= 0
+        # Get the linear indices where MB_mask is true
+        mask_indices = findall(MB_mask)
+        # Among those, find where ice would disappear after MB application
+        mask_ice_disappear = (H[mask_indices] .+ MB[mask_indices]) .< 0.0
+        # Get the actual indices to modify
+        disappear_indices = mask_indices[mask_ice_disappear]
+        # Clip MB in-place at those indices
+        MB[disappear_indices] .= .-H[disappear_indices]
 
         λ_∂MB∂H = zero(λ)
-        λ_∂MB∂H[MB_mask] .= tmp
+        # The snow term doesn't depend on the ice thickness, hence it is null
+        λ_∂MB∂H[MB_mask] = ((.- (mb_model.DDF .* PDD_jac)) ./ (step_MB / (1 / 12)))[MB_mask]
+        λ_∂MB∂H[disappear_indices] .= -λ[disappear_indices]
         λ_∂MB∂H
     else
         throw("The discrete VJP for model $(typeof(mb_model)) is not supported yet.")

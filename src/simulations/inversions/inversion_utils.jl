@@ -505,6 +505,8 @@ function _batch_iceflow_UDE(
                 glacier.S .= glacier.B .+ integrator.u
                 MB_timestep!(cache, model, glacier, step_MB, integrator.t)
                 apply_MB_mask!(integrator.u, cache.iceflow)
+                push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))
+                push!(cache.iceflow.MB_times, integrator.t)
             end
         end
         # A simulation period is sliced in time windows that are separated by `step_MB`
@@ -530,7 +532,9 @@ function _batch_iceflow_UDE(
 
     # Compute simulation results
     return Sleipnir.create_results(
-        container.simulation, glacier_idx, iceflow_sol, tstops
+        container.simulation, glacier_idx, iceflow_sol, tstops;
+        MB = container.simulation.cache.iceflow.MB_history,
+        t_MB = container.simulation.cache.iceflow.MB_times
     )
 end
 
