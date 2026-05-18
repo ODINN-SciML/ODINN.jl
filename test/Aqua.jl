@@ -6,6 +6,6 @@ function test_Aqua()
         :JET, :Test, :BenchmarkTools, :Revise, :Aqua, :FiniteDifferences])
     Aqua.test_deps_compat(ODINN)
     Aqua.test_piracies(ODINN; treat_as_own = [:AbstractPrepVJP, :Law, :∂law∂inp!], broken = true)
-    Aqua.test_persistent_tasks(ODINN)
+    Aqua.test_persistent_tasks(ODINN, broken = VERSION < v"1.11") # Precompilation of OrdinaryDiffEq fails for Julia 1.10
     Aqua.test_undocumented_names(ODINN; broken = true)
 end

@@ -199,8 +199,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 )
 
                 if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
+                    # Retrieve H before MB callback because the solution is stored only after MB has been applied
+                    indMB = findfirst(result.t_MB .== tj)
+                    H_preMB = H[j] - result.MB[indMB]
                     λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP,
-                        λ[j], H[j], simulation, glacier, tj)
+                        λ[j], H_preMB, simulation, glacier, tj)
                 end
 
                 # Compute derivative of local contribution to loss function
@@ -412,8 +415,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             effect_MB! = let simulation=simulation, glacier=glacier, H_itp=H_itp
                 function (integrator)
                     t = - integrator.t
+                    # Retrieve H before MB callback because the solution is stored only after MB has been applied
+                    indMB = findfirst(result.t_MB .== t)
+                    H_preMB = H_itp(t) - result.MB[indMB]
                     λ_∂MB∂H = VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP,
-                        integrator.u, H_itp(t), simulation, glacier, t)
+                        integrator.u, H_preMB, simulation, glacier, t)
                     integrator.u .+= λ_∂MB∂H
                 end
             end

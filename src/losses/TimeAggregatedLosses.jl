@@ -103,7 +103,8 @@ function backward_time_aggregated_loss(
     dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
     N = length(H0[mask])
 
-    ∂L∂H = zero(H_pred)
+    # ∂L∂H = zero(H_pred) # With Julia 1.10 in test mode H_pred is of type Type{Matrix{Float64}} which seems to be a bug, we bypass it by making a copy
+    ∂L∂H = [zero(H) for H in H_pred]
     ∂L∂H[ind[1]] = -2*(dhdt-dhdt_ref)*mask/(N*(tLoss[2]-tLoss[1]))
     ∂L∂H[ind[2]] = 2*(dhdt-dhdt_ref)*mask/(N*(tLoss[2]-tLoss[1]))
     return ∂L∂H, zero(θ)
@@ -231,7 +232,8 @@ function backward_time_aggregated_loss(
         ∂l∂Vy = ifelse.(mask, ∂l∂V .* (avg_Vy_pred .- Vy_ref) ./ (avg_V_pred .- V_ref), 0.0)
     end
 
-    ∂L∂H = zero(H_pred)
+    # ∂L∂H = zero(H_pred) # With Julia 1.10 in test mode H_pred is of type Type{Matrix{Float64}} which seems to be a bug, we bypass it by making a copy
+    ∂L∂H = [zero(H) for H in H_pred]
     ∂L∂θ = zero(θ)
 
     cnt = 0
