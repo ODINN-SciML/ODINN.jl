@@ -1,5 +1,7 @@
 export UDEparameters, Parameters
 
+using Sleipnir: label, sep, field, val, hint, check, nullable
+
 """
 A mutable struct that holds parameters for a UDE (Universal Differential Equation).
 
@@ -79,7 +81,51 @@ function UDEparameters(;
     return UDE_parameters
 end
 
-include("InversionParameters.jl")
+# Display setup
+Base.show(io::IO, ::MIME"text/plain", params::UDEparameters) = Base.show(io, params)
+function Base.show(io::IO, params::UDEparameters)
+    pad = 15
+
+    println(io, "UDEparameters")
+
+    # Target
+    label(io, "  Target", pad)
+    field(io, "target");
+    print(io, " = ")
+    isnothing(params.target) ? hint("(nothing)") : val(io, ":$(params.target)")
+    sep(io)
+    field(io, "ic_filter");
+    print(io, " = ")
+    isnothing(params.initial_condition_filter) ? hint("(nothing)") :
+    val(io, ":$(params.initial_condition_filter)")
+    println(io)
+
+    # Optimization
+    label(io, "  Optimization", pad)
+    field(io, "method");
+    print(io, " = ");
+    val(io, "\"$(params.optimization_method)\"")
+    sep(io)
+    field(io, "autoAD");
+    print(io, " = ");
+    val(io, "$(nameof(typeof(params.optim_autoAD)))")
+    sep(io)
+    field(io, "loss");
+    print(io, " = ");
+    val(io, "$(nameof(typeof(params.empirical_loss_function)))")
+    println(io)
+
+    # Adjoint
+    label(io, "  Adjoint", pad)
+    field(io, "grad");
+    print(io, " = ");
+    nullable(io, params.grad)
+    sep(io)
+    field(io, "sensealg");
+    print(io, " = ");
+    val(io, "$(nameof(typeof(params.sensealg)))")
+    println(io)
+end
 
 """
 Constructor for the `Parameters` type. Since some of the subtypes of parameters are defined
@@ -94,7 +140,6 @@ later on defined in the different packages of the ODINN ecosystem.
             solver::SolverParameters = SolverParameters(),
             hyper::Hyperparameters = Hyperparameters(),
             UDE::UDEparameters = UDEparameters()
-            inversion::InversionParameters = InversionParameters()
             )
 
 # Keyword arguments
@@ -104,15 +149,13 @@ later on defined in the different packages of the ODINN ecosystem.
   - `solver::SolverParameters`: Parameters for the solver configuration.
   - `hyper::Hyperparameters`: Hyperparameters for the model.
   - `UDE::UDEparameters`: Parameters specific to the UDE (Universal Differential Equation).
-  - `inversion::InversionParameters`: Parameters for inversion processes.
 """
 function Parameters(;
         physical::PhysicalParameters = PhysicalParameters(),
         simulation::SimulationParameters = SimulationParameters(),
         solver::SolverParameters = SolverParameters(),
         hyper::Hyperparameters = Hyperparameters(),
-        UDE::UDEparameters = UDEparameters(),
-        inversion::InversionParameters = InversionParameters()
+        UDE::UDEparameters = UDEparameters()
 )
     # Check Julia version during runtime (in addition to the precompilation check in ODINN.jl) to ensure that users are aware of compatibility issues when they run the code.
     if !(v"1.10.0" <= VERSION <= v"1.11.999")
@@ -120,7 +163,9 @@ function Parameters(;
         error("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
     end
 
-    parameters = Sleipnir.Parameters(physical, simulation, hyper, solver, UDE, inversion)
+    parameters = Sleipnir.Parameters{
+        typeof(physical), typeof(simulation), typeof(hyper), typeof(solver), typeof(UDE)}(
+        physical, simulation, hyper, solver, UDE)
 
     enable_multiprocessing(parameters)
 

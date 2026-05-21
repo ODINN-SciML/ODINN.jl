@@ -67,6 +67,14 @@ function params_constructor_specified(save_refs::Bool = false)
         UDE = ude_params,
         simulation = simulation_params)
 
+    # Test prints
+    println(physical_params)
+    println(hyparams)
+    println(solver_params)
+    println(ude_params)
+    println(simulation_params)
+    println(params)
+
     if save_refs
         jldsave(joinpath(Sleipnir.root_dir, "test/data/params/solver_params.jld2"); solver_params)
         jldsave(joinpath(Sleipnir.root_dir, "test/data/params/hyparams.jld2"); hyparams)
