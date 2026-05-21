@@ -83,53 +83,49 @@ end
 # Display setup
 Base.show(io::IO, ::MIME"text/plain", params::Hyperparameters) = Base.show(io, params)
 function Base.show(io::IO, params::Hyperparameters)
-    label(s) = printstyled(io, rpad(s, 11); color = :light_black)
-    sep() = printstyled(io, " · "; color = :light_black)
-    field(s) = printstyled(io, s; color = :light_black)
-    val(s) = print(io, s)
-    hint(s) = printstyled(io, s; color = :light_black)
+    pad = 11
 
     println(io, "Hyperparameters")
 
     # Training
-    label("  Training")
-    field("epochs");
+    label(io, "  Training", pad)
+    field(io, "epochs");
     print(io, " = ")
-    val("$(params.epochs)")
-    sep()
-    field("batch_size");
+    val(io, "$(params.epochs)")
+    sep(io)
+    field(io, "batch_size");
     print(io, " = ");
-    val("$(params.batch_size)")
-    sep()
-    field("optimizer");
+    val(io, "$(params.batch_size)")
+    sep(io)
+    field(io, "optimizer");
     print(io, " = ")
     if params.optimizer isa Vector
         opt_names = join([nameof(typeof(o)) for o in params.optimizer], ", ")
-        val("[$(opt_names)]")
+        val(io, "[$(opt_names)]")
     else
-        val("$(nameof(typeof(params.optimizer)))")
+        val(io, "$(nameof(typeof(params.optimizer)))")
     end
     println(io)
 
     # State
-    label("  State")
-    field("epoch");
+    label(io, "  State", pad)
+    field(io, "epoch");
     print(io, " = ");
-    val("$(params.current_epoch)")
+    val(io, "$(params.current_epoch)")
     total_epochs = params.epochs isa Vector ? sum(params.epochs) : params.epochs
-    hint(" / $total_epochs")
-    sep()
-    field("minibatch");
+    hint(io, " / $total_epochs")
+    sep(io)
+    field(io, "minibatch");
     print(io, " = ");
-    val("$(params.current_minibatch)")
-    sep()
-    field("loss");
+    val(io, "$(params.current_minibatch)")
+    sep(io)
+    field(io, "loss");
     print(io, " = ");
-    val("$(params.loss_epoch)")
-    sep()
-    field("loss_history");
+    val(io, "$(params.loss_epoch)")
+    sep(io)
+    field(io, "loss_history");
     print(io, " = ")
     n = length(params.loss_history)
-    n == 0 ? hint("(empty)") : hint("$n $(n == 1 ? "entry" : "entries")")
+    n == 0 ? hint(io, "(empty)") : hint(io, "$n $(n == 1 ? "entry" : "entries")")
     println(io)
 end
