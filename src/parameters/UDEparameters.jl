@@ -1,5 +1,7 @@
 export UDEparameters, Parameters
 
+using Sleipnir: label, sep, field, val, hint, check, nullable
+
 """
 A mutable struct that holds parameters for a UDE (Universal Differential Equation).
 
@@ -82,51 +84,46 @@ end
 # Display setup
 Base.show(io::IO, ::MIME"text/plain", params::UDEparameters) = Base.show(io, params)
 function Base.show(io::IO, params::UDEparameters)
-    label(s) = printstyled(io, rpad(s, 15); color = :light_black)
-    sep() = printstyled(io, " · "; color = :light_black)
-    field(s) = printstyled(io, s; color = :light_black)
-    val(s) = print(io, s)
-    hint(s) = printstyled(io, s; color = :light_black)
-    nullable(x) = isnothing(x) ? hint("(nothing)") : val("$(nameof(typeof(x)))")
+    pad = 15
 
     println(io, "UDEparameters")
 
     # Target
-    label("  Target")
-    field("target");
+    label(io, "  Target", pad)
+    field(io, "target");
     print(io, " = ")
-    isnothing(params.target) ? hint("(nothing)") : val(":$(params.target)")
-    sep()
-    field("ic_filter");
+    isnothing(params.target) ? hint("(nothing)") : val(io, ":$(params.target)")
+    sep(io)
+    field(io, "ic_filter");
     print(io, " = ")
     isnothing(params.initial_condition_filter) ? hint("(nothing)") :
-    val(":$(params.initial_condition_filter)")
+    val(io, ":$(params.initial_condition_filter)")
     println(io)
 
     # Optimization
-    label("  Optimization")
-    field("method");
+    label(io, "  Optimization", pad)
+    field(io, "method");
     print(io, " = ");
-    val("\"$(params.optimization_method)\"")
-    sep()
-    field("autoAD");
+    val(io, "\"$(params.optimization_method)\"")
+    sep(io)
+    field(io, "autoAD");
     print(io, " = ");
-    val("$(nameof(typeof(params.optim_autoAD)))")
-    sep()
-    field("loss");
+    val(io, "$(nameof(typeof(params.optim_autoAD)))")
+    sep(io)
+    field(io, "loss");
     print(io, " = ");
-    val("$(nameof(typeof(params.empirical_loss_function)))")
+    val(io, "$(nameof(typeof(params.empirical_loss_function)))")
     println(io)
 
     # Adjoint
-    label("  Adjoint")
-    field("grad");
+    label(io, "  Adjoint", pad)
+    field(io, "grad");
     print(io, " = ");
-    nullable(params.grad)
-    sep()
-    field("sensealg");
+    nullable(io, params.grad)
+    sep(io)
+    field(io, "sensealg");
     print(io, " = ");
-    val("$(nameof(typeof(params.sensealg)))")
+    val(io, "$(nameof(typeof(params.sensealg)))")
     println(io)
 end
 
@@ -166,7 +163,9 @@ function Parameters(;
         error("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
     end
 
-    parameters = Sleipnir.Parameters(physical, simulation, hyper, solver, UDE)
+    parameters = Sleipnir.Parameters{
+        typeof(physical), typeof(simulation), typeof(hyper), typeof(solver), typeof(UDE)}(
+        physical, simulation, hyper, solver, UDE)
 
     enable_multiprocessing(parameters)
 
