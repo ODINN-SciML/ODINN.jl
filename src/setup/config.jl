@@ -105,7 +105,8 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                     # if isfile(SYSIMAGE_PATH)
                     #     addprocs($procs - nprocs(); exeflags="--sysimage=$SYSIMAGE_PATH") # Use custom system image if available
                     # else
-                    addprocs($procs - nprocs(); exeflags = "--project") # Fallback to default if system image is missing
+                    project_dir = dirname(Base.active_project())
+                    addprocs($procs - nprocs(); exeflags = "--project=$(project_dir)") # Fallback to default if system image is missing
                     # end
                     println("Number of cores: ", nprocs())
                     println("Number of workers: ", nworkers())
