@@ -53,13 +53,19 @@ mutable struct InitialCondition{
         # Define a series of initial conditions
         if initialization == :Farinotti19
             initial_condition = NamedTuple{initial_condition_type}(
-                Tuple(glaciers[i].H₀ for i in 1:length(glaciers))
+                Tuple(farinotti19_thickness(glaciers[i].rgi_id, params)
+            for i in 1:length(glaciers))
             )
         elseif initialization == :Farinotti19Random
             stdH = 10.0
             grid_length = 10
             initial_condition = NamedTuple{initial_condition_type}(
                 Tuple(random_matrix(glaciers[i].H₀, stdH, grid_length)
+            for i in 1:length(glaciers))
+            )
+        elseif initialization == :Millan22
+            initial_condition = NamedTuple{initial_condition_type}(
+                Tuple(millan22_thickness(glaciers[i].rgi_id, params)
             for i in 1:length(glaciers))
             )
         else
