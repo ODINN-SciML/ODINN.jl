@@ -20,7 +20,7 @@ Per glacier initial condition container.
     InitialCondition(
         params::Sleipnir.Parameters,
         glaciers::Vector{<: AbstractGlacier},
-        initialization::Symbol = :Farinotti2019,
+        initialization::Symbol = :Farinotti19,
     )
 
 # Arguments
@@ -32,7 +32,7 @@ Per glacier initial condition container.
 # Example
 
 ```julia
-InitialCondition(params, glaciers, :Farinotti2019)
+InitialCondition(params, glaciers, :Farinotti19)
 ```
 """
 mutable struct InitialCondition{
@@ -43,7 +43,7 @@ mutable struct InitialCondition{
     function InitialCondition(
             params::Sleipnir.Parameters,
             glaciers::Vector{<: AbstractGlacier},
-            initialization::Symbol = :Farinotti2019
+            initialization::Symbol = :Farinotti19
     )
         # Float type
         ft = Sleipnir.Float
@@ -51,11 +51,11 @@ mutable struct InitialCondition{
         initial_condition_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
 
         # Define a series of initial conditions
-        if initialization == :Farinotti2019
+        if initialization == :Farinotti19
             initial_condition = NamedTuple{initial_condition_type}(
                 Tuple(glaciers[i].H₀ for i in 1:length(glaciers))
             )
-        elseif initialization == :Farinotti2019Random
+        elseif initialization == :Farinotti19Random
             stdH = 10.0
             grid_length = 10
             initial_condition = NamedTuple{initial_condition_type}(
