@@ -93,7 +93,7 @@ nn_model = NeuralNetwork(params)
 train_initial_conditions = true
 
 if train_initial_conditions
-    ic = InitialCondition(params, glaciers, :Farinotti2019)
+    ic = InitialCondition(params, glaciers, :Farinotti19)
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
         mass_balance = nothing,

@@ -194,7 +194,7 @@ function test_grad_finite_diff(
         end
     end
 
-    ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti2019) :
+    ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti19) :
          nothing
     trainable_model = if functional_inv
         nn_model
