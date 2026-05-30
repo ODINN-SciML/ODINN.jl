@@ -47,15 +47,22 @@ mutable struct InitialCondition{
     )
         # Float type
         ft = Sleipnir.Float
+        # Scaling factor
+        gridScalingFactor = params.simulation.gridScalingFactor
         # Component Array type
         initial_condition_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
 
         # Define a series of initial conditions
         if initialization == :Farinotti19
-            initial_condition = NamedTuple{initial_condition_type}(
-                Tuple(farinotti19_thickness(glaciers[i].rgi_id, params)
-            for i in 1:length(glaciers))
-            )
+            Hs = map(1:length(glaciers)) do i
+                H₀ = farinotti19_thickness(glaciers[i].rgi_id, params)
+                Sleipnir.fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+                if gridScalingFactor > 1
+                    H₀ = Sleipnir.block_average_pad_edge(H₀, gridScalingFactor)
+                end
+                H₀
+            end
+            initial_condition = NamedTuple{initial_condition_type}(Tuple(Hs))
         elseif initialization == :Farinotti19Random
             stdH = 10.0
             grid_length = 10
@@ -64,10 +71,15 @@ mutable struct InitialCondition{
             for i in 1:length(glaciers))
             )
         elseif initialization == :Millan22
-            initial_condition = NamedTuple{initial_condition_type}(
-                Tuple(millan22_thickness(glaciers[i].rgi_id, params)
-            for i in 1:length(glaciers))
-            )
+            Hs = map(1:length(glaciers)) do i
+                H₀ = millan22_thickness(glaciers[i].rgi_id, params)
+                Sleipnir.fillNaN!(H₀) # Fill NaNs with 0s to have real boundary conditions
+                if gridScalingFactor > 1
+                    H₀ = Sleipnir.block_average_pad_edge(H₀, gridScalingFactor)
+                end
+                H₀
+            end
+            initial_condition = NamedTuple{initial_condition_type}(Tuple(Hs))
         else
             @error "Strategy for initialization of ice thicknesses not found."
         end
