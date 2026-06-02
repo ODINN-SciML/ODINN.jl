@@ -387,7 +387,7 @@ function batch_loss_iceflow_transient(
 )
     result = _batch_iceflow_UDE(container, glacier_idx, iceflow_prob)
 
-    loss_function = container.simulation.parameters.UDE.empirical_loss_function
+    loss_function = @ignore_derivatives(container.simulation.parameters.UDE.empirical_loss_function)
 
     glacier = container.simulation.glaciers[glacier_idx]
     t = result.t
@@ -459,7 +459,6 @@ function batch_loss_iceflow_transient(
         glacier_idx, container.θ, container.simulation, prod(size(H[begin]))*1.0, (;))
     return sum(losses) + time_aggregated_losses, result
 end
-
 """
     _batch_iceflow_UDE(
         container::InversionBinder,
