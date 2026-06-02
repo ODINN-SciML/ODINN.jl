@@ -103,11 +103,11 @@ Here, we compile the main considerations and things that need to be taken into a
 
 All gradient-related choices are expressed through three independent fields of [`UDEparameters`](@ref ODINN.UDEparameters):
 
-| Field | Type | Role |
-|---|---|---|
-| `grad` | `AbstractAdjointMethod` | Which adjoint engine handles the ODE backward pass |
-| `sensealg` | `SciMLBase.AbstractAdjointSensitivityAlgorithm` | Which SciMLSensitivity algorithm to use (only active when `grad = SciMLSensitivityAdjoint()`) |
-| `optim_autoAD` | `AbstractADType` | How Optimization.jl differentiates the outer loss (set to `NoAD()` when ODINN or SciMLSensitivity already supplies the gradient) |
+| Field          | Type                                            | Role                                                                                                                             |
+|:-------------- |:----------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------- |
+| `grad`         | `AbstractAdjointMethod`                         | Which adjoint engine handles the ODE backward pass                                                                               |
+| `sensealg`     | `SciMLBase.AbstractAdjointSensitivityAlgorithm` | Which SciMLSensitivity algorithm to use (only active when `grad = SciMLSensitivityAdjoint()`)                                    |
+| `optim_autoAD` | `AbstractADType`                                | How Optimization.jl differentiates the outer loss (set to `NoAD()` when ODINN or SciMLSensitivity already supplies the gradient) |
 
 ### Layer 1 — `grad`: choosing the adjoint engine
 
@@ -167,9 +167,9 @@ When using `ContinuousAdjoint` or `DiscreteAdjoint`, the `VJP_method` field insi
 # optim_autoAD = AutoZygote() is required — ODINN asserts this at runtime.
 # Zygote differentiates through the loss; SciMLSensitivity handles the ODE adjoint via sensealg.
 UDE = UDEparameters(
-    grad         = SciMLSensitivityAdjoint(),
-    sensealg     = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
-    optim_autoAD = Optimization.AutoZygote(),
+    grad = SciMLSensitivityAdjoint(),
+    sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
+    optim_autoAD = Optimization.AutoZygote()
 )
 ```
 
@@ -178,9 +178,7 @@ UDE = UDEparameters(
 ```julia
 # optim_autoAD = NoAD() because SIA2D_grad! provides the gradient directly.
 UDE = UDEparameters(
-    grad         = ContinuousAdjoint(VJP_method = EnzymeVJP()),
-    optim_autoAD = ODINN.NoAD(),
+    grad = ContinuousAdjoint(VJP_method = EnzymeVJP()),
+    optim_autoAD = ODINN.NoAD()
 )
 ```
-
-

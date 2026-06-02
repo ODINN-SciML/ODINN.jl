@@ -19,7 +19,7 @@ params = Parameters(
         test_mode = false,
         multiprocessing = false,
         rgi_paths = get_rgi_paths(),
-        gridScalingFactor = 4,
+        gridScalingFactor = 4
     ),
     hyper = Hyperparameters(
         batch_size = 1,
@@ -28,8 +28,8 @@ params = Parameters(
             ODINN.Adam(0.02),
             ODINN.LBFGS(
                 linesearch = ODINN.LineSearches.BackTracking(iterations = 5),
-            ),
-        ],
+            )
+        ]
     ),
     physical = PhysicalParameters(minC = 1e-4, maxC = 1e-2),
     UDE = UDEparameters(
@@ -37,9 +37,9 @@ params = Parameters(
         sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
         optim_autoAD = Optimization.AutoZygote(),
         empirical_loss_function = LossH(),
-        target = :A,
+        target = :A
     ),
-    solver = Huginn.SolverParameters(step = δt),
+    solver = Huginn.SolverParameters(step = δt)
 )
 
 glaciers = initialize_glaciers([RGI_ID], params)
@@ -51,7 +51,7 @@ tstops = collect(TSPAN[1]:δt:TSPAN[2])
 C_law_gt = SyntheticC(params)
 model_gt = Model(
     iceflow = SIA2Dmodel(params; C = C_law_gt),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
 )
 prediction = generate_ground_truth_prediction(glaciers, params, model_gt, tstops)
 glaciers = prediction.glaciers
@@ -63,8 +63,8 @@ C_ground_truth[1:(end - 1), 1:(end - 1)] .= eval_law(
     prediction,
     1,
     (; CPDD = get_input(iCPDD(), prediction, 1, tstops[1]),
-       topo_roughness = get_input(iTopoRough(), prediction, 1, tstops[1])),
-    nothing,
+        topo_roughness = get_input(iTopoRough(), prediction, 1, tstops[1])),
+    nothing
 )
 C_ground_truth[prediction.glaciers[1].H₀ .== 0] .= NaN
 
@@ -77,7 +77,7 @@ C_law = LawC(params; scalar = false)
 model = Model(
     iceflow = SIA2Dmodel(params; C = C_law),
     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
-    regressors = (; C = trainable_model),
+    regressors = (; C = trainable_model)
 )
 
 inversion = Inversion(model, glaciers, params)
@@ -99,7 +99,7 @@ fig_gt = plot_gridded_data(
     C_ground_truth,
     inversion.results.simulation[1];
     colormap = :YlGnBu,
-    logPlot = true,
+    logPlot = true
 )
 save_figure(fig_gt, joinpath(outdir, "classical_inversion_C_ground_truth.png"))
 
