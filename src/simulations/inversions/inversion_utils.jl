@@ -202,11 +202,11 @@ function train_UDE!(
     # _glacier_data_batch has a simulation!
     loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
-    # if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-    #     @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
-    # else
-    #     @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
-    # end
+    if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
+        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
+    else
+        @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
+    end
     loss_function_grad!(_dθ, _θ, simulation_loader) =
         if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
             grad_loss_iceflow!(_dθ, _θ, simulation_loader[1], pmap)
@@ -387,7 +387,7 @@ function batch_loss_iceflow_transient(
 )
     result = _batch_iceflow_UDE(container, glacier_idx, iceflow_prob)
 
-    loss_function = @ignore_derivatives(container.simulation.parameters.UDE.empirical_loss_function)
+    loss_function = container.simulation.parameters.UDE.empirical_loss_function
 
     glacier = container.simulation.glaciers[glacier_idx]
     t = result.t
@@ -428,8 +428,8 @@ function batch_loss_iceflow_transient(
         # normalization = std(H_ref[τ][H_ref[τ] .> 0.0])^β
 
         tj = t[τ]
-        indThickness = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tH_ref)
-        indVelocity = findfirst(ti -> isapprox(ti, tj; atol = 1e-8, rtol = 0.0), tV_ref)
+        indThickness = findfirst(==(tj), tH_ref)
+        indVelocity = findfirst(==(tj), tV_ref)
 
         # Ignore these parts of the computational graph, otherwise AD fails
         Hr = @ignore_derivatives(isnothing(indThickness) ? nothing : H_ref[indThickness])
@@ -459,6 +459,7 @@ function batch_loss_iceflow_transient(
         glacier_idx, container.θ, container.simulation, prod(size(H[begin]))*1.0, (;))
     return sum(losses) + time_aggregated_losses, result
 end
+
 """
     _batch_iceflow_UDE(
         container::InversionBinder,
