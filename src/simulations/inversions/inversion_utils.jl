@@ -115,7 +115,7 @@ function train_UDE!(
         save_every_iter::Bool = false,
         logger::Union{<: TBLogger, Nothing} = nothing
 )
-    @info "Optimizing with BFGS"
+    @info "Optimizing with $(nameof(typeof(optimizer)))"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
