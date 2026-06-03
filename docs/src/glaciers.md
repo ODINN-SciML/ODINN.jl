@@ -31,6 +31,8 @@ The main climate data supported include:
 
 ## Initializing glaciers and their climate
 
+### Standard workflow
+
 In order to create `Glacier` types with information of a given glacier for a simulation, one can initialize a list of glaciers based on RGI (Randolph Glacier Inventory) IDs. Before running this, make sure to have used `Gungnir` to download all the necessary data for those glaciers in local. [Here](https://github.com/ODINN-SciML/Gungnir/blob/main/notebooks/Example.ipynb) you will find a notebook showing how to do so. Even easier, you can just double check that these glaciers are already available on the ODINN server. The list of the already processed glaciers can be obtained with `get_rgi_paths()`.
 
 !!! info
@@ -40,3 +42,9 @@ In order to create `Glacier` types with information of a given glacier for a sim
 ```@docs
 Sleipnir.initialize_glaciers
 ```
+
+### Custom glaciers
+
+Alternatively, users can create their own glaciers without using the automated initialization method [`initialize_glaciers`](@ref Sleipnir.initialize_glaciers) by manually specifying the attributes.
+An empty glacier object without a grid can be created by using `Glacier2D()`.
+When a grid is needed (most of the use-cases beyond debugging), each of fields have to be specified in [`Glacier2D()`](@ref Sleipnir.Glacier2D()).
