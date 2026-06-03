@@ -502,16 +502,21 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
     else
         0
     end
-    if scalar
-        f! = let min_C = min_C, max_C = max_C
-            function (cache, inp, θ)
-                val = @. min_C +
-                         (max_C - min_C) * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) /
-                         2
-                Zygote.@ignore_derivatives cache.value .= val
-                return val
-            end
+    # No p_VJP! here: LawC is designed for SciMLSensitivityAdjoint, which replays the RHS
+    # during the backward pass and therefore never needs an explicit analytical VJP for C.
+    # Manual adjoint methods (ContinuousAdjoint, DiscreteAdjoint) are not yet supported
+    # for C inversion; using them will yield a zero gradient for θ.C.
+    f! = let min_C = min_C, max_C = max_C
+        function (cache, inp, θ)
+            val = @. min_C +
+                     (max_C - min_C) * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) /
+                     2
+            Zygote.@ignore_derivatives cache.value .= val
+            return val
         end
+    end
+
+    if scalar
         init_cache = function (simulation, glacier_idx, θ)
             ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
         end
@@ -523,16 +528,6 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
             callback_freq = callback_freq
         )
     else
-        f! = let min_C = min_C, max_C = max_C
-            function (cache, inp, θ)
-                val = @. min_C +
-                         (max_C - min_C) * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) /
-                         2
-                Zygote.@ignore_derivatives cache.value .= val
-                return val
-            end
-        end
-
         init_cache = function (simulation, glacier_idx, θ)
             (; nx, ny) = simulation.glaciers[glacier_idx]
             MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ), glacier_idx)

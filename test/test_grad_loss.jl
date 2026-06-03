@@ -661,3 +661,110 @@ function test_grad_Halfar(
     @test abs(angle) < thres_angle
     @test abs(relerr) < thres_relerr
 end
+
+"""
+    test_grad_sciml_vs_manual(; thres)
+
+Check that the SciMLSensitivity auto-adjoint and the manual `DiscreteAdjoint` return
+consistent gradients for `LawA`. Both methods are run with identical parameters;
+only the `grad` field of `UDEparameters` differs.
+"""
+function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
+    println("> Comparing SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA")
+
+    rgi_ids = ["RGI60-11.03638"]
+    rgi_paths = get_rgi_paths()
+    working_dir = joinpath(ODINN.root_dir, "test/data")
+    δt = 1/12
+    tspan = (2010.0, 2012.0)
+    tstops = collect(tspan[1]:δt:tspan[2])
+
+    params_sciml = Parameters(
+        simulation = SimulationParameters(
+            working_dir = working_dir,
+            use_MB = false,
+            use_velocities = true,
+            tspan = tspan,
+            step_MB = δt,
+            multiprocessing = false,
+            workers = 1,
+            test_mode = true,
+            rgi_paths = rgi_paths,
+            gridScalingFactor = 4,
+            f_surface_velocity_factor = 0.8
+        ),
+        hyper = Hyperparameters(batch_size = 1, epochs = 100, optimizer = ODINN.Adam(0.005)),
+        physical = PhysicalParameters(minA = 2e-18, maxA = 8e-18),
+        UDE = UDEparameters(
+            grad = ODINN.SciMLSensitivityAdjoint(),
+            sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
+            optim_autoAD = Optimization.AutoZygote(),
+            empirical_loss_function = LossH(),
+            target = :A
+        ),
+        solver = Huginn.SolverParameters(step = δt, solver = ROCK4())
+    )
+
+    # Identical params except for the adjoint method
+    params_manual = Parameters(
+        simulation = params_sciml.simulation,
+        hyper = params_sciml.hyper,
+        physical = params_sciml.physical,
+        UDE = UDEparameters(
+            sensealg = params_sciml.UDE.sensealg,
+            optim_autoAD = params_sciml.UDE.optim_autoAD,
+            grad = ContinuousAdjoint(),
+            optimization_method = params_sciml.UDE.optimization_method,
+            empirical_loss_function = params_sciml.UDE.empirical_loss_function,
+            target = params_sciml.UDE.target,
+            initial_condition_filter = params_sciml.UDE.initial_condition_filter
+        ),
+        solver = params_sciml.solver
+    )
+
+    # Ground truth using a known constant A
+    model_gt = Model(
+        iceflow = SIA2Dmodel(params_sciml; A = ConstantA(2.21e-18)),
+        mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    )
+    glaciers = initialize_glaciers(rgi_ids, params_sciml)
+    glaciers = generate_ground_truth(glaciers, params_sciml, model_gt, tstops)
+
+    # Single NN shared across both simulations so both start at the same θ
+    nn_model = NeuralNetwork(params_sciml)
+    mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+
+    sim_sciml = Inversion(
+        Model(
+            iceflow = SIA2Dmodel(params_sciml; A = LawA(nn_model, params_sciml)),
+            mass_balance = mass_balance,
+            regressors = (; A = nn_model)
+        ),
+        glaciers, params_sciml
+    )
+    θ = sim_sciml.model.trainable_components.θ
+
+    sim_manual = Inversion(
+        Model(
+            iceflow = SIA2Dmodel(params_manual; A = LawA(nn_model, params_manual)),
+            mass_balance = mass_balance,
+            regressors = (; A = nn_model)
+        ),
+        glaciers, params_manual
+    )
+    sim_manual.model.trainable_components.θ .= θ
+
+    dθ_sciml = ODINN.grad_loss_iceflow!(θ, sim_sciml, map)
+    @assert !any(isnan, dθ_sciml) "SciML gradient contains NaNs"
+
+    dθ_manual = zero(θ)
+    SIA2D_grad!(dθ_manual, θ, sim_manual)
+
+    ratio, angle, relerr = stats_err_arrays(dθ_sciml, dθ_manual)
+    printVecScientific("ratio  = ", [ratio], thres[1])
+    printVecScientific("angle  = ", [angle], thres[2])
+    printVecScientific("relerr = ", [relerr], thres[3])
+    @test abs(ratio) < thres[1]
+    @test abs(angle) < thres[2]
+    @test abs(relerr) < thres[3]
+end
