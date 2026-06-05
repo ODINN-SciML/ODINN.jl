@@ -428,7 +428,7 @@ function test_grad_L2Sum()
     l_enzyme = Enzyme.make_zero(dl_enzyme)
     da_enzyme = Enzyme.make_zero(a)
     Enzyme.autodiff(
-        set_runtime_activity(Reverse), _loss!, Const,
+        set_runtime_activity(EnzymeCore.Reverse), _loss!, Const,
         Duplicated(l_enzyme, dl_enzyme),
         Duplicated(a, da_enzyme),
         Enzyme.Const(b),
@@ -475,7 +475,7 @@ function test_grad_TikhonovRegularization()
     l_enzyme = Enzyme.make_zero(dl_enzyme)
     da_enzyme = Enzyme.make_zero(a)
     Enzyme.autodiff(
-        set_runtime_activity(Reverse), _loss!, Const,
+        set_runtime_activity(EnzymeCore.Reverse), _loss!, Const,
         Duplicated(l_enzyme, dl_enzyme),
         Duplicated(a, da_enzyme),
         Enzyme.Const(Δx),
@@ -613,7 +613,7 @@ function test_grad_Halfar(
     l_enzyme = Enzyme.make_zero(dl_enzyme)
     H_ref = simulation.glaciers[1].thicknessData.H
     Enzyme.autodiff(
-        Reverse, _loss_halfar!, Const,
+        EnzymeCore.Reverse, _loss_halfar!, Const,
         Duplicated(l_enzyme, dl_enzyme),
         Enzyme.Const(R₀),
         Enzyme.Const(h₀),

@@ -17,7 +17,7 @@ function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation::Simulation
 
     λH = deepcopy(λ) # Need to copy because Enzyme changes the backward gradient in-place
     Enzyme.autodiff(
-        Reverse, SIA2D_UDE!, Const,
+        EnzymeCore.Reverse, SIA2D_UDE!, Const,
         Duplicated(θ, _θ),
         Duplicated(dH_H, λH),
         Duplicated(H, λ_∂f∂H),
@@ -44,7 +44,7 @@ function VJP_λ_∂SIA∂θ(VJPMode::EnzymeVJP, λ, H, θ, dH_H, simulation::Sim
     dH_λ = Enzyme.make_zero(H)
     λθ = deepcopy(λ) # Need to copy because Enzyme changes the backward gradient in-place
     Enzyme.autodiff(
-        Reverse, SIA2D_UDE!, Const,
+        EnzymeCore.Reverse, SIA2D_UDE!, Const,
         Duplicated(θ, λ_∂f∂θ),
         Duplicated(dH_λ, λθ),
         Const(H),
@@ -94,7 +94,7 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
     MB = Enzyme.make_zero(H)
     λH = deepcopy(λ) # Need to copy because Enzyme changes the backward gradient in-place
     Enzyme.autodiff(
-        Reverse, MB_wrapper!, Const,
+        EnzymeCore.Reverse, MB_wrapper!, Const,
         Duplicated(MB, λH),
         Duplicated(_H, λ_∂MB∂H),
         Duplicated(simulation, _simulation),
