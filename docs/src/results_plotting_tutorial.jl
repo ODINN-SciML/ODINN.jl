@@ -10,7 +10,7 @@ using CairoMakie
 
 # ## Running a forward simulation
 
-# We first run a short forward simulation on Argentière glacier (RGI60-11.01450)
+# We first run a short forward simulation on Great Aletsch glacier (RGI60-11.01450)
 # over a 5-year period, which will serve as the basis for all the plots below.
 
 rgi_ids = ["RGI60-11.01450"]
@@ -109,11 +109,15 @@ plot_cumulative_mb(results; title = "Cumulative mass balance")
 
 plot_glacier_dem(results)
 
-# ## Video
+# ## Animated thickness evolution
 
-# The `plot_glacier_vid` function generates an `.mp4` animation of the ice
-# thickness evolution throughout the simulation. Since videos cannot be rendered
-# inline in the documentation, the file is written to a local path.
+# `plot_glacier_vid` generates an animation of the ice-thickness evolution. The
+# output format is inferred from the file extension, so passing a `.gif` path
+# produces an animated GIF that can be embedded directly in the documentation
+# (a `.mp4` path works the same way for local use).
+
+folder = "results_plots"
+mkpath(folder)
 
 step_video = results.t[2] - results.t[1]
 plot_glacier_vid(
@@ -122,11 +126,15 @@ plot_glacier_vid(
     glacier,
     results.tspan,
     step_video,
-    joinpath(mktempdir(), "glacier_thickness.mp4");
+    joinpath(folder, "thickness_evolution.gif");
     framerate = 12,
     baseTitle = "Ice thickness"
 )
 nothing #hide
+
+# ```@raw html
+# <img src="./results_plots/thickness_evolution.gif" width="500"/>
+# ```
 
 # ## Saving figures
 

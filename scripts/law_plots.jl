@@ -6,6 +6,11 @@ Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use
 
 using Revise
 using ODINN
+# Interactive backend: loading GLMakie alongside ODINN triggers GLMakieExt, which
+# calls GLMakie.activate!() so the `display(fig)` calls below open interactive
+# windows. With CairoMakie alone (non-interactive) the figures render to file only
+# and nothing appears on screen.
+using GLMakie
 using Dates
 
 rgi_paths = get_rgi_paths()

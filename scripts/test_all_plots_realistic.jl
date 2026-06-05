@@ -13,11 +13,17 @@ using Pkg
 
 Pkg.activate(normpath(joinpath(@__DIR__, "..")))
 
-# Keep the local ecosystem packages aligned with this workspace checkout.
-Pkg.develop(path = "/Users/Bolib001/.julia/dev/Muninn")
-Pkg.develop(path = "/Users/Bolib001/.julia/dev/Sleipnir")
-Pkg.develop(path = "/Users/Bolib001/.julia/dev/Huginn")
-Pkg.develop(path = "/Users/Bolib001/Desktop/Jordi/Julia/MassBalanceMachine.jl")
+# Keep the local ecosystem packages aligned with your working copies.
+# Defaults to the standard Julia dev dir (`~/.julia/dev`); override the location
+# with the ODINN_DEV_DIR env var, or point MBM_PATH at a MassBalanceMachine checkout.
+# Each `develop` is guarded by `isdir`, so missing checkouts are simply skipped.
+dev_dir = get(ENV, "ODINN_DEV_DIR", Pkg.devdir())
+for pkg in ("Sleipnir", "Muninn", "Huginn")
+    pkg_path = joinpath(dev_dir, pkg)
+    isdir(pkg_path) && Pkg.develop(path = pkg_path)
+end
+mbm_path = get(ENV, "MBM_PATH", joinpath(dev_dir, "MassBalanceMachine"))
+isdir(mbm_path) && Pkg.develop(path = mbm_path)
 
 using ODINN
 using Sleipnir
