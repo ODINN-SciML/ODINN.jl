@@ -64,12 +64,12 @@ end
 # Display setup
 Base.show(io::IO, ::MIME"text/plain", inversion::Inversion) = Base.show(io, inversion)
 function Base.show(io::IO, inversion::Inversion)
-    label(s) = printstyled(io, rpad(s, 14); color = :light_black)
+    label(s) = printstyled(io, rpad(s, 14); color = 183)
     sep() = printstyled(io, " · "; color = :light_black)
     field(s) = printstyled(io, s; color = :light_black)
     val(s) = print(io, s)
     hint(s) = printstyled(io, s; color = :light_black)
-    check(b) = b ? "\e[32m✓\e[0m" : "\e[31m✗\e[0m"
+    check(b) = b ? "\e[32m✓\e[0m " : "\e[31m✗\e[0m "
 
     println(io, "Inversion")
 
