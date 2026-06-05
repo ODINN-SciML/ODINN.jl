@@ -84,12 +84,12 @@ prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 ### Figures
 
 fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing)
-display(fig)
+wait(display(fig))
 
 fig = plot_law(
     prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input = 1)
-display(fig)
+wait(display(fig))
 
 fig = plot_law(
     prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input = 2)
-display(fig)
+wait(display(fig))

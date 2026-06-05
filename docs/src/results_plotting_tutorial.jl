@@ -142,4 +142,4 @@ nothing #hide
 # and returns the output file path:
 
 fig_dem = plot_glacier_dem(results)
-save_figure(fig_dem, joinpath(mktempdir(), "glacier_dem.png"))
+save_figure(fig_dem, joinpath(folder, "glacier_dem.png"))
