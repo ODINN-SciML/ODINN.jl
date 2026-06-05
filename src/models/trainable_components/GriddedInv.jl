@@ -45,38 +45,34 @@ mutable struct GriddedInv{
             maxval::Union{Nothing, Float64} = nothing
     )
         inv_param_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
-        inv_param = NamedTuple{inv_param_type}(
-            Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀) .- 1)
-        for i in 1:length(glaciers))
-        )
-        θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
 
-        # Select bounds based on var
         if var == :A
             minv = isnothing(minval) ? params.physical.minA : minval
             maxv = isnothing(maxval) ? params.physical.maxA : maxval
+            inv_param = NamedTuple{inv_param_type}(
+                Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀) .- 1)
+            for i in 1:length(glaciers))
+            )
+            θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
+            θ = atanh.((θ .- minv) .* (2/(maxv-minv)) .- 1.0)
         elseif var == :C
-            minv = isnothing(minval) ? params.physical.minC : minval
-            maxv = isnothing(maxval) ? params.physical.maxC : maxval
-            minv < maxv ||
-                error("GriddedInv: expected minC < maxC, got minC=$(minv), maxC=$(maxv)")
-            # If any glacier.C value is outside the open interval (minv, maxv), seed from
-            # the midpoint. This mirrors GriddedInv(:A) where glacier.A is always in-bounds
-            # by construction; glacier.C defaults to 0 (no sliding), which is physically
-            # correct but out-of-range for the atanh mapping.
-            if any(x -> x <= minv || x >= maxv, collect(θ))
-                midv = Sleipnir.Float((minv + maxv) / 2)
-                inv_param = NamedTuple{inv_param_type}(
-                    Tuple(fill(midv, size(glaciers[i].H₀) .- 1)
-                for i in 1:length(glaciers))
-                )
-                θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
-            end
+            # LawC uses C = maxC * (tanh(x)+1)/2, so min is always 0.
+            # Inverse: x = atanh(C*2/maxC - 1), valid for C ∈ (0, maxC).
+            # For C=0 (no sliding), seed x=-5 → C ≈ 5e-5 * maxC.
+            maxv = Sleipnir.Float(isnothing(maxval) ? params.physical.maxC : maxval)
+            inv_param = NamedTuple{inv_param_type}(
+                Tuple(
+                let c = Sleipnir.Float(getfield(glaciers[i], var))
+                    seed = c <= 0 || c >= maxv ? Sleipnir.Float(-5) :
+                           atanh(c * 2 / maxv - 1)
+                    fill(seed, size(glaciers[i].H₀) .- 1)
+                end
+            for i in 1:length(glaciers))
+            )
+            θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
         else
             error("GriddedInv: Only :A or :C are supported for var (got $(var))")
         end
-
-        θ = atanh.((θ .- minv) .* (2/(maxv-minv)) .- 1.0)
 
         new{typeof(θ)}(θ)
     end

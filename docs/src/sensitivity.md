@@ -140,22 +140,22 @@ sensealg = QuadratureAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
 # Backsolve adjoint — reconstructs the forward solution on the fly during
 # the backward pass instead of storing it. Lowest memory footprint but
 # numerically unstable for the SIA; not recommended in practice.
-sensealg = BacksolveAdjoint(autojacvec = SciMLSensitivity.ZygoteVJP())
+sensealg = BacksolveAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
 ```
 
 ### Layer 3 — `optim_autoAD`: outer AD signal
 
 `optim_autoAD` acts as a required signal that tells ODINN which outer differentiation approach is being used. Importantly, ODINN always builds the `OptimizationFunction` internally with `NoAD()` and a custom `grad!` function — `optim_autoAD` is never passed directly to the optimizer machinery. Its role is to validate that the configuration is self-consistent:
 
-  - `Optimization.AutoZygote()` **must** be used with `SciMLSensitivityAdjoint()`. ODINN enforces this with an assertion at runtime. Internally, the custom `grad!` calls `Zygote.gradient` on the loss, which differentiates through the `solve(...)` call; SciMLSensitivity intercepts the ODE adjoint via the `sensealg`.
-  - `ODINN.NoAD()` must be used with the manual adjoint methods (`ContinuousAdjoint`, `DiscreteAdjoint`). In this case the custom `grad!` calls `SIA2D_grad!` directly, which runs the hand-written adjoint without any outer AD.
+  - `Optimization.AutoZygote()` **must** be used with `SciMLSensitivityAdjoint()`. ODINN enforces this with an assertion at runtime. Internally, the custom `grad!` calls `Zygote.gradient` on the loss, which differentiates through the `solve(...)` call; SciMLSensitivity intercepts the ODE adjoint via the `sensealg`. This allows us to handle the differentiation within each process with multiprocessing properly.
+  - `optim_autoAD` is **ignored** when using `ContinuousAdjoint` or `DiscreteAdjoint` — any value is accepted. `ODINN.NoAD()` is conventional here since the custom `grad!` calls `SIA2D_grad!` directly without any outer AD.
 
 ### Inner VJP for the manual adjoints
 
 When using `ContinuousAdjoint` or `DiscreteAdjoint`, the `VJP_method` field inside those structs controls how the Jacobian of each law is evaluated during the backward pass. The available options are `AbstractVJPMethod` subtypes:
 
-  - `DiscreteVJP(regressorADBackend = DI.AutoMooncake())` (default): Manual pullback implementation, with an AD backend for the regressor VJPs.
-  - `EnzymeVJP()`: Calls Enzyme directly to evaluate the VJP, without going through DifferentiationInterface.
+  - `DiscreteVJP(regressorADBackend = DI.AutoMooncake())` (default): Manual pullback implementation, with an AD backend for the regressor VJPs when the user doesn't provide how to compute them.
+  - `EnzymeVJP()`: Differentiates the entire `SIA2D` RHS via Enzyme (including all laws). The regressor VJPs are therefore handled by Enzyme directly rather than by a separate AD backend or user-provided pullback.
   - `ContinuousVJP(regressorADBackend = DI.AutoMooncake())`: Uses the continuous spatial formula for the SIA diffusion operator before discretization.
   - `NoVJP()`: Skips the contribution of a given term entirely (e.g. when the mass balance VJP should not be back-propagated).
 
@@ -176,9 +176,7 @@ UDE = UDEparameters(
 **Using ODINN's continuous adjoint with Enzyme VJPs:**
 
 ```julia
-# optim_autoAD = NoAD() because SIA2D_grad! provides the gradient directly.
 UDE = UDEparameters(
     grad = ContinuousAdjoint(VJP_method = EnzymeVJP()),
-    optim_autoAD = ODINN.NoAD()
 )
 ```

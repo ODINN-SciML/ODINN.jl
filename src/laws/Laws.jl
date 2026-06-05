@@ -481,18 +481,17 @@ Construct a law that defines a sliding coefficient C per glacier to invert.
 This can be either a spatially varying C or a scalar value per glacier based on the
 value of `scalar`.
 
-The tanh-based parameterisation ensures C stays within `[params.physical.minC, params.physical.maxC]`
+The tanh-based parameterisation ensures C stays within `[0, params.physical.maxC]`
 and is differentiable through `θ.C` at every RHS call (required by `SciMLSensitivityAdjoint`).
 
 # Arguments
 
-  - `params::Sleipnir.Parameters`: Parameters struct used to retrieve the minimum and
-    maximum values of C for scaling the parameter to invert.
+  - `params::Sleipnir.Parameters`: Parameters struct used to retrieve the maximum value of
+    C for scaling the parameter to invert.
   - `scalar::Bool`: Whether the sliding coefficient to invert is a scalar per glacier, or a
     spatially varying `C` per glacier (matrix to invert).
 """
 function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
-    min_C = params.physical.minC
     max_C = params.physical.maxC
     # Same rationale as LawA: SciMLSensitivityAdjoint replays the RHS during the backward
     # pass, so the law must run at every step for gradients to flow through θ → C → D.
@@ -506,11 +505,9 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
     # during the backward pass and therefore never needs an explicit analytical VJP for C.
     # Manual adjoint methods (ContinuousAdjoint, DiscreteAdjoint) are not yet supported
     # for C inversion; using them will yield a zero gradient for θ.C.
-    f! = let min_C = min_C, max_C = max_C
+    f! = let max_C = max_C
         function (cache, inp, θ)
-            val = @. min_C +
-                     (max_C - min_C) * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) /
-                     2
+            val = @. max_C * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) / 2
             Zygote.@ignore_derivatives cache.value .= val
             return val
         end
