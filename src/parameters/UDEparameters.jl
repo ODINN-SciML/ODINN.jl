@@ -92,11 +92,11 @@ function Base.show(io::IO, params::UDEparameters)
     label(io, "  Target", pad)
     field(io, "target");
     print(io, " = ")
-    isnothing(params.target) ? hint("(nothing)") : val(io, ":$(params.target)")
+    isnothing(params.target) ? hint(io, "(nothing)") : val(io, ":$(params.target)")
     sep(io)
     field(io, "ic_filter");
     print(io, " = ")
-    isnothing(params.initial_condition_filter) ? hint("(nothing)") :
+    isnothing(params.initial_condition_filter) ? hint(io, "(nothing)") :
     val(io, ":$(params.initial_condition_filter)")
     println(io)
 
