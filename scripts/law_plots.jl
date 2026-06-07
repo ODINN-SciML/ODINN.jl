@@ -6,6 +6,11 @@ Pkg.develop(Pkg.PackageSpec(path = odinn_folder)) # Set ODINN in dev mode to use
 
 using Revise
 using ODINN
+# Interactive backend: loading GLMakie alongside ODINN triggers GLMakieExt, which
+# calls GLMakie.activate!() so the `display(fig)` calls below open interactive
+# windows. With CairoMakie alone (non-interactive) the figures render to file only
+# and nothing appears on screen.
+using GLMakie
 using Dates
 
 rgi_paths = get_rgi_paths()
@@ -78,15 +83,13 @@ prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
 ### Figures
 
-ODINN.connect_electron_backend() # If you want to visualize the plots below properly on Ubuntu 24.04
-
 fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing)
-ODINN.PlotlyJS.display(fig)
+wait(display(fig))
 
 fig = plot_law(
     prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input = 1)
-ODINN.PlotlyJS.display(fig)
+wait(display(fig))
 
 fig = plot_law(
     prediction.model.iceflow.C, prediction, law_inputs, nothing; idx_fixed_input = 2)
-ODINN.PlotlyJS.display(fig)
+wait(display(fig))
