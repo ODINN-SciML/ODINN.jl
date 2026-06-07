@@ -1,6 +1,12 @@
 import Pkg
 function is_included_in_repl()
-    for frame in StackTraces.stacktrace()
+    # Handle github CI
+    if get(ENV, "CI_FAST", "false")=="true"
+        return true
+    end
+    frames = StackTraces.stacktrace()
+    # Handle manual include by the user in the REPL
+    for frame in frames
         if occursin("start_repl_backend", string(frame.func))
             return true
         end
