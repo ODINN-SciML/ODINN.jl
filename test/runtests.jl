@@ -1,6 +1,12 @@
 import Pkg
 function is_included_in_repl()
-    for frame in StackTraces.stacktrace()
+    # Handle github CI
+    if get(ENV, "CI_FAST", "false")=="true"
+        return true
+    end
+    frames = StackTraces.stacktrace()
+    # Handle manual include by the user in the REPL
+    for frame in frames
         if occursin("start_repl_backend", string(frame.func))
             return true
         end
@@ -30,7 +36,6 @@ using Enzyme
 using ODINN
 using Test
 using JLD2
-using Plots
 using Infiltrator
 using OrdinaryDiffEq
 using LinearAlgebra
@@ -144,6 +149,8 @@ ENV["GKSwstype"] = "nul"
                 thres = [5e-4, 7e-7, 2e-3])
             @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
                 ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-7, 1e-5])
+            @testset "SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA" test_grad_sciml_vs_manual(thres = [
+                1e-3, 1e-13, 1e-3])
         end
 
         # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])

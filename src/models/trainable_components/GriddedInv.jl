@@ -40,19 +40,39 @@ mutable struct GriddedInv{
     function GriddedInv(
             params::Sleipnir.Parameters,
             glaciers::Vector{<: AbstractGlacier},
-            var::Symbol
+            var::Symbol;
+            minval::Union{Nothing, Float64} = nothing,
+            maxval::Union{Nothing, Float64} = nothing
     )
         inv_param_type = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
-        inv_param = NamedTuple{inv_param_type}(
-            Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀) .- 1)
-        for i in 1:length(glaciers))
-        )
-        θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
 
-        # Invert parameterization
-        minA = params.physical.minA
-        maxA = params.physical.maxA
-        θ = atanh.((θ .- minA) .* (2/(maxA-minA)) .- 1.0)
+        if var == :A
+            minv = isnothing(minval) ? params.physical.minA : minval
+            maxv = isnothing(maxval) ? params.physical.maxA : maxval
+            inv_param = NamedTuple{inv_param_type}(
+                Tuple(fill(getfield(glaciers[i], var), size(glaciers[i].H₀) .- 1)
+            for i in 1:length(glaciers))
+            )
+            θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
+            θ = atanh.((θ .- minv) .* (2/(maxv-minv)) .- 1.0)
+        elseif var == :C
+            # LawC uses C = maxC * (tanh(x)+1)/2, so min is always 0.
+            # Inverse: x = atanh(C*2/maxC - 1), valid for C ∈ (0, maxC).
+            # For C=0 (no sliding), seed x=-5 → C ≈ 5e-5 * maxC.
+            maxv = Sleipnir.Float(isnothing(maxval) ? params.physical.maxC : maxval)
+            inv_param = NamedTuple{inv_param_type}(
+                Tuple(
+                let c = Sleipnir.Float(getfield(glaciers[i], var))
+                    seed = c <= 0 || c >= maxv ? Sleipnir.Float(-5) :
+                           atanh(c * 2 / maxv - 1)
+                    fill(seed, size(glaciers[i].H₀) .- 1)
+                end
+            for i in 1:length(glaciers))
+            )
+            θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
+        else
+            error("GriddedInv: Only :A or :C are supported for var (got $(var))")
+        end
 
         new{typeof(θ)}(θ)
     end

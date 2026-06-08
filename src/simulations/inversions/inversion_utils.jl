@@ -56,6 +56,9 @@ function run!(
                 simulation.results.simulation = Sleipnir.Results{Float64, Int64}[]
             end
         end
+        # Put back the original epochs and optimizer values
+        simulation.parameters.hyper.optimizer = optimizers
+        simulation.parameters.hyper.epochs = epochs
     end
 
     # Setup final results
@@ -115,7 +118,7 @@ function train_UDE!(
         save_every_iter::Bool = false,
         logger::Union{<: TBLogger, Nothing} = nothing
 )
-    @info "Optimizing with BFGS"
+    @info "Optimizing with $(nameof(typeof(optimizer)))"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)

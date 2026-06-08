@@ -9,9 +9,8 @@
 # For more details you can check the [Understanding the Law interface section](./inversions.md#Understanding-the-Laws-interface).
 
 using ODINN
-using Plots
+using CairoMakie
 using Dates
-using PlotlyJS
 
 ## Dummy parameters, only specifying the type of loss function to be used
 params = Parameters(UDE = UDEparameters(empirical_loss_function = LossH()))
@@ -116,18 +115,36 @@ tstops = collect(2010:δt:2015)
 
 prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
-# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D.
-# This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.
+# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws.
+# In addition to the default 3D representation, one can also generate 2D slices by fixing one of the two inputs with `idx_fixed_input`.
 
-fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing);
+fig_surface = plot_law(prediction.model.iceflow.C, prediction, law_inputs, nothing)
+fig_fixed_cpdd = plot_law(
+    prediction.model.iceflow.C,
+    prediction,
+    law_inputs,
+    nothing;
+    idx_fixed_input = 1
+)
+fig_fixed_topo = plot_law(
+    prediction.model.iceflow.C,
+    prediction,
+    law_inputs,
+    nothing;
+    idx_fixed_input = 2
+)
 
-# Since we are in the documentation it is not possible to have an interactive plot but if you reproduce this example locally, you can run the line above without ";" and you can skip the lines hereafter. This will open an interactive window with a 3D plot that you can rotate.
+# Since we are in the documentation it is not possible to have an interactive plot,
+# but when reproducing this example locally, you can display each figure directly.
 
 folder = "laws_plots"
 mkpath(folder)
-filepath = joinpath(folder, "3d_plot.png")
-PlotlyJS.savefig(fig, filepath);
+CairoMakie.save(joinpath(folder, "3d_plot.png"), fig_surface)
+CairoMakie.save(joinpath(folder, "fixed_cpdd_plot.png"), fig_fixed_cpdd)
+CairoMakie.save(joinpath(folder, "fixed_topo_plot.png"), fig_fixed_topo)
 
 # ```@raw html
-# <img src="./laws_plots/3d_plot.png" width="500"/>
+# <img src="./laws_plots/3d_plot.png" width="460"/>
+# <img src="./laws_plots/fixed_cpdd_plot.png" width="460"/>
+# <img src="./laws_plots/fixed_topo_plot.png" width="460"/>
 # ```
