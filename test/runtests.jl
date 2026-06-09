@@ -216,6 +216,9 @@ ENV["GKSwstype"] = "nul"
             @testset "MultiLoss" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
                 loss = MultiLoss(losses = (LossH(),), λs = (0.4,)))
+            @testset "MultiLoss SciMLSensitivity" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); thres = [5e-6, 1e-12, 5e-6],
+                loss = MultiLoss(losses = (LossH(),), λs = (0.4,)))
             @testset "Just regularization" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-8, 1e-2],
                 loss = MultiLoss(losses = (VelocityRegularization(),), λs = (1e2,)))
