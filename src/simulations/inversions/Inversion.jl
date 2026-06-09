@@ -13,12 +13,18 @@ It can involve at the same time a classical inversion and a functional inversion
   - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
   - `results::ODINN.Results`: A `ODINN.Results` instance to store the results of the inversion and of the forward simulations.
 """
-mutable struct Inversion{MODEL, CACHE, GLACIER, RES} <: Simulation
+mutable struct Inversion{
+    MODEL,
+    CACHE,
+    GLACIER,
+    PARAMS <: Sleipnir.Parameters,
+    RES <: ODINN.Results
+} <: Simulation
     model::MODEL
     cache::Union{CACHE, Nothing}
     glaciers::Vector{GLACIER}
-    parameters::Sleipnir.Parameters
-    results::ODINN.Results
+    parameters::PARAMS
+    results::RES
 end
 
 """
@@ -53,7 +59,8 @@ function Inversion(
     # Build the results struct based on input values
     emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
     emptyResults = Results(emptySimulationResults, TrainingStats())
-    inversion = Inversion{M, cache_type(model), G, typeof(emptyResults)}(model, nothing,
+    inversion = Inversion{M, cache_type(model), G, typeof(parameters), typeof(emptyResults)}(
+        model, nothing,
         glaciers,
         parameters,
         emptyResults)
