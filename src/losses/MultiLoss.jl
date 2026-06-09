@@ -19,7 +19,7 @@ a single differentiable loss function.
   - `losses::TL`: Tuple of loss functions.
   - `λs::TS`: Tuple of weighting coefficients.
 """
-struct MultiLoss{TL, TS} <: AbstractLoss
+struct MultiLoss{TL <: Tuple, TS <: Tuple} <: AbstractLoss
     losses::TL
     λs::TS
     function MultiLoss(;
@@ -27,7 +27,6 @@ struct MultiLoss{TL, TS} <: AbstractLoss
             λs = (1.0,)
     )
         @assert length(losses) == length(λs) "You need to provide an hyperparameter for each loss term defined."
-        λs = collect(λs)
         return new{typeof(losses), typeof(λs)}(losses, λs)
     end
 end
@@ -83,9 +82,11 @@ function loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    losses = map(
-        sub_loss -> loss(
-            sub_loss,
+    λs = @ignore_derivatives(SVector(lossType.λs...))
+    return sum(ntuple(
+        i -> ( # Map doesn't work with Zygote, this is why we use this ntuple
+            λs[i] * loss( # Combine contribution of each loss
+            lossType.losses[i],
             H_pred,
             H_ref,
             V_ref, Vx_ref, Vy_ref,
@@ -95,11 +96,9 @@ function loss(
             simulation,
             normalization,
             Δt
+        )
         ),
-        lossType.losses
-    )
-    # Combine contribution of each loss
-    return sum(lossType.λs .* losses)
+        length(lossType.losses)))
 end
 
 """
