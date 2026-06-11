@@ -113,7 +113,7 @@ function test_adjoint_SIA2D(
     apply_all_callback_laws!(model.iceflow, cache.iceflow, simulation, glacier_idx, t, θ)
     dH = zero(H)
     Huginn.SIA2D!(dH, H, simulation, t, θ)
-    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(
         dH, H, simulation, t, θ)
 
     Huginn.precompute_all_VJPs_laws!(
