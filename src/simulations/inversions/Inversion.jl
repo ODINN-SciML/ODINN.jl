@@ -14,9 +14,9 @@ It can involve at the same time a classical inversion and a functional inversion
   - `results::ODINN.Results`: A `ODINN.Results` instance to store the results of the inversion and of the forward simulations.
 """
 mutable struct Inversion{
-    MODEL,
+    MODEL <: Sleipnir.Model,
     CACHE,
-    GLACIER,
+    GLACIER <: Sleipnir.AbstractGlacier,
     PARAMS <: Sleipnir.Parameters,
     RES <: ODINN.Results
 } <: Simulation

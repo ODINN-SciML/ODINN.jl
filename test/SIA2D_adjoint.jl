@@ -113,7 +113,8 @@ function test_adjoint_SIA2D(
     apply_all_callback_laws!(model.iceflow, cache.iceflow, simulation, glacier_idx, t, θ)
     dH = zero(H)
     Huginn.SIA2D!(dH, H, simulation, t, θ)
-    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(
+    broken = !functional_inv # There is a runtime dispatch with classical inversions because at compilation time Julia has no way to know the type of θ.A[Symbol("$(cache.glacier_id)")]
+    JET.@test_opt broken=broken target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(
         dH, H, simulation, t, θ)
 
     Huginn.precompute_all_VJPs_laws!(
