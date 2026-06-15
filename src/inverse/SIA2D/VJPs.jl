@@ -68,15 +68,14 @@ function VJP_λ_∂surface_V∂θ(VJPMode::DiscreteVJP, λx, λy, H, θ, simulat
     return λ_∂V∂H, nothing
 end
 
-function MB_wrapper!(MB, H, simulation, glacier, step)
-    model = simulation.model
+function MB_wrapper!(MB, H, simulation, glacier, mb_model, step)
     cache = simulation.cache
     glacier.S .= glacier.B .+ H
 
     # Below we call the functions that are inside MB_timestep! manually
     # This is because get_cumulative_climate! cannot be differentiated with Enzyme, so it is called beforehand in the VJP function to retrieve the cumulative climate
     downscale_2D_climate!(glacier)
-    cache.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step, step)
+    cache.iceflow.MB .= compute_MB(mb_model, glacier.climate.climate_2D_step, step)
 
     apply_MB_mask!(H, cache.iceflow)
     MB .= simulation.cache.iceflow.MB
@@ -86,6 +85,10 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
     # Differentiation of get_cumulative_climate! with Enzyme yields an error
     # Since it isn't involved in the gradient computation (doesn't depend on H), it can be computed beforehand
     get_cumulative_climate!(glacier.climate, t, step_MB)
+
+    # Select the (possibly per-glacier) MB model outside the differentiated region
+    mb_model = get_mb_model(
+        simulation.model.mass_balance, simulation.cache.iceflow.glacier_idx)
 
     _simulation = Enzyme.make_zero(simulation)
     _glacier = Enzyme.make_zero(glacier)
@@ -98,6 +101,7 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
         Duplicated(H, λ_∂MB∂H),
         Duplicated(simulation, _simulation),
         Duplicated(glacier, _glacier),
+        Const(mb_model),
         Const(step_MB)
     )
     return λ_∂MB∂H
@@ -107,7 +111,8 @@ function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, g
     glacier.S .= glacier.B .+ H
     get_cumulative_climate!(glacier.climate, t, simulation.parameters.simulation.step_MB)
 
-    mb_model = simulation.model.mass_balance
+    mb_model = get_mb_model(
+        simulation.model.mass_balance, simulation.cache.iceflow.glacier_idx)
     λ_∂MB∂H = if isa(mb_model, TImodel1)
         downscale_2D_climate!(glacier)
         climate_2D_step = glacier.climate.climate_2D_step

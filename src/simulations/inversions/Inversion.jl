@@ -49,6 +49,12 @@ function Inversion(
     # We perform this check here to avoid having to provide the parameters when creating the model
     @assert targetType(model.trainable_components.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
 
+    # Optionally calibrate the mass balance model per glacier (no-op unless the
+    # model type defines a calibration routine, e.g. TImodel1).
+    if parameters.simulation.use_MB && parameters.simulation.calibrate_MB
+        calibrate_MB_model!(model, glaciers, parameters)
+    end
+
     # Build the results struct based on input values
     emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
     emptyResults = Results(emptySimulationResults, TrainingStats())
