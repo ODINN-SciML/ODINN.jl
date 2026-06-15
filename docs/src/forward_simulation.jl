@@ -93,8 +93,9 @@ params = Parameters(
 #                       iceflow. It defaults to a 2D Shallow Ice Approximation (SIA).
 #      Check out [this glaciology notebook](https://ldeo-glaciology.github.io/glaciology-intro-book/sections/ice_flow/sia_derivation.html) for a very good introduction to the Shallow Ice Approximation.
 # - *Surface mass balance model*: `MassBalanceModel` is the mass balance model that will be used for
-#                               simulations. Options here include temperature-index models, or
-#                               machine learning models coming from [`MassBalanceMachine`](https://github.com/ODINN-SciML/MassBalanceMachine).
+#                               simulations. Options include temperature-index models (e.g. `TImodel1`)
+#                               and neural network models loaded via [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl)
+#                               (see the [Models](@ref) section for details).
 # Trainable components can be embedded inside the iceflow model which can be a neural network to learn a parameterization in the context of Universal Differential Equation, or per glacier values in the context of a classical inversion (like inverting the initial conditions).
 # Refer to the [functional inversion tutorial](./functional_inversion.md) for an example of how to incorporate a neural network inside the iceflow model.
 

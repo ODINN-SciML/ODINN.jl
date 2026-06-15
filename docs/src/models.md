@@ -34,9 +34,43 @@ Muninn.TImodel1
 Muninn.TImodel1(params::Sleipnir.Parameters)
 ```
 
-Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps`field in [`Sleipnir.SimulationParameters`](@ref).
+Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps` field in [`Sleipnir.SimulationParameters`](@ref).
 
-We soon plan to add compatibility with neural networks coming from the [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine), which should become the *de facto* surface mass balance model in the `ODINN.jl` ecosystem.
+Neural network-based surface mass balance models trained with [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) are also supported.
+They can be loaded via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) package and used directly as drop-in `MBmodel`s.
+Pre-trained models are exported from Python as a pair of JSON files (`params.json` and `model.json`) and loaded as follows:
+
+```julia
+using MassBalanceMachine
+
+mlp = CustomMLP("path/to/params.json", "path/to/model.json")
+
+model = Model(
+    iceflow = SIA2Dmodel(params),
+    mass_balance = mlp
+)
+```
+
+`CustomMLP` is a subtype of `MBmodel` and wraps a `Lux.jl` feedforward network whose architecture, input feature normalisation bounds, and pre-trained weights are all read directly from the JSON export. The network takes monthly ERA5 climate features as inputs (e.g. `t2m`, `tp`, `ssrd`, …) and outputs a surface mass balance rate in m w.e. per time step. For now, only monthly time steps are supported. It is the *de facto* data-driven surface mass balance model in the ODINN ecosystem.
+
+Once loaded, models can be saved to a local registry to avoid re-parsing JSON on subsequent runs:
+
+```julia
+save_model(mlp, "norway_nongeo")  # saves to ~/.MassBalanceMachine/models/
+mlp = load_model("norway_nongeo") # fast retrieval by name
+```
+
+Internally, `MassBalanceMachine.jl` converts those exported Pytorch MLPs into `Lux.jl`, to be compatible with the whole Julia and `ODINN.jl` ecosystem.
+We also provide an API to download pre-trained models which are stored in our [HuggingFace MLP repository](https://huggingface.co/MassBalanceMachine/MLP).
+This API simply retrieves the `params.json` and `model.json` files associated to a pre-trained model.
+The list of available pre-trained models and their characteristics are given in this repository.
+For example you can load one very simple model trained with the WGMS on region 11 (European Alps) and register it in your local registry by running:
+
+```julia
+download_MLP("mlp_noSvf_wgms11_small_0.1")
+```
+
+See the [`MassBalanceMachine.jl` repository](https://github.com/ODINN-SciML/MassBalanceMachine.jl) for more details on model training, and the full registry API.
 
 ## Regressors
 

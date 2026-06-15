@@ -56,6 +56,9 @@ function run!(
                 simulation.results.simulation = Sleipnir.Results{Float64, Int64}[]
             end
         end
+        # Put back the original epochs and optimizer values
+        simulation.parameters.hyper.optimizer = optimizers
+        simulation.parameters.hyper.epochs = epochs
     end
 
     # Setup final results
@@ -115,7 +118,7 @@ function train_UDE!(
         save_every_iter::Bool = false,
         logger::Union{<: TBLogger, Nothing} = nothing
 )
-    @info "Optimizing with BFGS"
+    @info "Optimizing with $(nameof(typeof(optimizer)))"
 
     # Create batches for inversion training
     simulation_train_loader = generate_batches(simulation)
@@ -454,7 +457,10 @@ function batch_loss_iceflow_transient(
             Δtj
         )
     end
-    return sum(losses), result
+    time_aggregated_losses = time_aggregated_loss(
+        loss_function, H, nothing, nothing, nothing, nothing, t,
+        glacier_idx, container.θ, container.simulation, prod(size(H[begin]))*1.0, (;))
+    return sum(losses) + time_aggregated_losses, result
 end
 
 """
@@ -486,7 +492,10 @@ function _batch_iceflow_UDE(
     tstopsIceThickness = tdata(glacier.thicknessData)
     tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
     tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan))
-    tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity, tstopsDiscreteLoss)))
+    tstopsAggregatedLoss = unique(discretePostIntegralLossSteps(
+        params.UDE.empirical_loss_function, container.simulation, glacier_idx))
+    tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
+        tstopsDiscreteLoss, tstopsAggregatedLoss)))
 
     # Create mass balance callback
     cb_MB = if params.simulation.use_MB
@@ -500,11 +509,13 @@ function _batch_iceflow_UDE(
                 glacier.S .= glacier.B .+ integrator.u
                 MB_timestep!(cache, model, glacier, step_MB, integrator.t, glacier_idx)
                 apply_MB_mask!(integrator.u, cache.iceflow)
+                push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))
+                push!(cache.iceflow.MB_times, integrator.t)
             end
         end
         # A simulation period is sliced in time windows that are separated by `step_MB`
         # The mass balance is applied at the end of each of the windows
-        PeriodicCallback(mb_action!, step_MB; initial_affect = false)
+        PeriodicCallback(mb_action!, step_MB; initial_affect = false, final_affect = true)
     else
         CallbackSet()
     end
@@ -525,7 +536,9 @@ function _batch_iceflow_UDE(
 
     # Compute simulation results
     return Sleipnir.create_results(
-        container.simulation, glacier_idx, iceflow_sol, tstops
+        container.simulation, glacier_idx, iceflow_sol, tstops;
+        MB = container.simulation.cache.iceflow.MB_history,
+        t_MB = container.simulation.cache.iceflow.MB_times
     )
 end
 

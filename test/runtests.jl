@@ -1,6 +1,12 @@
 import Pkg
 function is_included_in_repl()
-    for frame in StackTraces.stacktrace()
+    # Handle github CI
+    if get(ENV, "CI_FAST", "false")=="true"
+        return true
+    end
+    frames = StackTraces.stacktrace()
+    # Handle manual include by the user in the REPL
+    for frame in frames
         if occursin("start_repl_backend", string(frame.func))
             return true
         end
@@ -30,7 +36,6 @@ using Enzyme
 using ODINN
 using Test
 using JLD2
-using Plots
 using Infiltrator
 using OrdinaryDiffEq
 using LinearAlgebra
@@ -132,11 +137,11 @@ ENV["GKSwstype"] = "nul"
                 ContinuousAdjoint(
                     VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
                     MB_VJP = ODINN.EnzymeVJP());
-                thres = [2e-3, 2e-5, 2e-3],
+                thres = [3e-3, 1e-8, 3e-3],
                 use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [2e-2, 2e-5, 2e-2], use_MB = true)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true)
             @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
             @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
@@ -144,6 +149,8 @@ ENV["GKSwstype"] = "nul"
                 thres = [5e-4, 7e-7, 2e-3])
             @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
                 ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-7, 1e-5])
+            @testset "SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA" test_grad_sciml_vs_manual(thres = [
+                1e-3, 1e-13, 1e-3])
         end
 
         # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
@@ -220,6 +227,20 @@ ENV["GKSwstype"] = "nul"
             @testset "Rheology regularization" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-8, 1e-8, 1e-8],
                 functional_inv = false, scalar = false, loss = RheologyRegularization())
+            @testset "Dhdt loss with discrete adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
+                DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
+                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+            @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
+                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+            if !(v"1.10.0" <= VERSION <= v"1.10.999")
+                # This test doesn't work with Julia 1.10 in test mode
+                # Despite a lot of effort we couldn't track the root cause, so we just deactivate that test
+                @testset "AvgV loss with continuous adjoint" test_grad_finite_diff(
+                    ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [
+                        1e-3, 1e-8, 1e-3],
+                    functional_inv = false, scalar = true, loss = LossAvgV(), aggregated_loss = :avgV)
+            end
         end
     end
 

@@ -57,7 +57,8 @@ function test_grad_finite_diff(
         scalar = true,
         custom_NN = false,
         max_params = 60,
-        mask_parameter_vector = false
+        mask_parameter_vector = false,
+        aggregated_loss = nothing
 ) where {ADJ <: AbstractAdjointMethod}
     if !functional_inv
         @assert target == :A "When testing classical inversion, only target A is supported"
@@ -73,10 +74,12 @@ function test_grad_finite_diff(
     thres_angle = thres[2]
     thres_relerr = thres[3]
 
-    rgi_ids = @match (velocityLoss, multiglacier) begin
-        (true, false) => ["RGI60-11.03646"]
-        (false, false) => ["RGI60-11.03638"]
-        (false, true) => ["RGI60-11.03638", "RGI60-11.01450"]
+    rgi_ids = @match (velocityLoss, multiglacier, aggregated_loss) begin
+        (true, false, nothing) => ["RGI60-11.03646"]
+        (false, false, nothing) => ["RGI60-11.03638"]
+        (false, true, nothing) => ["RGI60-11.03638", "RGI60-11.01450"]
+        (false, false, :dhdt) => ["RGI60-11.03638"]
+        (true, false, :avgV) => ["RGI60-11.03646"]
     end
 
     rgi_paths = get_rgi_paths()
@@ -93,6 +96,13 @@ function test_grad_finite_diff(
     else
         optim_autoAD = ODINN.NoAD()
         sensealg = SciMLSensitivity.ZygoteAdjoint()
+    end
+
+    minA, maxA = if aggregated_loss == :dhdt || aggregated_loss == :avgV
+        (2e-18, 8e-18)
+    else
+        # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
+        use_MB ? (1e-21, 2e-21) : (2e-18, 8e-18)
     end
 
     params = Parameters(
@@ -115,9 +125,8 @@ function test_grad_finite_diff(
             optimizer = ODINN.Adam(0.005)
         ),
         physical = PhysicalParameters(
-            # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
-            minA = use_MB ? 1e-21 : 2e-18,
-            maxA = use_MB ? 2e-21 : 8e-18
+            minA = minA,
+            maxA = maxA
         ),
         UDE = UDEparameters(
             sensealg = sensealg,
@@ -158,7 +167,13 @@ function test_grad_finite_diff(
     end
 
     # Generate ground truth based on the loss that will be used hereafter
-    store = ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)
+    store = if aggregated_loss == :dhdt
+        (:H, :dhdt)
+    elseif aggregated_loss == :avgV
+        (:H, :avgV)
+    else
+        ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)
+    end
     glaciers = generate_ground_truth(glaciers, params, model, tstops; store = store)
 
     # Neural network model
@@ -179,7 +194,7 @@ function test_grad_finite_diff(
         end
     end
 
-    ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti2019) :
+    ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti19) :
          nothing
     trainable_model = if functional_inv
         nn_model
@@ -206,20 +221,26 @@ function test_grad_finite_diff(
         (:D, true) => LawU(trainable_model, params)
     end
 
+    mass_balance = if aggregated_loss==:dhdt
+        # Intensify melting to make dhdt negative
+        TImodel1(params; DDF = 15.0/1000.0, acc_factor = 0.4/1000.0)
+    else
+        TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    end
     model = @match target begin
         :A => Model(
             iceflow = SIA2Dmodel(params; A = law),
-            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+            mass_balance = mass_balance,
             regressors = regressors
         )
         :D_hybrid => Model(
             iceflow = SIA2Dmodel(params; Y = law),
-            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+            mass_balance = mass_balance,
             regressors = regressors
         )
         :D => Model(
             iceflow = SIA2Dmodel(params; U = law),
-            mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+            mass_balance = mass_balance,
             regressors = regressors,
             target = SIA2D_D_target(
                 interpolation = :Linear,
@@ -407,7 +428,7 @@ function test_grad_L2Sum()
     l_enzyme = Enzyme.make_zero(dl_enzyme)
     da_enzyme = Enzyme.make_zero(a)
     Enzyme.autodiff(
-        set_runtime_activity(Reverse), _loss!, Const,
+        set_runtime_activity(EnzymeCore.Reverse), _loss!, Const,
         Duplicated(l_enzyme, dl_enzyme),
         Duplicated(a, da_enzyme),
         Enzyme.Const(b),
@@ -454,7 +475,7 @@ function test_grad_TikhonovRegularization()
     l_enzyme = Enzyme.make_zero(dl_enzyme)
     da_enzyme = Enzyme.make_zero(a)
     Enzyme.autodiff(
-        set_runtime_activity(Reverse), _loss!, Const,
+        set_runtime_activity(EnzymeCore.Reverse), _loss!, Const,
         Duplicated(l_enzyme, dl_enzyme),
         Duplicated(a, da_enzyme),
         Enzyme.Const(Δx),
@@ -592,7 +613,7 @@ function test_grad_Halfar(
     l_enzyme = Enzyme.make_zero(dl_enzyme)
     H_ref = simulation.glaciers[1].thicknessData.H
     Enzyme.autodiff(
-        Reverse, _loss_halfar!, Const,
+        EnzymeCore.Reverse, _loss_halfar!, Const,
         Duplicated(l_enzyme, dl_enzyme),
         Enzyme.Const(R₀),
         Enzyme.Const(h₀),
@@ -639,4 +660,111 @@ function test_grad_Halfar(
     @test abs(ratio) < thres_ratio
     @test abs(angle) < thres_angle
     @test abs(relerr) < thres_relerr
+end
+
+"""
+    test_grad_sciml_vs_manual(; thres)
+
+Check that the SciMLSensitivity auto-adjoint and the manual `DiscreteAdjoint` return
+consistent gradients for `LawA`. Both methods are run with identical parameters;
+only the `grad` field of `UDEparameters` differs.
+"""
+function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
+    println("> Comparing SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA")
+
+    rgi_ids = ["RGI60-11.03638"]
+    rgi_paths = get_rgi_paths()
+    working_dir = joinpath(ODINN.root_dir, "test/data")
+    δt = 1/12
+    tspan = (2010.0, 2012.0)
+    tstops = collect(tspan[1]:δt:tspan[2])
+
+    params_sciml = Parameters(
+        simulation = SimulationParameters(
+            working_dir = working_dir,
+            use_MB = false,
+            use_velocities = true,
+            tspan = tspan,
+            step_MB = δt,
+            multiprocessing = false,
+            workers = 1,
+            test_mode = true,
+            rgi_paths = rgi_paths,
+            gridScalingFactor = 4,
+            f_surface_velocity_factor = 0.8
+        ),
+        hyper = Hyperparameters(batch_size = 1, epochs = 100, optimizer = ODINN.Adam(0.005)),
+        physical = PhysicalParameters(minA = 2e-18, maxA = 8e-18),
+        UDE = UDEparameters(
+            grad = ODINN.SciMLSensitivityAdjoint(),
+            sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()),
+            optim_autoAD = Optimization.AutoZygote(),
+            empirical_loss_function = LossH(),
+            target = :A
+        ),
+        solver = Huginn.SolverParameters(step = δt, solver = ROCK4())
+    )
+
+    # Identical params except for the adjoint method
+    params_manual = Parameters(
+        simulation = params_sciml.simulation,
+        hyper = params_sciml.hyper,
+        physical = params_sciml.physical,
+        UDE = UDEparameters(
+            sensealg = params_sciml.UDE.sensealg,
+            optim_autoAD = params_sciml.UDE.optim_autoAD,
+            grad = ContinuousAdjoint(),
+            optimization_method = params_sciml.UDE.optimization_method,
+            empirical_loss_function = params_sciml.UDE.empirical_loss_function,
+            target = params_sciml.UDE.target,
+            initial_condition_filter = params_sciml.UDE.initial_condition_filter
+        ),
+        solver = params_sciml.solver
+    )
+
+    # Ground truth using a known constant A
+    model_gt = Model(
+        iceflow = SIA2Dmodel(params_sciml; A = ConstantA(2.21e-18)),
+        mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    )
+    glaciers = initialize_glaciers(rgi_ids, params_sciml)
+    glaciers = generate_ground_truth(glaciers, params_sciml, model_gt, tstops)
+
+    # Single NN shared across both simulations so both start at the same θ
+    nn_model = NeuralNetwork(params_sciml)
+    mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+
+    sim_sciml = Inversion(
+        Model(
+            iceflow = SIA2Dmodel(params_sciml; A = LawA(nn_model, params_sciml)),
+            mass_balance = mass_balance,
+            regressors = (; A = nn_model)
+        ),
+        glaciers, params_sciml
+    )
+    θ = sim_sciml.model.trainable_components.θ
+
+    sim_manual = Inversion(
+        Model(
+            iceflow = SIA2Dmodel(params_manual; A = LawA(nn_model, params_manual)),
+            mass_balance = mass_balance,
+            regressors = (; A = nn_model)
+        ),
+        glaciers, params_manual
+    )
+    sim_manual.model.trainable_components.θ .= θ
+
+    dθ_sciml = ODINN.grad_loss_iceflow!(θ, sim_sciml, map)
+    @assert !any(isnan, dθ_sciml) "SciML gradient contains NaNs"
+
+    dθ_manual = zero(θ)
+    SIA2D_grad!(dθ_manual, θ, sim_manual)
+
+    ratio, angle, relerr = stats_err_arrays(dθ_sciml, dθ_manual)
+    printVecScientific("ratio  = ", [ratio], thres[1])
+    printVecScientific("angle  = ", [angle], thres[2])
+    printVecScientific("relerr = ", [relerr], thres[3])
+    @test abs(ratio) < thres[1]
+    @test abs(angle) < thres[2]
+    @test abs(relerr) < thres[3]
 end
