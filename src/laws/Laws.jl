@@ -331,6 +331,11 @@ function LawA(
     st = nn_model.st
     smodel = StatefulLuxLayer{true}(archi, nothing, st)
 
+    if isa(params.UDE.grad, SciMLSensitivityAdjoint) && precompute_VJPs
+        @warn "Overwriting precompute_VJPs as the SciMLSensitivity adjoint is used."
+        precompute_VJPs = false
+    end
+
     @assert (typeof(input.T) == iAvgScalarTemp && scalar) ||
             (typeof(input.T) == iAvgGriddedTemp && !scalar) "Input type not supported. Use either `iAvgScalarTemp` when `scalar=true` or `iAvgGriddedTemp` when `scalar=false`."
 
