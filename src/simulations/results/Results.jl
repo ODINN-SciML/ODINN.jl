@@ -5,7 +5,6 @@ export TrainingStats, Results
         F <: AbstractFloat,
         I <: Integer,
         RETC <: Union{String, Nothing},
-        THETA <: Union{<: ComponentVector, Nothing},
         THETA_HIST <: ComponentVector,
         IC <: Union{Dict, Nothing}
     }
@@ -14,12 +13,13 @@ An object with the information of the training.
 
 # Fields
 
-  - `retcode::Union{String, Nothing}`: Report code of the optimization.
+  - `retcode::RETC`: Report code of the optimization.
   - `losses::Vector{F}`: Vector storing the value of the loss function at each iteration.
   - `niter::I`: Total number of iterations/epochs.
-  - `θ::Union{<: ComponentVector, Nothing}`: Parameters of neural network after training
-  - `θ_hist::Vector{<: ComponentVector}`: History of parameters of neural network during training
-  - `∇θ_hist::Vector{<: ComponentVector}`: History of gradients training
+  - `θ::Union{<: ComponentVector, Nothing}`: Parameters of neural network after training.
+  - `θ_hist::Vector{THETA_HIST}`: History of parameters of neural network during training.
+  - `∇θ_hist::Vector{THETA_HIST}`: History of gradients training.
+  - `initial_conditions::IC`: Initial conditions used to solve the PDEs.
   - `lastCall::DateTime`: Last time the callback diagnosis was called.
     This is used to compute the time per iteration.
 """
@@ -27,14 +27,13 @@ mutable struct TrainingStats{
     F <: AbstractFloat,
     I <: Integer,
     RETC <: Union{String, Nothing},
-    THETA <: Union{<: ComponentVector, Nothing},
     THETA_HIST <: ComponentVector,
     IC <: Union{Dict, Nothing}
 }
     retcode::RETC
     losses::Vector{F}
     niter::I
-    θ::THETA
+    θ::Union{<: ComponentVector, Nothing}
     θ_hist::Vector{THETA_HIST}
     ∇θ_hist::Vector{THETA_HIST}
     initial_conditions::IC
@@ -48,7 +47,8 @@ end
         niter::I = 0,
         θ::Union{ComponentVector, Nothing} = nothing,
         θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[],
-        ∇θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[]
+        ∇θ_hist::Union{Vector{ComponentVector}, Nothing} = ComponentVector[],
+        initial_conditions::Union{Dict, Nothing} = nothing
     ) where {F <: AbstractFloat, I <: Integer}
 
 Constructor for TrainingStats object used to store important information during training.
@@ -58,9 +58,11 @@ Constructor for TrainingStats object used to store important information during 
   - `retcode`: Report code of the optimization.
   - `losses`: Vector storing the value of the loss function at each iteration.
   - `niter`: Total number of iterations/epochs.
-  - `θ`: Parameters of neural network after training
-  - `θ_hist`: History of parameters of neural network during training
-  - `∇θ_hist`: History of gradients training
+  - `θ`: Parameters of neural network after training.
+  - `θ_hist`: History of parameters of neural network during training.
+  - `∇θ_hist`: History of gradients training.
+  - `initial_conditions`: Initial conditions used to solve the PDEs.
+  - `lastCall`: Last time the callback diagnosis was called.
 """
 function TrainingStats(;
         retcode::Union{String, Nothing} = nothing,
@@ -75,7 +77,7 @@ function TrainingStats(;
     @assert length(θ_hist) == niter
 
     training_stats = TrainingStats{eltype(losses), typeof(niter), typeof(retcode),
-        typeof(θ), eltype(θ_hist), typeof(initial_conditions)}(
+        eltype(θ_hist), typeof(initial_conditions)}(
         retcode, losses, niter, θ, θ_hist, ∇θ_hist, initial_conditions, DateTime(0, 1, 1)
     )
 
