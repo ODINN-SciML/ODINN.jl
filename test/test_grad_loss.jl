@@ -264,7 +264,7 @@ function test_grad_finite_diff(
     end
 
     loss_iceflow_grad!(dθ, _θ, _simulation) =
-        if isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+        if useSciMLSenseAlg
             ret = ODINN.grad_loss_iceflow!(_θ, simulation, map)
             @assert !any(isnan, ret) "Gradient computed with SciML contains NaNs. Try to run the code again if you just started the REPL. Gradient is $(ret)"
             dθ .= ret

@@ -149,7 +149,7 @@ ENV["GKSwstype"] = "nul"
                 ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP());
                 thres = [5e-4, 7e-7, 2e-3])
             @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
-                ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-7, 1e-5])
+                ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-13, 1e-5])
             @testset "SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA" test_grad_sciml_vs_manual(thres = [
                 1e-3, 1e-13, 1e-3])
         end
