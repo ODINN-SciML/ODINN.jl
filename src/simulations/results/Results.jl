@@ -1,7 +1,14 @@
 export TrainingStats, Results
 
 """
-    mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
+    mutable struct TrainingStats{
+        F <: AbstractFloat,
+        I <: Integer,
+        RETC <: Union{String, Nothing},
+        THETA <: Union{<: ComponentVector, Nothing},
+        THETA_HIST <: ComponentVector,
+        IC <: Union{Dict, Nothing}
+    }
 
 An object with the information of the training.
 
@@ -16,14 +23,21 @@ An object with the information of the training.
   - `lastCall::DateTime`: Last time the callback diagnosis was called.
     This is used to compute the time per iteration.
 """
-mutable struct TrainingStats{F <: AbstractFloat, I <: Integer}
-    retcode::Union{String, Nothing}
+mutable struct TrainingStats{
+    F <: AbstractFloat,
+    I <: Integer,
+    RETC <: Union{String, Nothing},
+    THETA <: Union{<: ComponentVector, Nothing},
+    THETA_HIST <: ComponentVector,
+    IC <: Union{Dict, Nothing}
+}
+    retcode::RETC
     losses::Vector{F}
     niter::I
-    θ::Union{<: ComponentVector, Nothing}
-    θ_hist::Vector{<: ComponentVector}
-    ∇θ_hist::Vector{<: ComponentVector}
-    initial_conditions::Union{Dict, Nothing}
+    θ::THETA
+    θ_hist::Vector{THETA_HIST}
+    ∇θ_hist::Vector{THETA_HIST}
+    initial_conditions::IC
     lastCall::DateTime
 end
 
@@ -60,7 +74,8 @@ function TrainingStats(;
     @assert length(losses) == niter
     @assert length(θ_hist) == niter
 
-    training_stats = TrainingStats{eltype(losses), typeof(niter)}(
+    training_stats = TrainingStats{eltype(losses), typeof(niter), typeof(retcode),
+        typeof(θ), eltype(θ_hist), typeof(initial_conditions)}(
         retcode, losses, niter, θ, θ_hist, ∇θ_hist, initial_conditions, DateTime(0, 1, 1)
     )
 
