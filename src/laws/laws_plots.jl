@@ -85,7 +85,7 @@ function plot_law_1d(
 
         if ground_truth_law !== nothing
             gt_outputs = [only(eval_law(
-                              ground_truth_law, simulation, i, input_tuples[i], nothing))
+                              ground_truth_law, simulation, i, input_tuples[i], θ))
                           for i in 1:length(xvals)]
             lines!(ax, xvals, gt_outputs; linewidth = 3, color = :black,
                 linestyle = :dash, label = "Ground Truth")
@@ -101,7 +101,7 @@ function plot_law_1d(
 
         if ground_truth_law !== nothing
             gt_outputs = eval_law(
-                ground_truth_law, simulation, glacier_idx, input_tuple, nothing)
+                ground_truth_law, simulation, glacier_idx, input_tuple, θ)
             lines!(ax, xvals, gt_outputs; linewidth = 3, color = :black,
                 linestyle = :dash, label = "Ground Truth")
         end

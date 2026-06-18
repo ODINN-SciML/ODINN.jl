@@ -236,5 +236,5 @@ plot_law(functional_inversion.model.iceflow.A, functional_inversion, law_input, 
 # Since we have a very limited range of temperature coverage with these 4 glaciers, we have only captured a small portion of the ground truth law, which has an almost linear form. If we wanted to learn the full dynamics of the Cuffey and Paterson synthetic law, we would need to have glaciers that cover a wider range of temperatures.
 
 # Just to have some additional context, here is how the synthetic law looks like for the full range of temperatures:
-plot_law(prediction.model.iceflow.A, functional_inversion,
+plot_law(prediction.model.iceflow.A, prediction,
     law_input, nothing; plot_full_input_range = true)

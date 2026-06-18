@@ -139,7 +139,7 @@ function train_UDE!(
     loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
+        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function but params.UDE.optim_autoAD = $(simulation.parameters.UDE.optim_autoAD)."
     else
         @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
     end
@@ -206,7 +206,7 @@ function train_UDE!(
     loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
+        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function but params.UDE.optim_autoAD = $(simulation.parameters.UDE.optim_autoAD)."
     else
         @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
     end

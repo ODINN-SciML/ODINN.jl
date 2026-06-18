@@ -97,14 +97,16 @@ function build_simulation_batch(
     glacier = simulation.glaciers[i]
     if length(simulation.results.simulation) < 1
         return Inversion{
-            typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(
+            typeof(model), cache_type(model), typeof(glacier),
+            typeof(simulation.parameters), typeof(simulation.results)}(
             model, cache, [glacier], simulation.parameters, simulation.results)
     else
         # TODO: Notice this assumes there is just one vector in results! Probably needs a fix
         # results = Results([simulation.results.simulation[i]], simulation.results.stats)
         results = Results([only(simulation.results.simulation)], simulation.results.stats)
         return Inversion{
-            typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(
+            typeof(model), cache_type(model), typeof(glacier),
+            typeof(simulation.parameters), typeof(simulation.results)}(
             model, cache, [glacier], simulation.parameters, results)
     end
 end

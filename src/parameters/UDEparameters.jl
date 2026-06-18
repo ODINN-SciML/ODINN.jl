@@ -13,14 +13,21 @@ A mutable struct that holds parameters for a UDE (Universal Differential Equatio
   - `optimization_method::String`: The optimization method to be used.
   - `target::Symbol`: The target variable for the optimization.
 """
-mutable struct UDEparameters{ADJ <: AbstractAdjointMethod} <: AbstractParameters
-    sensealg::SciMLBase.AbstractAdjointSensitivityAlgorithm
-    optim_autoAD::AbstractADType
-    grad::Union{ADJ, Nothing}
+mutable struct UDEparameters{
+    SENSALG <: SciMLBase.AbstractAdjointSensitivityAlgorithm,
+    OPTIMAD <: AbstractADType,
+    ADJ <: Union{AbstractAdjointMethod, Nothing},
+    LOSS <: AbstractLoss,
+    TGT <: Union{Symbol, Nothing},
+    IC <: Union{Symbol, Nothing}
+} <: AbstractParameters
+    sensealg::SENSALG
+    optim_autoAD::OPTIMAD
+    grad::ADJ
     optimization_method::String
-    empirical_loss_function::AbstractLoss
-    target::Union{Symbol, Nothing}
-    initial_condition_filter::Union{Symbol, Nothing}
+    empirical_loss_function::LOSS
+    target::TGT
+    initial_condition_filter::IC
 end
 
 function Base.:(==)(a::UDEparameters, b::UDEparameters)
@@ -73,7 +80,8 @@ function UDEparameters(;
     @assert ((optimization_method == "AD+AD") || (optimization_method == "AD+Diff")) "Wrong optimization method! Needs to be either `AD+AD` or `AD+Diff`"
 
     # Build the solver parameters based on input values
-    UDE_parameters = UDEparameters{typeof(grad)}(
+    UDE_parameters = UDEparameters{typeof(sensealg), typeof(optim_autoAD), typeof(grad),
+        typeof(empirical_loss_function), typeof(target), typeof(initial_condition_filter)}(
         sensealg, optim_autoAD, grad, optimization_method,
         empirical_loss_function, target, initial_condition_filter
     )

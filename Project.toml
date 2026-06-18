@@ -46,10 +46,17 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 SciMLSensitivity = "1ed8b502-d754-442c-8d5d-10ac956f44a1"
 SciMLStructures = "53ae85a6-f571-4167-b2af-e1d143709226"
 Sleipnir = "f5e6c550-199f-11ee-3608-394420200519"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TensorBoardLogger = "899adc3e-224a-11e9-021f-63837185c80f"
 Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[weakdeps]
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+
+[extensions]
+GLMakieExt = "GLMakie"
 
 [compat]
 Aqua = "0.8"
@@ -69,7 +76,7 @@ FastGaussQuadrature = "1"
 FillArrays = "1.16.0"
 FiniteDifferences = "0.12"
 GLMakie = "0.13"
-Huginn = "0.14"
+Huginn = "0.14.1"
 ImageFiltering = "0.7"
 Infiltrator = "1.8, 1.9"
 Interpolations = "0.15, 0.16"
@@ -98,19 +105,14 @@ Revise = "3"
 SciMLBase = "2"
 SciMLSensitivity = "7.98"
 SciMLStructures = "1"
-Sleipnir = "0.14"
+Sleipnir = "0.14.2"
+StaticArrays = "1.9"
 Statistics = "1"
 TensorBoardLogger = "0.1"
 Test = "1.10, 1.11"
 Tullio = "0.3"
 Zygote = "0.7"
 julia = "1.10, 1.11"
-
-[weakdeps]
-GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
-
-[extensions]
-GLMakieExt = "GLMakie"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"

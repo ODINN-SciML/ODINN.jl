@@ -65,7 +65,8 @@ function Hyperparameters(;
         batch_size::Int64 = 15
 )
     # Build Hyperparameters based on input values
-    hyperparameters = Hyperparameters(current_epoch, current_minibatch,
+    hyperparameters = Hyperparameters{typeof(loss_epoch), typeof(current_epoch)}(
+        current_epoch, current_minibatch,
         loss_history, optimizer, loss_epoch,
         epochs, batch_size)
 
