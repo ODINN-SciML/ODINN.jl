@@ -153,7 +153,7 @@ Creating a `Law` implies declaring different components which are provided to th
   - (3) `init_cache`: A function that describes how the cache needs to be initialized for the law to interact with the simulation. It returns an initialized cache.
   - (4) `callback_freq`: Optionally the callback frequency which determines the time frequency on which the law will be called during the simulation (e.g. weekly).
     It is also possible to not provide the `inputs` in which case the `f!` function is in charge of retrieving the appropriate variables to use in the law.
-    See in the API the docstring of [`Sleipnir.Law`](./api.md#Sleipnir.Law-api).
+    See in the [Sleipnir API](API/api_sleipnir.md) the docstring of [`Sleipnir.Law`].
 
 Functional inversions in ODINN are also handled by the `Inversion` subtype of `Simulation`.
 Whether a classical or a functional inversion should be made with respect to some of the components of the PDE depends on how the law is defined.

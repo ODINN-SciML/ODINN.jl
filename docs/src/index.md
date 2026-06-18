@@ -26,8 +26,10 @@ julia> Pkg.add("ODINN")
 The documentation, which you can navigate through the left-hand-side panel, is structured in the following way:
 
   - *Quick start*: Provides a straight-to-the-point example of a simple use-case of `ODINN.jl` to get an idea of the basic interface and API.
+  - *Ecosystem Packages*: Per-package landing pages for each component of the ODINN ecosystem, including scientific role, standalone usage guidance, minimal examples, and developer extension guides.
   - *Tutorials*: They provide clear examples of the main types of simulations and workflows that you can work with in `ODINN.jl`.
   - *How to use ODINN*: Explains the basic building blocks (i.e. types) used in `ODINN.jl` simulations, and how they are assembled together.
+  - *API*: Full API reference for each package (`Sleipnir`, `Huginn`, `Muninn`, `ODINN`), split into separate pages for easy navigation.
   - *Inversions*: Addresses more advanced questions related to inverse modelling, computing gradients, optimization, and machine learning.
   - *Community*: Explains the aspects related to how to contribute to the model(s), code style, building the documentation in local, and the code of conduct.
   - *Ongoing changes and future plans*: Self-explanatory.
@@ -42,13 +44,13 @@ Rather than focusing on global-scale simulations and sea-level rise contribution
 
 ## Architecture
 
-`ODINN.jl` is a modular model, split into multiple packages, each one handling a specific task:
+`ODINN.jl` is a modular model, split into multiple packages, each one handling a specific task. The packages form a dependency chain from bottom to top: `Gungnir` → `Sleipnir` → `Muninn`/`Huginn` → `ODINN.jl`. Each package can be used independently for its specific role, or together through the top-level `ODINN.jl` interface. Dedicated landing pages for each package describe their role, standalone usage, and extension points in detail.
 
-  - [`ODINN.jl`](https://github.com/ODINN-SciML/ODINN.jl) is the high-level interface to the whole ODINN ecosystem, containing the SciML functionalities related to automatic differentiation and sensitivity of hybrid models, mixing differential equations and data-driven regressors.
-  - [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl) is the ice flow dynamics module of ODINN. It contains all the information regarding glacier ice flow models, including the numerical methods to solve the PDEs using [`OrdinaryDiffEq.jl`](https://github.com/SciML/OrdinaryDiffEq.jl).
-  - [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl) is the surface mass balance module of ODINN. It contains all the information regarding glacier interactions with the atmosphere (i.e. surface mass balance processes). It supports simple temperature-index models as well as neural network models via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) extension, which ports pre-trained PyTorch models from [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) into `Lux.jl`.
-  - [`Sleipnir.jl`](https://github.com/ODINN-SciML/Sleipnir.jl) is the core package of ODINN, holding all the basic data structures and functions, common to the whole ecosystem. It directly reads the files provided by [`Gungnir`](https://github.com/ODINN-SciML/Gungnir).
-  - [`Gungnir`](https://github.com/ODINN-SciML/Gungnir) is a Python package, using [OGGM](https://github.com/OGGM/oggm) to retrieve all the necessary files (i.e. rasters and climate data) for the initial conditions and simulations in all the ODINN ecosystem. The user has the possibility to either store those files locally, or to use the ones we provide in a server. This is work in progress, so we will progressively cover more and more glaciers and regions in the near future.
+  - [`Sleipnir.jl`](https://github.com/ODINN-SciML/Sleipnir.jl) is the core package of ODINN, holding all the basic data structures and functions common to the whole ecosystem — glacier geometry (`Glacier2D`), climate data (`Climate2D`), simulation parameters, the law abstraction, and VJP infrastructure. It directly reads the files provided by [`Gungnir`](https://github.com/ODINN-SciML/Gungnir). → [Sleipnir package page](Packages/sleipnir.md)
+  - [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl) is the surface mass balance module of ODINN. It implements temperature-index models calibrated against geodetic observations, and supports neural-network-based mass balance via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) extension, which ports pre-trained PyTorch models into `Lux.jl`. → [Muninn package page](Packages/muninn.md)
+  - [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl) is the ice flow dynamics module of ODINN. It contains all the information regarding glacier ice flow models, including the 2D Shallow Ice Approximation (SIA2D) and the numerical methods to solve the PDEs using [`OrdinaryDiffEq.jl`](https://github.com/SciML/OrdinaryDiffEq.jl). → [Huginn package page](Packages/huginn.md)
+  - [`ODINN.jl`](https://github.com/ODINN-SciML/ODINN.jl) is the high-level interface to the whole ODINN ecosystem, containing the SciML functionalities related to automatic differentiation and sensitivity of hybrid models mixing differential equations and data-driven regressors. → [ODINN package page](Packages/odinn.md)
+  - [`Gungnir`](https://github.com/ODINN-SciML/Gungnir) is a Python package using [OGGM](https://github.com/OGGM/oggm) to retrieve all the necessary files (rasters and climate data) for the initial conditions and simulations in the ODINN ecosystem. Pre-built datasets are provided for common glacier regions; running `Gungnir` yourself is only required for new glaciers or custom climate sources. → [Gungnir package page](Packages/gungnir.md)
 
 ```@raw html
 <img src="./assets/odinn_ecosystem_v4.png" alt="ODINN ecosystem overview" width="700"/>

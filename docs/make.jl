@@ -47,10 +47,13 @@ tutorial_files = [
     "./src/results_plotting_tutorial.jl"
 ]
 
-# Generate independent Markdown files for each tutorial
-for tutorial_file in tutorial_files
-    tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
-    Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
+# Generate independent Markdown files for each tutorial.
+# Set ODINN_SKIP_LITERATE=true to reuse previously generated .md files (faster local iteration).
+if get(ENV, "ODINN_SKIP_LITERATE", "false") != "true"
+    for tutorial_file in tutorial_files
+        tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
+        Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
+    end
 end
 
 # Which markdown files to compile to HTML
@@ -69,6 +72,25 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "Quick start" => "quick_start.md",
+        "Ecosystem packages" => [
+            "Sleipnir.jl" => "Packages/sleipnir.md",
+            "Muninn.jl" => "Packages/muninn.md",
+            "Huginn.jl" => "Packages/huginn.md",
+            "Gungnir" => "Packages/gungnir.md",
+            "ODINN.jl" => "Packages/odinn.md"
+        ],
+        "How to use ODINN" => [
+            "Parameters" => "parameters.md",
+            "Glaciers" => "glaciers.md",
+            "Models" => "models.md",
+            "Results and plotting" => "results_plotting.md",
+            "Plotting tutorial" => "results_plotting_tutorial.md"
+        ],
+        "Inversions" => [
+            "Inversion types" => "inversions.md",
+            "Optimization" => "optimization.md",
+            "Sensitivity analysis" => "sensitivity.md"
+        ],
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
             "Classical inversion" => "classical_inversion.md",
@@ -77,18 +99,11 @@ makedocs(
             "Laws inputs" => "input_laws.md",
             "Laws VJP customization" => "vjp_laws.md"
         ],
-        "How to use ODINN" => [
-            "Parameters" => "parameters.md",
-            "Glaciers" => "glaciers.md",
-            "Models" => "models.md",
-            "Results and plotting" => "results_plotting.md",
-            "Plotting tutorial" => "results_plotting_tutorial.md",
-            "API" => "api.md"
-        ],
-        "Inversions" => [
-            "Inversion types" => "inversions.md",
-            "Optimization" => "optimization.md",
-            "Sensitivity analysis" => "sensitivity.md"
+        "API" => [
+            "Sleipnir.jl" => "API/api_sleipnir.md",
+            "Muninn.jl" => "API/api_muninn.md",
+            "Huginn.jl" => "API/api_huginn.md",
+            "ODINN.jl" => "API/api_odinn.md"
         ],
         "Community" => [
             "How to contribute" => "contribute.md",
