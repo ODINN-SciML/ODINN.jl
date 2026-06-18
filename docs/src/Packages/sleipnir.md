@@ -40,38 +40,9 @@ glacier = glaciers[1]
 @show size(glacier.S)    # surface elevation grid
 ```
 
-## How to extend Sleipnir
+## Extending Sleipnir
 
-### Add a new Law (custom physics or ML computation)
-
-A `Law` wraps a computation that is called at each ODE step (or at a fixed callback frequency). It can hold a cache, support custom VJPs for inverse modelling, and carry a name for dispatch.
-
-```julia
-using Sleipnir
-
-# Define a custom diffusivity law: D = A * H^(n+2)
-my_law_f! = function (cache, H, S, model, t, glacier_idx)
-    @. cache.output = model.iceflow.A.f * H^4  # simplified SIA diffusivity
-end
-
-my_law = Law(
-    f! = my_law_f!,
-    init_cache = (model, glacier) -> MatrixCache(size(glacier.H₀)...),
-    name = :MyCustomA
-)
-```
-
-See the [Laws tutorial](../laws.md) and [Laws VJP tutorial](../vjp_laws.md) for full worked examples including VJP customization for AD compatibility.
-
-### Add a new dynamic input type
-
-Dynamic inputs are values recomputed each ODE step and passed to laws (e.g. surface slope, surface temperature). Subtype `AbstractInput` and implement `generate_inputs`.
-
-See [Laws inputs tutorial](../input_laws.md) for the full pattern.
-
-### Add new observation data to `Glacier2D`
-
-`Glacier2D` accepts optional data fields (`ThicknessData`, `SurfaceVelocityData`, `DhdtData`) as parametric type parameters, using `Nothing` as the absent case. To add a new data type, follow the same pattern in `src/glaciers/data/`.
+To add a new `Law` type, a new dynamic input (`AbstractInput`), or new observation data to `Glacier2D`, see the [Extending ODINN](../extending.md#add-a-new-iceflow-law) guide.
 
 ## API reference
 

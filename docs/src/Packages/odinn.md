@@ -56,35 +56,9 @@ run!(inv)   # calls train_UDE! internally
 
 See the [Quick start](../quick_start.md) and [Functional inversion tutorial](../functional_inversion.md) for full worked examples.
 
-## How to extend ODINN
+## Extending ODINN
 
-### Add a new loss function
-
-Subtype `AbstractLoss` and implement `loss()` and `backward_loss()`:
-
-```julia
-using ODINN
-
-struct MyLoss <: AbstractLoss end
-
-function ODINN.loss(::MyLoss, pred, obs, mask)
-    # pred, obs: (nx, ny) arrays; mask: BitMatrix
-    return mean((pred[.!mask] .- obs[.!mask]) .^ 2)
-end
-
-function ODINN.backward_loss(::MyLoss, pred, obs, mask)
-    # return ∂L/∂pred
-    return 2.0 .* (pred .- obs) .* .!mask ./ count(.!mask)
-end
-```
-
-### Add a new inversion target
-
-Subtype `AbstractSIA2DTarget` and implement `Diffusivity()` and the staggered-grid derivative methods. See `src/models/target/` for the existing `SIA2D_A_target`, `SIA2D_D_target`, and `SIA2D_D_hybrid_target` as templates.
-
-### Add a new adjoint type
-
-Subtype `AbstractAdjoint` in `src/inverse/AdjointTypes.jl` and implement the gradient computation. For manual adjoints through the SIA2D PDE, see `src/inverse/SIA2D/adjoint.jl`.
+To add a new loss function, a new inversion target, or a new adjoint type, see the [Extending ODINN](../extending.md#add-a-new-loss-function) guide.
 
 ## API reference
 

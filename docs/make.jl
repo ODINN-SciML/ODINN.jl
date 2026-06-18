@@ -49,7 +49,11 @@ tutorial_files = [
 
 # Generate independent Markdown files for each tutorial.
 # Set ODINN_SKIP_LITERATE=true to reuse previously generated .md files (faster local iteration).
-if get(ENV, "ODINN_SKIP_LITERATE", "false") != "true"
+# Even when set, Literate still runs if any generated .md file is missing.
+generated_mds_exist = all(
+    isfile("./src/$(splitext(basename(f))[1]).md") for f in tutorial_files
+)
+if get(ENV, "ODINN_SKIP_LITERATE", "false") != "true" || !generated_mds_exist
     for tutorial_file in tutorial_files
         tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
         Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
@@ -77,7 +81,8 @@ makedocs(
             "Muninn.jl" => "Packages/muninn.md",
             "Huginn.jl" => "Packages/huginn.md",
             "Gungnir" => "Packages/gungnir.md",
-            "ODINN.jl" => "Packages/odinn.md"
+            "ODINN.jl" => "Packages/odinn.md",
+            "Extending ODINN" => "extending.md"
         ],
         "How to use ODINN" => [
             "Parameters" => "parameters.md",
