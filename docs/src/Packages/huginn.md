@@ -31,10 +31,11 @@ params = Parameters(
 
 glaciers = initialize_glaciers(["RGI60-11.00897"], params)
 
-# Build the ice flow model with a temperature-dependent creep law
-mb_model = TImodel1(DDF = 6.0/1000.0)
-sia_model = SIA2Dmodel(params)
-model = Model(sia_model, mb_model, nothing)
+# Build the ice flow model (SIA2D + temperature-index mass balance)
+model = Model(
+    iceflow = SIA2Dmodel(params),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+)
 
 # Run a forward simulation
 prediction = Prediction(model, glaciers, params)

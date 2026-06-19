@@ -1,6 +1,6 @@
 # Gungnir
 
-[`Gungnir`](https://github.com/ODINN-SciML/Gungnir) is a Python preprocessing pipeline that produces the glacier and climate data files consumed by the Julia ODINN ecosystem. It uses [OGGM](https://github.com/OGGM/oggm) to retrieve glacier geometry (DEMs, ice thickness, outlines) from the Randolph Glacier Inventory (RGI), and downloads climate reanalyses (W5E5 or ERA5) to force the mass balance models. The output is written to `~/.ODINN/ODINN_prepro/` as HDF5/JLD2 files, which `Sleipnir.initialize_glaciers()` reads at simulation time.
+[`Gungnir`](https://github.com/ODINN-SciML/Gungnir) is a Python preprocessing pipeline that produces the glacier and climate data files consumed by the Julia ODINN ecosystem. It uses [OGGM](https://github.com/OGGM/oggm) to retrieve glacier geometry (DEMs, ice thickness, outlines) from the Randolph Glacier Inventory (RGI), and downloads climate reanalyses (W5E5 or ERA5) to force the mass balance models. The output is written to `~/.ODINN/ODINN_prepro/` as NetCDF files, which `Sleipnir.initialize_glaciers()` reads via `Rasters.jl` at simulation time.
 
 Unlike the Julia packages in the ecosystem, `Gungnir` is **not** a Julia package — it runs in a Python environment and has no Julia API. It sits at the bottom of the dependency hierarchy: Gungnir → Sleipnir → Muninn/Huginn → ODINN.
 
@@ -76,18 +76,28 @@ After running, `Sleipnir.initialize_glaciers(rgi_ids, params)` will detect and l
 
 ## The Gungnir → Sleipnir handoff
 
-Gungnir writes per-glacier directories under `~/.ODINN/ODINN_prepro/<RGI_ID>/`. Each directory contains:
+This is the boundary between Python and Julia: Gungnir (Python) writes NetCDF files to disk; everything from `Sleipnir.initialize_glaciers()` onward is Julia.
 
-  - `glacier_stats.h5` — static geometry: bed, surface, thickness, coordinates
-  - `climate_<source>.h5` — gridded climate time series at glacier resolution
+Gungnir writes output under `~/.ODINN/ODINN_prepro/`. The root contains two JSON index files:
 
-`Sleipnir.initialize_glaciers()` reads these files, builds `Glacier2D` objects with the appropriate `Climate2D` attached, and downscales climate to the glacier grid via `downscale_2D_climate!()`. From that point forward, all computation is in Julia.
+  - `rgi_paths.json` — maps each RGI ID to the relative path of its glacier directory
+  - `rgi_names.json` — maps each RGI ID to the glacier name
+
+Individual glacier directories live at `per_glacier/<region>/<subregion>/<RGI_ID>/`, for example `per_glacier/RGI60-07/RGI60-07.00/RGI60-07.00042/`. Each directory contains:
+
+  - `gridded_data.nc` — static gridded attributes: DEM (`topo`), glacier mask, ice thickness from Farinotti 2019 (`consensus_ice_thickness`) and Millan 2022 (`millan_ice_thickness`), surface velocity fields (`millan_vx`, `millan_vy`), slope, aspect, and border distance.
+  - `climate_historical_daily_W5E5.nc` — daily W5E5 climate forcing (temp, prcp) near the glacier centroid.
+  - `climate_historical_monthly_ERA5.nc` or `climate_historical_daily_ERA5.nc` — ERA5 climate forcing at monthly or daily resolution depending on the mode used during preprocessing (see [Climate data sources](#climate-data-sources)).
+
+On the Julia side, `Sleipnir.initialize_glaciers()` reads `rgi_paths.json` to locate each glacier, loads the NetCDF files as `RasterStack` objects via `Rasters.jl`, builds `Glacier2D` structs with a `Climate2D` attached, and downscales the climate time series to the glacier grid via `downscale_2D_climate!()`.
 
 ## How to add a new climate source or atmospheric variable
 
- 1. Add a new downloader function in `gungnir/climate/` following the existing W5E5 or ERA5 pattern.
- 2. Register the new source name in the `CLIMATE_SOURCES` registry in `gungnir/config.py`.
- 3. Ensure the new variables are written to the output HDF5 file with field names that match the `Climate2Dstep` fields defined in `Sleipnir`.
+Climate retrieval is wired directly into the preprocessing loop in `gungnir/gungnir/preprocessing.py` — there is no plugin registry. The existing sources are the template: W5E5 via `process_w5e5_data` (from MBsandbox), and ERA5 via `ensure_era5_file_for_gdir` in `gungnir/gungnir/era5_climate.py`.
+
+ 1. Add a downloader/processor that writes a per-glacier NetCDF file, following the ERA5 pattern in `era5_climate.py`.
+ 2. Call it for each glacier inside `preprocessing_glaciers` in `preprocessing.py`, next to the existing W5E5/ERA5 calls.
+ 3. Ensure the new variables are written to the output NetCDF file with field names that match the `Climate2Dstep` fields defined in `Sleipnir`.
  4. If new fields are needed in `Climate2Dstep`, add them in `Sleipnir/src/glaciers/climate/Climate2D.jl` and update `downscale_2D_climate!` accordingly.
 
 Contributions to Gungnir are tracked in the [`Gungnir` GitHub repository](https://github.com/ODINN-SciML/Gungnir).

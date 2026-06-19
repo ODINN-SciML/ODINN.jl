@@ -2,9 +2,9 @@
 
 [`Sleipnir.jl`](https://github.com/ODINN-SciML/Sleipnir.jl) is the foundational package of the ODINN ecosystem, providing the core data structures and infrastructure on which all other packages are built. Every other ODINN package (`Huginn`, `Muninn`, `ODINN`) depends on `Sleipnir`, and each re-exports its symbols so downstream users rarely need to import `Sleipnir` directly.
 
-`Sleipnir` defines the glacier geometry and climate data containers (`Glacier2D`, `Climate2D`), the simulation parameter hierarchy (`Parameters`, `SimulationParameters`, `PhysicalParameters`), the law abstraction used to plug physical or machine-learning computations into the PDE solvers (`Law`, `AbstractLaw`), and the results container (`Results`). It also hosts the VJP infrastructure (`VJP`, `MatrixCache`, `ScalarCache`) used by inverse modelling workflows.
+`Sleipnir` defines the glacier geometry and climate data containers (`Glacier2D`, `Climate2D`), the simulation parameter hierarchy (`Parameters`, `SimulationParameters`, `PhysicalParameters`), the law abstraction used to plug physical or machine-learning computations into the PDE solvers (`Law`, `AbstractLaw`), and the results container (`Results`). It also hosts the VJP infrastructure (`MatrixCache`, `ScalarCache`) used by inverse modelling workflows.
 
-Data for `Sleipnir` is preprocessed by the Python package [`Gungnir`](gungnir.md) and stored under `~/.ODINN/ODINN_prepro/`. When preprocessing has been run, glacier objects are assembled with `initialize_glaciers()`, which reads the stored HDF5/JLD2 files. Pre-built datasets for common regions can be downloaded automatically without running `Gungnir` yourself.
+Data for `Sleipnir` is preprocessed by the Python package [`Gungnir`](gungnir.md) and stored under `~/.ODINN/ODINN_prepro/`. When preprocessing has been run, glacier objects are assembled with `initialize_glaciers()`, which reads the stored NetCDF files via `Rasters.jl`. Pre-built datasets for common regions can be downloaded automatically without running `Gungnir` yourself.
 
 ## Use directly vs. use `ODINN.jl`
 

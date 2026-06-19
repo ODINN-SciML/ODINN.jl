@@ -128,15 +128,14 @@ end
 
 ## Add a new mass balance model
 
-New mass balance models subtype `MBmodel` (defined in `Muninn`). When an ODE step fires the MB callback, the application chain is:
+New mass balance models subtype `MBmodel` (defined in `Muninn`). The MB callback fires every `step_MB` and runs three steps in sequence — only `compute_MB` is model-specific:
 
 ```
-MB_timestep!(glacier, cache, mb_model, t, step)
-  └── compute_MB(mb_model, climate_2D_step, step)   ← implement this
-        └── returns Matrix{Float} of MB values
-  └── apply_MB_mask!(H, MB, MB_total)               ← handles ice-edge masking
-        └── mutates H in-place; clips MB to prevent negative thickness
-  └── pushes snapshot to cache.iceflow.MB_history
+MB callback (every step_MB):
+  ├── MB_timestep!(cache, model, glacier, step, t)          # writes the MB into cache.iceflow.MB
+  │     └── compute_MB(mb_model, climate_2D_step, step)     ← implement this for your model
+  ├── apply_MB_mask!(H, cache.iceflow)                      # applies the MB to the ice thickness H, clipping to avoid negative thickness
+  └── push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))   # records the MB snapshot
 ```
 
 **Minimum to implement:**
@@ -219,31 +218,42 @@ For the conceptual overview of how `Law` binds inputs and a regressor to a targe
 
 ## Add a new loss function
 
-A *loss function* measures the mismatch between the model's predicted state (ice thickness, surface velocity, etc.) and observations. ODINN's built-in losses (`LossH`, `LossV`, `LossHV`) cover the most common cases. To add a different metric (e.g. an uncertainty-weighted MSE that uses the per-glacier observation uncertainties from Hugonnet et al. 2021) subtype `AbstractLoss` and implement `loss`, which must return a scalar:
+A *loss function* measures the mismatch between the model's predicted state (ice thickness, surface velocity, etc.) and observations. The metric itself is a **simple loss** (`AbstractSimpleLoss`, like the built-in `L2Sum` and `LogSum`); the composites `LossH`, `LossV`, `LossHV` (subtypes of `AbstractLoss`) then apply that metric to ice thickness and/or velocity. To add a new metric (e.g. a mean absolute error), subtype `AbstractSimpleLoss`. It needs a `distance` field — the composite uses it to build the in-glacier mask — and a `loss` method returning a scalar:
 
 ```julia
 using ODINN
 
-struct MyLoss <: AbstractLoss end
+struct MyLoss <: AbstractSimpleLoss
+    distance::Int
+end
+MyLoss(; distance = 3) = MyLoss(distance)
 
-function ODINN.loss(::MyLoss, pred, obs, mask)
-    # pred, obs: (nx, ny) arrays of predicted/observed values (ice thickness, velocity, …)
-    # mask: BitMatrix — true where data is MISSING; use .!mask to select valid pixels
-    return mean((pred[.!mask] .- obs[.!mask]) .^ 2)
+# a = prediction, b = reference (both (nx, ny)); mask is TRUE for valid in-glacier
+# pixels; normalization is a scalar divisor. Must return a scalar.
+function ODINN.loss(::MyLoss, a::Matrix, b::Matrix, mask::BitMatrix, normalization)
+    return sum(abs.(a[mask] .- b[mask])) / normalization
 end
 ```
 
-Pass it to an `Inversion` via the `loss` keyword: `Inversion(model, glaciers, params; loss = MyLoss())`.
+Select it by wrapping it in a thickness/velocity loss and passing it through `UDEparameters` (there is no `loss` keyword on `Inversion`):
+
+```julia
+params = Parameters(
+# …,
+    UDE = UDEparameters(empirical_loss_function = LossH(loss = MyLoss()))   # LossV / LossHV for velocity
+)
+```
 
 **Do you also need `backward_loss`?**
 
-`backward_loss` returns `∂L/∂pred` — the per-pixel gradient of the loss. It is only called by ODINN's manual adjoint methods (`DiscreteAdjoint` and `ContinuousAdjoint`). If you use `SciMLSensitivityAdjoint` (configured via `UDEparameters(grad = SciMLSensitivityAdjoint(), optim_autoAD = AutoZygote())`), Zygote differentiates through the loss automatically and `backward_loss` is never called. You only need it for manual adjoint configurations:
+`backward_loss` returns `∂L/∂a` (same shape as `a`), zero outside the mask. It is only called by ODINN's manual adjoint methods (`DiscreteAdjoint` and `ContinuousAdjoint`). With `SciMLSensitivityAdjoint` (configured via `UDEparameters(grad = SciMLSensitivityAdjoint(), optim_autoAD = Optimization.AutoZygote())`), Zygote differentiates through the loss automatically and `backward_loss` is never called. You only need it for the manual adjoints:
 
 ```julia
-function ODINN.backward_loss(::MyLoss, pred, obs, mask)
-    # ∂MSE/∂pred = 2*(pred - obs) / n_valid, zero where data is missing
-    n = count(.!mask)
-    return 2.0 .* (pred .- obs) .* .!mask ./ n
+function ODINN.backward_loss(::MyLoss, a::Matrix, b::Matrix, mask::BitMatrix, normalization)
+    # ∂/∂a of sum|a − b|, restricted to valid pixels
+    d = zero(a)
+    d[mask] = sign.(a[mask] .- b[mask])
+    return d ./ normalization
 end
 ```
 

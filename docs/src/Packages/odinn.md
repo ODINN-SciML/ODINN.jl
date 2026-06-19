@@ -31,27 +31,31 @@ params = Parameters(
         multiprocessing = false,
         use_MB = true
     ),
+    hyper = Hyperparameters(optimizer = ODINN.Adam(0.01), epochs = 50),
     UDE = UDEparameters(
-        sensealg = InterpolatingAdjoint(autojacvec = EnzymeVJP()),
-        optim_autoAD = Optimization.AutoEnzyme(),
-        grad = ContinuousAdjoint()
-    ),
-    hyper = Hyperparameters(optimizer = Adam(0.01), epochs = 50)
+        optim_autoAD = ODINN.NoAD(),
+        grad = ContinuousAdjoint(),
+        empirical_loss_function = LossH()   # fit to ice thickness
+    )
 )
 
 glaciers = initialize_glaciers(["RGI60-11.00897", "RGI60-11.01450"], params)
 
-# Build a UDE model: learn the creep coefficient A via a neural network
-nn = NeuralNetwork(2 => [8, 8] => 1, params)
-law_A = LawA(nn)
-sia = SIA2Dmodel(params)
-mb = TImodel1(DDF = 6.0/1000.0)
-model = Model(sia, mb, TrainableComponents(A = law_A))
+# Build a UDE model: learn the creep coefficient A with a neural network.
+# The NN-backed law is attached to the iceflow model, and the same NN is
+# registered as the regressor for A.
+nn_model = NeuralNetwork(params)
+A_law = LawA(nn_model, params)
+model = Model(
+    iceflow = SIA2Dmodel(params; A = A_law),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    regressors = (; A = nn_model)
+)
 
-# Train on thickness observations
-loss = LossH()
-inv = Inversion(model, glaciers, params; loss)
-run!(inv)   # calls train_UDE! internally
+# Train (the glaciers must carry the observations to fit to — see the
+# functional inversion tutorial for generating/loading reference data)
+functional_inversion = Inversion(model, glaciers, params)
+run!(functional_inversion)
 ```
 
 See the [Quick start](../quick_start.md) and [Functional inversion tutorial](../functional_inversion.md) for full worked examples.
