@@ -116,7 +116,7 @@ function test_grad_finite_diff(
             workers = 1,
             test_mode = true,
             rgi_paths = rgi_paths,
-            gridScalingFactor = 4,
+            gridScalingFactor = custom_NN ? 8 : 4,
             f_surface_velocity_factor = 0.8
         ),
         hyper = Hyperparameters(
@@ -690,7 +690,7 @@ function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
             workers = 1,
             test_mode = true,
             rgi_paths = rgi_paths,
-            gridScalingFactor = custom_NN ? 8 : 4,
+            gridScalingFactor = 4,
             f_surface_velocity_factor = 0.8
         ),
         hyper = Hyperparameters(batch_size = 1, epochs = 100, optimizer = ODINN.Adam(0.005)),
