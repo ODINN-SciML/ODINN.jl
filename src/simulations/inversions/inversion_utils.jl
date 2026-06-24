@@ -169,7 +169,8 @@ function train_UDE!(
     )
 
     θ_trained = iceflow_trained.u
-    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(
+        θ_trained, simulation, pmap; processVelocity = Huginn.V_from_H)
 
     return iceflow_trained
 end
@@ -235,13 +236,14 @@ function train_UDE!(
     )
 
     θ_trained = iceflow_trained.u
-    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(
+        θ_trained, simulation, pmap; processVelocity = Huginn.V_from_H)
 
     return iceflow_trained
 end
 
 """
-    create_results(θ, simulation::Inversion, mappingFct)
+    create_results(θ, simulation::Inversion, mappingFct; processVelocity::Union{Nothing, Function} = nothing)
 
 Given the parameters θ, solve the iceflow problem for all the glaciers and aggregate
 the results for all of them.
@@ -254,8 +256,10 @@ Arguments:
   - `θ`: Parameters to use for the forward simulation.
   - `simulation::Inversion`: Simulation structure that contains all the required information about the inversion.
   - `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
+  - `processVelocity::Union{Nothing, Function}`: Post processing function to map the ice thickness to the surface velocity. It is called before creating the results. It takes as inputs simulation, ice thickness (matrix) and the associated time and returns 3 variables Vx, Vy, V which are all matrix. Defaults is nothing which means no post processing is applied.
 """
-function create_results(θ, simulation::Inversion, mappingFct)
+function create_results(θ, simulation::Inversion, mappingFct;
+        processVelocity::Union{Nothing, Function} = nothing)
     simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     results = mappingFct(simulations) do simulation
@@ -534,6 +538,7 @@ function _batch_iceflow_UDE(
     iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob, tstops)
 
     # Compute simulation results
+    # No need to generate the velocities since this is automatically computed directly inside the loss function when needed
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, tstops;
         MB = container.simulation.cache.iceflow.MB_history,
