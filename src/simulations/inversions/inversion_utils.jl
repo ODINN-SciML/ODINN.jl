@@ -266,7 +266,8 @@ function create_results(θ, simulation::Inversion, mappingFct;
         container = InversionBinder(simulation, simulation.model.trainable_components.θ)
         [_batch_iceflow_UDE(
              container, glacier_idx,
-             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx)
+             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx);
+             processVelocity = processVelocity
          ) for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
@@ -471,7 +472,8 @@ end
     _batch_iceflow_UDE(
         container::InversionBinder,
         glacier_idx::Integer,
-        iceflow_prob::ODEProblem,
+        iceflow_prob::ODEProblem;
+        processVelocity::Union{Nothing, Function} = nothing
     )
 
 Define the callbacks to be called by the ODE solver, solve the ODE and create the results.
@@ -479,7 +481,8 @@ Define the callbacks to be called by the ODE solver, solve the ODE and create th
 function _batch_iceflow_UDE(
         container::InversionBinder,
         glacier_idx::Integer,
-        iceflow_prob::ODEProblem
+        iceflow_prob::ODEProblem;
+        processVelocity::Union{Nothing, Function} = nothing
 )
     params = container.simulation.parameters
     glacier = container.simulation.glaciers[glacier_idx]
@@ -542,7 +545,8 @@ function _batch_iceflow_UDE(
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, tstops;
         MB = container.simulation.cache.iceflow.MB_history,
-        t_MB = container.simulation.cache.iceflow.MB_times
+        t_MB = container.simulation.cache.iceflow.MB_times,
+        processVelocity = processVelocity
     )
 end
 
