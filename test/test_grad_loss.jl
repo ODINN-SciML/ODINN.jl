@@ -327,7 +327,7 @@ function test_grad_finite_diff(
                     end
                 else
                     # Mask parameter vector
-                    if mask_parameter_vector && (length(θ[key]) < max_params)
+                    if mask_parameter_vector && (length(θ[key]) > max_params)
                         indx = ODINN.sample(1:length(θ[key]), max_params; replace = false)
                     else
                         indx = 1:length(θ[key]) |> collect
