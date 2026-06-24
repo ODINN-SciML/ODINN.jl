@@ -38,7 +38,7 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `multiglacier::Bool`: Whether to run the test on multiple glaciers.
   - `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
   - `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
-  - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network.
+  - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network. If the custom neural network is used, the glacier grid and the number of points in the VJP interpolation are reduced to spare computation time and memory.
   - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
   - `mask_parameter_vector::Bool`: Whether to apply a mask to the parameter vector `θ` before evaluating finite-difference gradients. If `false`, the
     mask based on `max_params` is just applied to the initial conditions, not to parameters of the regressor.
@@ -244,7 +244,7 @@ function test_grad_finite_diff(
             regressors = regressors,
             target = SIA2D_D_target(
                 interpolation = :Linear,
-                n_interp_half = 200
+                n_interp_half = custom_NN ? 50 : 200
             )
         )
     end
@@ -690,7 +690,7 @@ function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
             workers = 1,
             test_mode = true,
             rgi_paths = rgi_paths,
-            gridScalingFactor = 4,
+            gridScalingFactor = custom_NN ? 8 : 4,
             f_surface_velocity_factor = 0.8
         ),
         hyper = Hyperparameters(batch_size = 1, epochs = 100, optimizer = ODINN.Adam(0.005)),
