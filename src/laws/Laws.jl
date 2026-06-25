@@ -452,7 +452,6 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
 
         init_cache = function (simulation, glacier_idx, θ)
             (; nx, ny) = simulation.glaciers[glacier_idx]
-            #@infiltrate
             MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), vec(zero(θ.A[Symbol("$(glacier_idx)")])), glacier_idx)
         end
 
@@ -460,7 +459,6 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
             # In this function we compute the diagonal of the Jacobian since `f!` applies element-wise
             # We do so by using the `sum` trick below
             ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ)
-            #@infiltrate
             cache.vjp_θ .= vec(ret.A[Symbol("$(cache.glacier_id)")])
         end
 
