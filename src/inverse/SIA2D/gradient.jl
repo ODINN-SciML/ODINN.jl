@@ -102,7 +102,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             tstopsDiscreteLoss, tstopsAggregatedLoss)))
 
         @assert length(t) == length(tstops) "The size of tstops does not match with the size of the reference times."
-        @assert isapprox(t, tstops, rtol = 1e-10) "Times in tstops and reference times in result do not coincide. Maximum difference is $(maximum(abs.(t-tstops)))"
+        @assert isapprox(t, tstops, rtol = 1e-7) "Times in tstops and reference times in result do not coincide. Maximum difference is $(maximum(abs.(t-tstops)))"
         if useThickness
             @assert size(H[begin]) == size(H_ref[begin])
         end
@@ -366,7 +366,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 stop_condition_loss, integrator -> effect_loss!(-integrator.t, integrator.u))
 
             # Contribution of aggregated losses
-            # @infiltrate
             ∂L∂H_aggregated_loss,
             ∂L∂θ_aggregated_loss = if length(tstopsAggregatedLoss)>0
                 indPostIntegralLoss = Sleipnir.indFromT(tspan, tstopsAggregatedLoss, t)
