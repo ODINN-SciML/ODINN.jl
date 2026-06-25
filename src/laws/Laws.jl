@@ -452,7 +452,8 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
 
         init_cache = function (simulation, glacier_idx, θ)
             (; nx, ny) = simulation.glaciers[glacier_idx]
-            MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), vec(zero(θ.A[Symbol("$(glacier_idx)")])), glacier_idx)
+            MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1),
+                vec(zero(θ.A[Symbol("$(glacier_idx)")])), glacier_idx)
         end
 
         p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
