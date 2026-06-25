@@ -249,7 +249,8 @@ function VJP_λ_∂SIA∂θ_discrete(
     # Evaluate numerical integral for loss
     @tullio ∂θ_v[k] := ∂D∂θ[i, j, k] * D_adjoint[i, j]
     # Construct component vector
-    ∂θ = Vector2ComponentVector(∂θ_v, θ)
+    ∂θ = zero(θ)
+    ∂θ.A .= vec(∂θ_v)
 
     return ∂θ
 end
@@ -407,7 +408,8 @@ function VJP_λ_∂surface_V∂θ_discrete(
     # Evaluate numerical integral for loss
     @tullio ∂θ_v[k] := ∂D∂θ[i, j, k] * ∇S∂V[i, j]
     # Construct component vector
-    ∂θ = Vector2ComponentVector(∂θ_v, θ)
+    ∂θ = zero(θ)
+    ∂θ.A .= vec(∂θ_v)
 
     return -∂θ
 end
@@ -656,7 +658,8 @@ function VJP_λ_∂SIA∂θ_continuous(
     # Evaluate numerical integral for loss
     @tullio ∂θ_v[k] := ∇_∂D∂θ_∇S[i, j, k] * λ[i, j]
 
-    ∂θ = Vector2ComponentVector(∂θ_v, θ)
+    ∂θ = zero(θ)
+    ∂θ.A .= vec(∂θ_v)
 
     return ∂θ
 end
