@@ -250,7 +250,7 @@ function VJP_λ_∂SIA∂θ_discrete(
     @tullio ∂θ_v[k] := ∂D∂θ[i, j, k] * D_adjoint[i, j]
     # Construct component vector
     ∂θ = zero(θ)
-    ∂θ.A .= vec(∂θ_v)
+    assign_∂θ!(target, ∂θ, ∂θ_v)
 
     return ∂θ
 end
@@ -409,7 +409,7 @@ function VJP_λ_∂surface_V∂θ_discrete(
     @tullio ∂θ_v[k] := ∂D∂θ[i, j, k] * ∇S∂V[i, j]
     # Construct component vector
     ∂θ = zero(θ)
-    ∂θ.A .= vec(∂θ_v)
+    assign_∂θ!(target, ∂θ, ∂θ_v)
 
     return -∂θ
 end
@@ -659,7 +659,7 @@ function VJP_λ_∂SIA∂θ_continuous(
     @tullio ∂θ_v[k] := ∇_∂D∂θ_∇S[i, j, k] * λ[i, j]
 
     ∂θ = zero(θ)
-    ∂θ.A .= vec(∂θ_v)
+    assign_∂θ!(target, ∂θ, ∂θ_v)
 
     return ∂θ
 end
