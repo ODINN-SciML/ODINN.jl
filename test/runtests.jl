@@ -247,7 +247,7 @@ ENV["GKSwstype"] = "nul"
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-8, 1e-4],
                 functional_inv = false, scalar = false,
                 loss = MultiLoss(
-                    losses = (LossH(), InitialThicknessRegularization(t₀ = 2010.0)), λs = (
+                    losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (
                         1.0, 1.0)),
                 train_initial_conditions = true)
         end

@@ -62,7 +62,7 @@ params = Parameters(
         grad = ContinuousAdjoint(),
         optimization_method = "AD+AD",
         empirical_loss_function = MultiLoss(
-            losses = (LossH(), InitialThicknessRegularization(t₀ = 1994.0)),
+            losses = (LossH(), InitialThicknessRegularization(1994.0)),
             λs = (1.0, 1e-4)
         ),
         target = :A,
