@@ -168,3 +168,7 @@ function ∂Velocityꜛ∂θ(
         return sparse_cartesian_tensor(∂A_spatial, iceflow_cache.A.vjp_θ)
     end
 end
+
+function assign_∂θ!(target::SIA2D_A_target, ∂θ, ∂θ_v)
+    ∂θ.A .= vec(∂θ_v)
+end

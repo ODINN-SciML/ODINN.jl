@@ -147,7 +147,7 @@ function LawU(
     init_cache_matrix = function (simulation, glacier_idx, θ)
         glacier = simulation.glaciers[glacier_idx]
         (; nx, ny) = glacier
-        return MatrixCache(zeros(nx - 1, ny - 1), zeros(nx - 1, ny - 1), zero(θ))
+        return MatrixCache(zeros(nx - 1, ny - 1), zeros(nx - 1, ny - 1), zero(θ.U))
     end
 
     p_VJP! = let smodel = smodel, prescale = prescale, postscale = postscale
@@ -162,7 +162,7 @@ function LawU(
                 grad, = Zygote.gradient(
                     _θ -> _pred_NN(
                         [h, ∇s], smodel, _θ.U, prescale, postscale), θ)
-                grads[i, j] .= ODINN.ComponentVector2Vector(grad)
+                grads[i, j] .= ODINN.ComponentVector2Vector(grad.U)
             end
             cache.interp_θ = interpolate((nodes_H, nodes_∇S), grads, Gridded(Linear()))
         end
@@ -265,7 +265,7 @@ function LawY(
             end,
             init_cache = function (simulation, glacier_idx, θ; scalar::Bool = true)
                 (; nx, ny) = simulation.glaciers[glacier_idx]
-                return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ))
+                return MatrixCache(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ.Y))
             end
         )
     end
@@ -363,7 +363,7 @@ function LawA(
     end
     p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
         ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
-        cache.vjp_θ .= ret
+        cache.vjp_θ .= ret.A
     end
     A_law = if scalar
         Law{ScalarCache}(;
@@ -371,7 +371,7 @@ function LawA(
             inputs = input,
             f! = f!,
             init_cache = function (simulation, glacier_idx, θ)
-                return ScalarCache(zeros(), zeros(), zero(θ))
+                return ScalarCache(zeros(), zeros(), zero(θ.A))
             end,
             p_VJP! = precompute_VJPs ? p_VJP! : nothing,
             callback_freq = callback_freq
@@ -383,7 +383,7 @@ function LawA(
             f! = f!,
             init_cache = function (simulation, glacier_idx, θ)
                 (; nx, ny) = simulation.glaciers[glacier_idx]
-                return MatrixCache(zeros(nx, ny), zeros(nx, ny), zero(θ))
+                return MatrixCache(zeros(nx, ny), zeros(nx, ny), zero(θ.A))
             end
         )
     end
@@ -429,7 +429,7 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
             end
         end
         init_cache = function (simulation, glacier_idx, θ)
-            ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
+            ScalarCacheGlacierId(zeros(), zeros(), vec(zero(θ.A[Symbol("$(glacier_idx)")])), glacier_idx)
         end
 
         p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
@@ -457,7 +457,8 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
 
         init_cache = function (simulation, glacier_idx, θ)
             (; nx, ny) = simulation.glaciers[glacier_idx]
-            MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ), glacier_idx)
+            MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1),
+                vec(zero(θ.A[Symbol("$(glacier_idx)")])), glacier_idx)
         end
 
         p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
@@ -520,7 +521,7 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
 
     if scalar
         init_cache = function (simulation, glacier_idx, θ)
-            ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
+            ScalarCacheGlacierId(zeros(), zeros(), vec(zero(θ.C[Symbol("$(glacier_idx)")])), glacier_idx)
         end
 
         C_law = Law{ScalarCacheGlacierId}(;
@@ -532,7 +533,8 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
     else
         init_cache = function (simulation, glacier_idx, θ)
             (; nx, ny) = simulation.glaciers[glacier_idx]
-            MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ), glacier_idx)
+            MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1),
+                vec(zero(θ.C[Symbol("$(glacier_idx)")])), glacier_idx)
         end
 
         C_law = Law{MatrixCacheGlacierId}(;
