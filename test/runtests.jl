@@ -207,8 +207,9 @@ ENV["GKSwstype"] = "nul"
         @testset "Adjoint method of SIA equation with pure D as target and custom NN" begin
             # @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-7, 1e-3], target = :D, custom_NN = true)
             @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences (loss V)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-7, 5e-3],
-                target = :D, custom_NN = true, loss = LossV())
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-7, 1e-4],
+                target = :D, custom_NN = true, loss = LossV(),
+                max_params = 25, mask_parameter_vector = true)
         end
     end
 
