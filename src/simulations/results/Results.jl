@@ -5,8 +5,7 @@ export TrainingStats, Results
         F <: AbstractFloat,
         I <: Integer,
         RETC <: Union{String, Nothing},
-        THETA_HIST <: ComponentVector,
-        IC <: Union{Dict, Nothing}
+        THETA_HIST <: ComponentVector
     }
 
 An object with the information of the training.
@@ -19,7 +18,7 @@ An object with the information of the training.
   - `θ::Union{<: ComponentVector, Nothing}`: Parameters of neural network after training.
   - `θ_hist::Vector{THETA_HIST}`: History of parameters of neural network during training.
   - `∇θ_hist::Vector{THETA_HIST}`: History of gradients training.
-  - `initial_conditions::IC`: Initial conditions used to solve the PDEs.
+  - `initial_conditions::Union{<: Dict, Nothing}`: Initial conditions used to solve the PDEs.
   - `lastCall::DateTime`: Last time the callback diagnosis was called.
     This is used to compute the time per iteration.
 """
@@ -27,8 +26,7 @@ mutable struct TrainingStats{
     F <: AbstractFloat,
     I <: Integer,
     RETC <: Union{String, Nothing},
-    THETA_HIST <: ComponentVector,
-    IC <: Union{Dict, Nothing}
+    THETA_HIST <: ComponentVector
 }
     retcode::RETC
     losses::Vector{F}
@@ -36,7 +34,7 @@ mutable struct TrainingStats{
     θ::Union{<: ComponentVector, Nothing}
     θ_hist::Vector{THETA_HIST}
     ∇θ_hist::Vector{THETA_HIST}
-    initial_conditions::IC
+    initial_conditions::Union{<: Dict, Nothing}
     lastCall::DateTime
 end
 
@@ -77,7 +75,7 @@ function TrainingStats(;
     @assert length(θ_hist) == niter
 
     training_stats = TrainingStats{eltype(losses), typeof(niter), typeof(retcode),
-        eltype(θ_hist), typeof(initial_conditions)}(
+        eltype(θ_hist)}(
         retcode, losses, niter, θ, θ_hist, ∇θ_hist, initial_conditions, DateTime(0, 1, 1)
     )
 
