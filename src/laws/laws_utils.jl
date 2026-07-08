@@ -44,6 +44,15 @@ function eval_law(law::AbstractLaw, simulation::Simulation,
     return cache.value
 end
 
+# ConstantLaw holds a fixed value (no `f`); its init_cache returns the value directly.
+function eval_law(law::ConstantLaw, simulation::Simulation,
+        glacier_idx::Integer, input_values::NamedTuple, θ)
+    if !isnothing(simulation.model.trainable_components)
+        simulation.model.trainable_components.θ = θ
+    end
+    return init_cache(law, simulation, glacier_idx, θ).value
+end
+
 """
     T_A_Alaw(simulation::Simulation, glacier_idx::Integer, θ, t::AbstractFloat)
 

@@ -41,6 +41,7 @@ using Optimization, Optim, Optimisers, OptimizationOptimisers, OptimizationOptim
 using Optimisers: Adam # Import manually because this conflicts with Optim.Adam
 using ComponentArrays
 using ChainRules: @ignore_derivatives
+import ChainRules
 using SciMLBase: NoAD, CallbackSet
 using DiffEqCallbacks: PeriodicCallback
 using MLUtils: DataLoader

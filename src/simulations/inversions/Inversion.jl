@@ -52,8 +52,16 @@ function Inversion(
         parameters::P
 ) where {G <: Sleipnir.AbstractGlacier, M <: Sleipnir.Model, P <: Sleipnir.Parameters}
 
-    # We perform this check here to avoid having to provide the parameters when creating the model
-    @assert targetType(model.trainable_components.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
+    # `target` drives only the manual adjoints and NN forward setup; the automatic
+    # SciMLSensitivity adjoint ignores it, so we skip the check there (e.g. lets gridded-C run).
+    if !isa(parameters.UDE.grad, SciMLSensitivityAdjoint)
+        @assert targetType(model.trainable_components.target) == parameters.UDE.target "Target does not match the one provided in the parameters."
+    elseif isa(parameters.solver.solver, RDPK3Sp35)
+        # InterpolatingAdjoint is unstable in backward mode with the default RDPK3Sp35
+        # (NaN dt); the auto-adjoint solve transparently switches to ROCK4 (see
+        # `sciml_adjoint_solver`). Pass `solver=...` explicitly to override.
+        @info "SciMLSensitivityAdjoint: using ROCK4 for the adjoint solve (default RDPK3Sp35 is unstable in backward mode)."
+    end
     Muninn.validate_model_simulation_compatibility(model, parameters)
 
     # Build the results struct based on input values
@@ -161,3 +169,4 @@ end
 include("sciml_utils.jl")
 include("inversion_utils.jl")
 include("callback_utils.jl")
+include("lambda_sweep.jl")

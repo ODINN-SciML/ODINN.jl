@@ -309,7 +309,8 @@ function loss(
 
     # Compute the predicted velocity Vx_pred, Vy_pred, V_pred
     if !isnothing(simulation.model.trainable_components)
-        simulation.model.trainable_components.θ = θ
+        # Ignored for AD: θ is passed explicitly to V_from_H; this assignment must stay off Zygote's tape
+        @ignore_derivatives simulation.model.trainable_components.θ = θ
     end
     Vx_pred, Vy_pred, V_pred = Huginn.V_from_H(simulation, H_pred, t, θ)
     # TODO: in the future we should dispatch wrt the iceflow model

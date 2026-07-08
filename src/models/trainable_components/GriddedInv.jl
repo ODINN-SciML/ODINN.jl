@@ -56,14 +56,16 @@ mutable struct GriddedInv{
             θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
             θ = atanh.((θ .- minv) .* (2/(maxv-minv)) .- 1.0)
         elseif var == :C
-            # LawC uses C = maxC * (tanh(x)+1)/2, so min is always 0.
-            # Inverse: x = atanh(C*2/maxC - 1), valid for C ∈ (0, maxC).
-            # For C=0 (no sliding), seed x=-5 → C ≈ 5e-5 * maxC.
+            # LawC: C = maxC * (tanh(x)+1)/2, inverse x = atanh(C*2/maxC - 1), C ∈ (0, maxC).
+            # No prior (glacier.C ≤ 0): seed at C = midC → θ ≈ 0 (max gradient sensitivity);
+            # seeding at C ≈ 0 lands in the saturated tanh tail and stalls descent.
             maxv = Sleipnir.Float(isnothing(maxval) ? params.physical.maxC : maxval)
+            minv = Sleipnir.Float(isnothing(minval) ? params.physical.minC : minval)
+            seed_default = atanh((minv + maxv) / maxv - 1)  # θ for C = (minC+maxC)/2
             inv_param = NamedTuple{inv_param_type}(
                 Tuple(
                 let c = Sleipnir.Float(getfield(glaciers[i], var))
-                    seed = c <= 0 || c >= maxv ? Sleipnir.Float(-5) :
+                    seed = c <= 0 || c >= maxv ? seed_default :
                            atanh(c * 2 / maxv - 1)
                     fill(seed, size(glaciers[i].H₀) .- 1)
                 end

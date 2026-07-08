@@ -262,7 +262,8 @@ function create_results(θ, simulation::Inversion, mappingFct)
         container = InversionBinder(simulation, simulation.model.trainable_components.θ)
         [_batch_iceflow_UDE(
              container, glacier_idx,
-             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx)
+             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx);
+             storeDiagnostics = true
          ) for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
@@ -345,7 +346,8 @@ function grad_parallel_loss_iceflow!(θ, simulation::Inversion, glacier_idx::Int
     iceflow_prob = define_iceflow_prob(θ, simulation, glacier_idx)
     ret, = Zygote.gradient(
         _θ -> batch_loss_iceflow_transient(
-            InversionBinder(simulation, _θ),
+            _θ,
+            simulation,
             glacier_idx,
             iceflow_prob
         )[1], θ)
@@ -361,7 +363,8 @@ This function calls `batch_loss_iceflow_transient` which returns both the loss a
 """
 function parallel_loss_iceflow_transient(θ, simulation::Inversion)
     return [batch_loss_iceflow_transient(
-                InversionBinder(simulation, θ),
+                θ,
+                simulation,
                 glacier_idx,
                 define_iceflow_prob(θ, simulation, glacier_idx)
             )[1]
@@ -370,29 +373,41 @@ end
 
 """
     batch_loss_iceflow_transient(
-        container::InversionBinder,
+        θ,
+        simulation::Inversion,
         glacier_idx::Integer,
         iceflow_prob::ODEProblem,
     )
 
 Solve the ODE, retrieve the results and compute the loss.
 
+The `InversionBinder` that carries `θ` as the ODE parameter `p` is built internally and
+used only for the solve. The loss is computed from the raw `θ`/`simulation` so that the
+direct `∂θ` of velocity/regularization terms is not routed through (and amplified by) the
+SciMLSensitivity solve adjoint. The indirect `∂θ` still flows through the solved `H`.
+
 Arguments:
 
-  - `container::InversionBinder`: SciMLStruct that contains the simulation structure and the vector of parameters to optimize.
+  - `θ`: Vector of parameters to optimize.
+  - `simulation::Inversion`: Inversion structure with all the required information.
   - `glacier_idx::Integer`: Index of the glacier.
   - `iceflow_prob::ODEProblem`: Iceflow problem defined as an ODE with respect to time.
 """
 function batch_loss_iceflow_transient(
-        container::InversionBinder,
+        θ,
+        simulation::Inversion,
         glacier_idx::Integer,
         iceflow_prob::ODEProblem
 )
+    # The binder is an internal solve detail: it carries θ as the ODE parameter `p` for
+    # SciMLSensitivity. The loss below uses the raw θ/simulation (not container.θ) so the
+    # direct ∂θ stays off the solve adjoint. See `grad_parallel_loss_iceflow!`.
+    container = InversionBinder(simulation, θ)
     result = _batch_iceflow_UDE(container, glacier_idx, iceflow_prob)
 
-    loss_function = container.simulation.parameters.UDE.empirical_loss_function
+    loss_function = simulation.parameters.UDE.empirical_loss_function
 
-    glacier = container.simulation.glaciers[glacier_idx]
+    glacier = simulation.glaciers[glacier_idx]
     t = result.t
     H = result.H
 
@@ -408,7 +423,7 @@ function batch_loss_iceflow_transient(
     H_ref = useThickness ? glacier.thicknessData.H : nothing
 
     # Discretization for the surface velocity loss term
-    tV_ref = tdata(glacier.velocityData, container.simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
+    tV_ref = tdata(glacier.velocityData, simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
     ΔtV = diff(tV_ref)
     useVelocity = length(tV_ref)>0
     Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
@@ -451,15 +466,15 @@ function batch_loss_iceflow_transient(
             Vr, Vxr, Vyr,
             t[τ],
             glacier_idx,
-            container.θ,
-            container.simulation,
+            θ,
+            simulation,
             prod(size(H[τ]))*normalization,
             Δtj
         )
     end
     time_aggregated_losses = time_aggregated_loss(
         loss_function, H, nothing, nothing, nothing, nothing, t,
-        glacier_idx, container.θ, container.simulation, prod(size(H[begin]))*1.0, (;))
+        glacier_idx, θ, simulation, prod(size(H[begin]))*1.0, (;))
     return sum(losses) + time_aggregated_losses, result
 end
 
@@ -475,7 +490,8 @@ Define the callbacks to be called by the ODE solver, solve the ODE and create th
 function _batch_iceflow_UDE(
         container::InversionBinder,
         glacier_idx::Integer,
-        iceflow_prob::ODEProblem
+        iceflow_prob::ODEProblem;
+        storeDiagnostics::Bool = false
 )
     params = container.simulation.parameters
     glacier = container.simulation.glaciers[glacier_idx]
@@ -533,12 +549,41 @@ function _batch_iceflow_UDE(
     # Run iceflow UDE for this glacier
     iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob, tstops)
 
+    # Diagnostics (surface velocity + gridded C) are only needed for the final stored
+    # results, not on the differentiated per-iteration loss path, so they are gated.
+    processVelocity = storeDiagnostics ? Huginn.V_from_H : nothing
+    processC = storeDiagnostics ?
+               ((sim,
+        θ) -> begin
+        Cfull = zeros(Sleipnir.Float, size(sim.glaciers[glacier_idx].H₀))
+        Huginn.inn1(Cfull) .= eval_law(sim.model.iceflow.C, sim, glacier_idx, (;), θ)
+        Cfull
+    end) : nothing
+
     # Compute simulation results
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, tstops;
+        processVelocity = processVelocity,
+        processC = processC,
         MB = container.simulation.cache.iceflow.MB_history,
         t_MB = container.simulation.cache.iceflow.MB_times
     )
+end
+
+"""
+    sciml_adjoint_solver(params)
+
+ODE solver algorithm to use for the SciMLSensitivity adjoint solve. `InterpolatingAdjoint`
+is unstable in backward mode with the default `RDPK3Sp35` (NaN dt), so we transparently
+switch to `ROCK4` when the solver is still at its default. An explicitly chosen non-default
+solver is respected, and non-SciMLSensitivity grads keep their own solver.
+"""
+function sciml_adjoint_solver(params)
+    solver = params.solver.solver
+    if isa(params.UDE.grad, SciMLSensitivityAdjoint) && isa(solver, RDPK3Sp35)
+        return ROCK4()
+    end
+    return solver
 end
 
 """
@@ -561,7 +606,7 @@ function simulate_iceflow_UDE!(
     iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
-        params.solver.solver,
+        sciml_adjoint_solver(params),
         callback = cb,
         sensealg = params.UDE.sensealg,
         reltol = params.solver.reltol,
