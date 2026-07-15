@@ -57,12 +57,25 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
+          - '1.11'
         os:
           - ubuntu-latest
           - macos-latest
         arch:
           - x64
+        group:
+          - Core1
+          - Core2
+          - Core3
+          - Core4
+          - Core5
+          - Core6
+          - Core7
+          - Core8
+          - Core9
+          - Core10
+          - Core11
+          - Aqua
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
