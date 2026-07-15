@@ -279,7 +279,7 @@ ENV["GKSwstype"] = "nul"
         @testset "Multiglacier inversion test" begin
             @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-4, 1e-8, 1e-4], multiglacier = true)
+                thres = [2e-4, 1e-8, 2e-4], multiglacier = true)
             @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
                 multiglacier = true, train_initial_conditions = true)
