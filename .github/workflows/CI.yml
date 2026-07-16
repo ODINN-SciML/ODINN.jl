@@ -15,6 +15,7 @@ on:
       - 'scripts/**'
 env:
   PR_NUMBER: ${{ github.event.number }}
+  CI: true
 permissions:
   # needed to allow julia-actions/cache to delete old caches that it has created
   actions: write

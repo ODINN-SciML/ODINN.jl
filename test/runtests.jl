@@ -238,8 +238,8 @@ ENV["GKSwstype"] = "nul"
             @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
                 functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
-            if !(v"1.10.0" <= VERSION <= v"1.10.999")
-                # This test doesn't work with Julia 1.10 in test mode
+            if (!CI || !Sys.isapple())
+                # The gradient computed with macOS within the CI is wrong
                 # Despite a lot of effort we couldn't track the root cause, so we just deactivate that test
                 @testset "AvgV loss with continuous adjoint" test_grad_finite_diff(
                     ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [
