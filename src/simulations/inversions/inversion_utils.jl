@@ -139,7 +139,7 @@ function train_UDE!(
     loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
+        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function but params.UDE.optim_autoAD = $(simulation.parameters.UDE.optim_autoAD)."
     else
         @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
     end
@@ -169,7 +169,8 @@ function train_UDE!(
     )
 
     θ_trained = iceflow_trained.u
-    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(
+        θ_trained, simulation, pmap; processVelocity = Huginn.V_from_H)
 
     return iceflow_trained
 end
@@ -206,7 +207,7 @@ function train_UDE!(
     loss_function(_θ, simulation_loader) = loss_iceflow_transient(_θ, simulation_loader[1], pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
-        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function."
+        @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function but params.UDE.optim_autoAD = $(simulation.parameters.UDE.optim_autoAD)."
     else
         @info "Optimizing with custom $(typeof(simulation.parameters.UDE.grad)) method"
     end
@@ -235,13 +236,14 @@ function train_UDE!(
     )
 
     θ_trained = iceflow_trained.u
-    simulation.results.simulation = create_results(θ_trained, simulation, pmap)
+    simulation.results.simulation = create_results(
+        θ_trained, simulation, pmap; processVelocity = Huginn.V_from_H)
 
     return iceflow_trained
 end
 
 """
-    create_results(θ, simulation::Inversion, mappingFct)
+    create_results(θ, simulation::Inversion, mappingFct; processVelocity::Union{Nothing, Function} = nothing)
 
 Given the parameters θ, solve the iceflow problem for all the glaciers and aggregate
 the results for all of them.
@@ -254,15 +256,18 @@ Arguments:
   - `θ`: Parameters to use for the forward simulation.
   - `simulation::Inversion`: Simulation structure that contains all the required information about the inversion.
   - `mappingFct`: Function to use to process the glaciers. Either `map` for a sequential processing or `pmap` for multiprocessing.
+  - `processVelocity::Union{Nothing, Function}`: Post processing function to map the ice thickness to the surface velocity. It is called before creating the results. It takes as inputs simulation, ice thickness (matrix) and the associated time and returns 3 variables Vx, Vy, V which are all matrix. Defaults is nothing which means no post processing is applied.
 """
-function create_results(θ, simulation::Inversion, mappingFct)
+function create_results(θ, simulation::Inversion, mappingFct;
+        processVelocity::Union{Nothing, Function} = nothing)
     simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     results = mappingFct(simulations) do simulation
         container = InversionBinder(simulation, simulation.model.trainable_components.θ)
         [_batch_iceflow_UDE(
              container, glacier_idx,
-             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx)
+             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx);
+             processVelocity = processVelocity
          ) for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
@@ -467,7 +472,8 @@ end
     _batch_iceflow_UDE(
         container::InversionBinder,
         glacier_idx::Integer,
-        iceflow_prob::ODEProblem,
+        iceflow_prob::ODEProblem;
+        processVelocity::Union{Nothing, Function} = nothing
     )
 
 Define the callbacks to be called by the ODE solver, solve the ODE and create the results.
@@ -475,7 +481,8 @@ Define the callbacks to be called by the ODE solver, solve the ODE and create th
 function _batch_iceflow_UDE(
         container::InversionBinder,
         glacier_idx::Integer,
-        iceflow_prob::ODEProblem
+        iceflow_prob::ODEProblem;
+        processVelocity::Union{Nothing, Function} = nothing
 )
     params = container.simulation.parameters
     glacier = container.simulation.glaciers[glacier_idx]
@@ -534,10 +541,12 @@ function _batch_iceflow_UDE(
     iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob, tstops)
 
     # Compute simulation results
+    # No need to generate the velocities since this is automatically computed directly inside the loss function when needed
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, tstops;
         MB = container.simulation.cache.iceflow.MB_history,
-        t_MB = container.simulation.cache.iceflow.MB_times
+        t_MB = container.simulation.cache.iceflow.MB_times,
+        processVelocity = processVelocity
     )
 end
 
