@@ -1,15 +1,7 @@
 export L2Sum, LogSum
 export LossH, LossV, LossHV
 export loss, backward_loss
-
-# Abstract type as a parent type for all losses
-abstract type GeneralAbstractLoss end
-
-# Basic losses whose purpose is to be used within other losses
-abstract type AbstractSimpleLoss <: GeneralAbstractLoss end
-
-# More advanced losses that are used in the code
-abstract type AbstractLoss <: GeneralAbstractLoss end
+import Sleipnir: GeneralAbstractLoss, AbstractSimpleLoss, AbstractLoss, velocityProduct
 
 """
     L2Sum{I <: Integer} <: AbstractSimpleLoss
