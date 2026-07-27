@@ -38,6 +38,7 @@ DocMeta.setdocmeta!(ODINN, :DocTestSetup, :(using ODINN); recursive = true)
 # List of tutorial files
 tutorial_files = [
     "./src/forward_simulation.jl",
+    "./src/smb_calibration.jl",
     "./src/classical_inversion.jl",
     "./src/functional_inversion.jl",
     "./src/laws.jl",
@@ -71,6 +72,7 @@ makedocs(
         "Quick start" => "quick_start.md",
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
+            "SMB calibration" => "smb_calibration.md",
             "Classical inversion" => "classical_inversion.md",
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",

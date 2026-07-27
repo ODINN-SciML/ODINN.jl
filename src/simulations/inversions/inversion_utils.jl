@@ -508,12 +508,13 @@ function _batch_iceflow_UDE(
     cb_MB = if params.simulation.use_MB
         # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
         mb_action! = let model = container.simulation.model,
-            cache = container.simulation.cache, glacier = glacier, step_MB = step_MB
+            cache = container.simulation.cache, glacier = glacier, step_MB = step_MB,
+            glacier_idx = glacier_idx
 
             function (integrator)
                 # Compute mass balance
                 glacier.S .= glacier.B .+ integrator.u
-                MB_timestep!(cache, model, glacier, step_MB, integrator.t)
+                MB_timestep!(cache, model, glacier, step_MB, integrator.t, glacier_idx)
                 apply_MB_mask!(integrator.u, cache.iceflow)
                 push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))
                 push!(cache.iceflow.MB_times, integrator.t)
