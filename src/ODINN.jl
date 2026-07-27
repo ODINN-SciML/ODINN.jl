@@ -64,6 +64,7 @@ using Dates
 using MLStyle
 import DifferentiationInterface as DI
 import Mooncake
+using StaticArrays
 
 # ##############################################
 # ############    PARAMETERS     ###############

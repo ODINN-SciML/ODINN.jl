@@ -301,9 +301,11 @@ function time_aggregated_loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    losses = map(
-        sub_loss -> time_aggregated_loss(
-            sub_loss,
+    λs = @ignore_derivatives(SVector(lossType.λs...))
+    return sum(ntuple(
+        i -> ( # Map doesn't work with Zygote, this is why we use this ntuple
+            λs[i] * time_aggregated_loss( # Combine contribution of each loss
+            lossType.losses[i],
             H_pred,
             H_ref,
             V_ref, Vx_ref, Vy_ref,
@@ -313,11 +315,9 @@ function time_aggregated_loss(
             simulation,
             normalization,
             Δt
+        )
         ),
-        lossType.losses
-    )
-    # Combine contribution of each loss
-    return sum(lossType.λs .* losses)
+        length(lossType.losses)))
 end
 function backward_time_aggregated_loss(
         lossType::MultiLoss,

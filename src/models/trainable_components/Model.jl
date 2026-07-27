@@ -130,23 +130,23 @@ end
 struct emptyTrainableModel <: TrainableModel end
 
 mutable struct TrainableComponents{
-    TrainableModelAType <: TrainableModel,
-    TrainableModelCType <: TrainableModel,
-    TrainableModelnType <: TrainableModel,
-    TrainableModelYType <: TrainableModel,
-    TrainableModelUType <: TrainableModel,
-    TrainableModelICType <: TrainableModel,
+    TrainableModelAType <: Union{TrainableModel, Nothing},
+    TrainableModelCType <: Union{TrainableModel, Nothing},
+    TrainableModelnType <: Union{TrainableModel, Nothing},
+    TrainableModelYType <: Union{TrainableModel, Nothing},
+    TrainableModelUType <: Union{TrainableModel, Nothing},
+    TrainableModelICType <: Union{TrainableModel, Nothing},
     TAR <: AbstractTarget,
-    ComponentArrayType <: ComponentArray
+    ComponentArrayType <: Union{ComponentArray, Nothing}
 } <: AbstractModel
-    A::Union{TrainableModelAType, Nothing}
-    C::Union{TrainableModelCType, Nothing}
-    n::Union{TrainableModelnType, Nothing}
-    Y::Union{TrainableModelYType, Nothing}
-    U::Union{TrainableModelUType, Nothing}
-    IC::Union{TrainableModelICType, Nothing}
+    A::TrainableModelAType
+    C::TrainableModelCType
+    n::TrainableModelnType
+    Y::TrainableModelYType
+    U::TrainableModelUType
+    IC::TrainableModelICType
     target::TAR
-    θ::Union{ComponentArrayType, Nothing}
+    θ::ComponentArrayType
 
     function TrainableComponents(
             target,

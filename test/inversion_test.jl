@@ -1,3 +1,106 @@
+function test_inversion_instantiation()
+    rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]
+
+    rgi_paths = get_rgi_paths()
+    # Filter out glaciers that are not used to avoid having references that depend on all the glaciers processed in Gungnir
+    rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
+
+    tspan = (2010.0, 2012.0)
+    δt = 1/12
+    epochs = [5, 7]
+    optimizer = [ODINN.Adam(0.01), ODINN.LBFGS()]
+    params = Parameters(
+        simulation = SimulationParameters(
+            use_MB = true,
+            use_velocities = false,
+            tspan = tspan,
+            multiprocessing = true,
+            test_mode = true,
+            rgi_paths = rgi_paths,
+            gridScalingFactor = 4 # We reduce the size of glacier for simulation
+        ),
+        hyper = Hyperparameters(
+            batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
+            epochs = epochs,
+            optimizer = optimizer
+        ),
+        physical = PhysicalParameters(
+            minA = 8e-21,
+            maxA = 8e-17
+        )
+    )
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Parameters(
+        simulation = SimulationParameters(
+            use_MB = true,
+            use_velocities = false,
+            tspan = tspan,
+            multiprocessing = true,
+            test_mode = true,
+            rgi_paths = rgi_paths,
+            gridScalingFactor = 4 # We reduce the size of glacier for simulation
+        ),
+        hyper = Hyperparameters(
+            batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient
+            epochs = epochs,
+            optimizer = optimizer
+        ),
+        physical = PhysicalParameters(
+            minA = 8e-21,
+            maxA = 8e-17
+        )
+    )
+    @test check_concrete_types(params; show = false)
+    @test_broken check_field_types(typeof(params); show = false)
+
+    MB_model = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    model = Model(
+        iceflow = SIA2Dmodel(params; A = CuffeyPaterson(scalar = true)),
+        mass_balance = MB_model
+    )
+    @test check_concrete_types(model; show = false)
+    @test check_field_types(typeof(model); show = false)
+
+    # We retrieve some glaciers for the simulation
+    glaciers = initialize_glaciers(rgi_ids, params)
+
+    # Time snapshots for transient inversion
+    tstops = collect(tspan[1]:δt:tspan[2])
+
+    A_poly = Huginn.polyA_PatersonCuffey()
+
+    glaciers = generate_ground_truth(glaciers, params, model, tstops)
+    @test check_concrete_types(glaciers; show = false)
+    @test check_field_types(typeof(glaciers); show = false)
+
+    trainable_model = NeuralNetwork(params)
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) NeuralNetwork(params)
+    @test check_concrete_types(model; show = false)
+    @test check_field_types(typeof(model); show = false)
+
+    A_law = LawA(trainable_model, params; scalar = true)
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) LawA(trainable_model, params; scalar = true)
+    @test check_concrete_types(A_law; show = false)
+    @test_broken check_field_types(typeof(A_law); show = false)
+
+    model = Model(
+        iceflow = SIA2Dmodel(params; A = A_law),
+        mass_balance = MB_model,
+        regressors = (; A = trainable_model)
+    )
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Model(
+        iceflow = SIA2Dmodel(params; A = A_law),
+        mass_balance = MB_model,
+        regressors = (; A = trainable_model)
+    )
+    @test check_concrete_types(model; show = false)
+    @test_broken check_field_types(typeof(model); show = false)
+
+    inversion = Inversion(model, glaciers, params)
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Inversion(model, glaciers, params)
+    @test check_concrete_types(inversion; show = false)
+    @test_broken check_field_types(typeof(inversion); show = false)
+end
+
 function inversion_test(;
         use_MB = false,
         multiprocessing = false,

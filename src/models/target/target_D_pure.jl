@@ -251,3 +251,7 @@ function ∂Velocityꜛ∂θ(
     ∂D∂θꜛ = ∂U∂θ(target; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params) / f
     return ∂D∂θꜛ
 end
+
+function assign_∂θ!(target::SIA2D_D_target, ∂θ, ∂θ_v)
+    ∂θ.U .= vec(∂θ_v)
+end

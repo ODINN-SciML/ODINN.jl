@@ -13,12 +13,18 @@ It can involve at the same time a classical inversion and a functional inversion
   - `parameters::Sleipnir.Parameters`: The parameters used for the simulation.
   - `results::ODINN.Results`: A `ODINN.Results` instance to store the results of the inversion and of the forward simulations.
 """
-mutable struct Inversion{MODEL, CACHE, GLACIER, RES} <: Simulation
+mutable struct Inversion{
+    MODEL <: Sleipnir.Model,
+    CACHE,
+    GLACIER <: Sleipnir.AbstractGlacier,
+    PARAMS <: Sleipnir.Parameters,
+    RES <: ODINN.Results
+} <: Simulation
     model::MODEL
     cache::Union{CACHE, Nothing}
     glaciers::Vector{GLACIER}
-    parameters::Sleipnir.Parameters
-    results::ODINN.Results
+    parameters::PARAMS
+    results::RES
 end
 
 """
@@ -59,7 +65,8 @@ function Inversion(
     # Build the results struct based on input values
     emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
     emptyResults = Results(emptySimulationResults, TrainingStats())
-    inversion = Inversion{M, cache_type(model), G, typeof(emptyResults)}(model, nothing,
+    inversion = Inversion{M, cache_type(model), G, typeof(parameters), typeof(emptyResults)}(
+        model, nothing,
         glaciers,
         parameters,
         emptyResults)
@@ -70,36 +77,31 @@ end
 # Display setup
 Base.show(io::IO, ::MIME"text/plain", inversion::Inversion) = Base.show(io, inversion)
 function Base.show(io::IO, inversion::Inversion)
-    label(s) = printstyled(io, rpad(s, 14); color = 183)
-    sep() = printstyled(io, " · "; color = :light_black)
-    field(s) = printstyled(io, s; color = :light_black)
-    val(s) = print(io, s)
-    hint(s) = printstyled(io, s; color = :light_black)
-    check(b) = b ? "\e[32m✓\e[0m " : "\e[31m✗\e[0m "
+    pad = 14
 
     println(io, "Inversion")
 
     # ── glaciers ──────────────────────────────────────────────────────────────
-    label("  glaciers")
+    label(io, "  glaciers", pad)
     n = length(inversion.glaciers)
-    val("$n");
-    hint(" $(n == 1 ? "glacier" : "glaciers")")
+    val(io, "$n");
+    hint(io, " $(n == 1 ? "glacier" : "glaciers")")
     println(io)
 
     # ── model ─────────────────────────────────────────────────────────────────
-    label("  model")
-    field("iceflow");
+    label(io, "  model", pad)
+    field(io, "iceflow");
     print(io, " = ")
-    val("$(nameof(typeof(inversion.model.iceflow)))")
-    sep()
-    field("mass_balance");
+    val(io, "$(nameof(typeof(inversion.model.iceflow)))")
+    sep(io)
+    field(io, "mass_balance");
     print(io, " = ")
-    val("$(nameof(typeof(inversion.model.mass_balance)))")
-    sep()
-    field("learnable");
+    val(io, "$(nameof(typeof(inversion.model.mass_balance)))")
+    sep(io)
+    field(io, "learnable");
     print(io, " =")
     if isnothing(inversion.model.trainable_components)
-        hint(" (nothing)")
+        hint(io, " (nothing)")
         println(io)
     else
         println(io)
@@ -112,7 +114,7 @@ function Base.show(io::IO, inversion::Inversion)
     end
 
     # ── parameters ────────────────────────────────────────────────────────────
-    label("  parameters")
+    label(io, "  parameters", pad)
     println(io)
     params_str = sprint(show, inversion.parameters)
     for line in split(params_str, "\n")
@@ -123,37 +125,37 @@ function Base.show(io::IO, inversion::Inversion)
     end
 
     # ── cache ─────────────────────────────────────────────────────────────────
-    label("  cache")
+    label(io, "  cache", pad)
     if isnothing(inversion.cache)
-        hint("(nothing)")
+        hint(io, "(nothing)")
     else
-        val("$(nameof(typeof(inversion.cache)))")
+        val(io, "$(nameof(typeof(inversion.cache)))")
     end
     println(io)
 
     # ── results ───────────────────────────────────────────────────────────────
-    label("  results")
+    label(io, "  results", pad)
     stats = inversion.results.stats
     if stats.niter == 0
         print(io, check(false));
-        hint(" not yet run")
+        hint(io, " not yet run")
     else
         total_epochs = inversion.parameters.hyper.epochs isa Vector ?
                        sum(inversion.parameters.hyper.epochs) :
                        inversion.parameters.hyper.epochs
         print(io, check(true))
-        field(" epoch");
+        field(io, " epoch");
         print(io, " = ");
-        val("$(stats.niter)")
-        hint(" / $total_epochs")
-        sep()
-        field("loss");
+        val(io, "$(stats.niter)")
+        hint(io, " / $total_epochs")
+        sep(io)
+        field(io, "loss");
         print(io, " = ");
-        val("$(last(stats.losses))")
-        sep()
-        field("#(simulation)");
+        val(io, "$(last(stats.losses))")
+        sep(io)
+        field(io, "#(simulation)");
         print(io, " = ")
-        val("$(length(inversion.results.simulation))")
+        val(io, "$(length(inversion.results.simulation))")
     end
     println(io)
 end

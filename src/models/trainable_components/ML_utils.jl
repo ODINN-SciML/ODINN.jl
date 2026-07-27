@@ -95,18 +95,20 @@ function build_simulation_batch(
     # but we need to pay attention that there is no side effect with multiprocessing
     model = Sleipnir.Model(iceflow, massbalance, submodels)
 
-    cache = init_cache(model, simulation, i, θi)
+    cache = init_cache(model, simulation, 1, θi) # We set glacier_idx=1 because the elements of θ which are subject to classical inversion have been split into θi
     glacier = simulation.glaciers[i]
     if length(simulation.results.simulation) < 1
         return Inversion{
-            typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(
+            typeof(model), cache_type(model), typeof(glacier),
+            typeof(simulation.parameters), typeof(simulation.results)}(
             model, cache, [glacier], simulation.parameters, simulation.results)
     else
         # TODO: Notice this assumes there is just one vector in results! Probably needs a fix
         # results = Results([simulation.results.simulation[i]], simulation.results.stats)
         results = Results([only(simulation.results.simulation)], simulation.results.stats)
         return Inversion{
-            typeof(model), cache_type(model), typeof(glacier), typeof(simulation.results)}(
+            typeof(model), cache_type(model), typeof(glacier),
+            typeof(simulation.parameters), typeof(simulation.results)}(
             model, cache, [glacier], simulation.parameters, results)
     end
 end

@@ -66,6 +66,8 @@ function params_constructor_specified(save_refs::Bool = false)
         solver = solver_params,
         UDE = ude_params,
         simulation = simulation_params)
+    @test check_concrete_types(params; show = false)
+    @test_broken check_field_types(typeof(params); show = false)
 
     # Test prints
     println(physical_params)
