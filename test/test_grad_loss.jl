@@ -157,7 +157,7 @@ function test_grad_finite_diff(
     ground_truth_A_law = scalar ? ConstantA(2.21e-18) : CuffeyPaterson(scalar = scalar)
     model = Model(
         iceflow = SIA2Dmodel(params; A = ground_truth_A_law),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
     )
     glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
     if !functional_inv
@@ -223,9 +223,9 @@ function test_grad_finite_diff(
 
     mass_balance = if aggregated_loss==:dhdt
         # Intensify melting to make dhdt negative
-        TImodel1(params; DDF = 15.0/1000.0, acc_factor = 0.4/1000.0)
+        TImodel1(params; DDF = 15.0/1000.0, prcp_fac = 0.4)
     else
-        TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
     end
     model = @match target begin
         :A => Model(
@@ -725,14 +725,14 @@ function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
     # Ground truth using a known constant A
     model_gt = Model(
         iceflow = SIA2Dmodel(params_sciml; A = ConstantA(2.21e-18)),
-        mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, prcp_fac = 1.2)
     )
     glaciers = initialize_glaciers(rgi_ids, params_sciml)
     glaciers = generate_ground_truth(glaciers, params_sciml, model_gt, tstops)
 
     # Single NN shared across both simulations so both start at the same θ
     nn_model = NeuralNetwork(params_sciml)
-    mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, prcp_fac = 1.2)
 
     sim_sciml = Inversion(
         Model(

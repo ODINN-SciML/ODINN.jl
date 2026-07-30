@@ -45,11 +45,11 @@ function grad_free_test(; use_MB::Bool = false)
     JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) ConstantA(2.21e-18)
     model = Model(
         iceflow = SIA2Dmodel(params; A = A_law),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
     )
     JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Model(
         iceflow = SIA2Dmodel(params; A = A_law),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
     )
 
     # We retrieve some glaciers for the simulation
@@ -65,12 +65,12 @@ function grad_free_test(; use_MB::Bool = false)
 
     model = Model(
         iceflow = SIA2Dmodel(params; A = A_law),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2),
         regressors = (; A = nn_model)
     )
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Model(
         iceflow = SIA2Dmodel(params; A = A_law),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2),
         regressors = (; A = nn_model)
     )
 

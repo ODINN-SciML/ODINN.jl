@@ -52,7 +52,7 @@ function test_inversion_instantiation()
     @test check_concrete_types(params; show = false)
     @test_broken check_field_types(typeof(params); show = false)
 
-    MB_model = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    MB_model = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
     model = Model(
         iceflow = SIA2Dmodel(params; A = CuffeyPaterson(scalar = true)),
         mass_balance = MB_model
@@ -174,7 +174,7 @@ function inversion_test(;
         )
     )
 
-    MB_model = use_MB ? TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0) :
+    MB_model = use_MB ? TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2) :
                nothing
     model = Model(
         iceflow = SIA2Dmodel(params; A = CuffeyPaterson(scalar = scalar)),
