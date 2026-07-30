@@ -122,6 +122,7 @@ It is particularly useful for constraining glacier flow dynamics when velocity d
 
 # Fields
 
+  - `velocityProduct::Symbol = :Millan22`: Velocity product to use as reference. Defaults to `:Millan22`.
   - `loss::L = L2Sum()`: The underlying loss function type used to compare predicted and reference velocities
   - `component::Symbol = :xy`: Which velocity component(s) to use in the loss:
       + `:xy`: Compare x and y velocity components separately (sum of losses)
@@ -138,6 +139,7 @@ The loss computation involves:
  4. Comparing the averaged velocity to reference observations using the specified loss function
 """
 @kwdef struct LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: TimeAggregatedLoss
+    velocityProduct::Symbol = :Millan22
     loss::L = L2Sum()
     component::Symbol = :xy
     step::F = 1/12
@@ -256,6 +258,7 @@ function backward_time_aggregated_loss(
 end
 
 loss_uses_velocity(lossType::LossAvgV) = true
+velocityProduct(lossType::LossAvgV) = :Millan22
 
 # Fallback methods for subtypes of `AbstractLoss` that do not implement `time_aggregated_loss` and `backward_time_aggregated_loss`, which is typically the case of all losses which are not subtypes of `TimeAggregatedLoss`
 function time_aggregated_loss(
