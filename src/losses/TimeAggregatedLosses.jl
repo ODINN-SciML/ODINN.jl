@@ -230,8 +230,11 @@ function backward_time_aggregated_loss(
         ∂l∂Vy = backward_loss(lossType.loss, avg_Vy_pred, Vy_ref, mask, normalization)
     elseif lossType.component == :abs
         ∂l∂V = backward_loss(lossType.loss, avg_V_pred, V_ref, mask, normalization)
-        ∂l∂Vx = ifelse.(mask, ∂l∂V .* (avg_Vx_pred .- Vx_ref) ./ (avg_V_pred .- V_ref), 0.0)
-        ∂l∂Vy = ifelse.(mask, ∂l∂V .* (avg_Vy_pred .- Vy_ref) ./ (avg_V_pred .- V_ref), 0.0)
+        # Chain rule through V = √(Vx² + Vy²): ∂l/∂Vx = ∂l/∂V · Vx/V (and similarly Vy)
+        ∂Vx_dir, ∂Vy_dir = VJP_λ_∂V∂Vxy(∂l∂V, avg_Vx_pred, avg_Vy_pred)
+        valid = mask .& (avg_V_pred .> 0.0)
+        ∂l∂Vx = ifelse.(valid, ∂Vx_dir, 0.0)
+        ∂l∂Vy = ifelse.(valid, ∂Vy_dir, 0.0)
     end
 
     # ∂L∂H = zero(H_pred) # With Julia 1.10 in test mode H_pred is of type Type{Matrix{Float64}} which seems to be a bug, we bypass it by making a copy

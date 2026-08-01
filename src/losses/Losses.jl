@@ -357,9 +357,11 @@ function backward_loss(
         ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization)
     elseif lossType.component == :abs
         ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask, normalization)
-        # ∂lV∂Vx, ∂lV∂Vy = zero(∂lV∂V), zero(∂lV∂V)
-        ∂lV∂Vx = ifelse.(mask, ∂lV∂V .* (Vx_pred .- Vx_ref) ./ (V_pred .- V_ref), 0.0)
-        ∂lV∂Vy = ifelse.(mask, ∂lV∂V .* (Vy_pred .- Vy_ref) ./ (V_pred .- V_ref), 0.0)
+        # Chain rule through V = √(Vx² + Vy²): ∂l/∂Vx = ∂l/∂V · Vx/V (and similarly Vy)
+        ∂Vx_dir, ∂Vy_dir = VJP_λ_∂V∂Vxy(∂lV∂V, Vx_pred, Vy_pred)
+        valid = mask .& (V_pred .> 0.0)
+        ∂lV∂Vx = ifelse.(valid, ∂Vx_dir, 0.0)
+        ∂lV∂Vy = ifelse.(valid, ∂Vy_dir, 0.0)
     end
 
     ∂lV∂Vx_scale = if lossType.scale_loss
