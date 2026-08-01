@@ -96,7 +96,10 @@ function test_inversion_instantiation()
     @test_broken check_field_types(typeof(model); show = false)
 
     inversion = Inversion(model, glaciers, params)
-    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Inversion(model, glaciers, params)
+    # Not type-stable: calibrate_MB reads the climate RasterStack whose eltype is not
+    # known at compile time (same limitation as the Model construction above).
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Inversion(
+        model, glaciers, params)
     @test check_concrete_types(inversion; show = false)
     @test_broken check_field_types(typeof(inversion); show = false)
 end

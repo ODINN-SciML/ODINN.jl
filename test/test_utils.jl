@@ -76,9 +76,16 @@ Returns:
     to normalize and compute the relative error.
 """
 function stats_err_arrays(a::T, b::T) where {T}
-    ratio = sqrt(sum(a .^ 2)) / sqrt(sum(b .^ 2)) - 1
-    angle = sum(a .* b) / (sqrt(sum(a .^ 2)) * sqrt(sum(b .^ 2))) - 1
-    relerr = sqrt(sum((a - b) .^ 2)) / sqrt(sum((a) .^ 2))
+    norm_a = sqrt(sum(a .^ 2))
+    norm_b = sqrt(sum(b .^ 2))
+    # Both gradients are exactly zero (e.g. the tested parameter has no influence
+    # on the loss for this scenario): they trivially agree, avoid a 0/0 NaN.
+    if norm_a == 0 && norm_b == 0
+        return 0.0, 0.0, 0.0
+    end
+    ratio = norm_a / norm_b - 1
+    angle = sum(a .* b) / (norm_a * norm_b) - 1
+    relerr = sqrt(sum((a - b) .^ 2)) / norm_a
     return ratio, angle, relerr
 end
 

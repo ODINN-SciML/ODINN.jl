@@ -58,7 +58,8 @@ function test_grad_finite_diff(
         custom_NN = false,
         max_params = 60,
         mask_parameter_vector = false,
-        aggregated_loss = nothing
+        aggregated_loss = nothing,
+        tspan_override = nothing
 ) where {ADJ <: AbstractAdjointMethod}
     if !functional_inv
         @assert target == :A "When testing classical inversion, only target A is supported"
@@ -87,7 +88,18 @@ function test_grad_finite_diff(
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
-    tspan = use_MB ? (1980.0, 2019.0) : (2010.0, 2012.0)
+    # The dhdt loss uses a short window: over the full 1980-2019 span the intensified
+    # melt fully melts the glacier out, leaving H1≈0 independent of A, so ∂dhdt/∂A→0 and
+    # the gradient check becomes vacuous. A 5-year window keeps ~55% of cells alive.
+    tspan = if !isnothing(tspan_override)
+        tspan_override
+    elseif aggregated_loss == :dhdt
+        (2010.0, 2015.0)
+    elseif use_MB
+        (1980.0, 2019.0)
+    else
+        (2010.0, 2012.0)
+    end
 
     useSciMLSenseAlg = isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
     if useSciMLSenseAlg
@@ -222,8 +234,10 @@ function test_grad_finite_diff(
     end
 
     mass_balance = if aggregated_loss==:dhdt
-        # Intensify melting to make dhdt negative
-        TImodel1(params; DDF = 15.0/1000.0, prcp_fac = 0.4)
+        # Intensify melting (vs the mild ground-truth MB) so dhdt_pred differs from
+        # dhdt_ref (nonzero loss prefactor), but not so much that the glacier melts out
+        # over the 5-year window: ~55% of cells survive, keeping ∂dhdt/∂A nonzero.
+        TImodel1(params; DDF = 9.0/1000.0, prcp_fac = 0.8)
     else
         TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
     end

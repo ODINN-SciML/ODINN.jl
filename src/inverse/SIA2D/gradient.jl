@@ -198,12 +198,16 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
                 )
 
+                # State at which the SIA VJP is linearized. At an MB step the SIA flow over
+                # the interval ends at the pre-MB state, so undo the MB increment here.
+                H_SIA = H[j]
                 if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
                     # Retrieve H before MB callback because the solution is stored only after MB has been applied
                     indMB = findfirst(result.t_MB .== tj)
                     H_preMB = H[j] - result.MB[indMB]
                     λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP,
                         λ[j], H_preMB, simulation, glacier, tj)
+                    H_SIA = H_preMB
                 end
 
                 # Compute derivative of local contribution to loss function
@@ -234,7 +238,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 ### Custom VJP to compute the adjoint
                 λ_∂f∂H,
                 dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method,
-                    λ[j], H[j], θ, simulation, tj)
+                    λ[j], H_SIA, θ, simulation, tj)
 
                 ### Update adjoint
                 if j>1
@@ -243,7 +247,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
                     ### Custom VJP for grad of loss function
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method,
-                        λ[j - 1], H[j], θ, dH_H, simulation, tj)
+                        λ[j - 1], H_SIA, θ, dH_H, simulation, tj)
 
                     ### Contribution to the loss
                     dLdθ .+= Δt[j - 1] * λ_∂f∂θ
