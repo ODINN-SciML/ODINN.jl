@@ -58,8 +58,7 @@ function test_grad_finite_diff(
         custom_NN = false,
         max_params = 60,
         mask_parameter_vector = false,
-        aggregated_loss = nothing,
-        tspan_override = nothing
+        aggregated_loss = nothing
 ) where {ADJ <: AbstractAdjointMethod}
     if !functional_inv
         @assert target == :A "When testing classical inversion, only target A is supported"
@@ -91,9 +90,7 @@ function test_grad_finite_diff(
     # The dhdt loss uses a short window: over the full 1980-2019 span the intensified
     # melt fully melts the glacier out, leaving H1≈0 independent of A, so ∂dhdt/∂A→0 and
     # the gradient check becomes vacuous. A 5-year window keeps ~55% of cells alive.
-    tspan = if !isnothing(tspan_override)
-        tspan_override
-    elseif aggregated_loss == :dhdt
+    tspan = if aggregated_loss == :dhdt
         (2010.0, 2015.0)
     elseif use_MB
         (1980.0, 2019.0)

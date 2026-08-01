@@ -307,6 +307,26 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 throw("Interpolation method for continuous adjoint not defined.")
             end
 
+            # Interpolant used only for the SIA VJP linearization. The forward SIA flow over
+            # each interval ends at the pre-MB state (MB is applied at the right endpoint),
+            # but H stores post-MB states. Interpolate post-MB at the left node and pre-MB at
+            # the right node so the SIA VJP is linearized on the true forward trajectory.
+            H_itp_SIA = if simulation.parameters.simulation.use_MB
+                H_preMB_nodes = map(eachindex(t)) do j
+                    indMB = findfirst(result.t_MB .== t[j])
+                    isnothing(indMB) ? H[j] : H[j] .- result.MB[indMB]
+                end
+                let t = t, H = H, H_preMB_nodes = H_preMB_nodes
+                    function (tq)
+                        j = clamp(searchsortedlast(t, tq), firstindex(t), lastindex(t) - 1)
+                        frac = (tq - t[j]) / (t[j + 1] - t[j])
+                        H[j] .+ frac .* (H_preMB_nodes[j + 1] .- H[j])
+                    end
+                end
+            else
+                H_itp
+            end
+
             # Nodes and weights for numerical quadrature
             t_nodes,
             weights = GaussQuadrature(tspan..., simulation.parameters.UDE.grad.n_quadrature)
@@ -322,7 +342,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     t = -τ
                     λ_∂f∂H,
                     _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method,
-                        λ, H_itp(t), θ, simulation, t)
+                        λ, H_itp_SIA(t), θ, simulation, t)
                     dλ .= λ_∂f∂H
                 end
             end
@@ -498,7 +518,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                Union{DiscreteVJP, EnzymeVJP, ContinuousVJP}
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(- t_nodes[j])
-                    _H = H_itp(t_nodes[j])
+                    _H = H_itp_SIA(t_nodes[j])
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method,
                         λ_sol, _H, θ, nothing, simulation, t_nodes[j])
                     dLdθ .+= weights[j] .* (λ_∂f∂θ .+ ∂L∂θ[j])
