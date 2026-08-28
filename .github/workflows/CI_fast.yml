@@ -48,8 +48,7 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     needs: pr-check
     # Skip CI if PR exists (on push only)
-    # Or if there is a label that states the CI is broken because a dependency needs a new release
-    if: ${{ (github.event_name != 'push' || needs.pr-check.outputs.skip == 'false') && !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
+    if: ${{ (github.event_name != 'push' || needs.pr-check.outputs.skip == 'false') }}
     runs-on: ${{ matrix.os }}
     defaults:
        run:
@@ -79,13 +78,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - name: Check Julia SSL certifications 🔎🔐
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
         run: julia -e 'using NetworkOptions; println(NetworkOptions.bundled_ca_roots()); println(NetworkOptions.ca_roots())'
         shell: bash -el {0}
       - uses: actions/cache@v4
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
         env:
           cache-name: cache-artifacts
         with:
@@ -96,8 +98,10 @@ jobs:
             ${{ runner.os }}-test-
             ${{ runner.os }}-
       - name: Build Julia packages
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
         uses: julia-actions/julia-buildpkg@v1
       - name: Run tests [${{ matrix.group }}]
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
         run: julia --project=test/test_env/ -e 'include("test/runtests.jl")'
         env:
           GROUP: ${{ matrix.group }}
@@ -110,10 +114,10 @@ jobs:
           echo "comment<<$EOF" >> $GITHUB_OUTPUT
           echo "$outTxt" >> $GITHUB_OUTPUT
           echo "$EOF" >> $GITHUB_OUTPUT
-        if: ${{ matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run benchmark') }}
+        if: ${{ matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run benchmark') && !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
       - name: Publish benchmark
         uses: actions/github-script@v6
-        if: ${{ matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run benchmark') }}
+        if: ${{ matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run benchmark') && !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -123,3 +127,10 @@ jobs:
               repo: context.repo.repo,
               body: `${{steps.generate-comment.outputs.comment}}`
             })
+      - name: Tests ran
+        # Check that the CI was not skipped because a dependency needs a new release
+        if: ${{ contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+              core.setFailed('Tests did not run because of the "CI needs new release" tag')
