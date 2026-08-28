@@ -15,5 +15,6 @@ Implementation of Target objective for learning elements of the SIA equation.
 ### Add specific target objectives
 include("target_utils.jl")
 include("target_A.jl")
+include("target_C.jl")
 include("target_D_hybrid.jl")
 include("target_D_pure.jl")

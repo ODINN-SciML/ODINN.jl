@@ -105,6 +105,8 @@ function Model(
             target = SIA2D_D_target()
         elseif iceflow.Y_is_provided
             target = SIA2D_D_hybrid_target()
+        elseif haskey(regressors, :C)
+            target = SIA2D_C_target()
         elseif !(haskey(regressors, :A) && regressors.A isa FunctionalModel) ||
                inputs(iceflow.A)==_inputs_A_law_scalar ||
                inputs(iceflow.A)==_inputs_A_law_gridded
@@ -118,7 +120,7 @@ function Model(
         elseif iceflow.Y_is_provided
             @assert targetType(target) == :D_hybrid "The provided laws do not match with the provided target. Make sure that the target is a SIA2D_D_hybrid_target."
         else
-            @assert targetType(target) == :A "The provided laws do not match with the provided target. Make sure that the target is a SIA2D_A_target."
+            @assert targetType(target) in (:A, :C) "The provided laws do not match with the provided target. Make sure that the target is a SIA2D_A_target or SIA2D_C_target."
         end
     end
 

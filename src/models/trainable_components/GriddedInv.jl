@@ -59,6 +59,7 @@ mutable struct GriddedInv{
             # LawC uses C = maxC * (tanh(x)+1)/2, so min is always 0.
             # Inverse: x = atanh(C*2/maxC - 1), valid for C ∈ (0, maxC).
             # For C=0 (no sliding), seed x=-5 → C ≈ 5e-5 * maxC.
+            @infiltrate
             maxv = Sleipnir.Float(isnothing(maxval) ? params.physical.maxC : maxval)
             inv_param = NamedTuple{inv_param_type}(
                 Tuple(

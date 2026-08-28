@@ -496,15 +496,15 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
     # Same rationale as LawA: SciMLSensitivityAdjoint replays the RHS during the backward
     # pass, so the law must run at every step for gradients to flow through θ → C → D.
     callback_freq = if isa(params.UDE.grad, DummyAdjoint) ||
-                       isa(params.UDE.grad, SciMLSensitivityAdjoint)
+                       isa(params.UDE.grad, SciMLSensitivityAdjoint) ||
+                       isa(params.UDE.grad.VJP_method, EnzymeVJP)
         nothing
     else
         0
     end
-    # No p_VJP! here: LawC is designed for SciMLSensitivityAdjoint, which replays the RHS
-    # during the backward pass and therefore never needs an explicit analytical VJP for C.
-    # Manual adjoint methods (ContinuousAdjoint, DiscreteAdjoint) are not yet supported
-    # for C inversion; using them will yield a zero gradient for θ.C.
+    # Manual adjoint support for LawC is implemented via explicit p_VJP! callbacks.
+    # For SciMLSensitivityAdjoint or DummyAdjoint the law is replayed on the backward pass,
+    # so no additional precomputed VJP is required.
     f! = let max_C = max_C
         function (cache, inp, θ)
             val = @. max_C * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) / 2
@@ -518,10 +518,16 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
             ScalarCacheGlacierId(zeros(), zeros(), zero(θ), glacier_idx)
         end
 
+        p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+            ret, = Zygote.gradient(_θ -> f!(cache, inputs, _θ), θ)
+            cache.vjp_θ[1] = only(ret.C[Symbol("$(cache.glacier_id)")])
+        end
+
         C_law = Law{ScalarCacheGlacierId}(;
             inputs = (;),
             f! = f!,
             init_cache = init_cache,
+            p_VJP! = p_VJP!,
             callback_freq = callback_freq
         )
     else
@@ -530,10 +536,16 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
             MatrixCacheGlacierId(zeros(nx-1, ny-1), zeros(nx-1, ny-1), zero(θ), glacier_idx)
         end
 
+        p_VJP! = function (cache, vjpsPrepLaw, inputs, θ)
+            ret, = Zygote.gradient(_θ -> sum(f!(cache, inputs, _θ)), θ)
+            cache.vjp_θ .= vec(ret.C[Symbol("$(cache.glacier_id)")])
+        end
+
         C_law = Law{MatrixCacheGlacierId}(;
             inputs = (;),
             f! = f!,
             init_cache = init_cache,
+            p_VJP! = p_VJP!,
             callback_freq = callback_freq
         )
     end

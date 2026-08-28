@@ -49,9 +49,25 @@ mutable struct GlacierWideInv{
         θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
 
         # Invert parameterization
-        minA = params.physical.minA
-        maxA = params.physical.maxA
-        θ = atanh.((θ .- minA) .* (2/(maxA-minA)) .- 1.0)
+        if var == :A
+            minA = params.physical.minA
+            maxA = params.physical.maxA
+            θ = atanh.((θ .- minA) .* (2/(maxA-minA)) .- 1.0)
+        elseif var == :C
+            # LawC uses C = maxC * (tanh(x)+1)/2, so min is always 0.
+            # Inverse: x = atanh(C*2/maxC - 1), valid for C ∈ (0, maxC).
+            # For C=0 (no sliding), seed x=-5 → C ≈ 5e-5 * maxC.
+            inv_param = NamedTuple{inv_param_type}(
+                Tuple(
+                let c = θ[i]
+                    c <= 0 || c >= maxv ? Sleipnir.Float(-5) : atanh(c * 2 / maxv - 1)
+                end
+            for i in 1:length(glaciers))
+            )
+            θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
+        else
+            error("GlacierWideInv: Only :A or :C are supported for var (got $(var))")
+        end
 
         new{typeof(θ)}(θ)
     end

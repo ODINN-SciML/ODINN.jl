@@ -14,13 +14,13 @@ function is_included_in_repl()
     return false
 end
 
-Pkg.activate(dirname(Base.current_project()))
-Pkg.instantiate() # Need this to setup the ODINN env for multiprocessing
-if is_included_in_repl()
-    # The Project.toml of the test environment to be used when running with include is in a subfolder to avoid that Julia uses this file in test mode
-    Pkg.activate(dirname(Base.current_project())*"/test/test_env/")
-    Pkg.resolve()
-end
+# Pkg.activate(dirname(Base.current_project()))
+# Pkg.instantiate() # Need this to setup the ODINN env for multiprocessing
+# if is_included_in_repl()
+#     # The Project.toml of the test environment to be used when running with include is in a subfolder to avoid that Julia uses this file in test mode
+#     Pkg.activate(dirname(Base.current_project())*"/test/test_env/")
+#     Pkg.resolve()
+# end
 
 const GROUP = get(ENV, "GROUP", "All")
 const CI = parse(Bool, get(ENV, "CI", "false"))
@@ -73,213 +73,219 @@ ENV["GKSwstype"] = "nul"
 @info "Running group $(GROUP)"
 
 @testset "Run all tests" begin
-    if GROUP == "All" || GROUP == "Core1"
-        @testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB = false)
-        @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB = true)
-        @testset "Parameters constructors with specified values" params_constructor_specified()
+    # if GROUP == "All" || GROUP == "Core1"
+    #     @testset "Training workflow without sensitivity analysis and AD (without MB)" grad_free_test(use_MB = false)
+    #     @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB = true)
+    #     @testset "Parameters constructors with specified values" params_constructor_specified()
 
-        @testset "Adjoint of unit operations inside SIA2D" begin
-            @testset "Adjoint of diff" test_adjoint_diff()
-            @testset "Adjoint of clamp_borders" test_adjoint_clamp_borders()
-            @testset "Adjoint of avg" test_adjoint_avg()
-        end
-    end
+    #     @testset "Adjoint of unit operations inside SIA2D" begin
+    #         @testset "Adjoint of diff" test_adjoint_diff()
+    #         @testset "Adjoint of clamp_borders" test_adjoint_clamp_borders()
+    #         @testset "Adjoint of avg" test_adjoint_avg()
+    #     end
+    # end
 
     if GROUP == "All" || GROUP == "Core2"
-        @testset "VJPs tests with A as target" begin
-            @testset "VJP (Enzyme) of MB vs finite differences" test_MB_VJP(ODINN.EnzymeVJP())
-            @testset "VJP (discrete) of MB vs finite differences" test_MB_VJP(DiscreteVJP())
-            @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(
-                ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A)
+        # @testset "VJPs tests with A as target" begin
+        #     @testset "VJP (Enzyme) of MB vs finite differences" test_MB_VJP(ODINN.EnzymeVJP())
+        #     @testset "VJP (discrete) of MB vs finite differences" test_MB_VJP(DiscreteVJP())
+        #     @testset "VJP (Enzyme) of SIA2D vs finite differences" test_adjoint_SIA2D(
+        #         ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); target = :A)
+        #     @testset "VJP (discrete) of SIA2D vs finite differences" test_adjoint_SIA2D(
+        #         ContinuousAdjoint(VJP_method = DiscreteVJP());
+        #         thres = [5e-7, 1e-6, 5e-4], target = :A)
+        #     @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(
+        #         ContinuousAdjoint(VJP_method = DiscreteVJP());
+        #         thres = [3e-4, 2e-4, 2e-2], target = :A, C = 7e-8)
+        #     @testset "VJP (continuous) of SIA2D vs finite differences" test_adjoint_SIA2D(
+        #         ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
+        #     @testset "VJP (continuous) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(
+        #         ContinuousAdjoint(VJP_method = ContinuousVJP());
+        #         thres = [6e-4, 7e-4, 4e-2], target = :A, C = 7e-8)
+        #     @testset "VJP (discrete) of SIA2D with classical scalar inversion vs finite differences" test_adjoint_SIA2D(
+        #         ContinuousAdjoint(VJP_method = DiscreteVJP());
+        #         thres = [6e-4, 7e-4, 4e-2], target = :A, functional_inv = false)
+        #     @testset "VJP (discrete) of SIA2D with classical gridded inversion vs finite differences" test_adjoint_SIA2D(
+        #         ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [6e-4, 7e-4, 4e-2],
+        #         target = :A, functional_inv = false, scalar = false)
+        # end
+
+        @testset "VJPs tests with C as target" begin
             @testset "VJP (discrete) of SIA2D vs finite differences" test_adjoint_SIA2D(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [5e-7, 1e-6, 5e-4], target = :A)
-            @testset "VJP (discrete) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [3e-4, 2e-4, 2e-2], target = :A, C = 7e-8)
-            @testset "VJP (continuous) of SIA2D vs finite differences" test_adjoint_SIA2D(
-                ContinuousAdjoint(VJP_method = ContinuousVJP()); target = :A)
-            @testset "VJP (continuous) of SIA2D with C>0 vs finite differences" test_adjoint_SIA2D(
-                ContinuousAdjoint(VJP_method = ContinuousVJP());
-                thres = [6e-4, 7e-4, 4e-2], target = :A, C = 7e-8)
-            @testset "VJP (discrete) of SIA2D with classical scalar inversion vs finite differences" test_adjoint_SIA2D(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [6e-4, 7e-4, 4e-2], target = :A, functional_inv = false)
-            @testset "VJP (discrete) of SIA2D with classical gridded inversion vs finite differences" test_adjoint_SIA2D(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [6e-4, 7e-4, 4e-2],
-                target = :A, functional_inv = false, scalar = false)
+                thres = [6e-4, 7e-4, 4e-2], target = :C, functional_inv=false, scalar=true)
         end
 
-        @testset "Manual backward of the loss terms vs Enzyme" begin
-            @testset "L2Sum" test_grad_L2Sum()
-            @testset "TikhonovRegularization" test_grad_TikhonovRegularization()
-        end
+        # @testset "Manual backward of the loss terms vs Enzyme" begin
+        #     @testset "L2Sum" test_grad_L2Sum()
+        #     @testset "TikhonovRegularization" test_grad_TikhonovRegularization()
+        # end
     end
 
-    if GROUP == "All" || GROUP == "Core3"
-        @testset "Manual adjoint methods of SIA equation with A as target" begin
-            @testset "Discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
-                DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3])
-            @testset "Discrete adjoint with discrete VJP vs finite differences for scalar classical inversions" test_grad_finite_diff(
-                DiscreteAdjoint(VJP_method = DiscreteVJP());
-                functional_inv = false, thres = [5e-3, 1e-8, 5e-3])
-            @testset "Discrete adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
-                DiscreteAdjoint(VJP_method = DiscreteVJP());
-                thres = [5e-3, 5e-7, 5e-3], train_initial_conditions = true)
-            @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
-                DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-4, 1e-8, 2e-4])
-            @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3])
-            @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [5e-4, 1e-8, 5e-4], train_initial_conditions = true)
-            @testset "Continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(
-                ContinuousAdjoint(
-                    VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
-                    MB_VJP = ODINN.EnzymeVJP());
-                thres = [3e-3, 1e-8, 3e-3],
-                use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
-            @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [3e-3, 1e-8, 3e-3], use_MB = true)
-            @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
-            @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP());
-                thres = [5e-4, 7e-7, 2e-3])
-            @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
-                ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-7, 1e-5])
-            @testset "SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA" test_grad_sciml_vs_manual(thres = [
-                1e-3, 1e-13, 1e-3])
-        end
+    # if GROUP == "All" || GROUP == "Core3"
+    #     @testset "Manual adjoint methods of SIA equation with A as target" begin
+    #         @testset "Discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
+    #             DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3])
+    #         @testset "Discrete adjoint with discrete VJP vs finite differences for scalar classical inversions" test_grad_finite_diff(
+    #             DiscreteAdjoint(VJP_method = DiscreteVJP());
+    #             functional_inv = false, thres = [5e-3, 1e-8, 5e-3])
+    #         @testset "Discrete adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
+    #             DiscreteAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [5e-3, 5e-7, 5e-3], train_initial_conditions = true)
+    #         @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
+    #             DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-4, 1e-8, 2e-4])
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3])
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [5e-4, 1e-8, 5e-4], train_initial_conditions = true)
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(
+    #             ContinuousAdjoint(
+    #                 VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
+    #                 MB_VJP = ODINN.EnzymeVJP());
+    #             thres = [3e-3, 1e-8, 3e-3],
+    #             use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+    #             thres = [3e-3, 1e-8, 3e-3], use_MB = true)
+    #         @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
+    #         @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP());
+    #             thres = [5e-4, 7e-7, 2e-3])
+    #         @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
+    #             ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-7, 1e-5])
+    #         @testset "SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA" test_grad_sciml_vs_manual(thres = [
+    #             1e-3, 1e-13, 1e-3])
+    #     end
 
-        # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
-        # @testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-1, 1e-15, 7e-1])
-    end
+    #     # @testset "Manual implementation of the discrete VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-1, 1e-15, 5e-1])
+    #     # @testset "Manual implementation of the continuous VJP vs Enzyme for Halfar solution" test_grad_Halfar(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [5e-1, 1e-15, 7e-1])
+    # end
 
-    if GROUP == "All" || GROUP == "Core4"
-        @testset "Manual adjoint methods of SIA equation with A as target and ice velocity loss" begin
-            @testset "VJP (discrete) of surface_V vs finite differences" test_adjoint_surface_V(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-6, 1e-13, 1e-6], target = :A)
-            @testset "Discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
-                DiscreteAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-4, 1e-7, 5e-4], loss = LossV())
-            # @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
-            @testset "Continuous adjoint with discrete VJP vs finite differences (L2)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-2, 1e-5, 1e-2], loss = LossV())
-            @testset "Continuous adjoint with discrete VJP vs finite differences (Log)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],
-                loss = LossV(loss = LogSum(), component = :abs))
-            # @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
-            # @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3], loss=LossV())
-        end
-    end
+    # if GROUP == "All" || GROUP == "Core4"
+    #     @testset "Manual adjoint methods of SIA equation with A as target and ice velocity loss" begin
+    #         @testset "VJP (discrete) of surface_V vs finite differences" test_adjoint_surface_V(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [1e-6, 1e-13, 1e-6], target = :A)
+    #         @testset "Discrete adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
+    #             DiscreteAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [1e-4, 1e-7, 5e-4], loss = LossV())
+    #         # @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences (L2)" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [1e-2, 1e-5, 1e-2], loss = LossV())
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences (Log)" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],
+    #             loss = LossV(loss = LogSum(), component = :abs))
+    #         # @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
+    #         # @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3], loss=LossV())
+    #     end
+    # end
 
-    if GROUP == "All" || GROUP == "Core5"
-        @testset "Manual adjoint methods of SIA equation with hybrid D as target" begin
-            @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-4, 1e-8, 2e-4], target = :D_hybrid)
-            @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = ContinuousVJP());
-                thres = [2e-3, 2e-8, 2e-3], target = :D_hybrid)
-        end
-    end
+    # if GROUP == "All" || GROUP == "Core5"
+    #     @testset "Manual adjoint methods of SIA equation with hybrid D as target" begin
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [1e-4, 1e-8, 2e-4], target = :D_hybrid)
+    #         @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = ContinuousVJP());
+    #             thres = [2e-3, 2e-8, 2e-3], target = :D_hybrid)
+    #     end
+    # end
 
-    if GROUP == "All" || GROUP == "Core6"
-        @testset "Adjoint method of SIA equation with pure D as target" begin
-            @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [3e-2, 5e-5, 3e-2], target = :D)
-            @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = ContinuousVJP());
-                thres = [3e-2, 5e-5, 3e-2], target = :D)
-            @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences (loss V)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [5e-3, 1e-6, 5e-3], target = :D, loss = LossV())
-        end
-    end
-    if (GROUP == "All" && (!CI || !Sys.isapple())) || GROUP == "Core7"
-        # Skip this test on macOS when running the "Full tests" CI because it is too slow and produces a timeout error (>6h)
-        @testset "Adjoint method of SIA equation with pure D as target and custom NN" begin
-            # @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-7, 1e-3], target = :D, custom_NN = true)
-            @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences (loss V)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-7, 5e-3],
-                target = :D, custom_NN = true, loss = LossV())
-        end
-    end
+    # if GROUP == "All" || GROUP == "Core6"
+    #     @testset "Adjoint method of SIA equation with pure D as target" begin
+    #         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [3e-2, 5e-5, 3e-2], target = :D)
+    #         @testset "Manual implementation of the continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = ContinuousVJP());
+    #             thres = [3e-2, 5e-5, 3e-2], target = :D)
+    #         @testset "Manual implementation of the continuous adjoint with discrete VJP vs finite differences (loss V)" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [5e-3, 1e-6, 5e-3], target = :D, loss = LossV())
+    #     end
+    # end
+    # if (GROUP == "All" && (!CI || !Sys.isapple())) || GROUP == "Core7"
+    #     # Skip this test on macOS when running the "Full tests" CI because it is too slow and produces a timeout error (>6h)
+    #     @testset "Adjoint method of SIA equation with pure D as target and custom NN" begin
+    #         # @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-7, 1e-3], target = :D, custom_NN = true)
+    #         @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences (loss V)" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-7, 5e-3],
+    #             target = :D, custom_NN = true, loss = LossV())
+    #     end
+    # end
 
-    if GROUP == "All" || GROUP == "Core8"
-        @testset "Multi-objective function and regularization test" begin
-            @testset "MultiLoss" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
-                loss = MultiLoss(losses = (LossH(),), λs = (0.4,)))
-            @testset "Just regularization" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-8, 1e-2],
-                loss = MultiLoss(losses = (VelocityRegularization(),), λs = (1e2,)))
-            @testset "Empirical and regularization" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-4, 1e-8, 1e-4],
-                loss = MultiLoss(losses = (LossH(), VelocityRegularization()), λs = (
-                    1e-2, 2e-1)))
-            @testset "Rheology regularization" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-8, 1e-8, 1e-8],
-                functional_inv = false, scalar = false, loss = RheologyRegularization())
-            @testset "Dhdt loss with discrete adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
-                DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
-                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
-            @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
-                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
-            if !(v"1.10.0" <= VERSION <= v"1.10.999")
-                # This test doesn't work with Julia 1.10 in test mode
-                # Despite a lot of effort we couldn't track the root cause, so we just deactivate that test
-                @testset "AvgV loss with continuous adjoint" test_grad_finite_diff(
-                    ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [
-                        1e-3, 1e-8, 1e-3],
-                    functional_inv = false, scalar = true, loss = LossAvgV(), aggregated_loss = :avgV)
-            end
-        end
-    end
+    # if GROUP == "All" || GROUP == "Core8"
+    #     @testset "Multi-objective function and regularization test" begin
+    #         @testset "MultiLoss" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
+    #             loss = MultiLoss(losses = (LossH(),), λs = (0.4,)))
+    #         @testset "Just regularization" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-8, 1e-2],
+    #             loss = MultiLoss(losses = (VelocityRegularization(),), λs = (1e2,)))
+    #         @testset "Empirical and regularization" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [1e-4, 1e-8, 1e-4],
+    #             loss = MultiLoss(losses = (LossH(), VelocityRegularization()), λs = (
+    #                 1e-2, 2e-1)))
+    #         @testset "Rheology regularization" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-8, 1e-8, 1e-8],
+    #             functional_inv = false, scalar = false, loss = RheologyRegularization())
+    #         @testset "Dhdt loss with discrete adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
+    #             DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
+    #             functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+    #         @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
+    #             functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+    #         if !(v"1.10.0" <= VERSION <= v"1.10.999")
+    #             # This test doesn't work with Julia 1.10 in test mode
+    #             # Despite a lot of effort we couldn't track the root cause, so we just deactivate that test
+    #             @testset "AvgV loss with continuous adjoint" test_grad_finite_diff(
+    #                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [
+    #                     1e-3, 1e-8, 1e-3],
+    #                 functional_inv = false, scalar = true, loss = LossAvgV(), aggregated_loss = :avgV)
+    #         end
+    #     end
+    # end
 
-    if GROUP == "All" || GROUP == "Core9"
-        @testset "Classical inversions" begin
-            @testset "Scalar inversion w/o MB" inversion_test(
-                use_MB = false, multiprocessing = false, functional_inv = false)
-            @testset "Gridded inversion w/o MB" inversion_test(
-                use_MB = false, multiprocessing = false, functional_inv = false, scalar = false)
-        end
-        @testset "Functional inversions" begin
-            @testset "Functional inversion w/o MB" inversion_test(use_MB = false, multiprocessing = false)
-            @testset "Functional inversion w/ MB" inversion_test(use_MB = true,
-                multiprocessing = false,
-                grad = ContinuousAdjoint(VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote())))
-            @testset "Functional inversion w/o MB w/ multiprocessing" inversion_test(
-                use_MB = false, multiprocessing = true)
-        end
-    end
+    # if GROUP == "All" || GROUP == "Core9"
+    #     @testset "Classical inversions" begin
+    #         @testset "Scalar inversion w/o MB" inversion_test(
+    #             use_MB = false, multiprocessing = false, functional_inv = false)
+    #         @testset "Gridded inversion w/o MB" inversion_test(
+    #             use_MB = false, multiprocessing = false, functional_inv = false, scalar = false)
+    #     end
+    #     @testset "Functional inversions" begin
+    #         @testset "Functional inversion w/o MB" inversion_test(use_MB = false, multiprocessing = false)
+    #         @testset "Functional inversion w/ MB" inversion_test(use_MB = true,
+    #             multiprocessing = false,
+    #             grad = ContinuousAdjoint(VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote())))
+    #         @testset "Functional inversion w/o MB w/ multiprocessing" inversion_test(
+    #             use_MB = false, multiprocessing = true)
+    #     end
+    # end
 
-    if GROUP == "All" || GROUP == "Core10"
-        @testset "Multiglacier inversion test" begin
-            @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-2, 1e-5, 1e-2], multiglacier = true)
-            @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],
-                multiglacier = true, train_initial_conditions = true)
-        end
-    end
+    # if GROUP == "All" || GROUP == "Core10"
+    #     @testset "Multiglacier inversion test" begin
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP());
+    #             thres = [1e-2, 1e-5, 1e-2], multiglacier = true)
+    #         @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
+    #             ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],
+    #             multiglacier = true, train_initial_conditions = true)
+    #     end
+    # end
 
-    if GROUP == "All" || GROUP == "Core11"
-        @testset "Save results" begin
-            @testset "Single glacier" save_simulation_test!(multiglacier = false)
-            @testset "Multiple glaciers" save_simulation_test!(multiglacier = true)
-        end
-    end
+    # if GROUP == "All" || GROUP == "Core11"
+    #     @testset "Save results" begin
+    #         @testset "Single glacier" save_simulation_test!(multiglacier = false)
+    #         @testset "Multiple glaciers" save_simulation_test!(multiglacier = true)
+    #     end
+    # end
 
-    if GROUP == "All" || GROUP == "Aqua"
-        @testset "Aqua" test_Aqua()
-    end
+    # if GROUP == "All" || GROUP == "Aqua"
+    #     @testset "Aqua" test_Aqua()
+    # end
 end

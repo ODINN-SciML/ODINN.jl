@@ -75,6 +75,15 @@ function test_adjoint_SIA2D(
             mass_balance = nothing,
             regressors = (; A = trainable_model)
         )
+    elseif target==:C
+        @assert !functional_inv "Target :C currently supports classical inversion only in tests."
+        law = LawC(params; scalar = scalar)
+        iceflow_model = SIA2Dmodel(params; C = law)
+        Model(
+            iceflow = iceflow_model,
+            mass_balance = nothing,
+            regressors = (; C = trainable_model)
+        )
     elseif target==:D_hybrid
         @assert functional_inv
         iceflow_model = SIA2Dmodel(params; Y = LawY(trainable_model, params))
