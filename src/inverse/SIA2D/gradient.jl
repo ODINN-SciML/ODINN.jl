@@ -509,10 +509,10 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             # Compute gradient wrt initial condition because this is not taken into account in the quadrature
             if haskey(θ, :IC)
                 λ₀ = copy(sol_rev(-tspan[1]))
-                # The loss deposits at t₀ are not applied by the discrete callbacks at the
-                # reverse-integration boundary (same reason the t₁ contribution is added
-                # manually to λ₁ above). dL/dH₀ = λ(t₀⁻) must include the t₀ jump, so add
-                # it explicitly here; otherwise the initial-condition gradient is too small.
+                # The callbacks do deposit the t₀ loss during the reverse solve, but
+                # `sol_rev` interpolated at -tspan[1] does not carry that jump. Since
+                # dL/dH₀ = λ(t₀⁻) must include it, apply it explicitly here; otherwise the
+                # initial-condition gradient is too small.
                 if tspan[1] ∈ tstops
                     effect_loss!(tspan[1], λ₀)
                 end
