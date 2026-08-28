@@ -111,4 +111,7 @@ include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))
 # Results
 include(joinpath(root_dir, "src/results/TrainingResults.jl"))
 
+# Gradient checks
+include(joinpath(root_dir, "src/gradient/check.jl"))
+
 end # module
