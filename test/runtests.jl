@@ -143,6 +143,21 @@ ENV["GKSwstype"] = "nul"
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
                 thres = [3e-3, 1e-8, 3e-3], use_MB = true)
+            # A nonzero temp_bias moves the PDD/snow clamp thresholds, which the MB VJPs
+            # must pick up from the MB model rather than assume away.
+            @testset "Continuous adjoint w/ discrete MB VJP and temperature bias" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+            @testset "Continuous adjoint w/ Enzyme MB VJP and temperature bias" test_grad_finite_diff(
+                ContinuousAdjoint(
+                    VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
+                    MB_VJP = ODINN.EnzymeVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+            # Calibration turns mass_balance into one model per glacier, so this covers the
+            # vector of MB models flowing through the VJPs.
+            @testset "Continuous adjoint w/ discrete MB VJP and calibrated MB" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, calibrate_MB = true)
             @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
             @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(

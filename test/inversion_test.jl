@@ -153,6 +153,8 @@ function inversion_test(;
             multiprocessing = multiprocessing,
             workers = workers,
             test_mode = true,
+            # Calibration would replace the MB model built below, making A less identifiable.
+            calibrate_MB = false,
             rgi_paths = rgi_paths,
             gridScalingFactor = 4 # We reduce the size of glacier for simulation
         ),

@@ -74,7 +74,7 @@ function MB_wrapper!(MB, H, simulation, glacier, mb_model, step)
 
     # Below we call the functions that are inside MB_timestep! manually
     # This is because get_cumulative_climate! cannot be differentiated with Enzyme, so it is called beforehand in the VJP function to retrieve the cumulative climate
-    downscale_2D_climate!(glacier)
+    downscale_2D_climate!(glacier; temp_bias = get_temp_bias(mb_model))
     cache.iceflow.MB .= compute_MB(mb_model, glacier.climate.climate_2D_step, step)
 
     apply_MB_mask!(H, cache.iceflow)
@@ -109,7 +109,6 @@ function VJP_λ_∂MB∂H(VJPMode::EnzymeVJP, λ, H, simulation::Simulation, gla
 end
 
 function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, glacier, t)
-    model = simulation.model
     cache = simulation.cache
     step_MB = simulation.parameters.simulation.step_MB
     glacier.S .= glacier.B .+ H
@@ -118,7 +117,8 @@ function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, g
     mb_model = get_mb_model(
         simulation.model.mass_balance, simulation.cache.iceflow.glacier_idx)
     λ_∂MB∂H = if isa(mb_model, TImodel1)
-        downscale_2D_climate!(glacier)
+        temp_bias = get_temp_bias(mb_model)
+        downscale_2D_climate!(glacier; temp_bias = temp_bias)
         climate_2D_step = glacier.climate.climate_2D_step
 
         # Per-day Jacobian of PDD and snow wrt S (ΔS = S - ref_hgt), matching the daily
@@ -132,7 +132,7 @@ function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, g
         ∂PDD∂S = zero(glacier.S)
         ∂snow∂S = zero(glacier.S)
         for d in eachindex(temp_vec)
-            T_d, g_d, p_d = temp_vec[d], grad_vec[d], prcp_vec[d]
+            T_d, g_d, p_d = temp_vec[d] + temp_bias, grad_vec[d], prcp_vec[d]
             @. ∂PDD∂S += ifelse(T_d + g_d * ΔS > 0, g_d, 0.0)
             @. ∂snow∂S += ifelse((2 - T_d - g_d * ΔS > 0) & (2 - T_d - g_d * ΔS < 2),
                 -p_d * g_d / 2, 0.0)
@@ -140,7 +140,7 @@ function VJP_λ_∂MB∂H(VJPMode::DiscreteVJP, λ, H, simulation::Simulation, g
         ∂MB∂S = (PRECIP_UNIT_CONVERSION * mb_model.prcp_fac .* ∂snow∂S .-
                  mb_model.DDF .* ∂PDD∂S) ./ (step_MB / (1 / 12))
 
-        cache.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step, step_MB)
+        cache.iceflow.MB .= compute_MB(mb_model, glacier.climate.climate_2D_step, step_MB)
         MB = cache.iceflow.MB
         MB_mask = cache.iceflow.MB_mask
 
