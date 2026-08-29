@@ -307,7 +307,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 throw("Interpolation method for continuous adjoint not defined.")
             end
 
-            # Interpolant used only for the SIA VJP linearization. The forward SIA flow over
+            # Linear interpolant (as above) used only for the SIA VJP linearization. The forward SIA flow over
             # each interval ends at the pre-MB state (MB is applied at the right endpoint),
             # but H stores post-MB states. Interpolate post-MB at the left node and pre-MB at
             # the right node so the SIA VJP is linearized on the true forward trajectory.
@@ -337,7 +337,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                  (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP))
                 throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
             end
-            f_adjoint_rev = let simulation=simulation, H_itp=H_itp, θ=θ
+            f_adjoint_rev = let simulation=simulation, H_itp_SIA=H_itp_SIA, θ=θ
                 function (dλ, λ, p, τ)
                     t = -τ
                     λ_∂f∂H,

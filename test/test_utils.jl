@@ -78,8 +78,7 @@ Returns:
 function stats_err_arrays(a::T, b::T) where {T}
     norm_a = sqrt(sum(a .^ 2))
     norm_b = sqrt(sum(b .^ 2))
-    # Both gradients are exactly zero (e.g. the tested parameter has no influence
-    # on the loss for this scenario): they trivially agree, avoid a 0/0 NaN.
+    # Both vectors are exactly zero: they are trivially aligned, avoid a 0/0 NaN.
     if norm_a == 0 && norm_b == 0
         return 0.0, 0.0, 0.0
     end
