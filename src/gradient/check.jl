@@ -11,10 +11,33 @@
 
 Compare two gradients at a given parameter vector and compute statistics to check how close they are to each other:
 
-  - The first gradient is either the one provided as an argument, or the one obtained by the
-    adjoint if not provided. It is computed using the adjoint method configured in
-    `simulation.parameters.UDE.grad`.
-  - The other gradient is computed using finite differences.
+    - The first gradient is either `gradient`, or, when `gradient === nothing`, a gradient
+        computed with the adjoint method configured in `simulation.parameters.UDE.grad`.
+    - The second gradient is computed with central finite differences of the ice-flow loss.
+
+When the parameter vector contains more than `max_params` entries, finite differences
+are evaluated on a randomly selected subset. Initial-condition parameters are always
+masked in this case; when `mask_parameter_vector` is `true`, other parameter groups
+are masked as well.
+
+The simulation's trainable parameter vector is restored to its original value before
+returning, including when gradient evaluation throws an exception.
+
+# Arguments
+- `simulation::Inversion`: Inversion whose loss and gradients are compared.
+- `θ`: Parameter vector at which to evaluate the gradients. Defaults to the simulation's
+    current trainable parameter vector.
+- `gradient`: Precomputed gradient to compare with finite differences. If omitted, it is
+    computed from `simulation`.
+- `finite_difference_order`: Order of the central finite-difference formula.
+- `max_params`: Maximum number of parameter entries used for finite-difference evaluation.
+- `mask_parameter_vector`: Whether to sample non-initial-condition parameter groups when
+    `max_params` is exceeded.
+
+# Returns
+A tuple `(ratio, angle, relative_error, (gradient, finite_difference_gradient))`, where
+the first three values are absolute gradient-comparison statistics returned by
+`stats_err_arrays`, and the final value contains the two gradients that were compared.
 """
 function grad_finite_diff(
         simulation::Inversion;
