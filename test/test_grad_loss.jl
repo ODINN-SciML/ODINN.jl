@@ -11,6 +11,8 @@ using Distributed: map
         train_initial_conditions = false,
         multiglacier = false,
         use_MB = false,
+        temp_bias = 0.0,
+        calibrate_MB = false,
         functional_inv = true,
         custom_NN = false,
         max_params = 60,
@@ -37,6 +39,11 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
   - `multiglacier::Bool`: Whether to run the test on multiple glaciers.
   - `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
+  - `temp_bias`: Temperature bias of the tested `TImodel1`, in °C. A nonzero value shifts
+    where the PDD and snow clamps activate, so it exercises that dependency in the MB VJP.
+  - `calibrate_MB::Bool`: Whether to calibrate the mass balance model against the geodetic
+    observations. Off by default so the `TImodel1` built below is the one actually tested;
+    turn it on to check the adjoint against a per-glacier calibrated vector of MB models.
   - `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
   - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network. If the custom neural network is used, the glacier grid and the number of points in the VJP interpolation are reduced to spare computation time and memory.
   - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
@@ -53,6 +60,8 @@ function test_grad_finite_diff(
         train_initial_conditions = false,
         multiglacier = false,
         use_MB = false,
+        temp_bias = 0.0,
+        calibrate_MB = false,
         functional_inv = true,
         scalar = true,
         custom_NN = false,
@@ -87,7 +96,14 @@ function test_grad_finite_diff(
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
-    tspan = use_MB ? (1980.0, 2019.0) : (2010.0, 2012.0)
+    # Short window: over 1980-2019 the melt empties the mask and ∂dhdt/∂A vanishes.
+    tspan = if aggregated_loss == :dhdt
+        (2010.0, 2015.0)
+    elseif use_MB
+        (1980.0, 2019.0)
+    else
+        (2010.0, 2012.0)
+    end
 
     useSciMLSenseAlg = isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
     if useSciMLSenseAlg
@@ -115,6 +131,7 @@ function test_grad_finite_diff(
             multiprocessing = false,
             workers = 1,
             test_mode = true,
+            calibrate_MB = calibrate_MB,
             rgi_paths = rgi_paths,
             gridScalingFactor = custom_NN ? 8 : 4,
             f_surface_velocity_factor = 0.8
@@ -222,10 +239,10 @@ function test_grad_finite_diff(
     end
 
     mass_balance = if aggregated_loss==:dhdt
-        # Intensify melting to make dhdt negative
-        TImodel1(params; DDF = 15.0/1000.0, prcp_fac = 0.4)
+        # Intensify melting to make dhdt negative, without melting the glacier out.
+        TImodel1(params; DDF = 9.0/1000.0, prcp_fac = 0.8, temp_bias = temp_bias)
     else
-        TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
+        TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2, temp_bias = temp_bias)
     end
     model = @match target begin
         :A => Model(

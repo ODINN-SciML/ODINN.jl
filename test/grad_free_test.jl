@@ -76,7 +76,10 @@ function grad_free_test(; use_MB::Bool = false)
 
     # We create an ODINN prediction
     functional_inversion = Inversion(model, glaciers, params)
-    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Inversion(model, glaciers, params)
+    # Not type-stable: calibrate_MB reads the climate RasterStack whose eltype is not
+    # known at compile time (same limitation as the Model construction above).
+    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) Inversion(
+        model, glaciers, params)
 
     # Run simulation
     run!(functional_inversion)

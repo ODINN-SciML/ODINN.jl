@@ -5,7 +5,6 @@
 # It covers the main plot types available after running a forward simulation.
 
 using ODINN
-using Sleipnir
 using CairoMakie
 
 # ## Running a forward simulation
