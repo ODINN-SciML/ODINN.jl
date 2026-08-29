@@ -57,15 +57,18 @@ function Inversion(
     Muninn.validate_model_simulation_compatibility(model, parameters)
 
     # Optionally calibrate the mass balance model per glacier (no-op unless the
-    # model type defines a calibration routine, e.g. TImodel1).
+    # model type defines a calibration routine, e.g. TImodel1). Calibration returns a new
+    # Model since one model per glacier changes the type of the mass_balance field, so the
+    # return value has to be used, as Huginn's Prediction does.
     if parameters.simulation.use_MB && parameters.simulation.calibrate_MB
-        calibrate_MB_model!(model, glaciers, parameters)
+        model = calibrate_MB_model(model, glaciers, parameters)
     end
 
     # Build the results struct based on input values
     emptySimulationResults = Vector{Sleipnir.Results{Sleipnir.Float, Sleipnir.Int}}([])
     emptyResults = Results(emptySimulationResults, TrainingStats())
-    inversion = Inversion{M, cache_type(model), G, typeof(parameters), typeof(emptyResults)}(
+    inversion = Inversion{
+        typeof(model), cache_type(model), G, typeof(parameters), typeof(emptyResults)}(
         model, nothing,
         glaciers,
         parameters,

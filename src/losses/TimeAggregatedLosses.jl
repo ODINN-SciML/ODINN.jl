@@ -76,6 +76,11 @@ function time_aggregated_loss(
     H0 = H_pred[ind[1]]
     H1 = H_pred[ind[2]]
     mask = H0 .> 1e-2
+    # Glacier fully melted out at the start of the window: no ice-covered pixels
+    # to compare against, so this window contributes no loss.
+    if !any(mask)
+        return zero(F)
+    end
     dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
     return (dhdt-dhdt_ref)^2
 end
@@ -100,11 +105,17 @@ function backward_time_aggregated_loss(
     H0 = H_pred[ind[1]]
     H1 = H_pred[ind[2]]
     mask = H0 .> 1e-2
-    dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
-    N = length(H0[mask])
 
     # ∂L∂H = zero(H_pred) # With Julia 1.10 in test mode H_pred is of type Type{Matrix{Float64}} which seems to be a bug, we bypass it by making a copy
     ∂L∂H = [zero(H) for H in H_pred]
+    # Glacier fully melted out at the start of the window: no ice-covered pixels
+    # to compare against, so this window contributes no gradient.
+    if !any(mask)
+        return ∂L∂H, zero(θ)
+    end
+    dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
+    N = length(H0[mask])
+
     ∂L∂H[ind[1]] = -2*(dhdt-dhdt_ref)*mask/(N*(tLoss[2]-tLoss[1]))
     ∂L∂H[ind[2]] = 2*(dhdt-dhdt_ref)*mask/(N*(tLoss[2]-tLoss[1]))
     return ∂L∂H, zero(θ)

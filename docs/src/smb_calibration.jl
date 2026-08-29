@@ -32,16 +32,16 @@ params = Parameters(
 )
 
 ## Initializing the glaciers also loads the Hugonnet geodetic mass balance into
-## each `glacier.geodetic_MB` (mean MB in m w.e. yr⁻¹) and `glacier.dhdtData`.
+## each `glacier.dhdtData` (mean MB in m w.e. yr⁻¹, plus its period and uncertainty).
 glaciers = initialize_glaciers(rgi_ids, params)
 
 ## A TI mass balance model with a single DDF. `iceflow = nothing` because the
 ## TI calibration only uses the static glacier geometry and climate.
 model = Model(iceflow = nothing, mass_balance = TImodel1(params))
 
-## Calibrate the mass balance model against the geodetic observations. This
-## fills `model.mass_balance` with one calibrated `TImodel1` per glacier.
-calibrate_MB_model!(model, glaciers, params)
+## Calibrate the mass balance model against the geodetic observations. It returns a new
+## `Model` since one `TImodel1` per glacier changes the type of the `mass_balance` field.
+model = calibrate_MB_model(model, glaciers, params)
 calibrated_models = model.mass_balance
 
 ## Inspect the calibrated parameters and how well the modelled MB matches the
@@ -49,7 +49,7 @@ calibrated_models = model.mass_balance
 for (glacier, cal_model) in zip(glaciers, calibrated_models)
     cal_mb = compute_mean_annual_MB(cal_model, glacier, 2000.0, 2020.0)
     println("Glacier ", glacier.rgi_id)
-    println("  Hugonnet geodetic MB : ", round(glacier.geodetic_MB; digits = 4), " m w.e. yr⁻¹")
+    println("  Hugonnet geodetic MB : ", round(glacier.dhdtData.dhdt; digits = 4), " m w.e. yr⁻¹")
     println("  Calibrated DDF       : ", round(cal_model.DDF * 1000; digits = 4), " mm w.e. °C⁻¹ d⁻¹")
     println("  prcp_fac             : ", round(cal_model.prcp_fac; digits = 4))
     println("  temp_bias            : ", round(cal_model.temp_bias; digits = 4), " °C")
@@ -63,9 +63,10 @@ end
 # When `initialize_glaciers` is called, Sleipnir looks up each glacier in the
 # Hugonnet et al. (2021) geodetic dataset and stores the result on the glacier:
 #
-# - `glacier.geodetic_MB`: the glacier-wide mean mass balance over 2000–2020,
-#   in m w.e. yr⁻¹ — this is the calibration target.
-# - `glacier.dhdtData`: the observation period and surface elevation change rate.
+# - `glacier.dhdtData.dhdt`: the glacier-wide mean mass balance over 2000–2020,
+#   in m w.e. yr⁻¹ (Hugonnet's `dmdtda`) — this is the calibration target.
+# - `glacier.dhdtData.t`: the observation period, used as the default calibration window.
+# - `glacier.dhdtData.uncertainty`: the reported error on that mass balance.
 #
 # No extra step is required: the data ships with Sleipnir for the reference
 # glaciers used here, and is loaded from the full Hugonnet table when available.
@@ -84,9 +85,9 @@ end
 
 # ### Running the calibration
 #
-# `calibrate_MB_model!(model, glaciers, params)` expands the single `TImodel1`
+# `calibrate_MB_model(model, glaciers, params)` expands the single `TImodel1`
 # template into a vector of per-glacier calibrated models, fitting each glacier
-# against its `geodetic_MB`. For a whole simulation you can instead set
+# against its `dhdtData.dhdt`. For a whole simulation you can instead set
 # `calibrate_MB = true` in `SimulationParameters`, which calibrates the mass
 # balance model automatically before the run.
 #
@@ -98,6 +99,6 @@ end
 # ### Using the calibrated models
 #
 # `compute_mean_annual_MB(cal_model, glacier, t0, t1)` returns the modelled mean
-# annual mass balance, which should now be close to `glacier.geodetic_MB`. The
+# annual mass balance, which should now be close to `glacier.dhdtData.dhdt`. The
 # calibrated models are ready to be used in forward simulations, exactly like
 # the mass balance model in the [Forward simulation tutorial](forward_simulation.md).
