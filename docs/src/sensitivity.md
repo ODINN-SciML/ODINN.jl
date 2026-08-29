@@ -188,6 +188,7 @@ However, if you suspect an issue in the computed gradient (for example if the re
 For this use
 
 ```julia
+using FiniteDifferences  # Required to use grad_finite_diff
 ratio, angle, relerr, (dθ, dθ_FD) = grad_finite_diff(simulation)
 ```
 
