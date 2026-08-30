@@ -1,4 +1,4 @@
-export Model
+import Sleipnir: Model, _construct_Model
 
 _inputs_A_law_scalar = (; T = iAvgScalarTemp())
 _inputs_A_law_gridded = (; T = iAvgGriddedTemp())
@@ -38,39 +38,7 @@ include("./InitialCondition.jl")
 include("./GlacierWideInv.jl")
 include("./GriddedInv.jl")
 
-"""
-    Model(;
-        iceflow::Union{IFM, Nothing} = nothing,
-        mass_balance::Union{MBM, Nothing} = nothing,
-        regressors::Union{NamedTuple, Nothing} = nothing,
-        target::Union{TAR, Nothing} = nothing,
-    ) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
-
-Creates a new model instance using the provided iceflow, mass balance, and machine learning components.
-
-# Arguments
-
-  - `iceflow::Union{IFM, Nothing}`: The iceflow model to be used. Can be a single model or `nothing`.
-  - `mass_balance::Union{MBM, Nothing}`: The mass balance model to be used. Can be a single model or `nothing`.
-  - `regressors::Union{NamedTuple, Nothing}`: The regressors to be used in the laws.
-
-# Returns
-
-  - `model`: A new instance of `Sleipnir.Model` initialized with the provided components.
-"""
-function Model(;
-        iceflow::Union{IFM, Nothing} = nothing,
-        mass_balance::Union{MBM, Nothing} = nothing,
-        regressors::Union{NamedTuple, Nothing} = nothing,
-        target::Union{TAR, Nothing} = nothing
-) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
-    if isnothing(regressors)
-        Sleipnir.Model(iceflow, mass_balance, nothing)
-    else
-        Model(iceflow, mass_balance, regressors; target = target)
-    end
-end
-function Model(
+function _construct_Model(
         iceflow::Union{IFM, Nothing},
         mass_balance::Union{MBM, Nothing},
         regressors::NamedTuple;
