@@ -70,8 +70,7 @@ using StaticArrays
 # ############    PARAMETERS     ###############
 # ##############################################
 
-cd(@__DIR__)
-const global root_dir::String = dirname(Base.current_project())
+const global root_dir::String = joinpath(dirname(@__FILE__), "..")
 const global root_plots::String = joinpath(root_dir, "plots")
 
 # const SYSIMAGE_DIR = joinpath(homedir(), ".ODINN")
