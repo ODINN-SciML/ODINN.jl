@@ -52,7 +52,6 @@ using MLStyle
 import DifferentiationInterface as DI
 using Aqua
 
-include("test_utils.jl")
 include("params_construction.jl")
 include("grad_free_test.jl")
 include("SIA2D_adjoint_utils.jl")

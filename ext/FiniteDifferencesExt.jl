@@ -2,9 +2,31 @@ module FiniteDifferencesExt
 
 # When FiniteDifferences is loaded alongside ODINN, define utils to check the adjoint
 
+using Printf
 using ODINN
 using FiniteDifferences
-import ODINN: grad_finite_diff
+import ODINN: grad_finite_diff, printVecScientific
+
+printVecScientific(v::AbstractVector) = join([@sprintf("%9.2e", e) for e in v], " ")
+function printVecScientific(baseVarName::String, v::AbstractVector, thres = nothing)
+    print(baseVarName)
+    for e in v
+        if isnothing(thres)
+            print(@sprintf("%9.2e", e))
+        else
+            if abs(e)<=thres
+                printstyled(@sprintf("%9.2e", e); color = :green)
+            else
+                printstyled(@sprintf("%9.2e", e); color = :red)
+            end
+        end
+        print(" ")
+    end
+    if !isnothing(thres)
+        printstyled("< $(thres)"; color = :blue)
+    end
+    println("")
+end
 
 """
     grad_finite_diff(
@@ -66,6 +88,8 @@ function grad_finite_diff(
         return ODINN.loss_iceflow_transient(_θ, _simulation, map)
     end
 
+    ratio = angle = relerr = NaN
+    dθ = dθ_FD = NaN
     try
         dθ = if isnothing(gradient)
             dθ = zero(θ)

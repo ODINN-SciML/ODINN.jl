@@ -75,7 +75,7 @@ function test_MB_VJP(
     for k in range(-5, 1, step = 2)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(
+        ∂H_num = ODINN.compute_numerical_gradient(
             H, (simulation, t, δt, λ, glacier), f_H, ϵ; varStr = "of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)

@@ -150,7 +150,7 @@ function test_adjoint_SIA2D(
     for k in range(3, 7, step = 2)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(
+        ∂H_num = ODINN.compute_numerical_gradient(
             H, (simulation, t, vecBackwardSIA2D, glacier_idx), f_H, ϵ; varStr = "of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)
@@ -184,7 +184,7 @@ function test_adjoint_SIA2D(
     for k in range(3, 7)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂θ_num = compute_numerical_gradient(
+        ∂θ_num = ODINN.compute_numerical_gradient(
             θ, (H, simulation, t, vecBackwardSIA2D, glacier_idx), f_θ, ϵ; varStr = "of θ")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂θ, ∂θ_num)
         push!(ratio, ratio_k)
@@ -323,7 +323,7 @@ function test_adjoint_surface_V(
     for k in range(3, 8)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(
+        ∂H_num = ODINN.compute_numerical_gradient(
             H, (simulation, t, vecBackwardSIA2D, glacier_idx), f_H, ϵ; varStr = "of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)
@@ -357,7 +357,7 @@ function test_adjoint_surface_V(
     for k in range(5, 7)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂θ_num = compute_numerical_gradient(
+        ∂θ_num = ODINN.compute_numerical_gradient(
             θ, (H, simulation, t, vecBackwardSIA2D, glacier_idx), f_θ, ϵ; varStr = "of θ")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂θ, ∂θ_num)
         push!(ratio, ratio_k)
