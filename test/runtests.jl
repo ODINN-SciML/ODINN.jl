@@ -114,6 +114,7 @@ ENV["GKSwstype"] = "nul"
         @testset "Manual backward of the loss terms vs Enzyme" begin
             @testset "L2Sum" test_grad_L2Sum()
             @testset "TikhonovRegularization" test_grad_TikhonovRegularization()
+            @testset "V magnitude chain rule (:abs)" test_grad_V_from_Vxy()
         end
     end
 

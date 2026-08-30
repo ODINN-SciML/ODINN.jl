@@ -264,6 +264,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
             # Compute gradient wrt initial condition because this is not taken into account in the loop above
             if haskey(θ, :IC)
+                @warn "DiscreteAdjoint initial-condition (H₀) gradients are unreliable \
+                    for the stiff SIA at practical time steps and may be unstable; \
+                    prefer ContinuousAdjoint for initial-condition inversion." maxlog=1
                 λ₀ = λ[begin]
                 s₀ = evaluate_∂H₀(
                     θ,
@@ -529,7 +532,17 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
             # Compute gradient wrt initial condition because this is not taken into account in the quadrature
             if haskey(θ, :IC)
-                λ₀ = sol_rev(-tspan[1])
+                λ₀ = copy(sol_rev(-tspan[1]))
+                # The callbacks do deposit the t₀ loss during the reverse solve, but
+                # `sol_rev` interpolated at -tspan[1] does not carry that jump. Since
+                # dL/dH₀ = λ(t₀⁻) must include it, apply it explicitly here; otherwise the
+                # initial-condition gradient is too small.
+                if tspan[1] ∈ tstops
+                    effect_loss!(tspan[1], λ₀)
+                end
+                if length(tstopsAggregatedLoss) > 0 && tspan[1] ∈ tstopsAggregatedLoss
+                    effect_aggregated_loss!(tspan[1], λ₀)
+                end
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,

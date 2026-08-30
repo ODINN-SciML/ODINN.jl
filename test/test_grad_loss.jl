@@ -419,6 +419,59 @@ function test_grad_finite_diff(
     end
 end
 
+"""
+    test_grad_V_from_Vxy()
+
+Solver-free finite-difference check for the `:abs` component of the velocity losses
+(`LossV` / `LossAvgV`). The `:abs` branch builds the loss from the velocity magnitude
+`V = √(Vx² + Vy²)` and must propagate the gradient back to `(Vx, Vy)` with the exact
+chain rule `∂ℓ/∂Vx = ∂ℓ/∂V · Vx/V`. This reproduces that branch with the **real** loss
+functions (`loss` / `backward_loss` of the simple loss, composed with `ODINN.VJP_λ_∂V∂Vxy`)
+and compares to finite differences of the same velocity loss.
+
+It guards against regressing to the previous secant-slope form
+`∂ℓ/∂V · (Vx_pred - Vx_ref)/(V_pred - V_ref)`, which equals the chain rule only when the
+predicted and reference flow directions coincide — a condition that holds closely enough
+for SIA that no integration test reliably exposes the error (the secant blows up as
+`V_pred → V_ref`). Here FD is exact and the secant would fail by O(1).
+"""
+function test_grad_V_from_Vxy()
+    nx, ny = 6, 5
+    # Deterministic, strictly-positive fields; predicted and reference flow directions
+    # deliberately differ so the (buggy) secant slope departs from the true chain rule.
+    Vx_pred = [1.0 + 0.30i + 0.10j for i in 1:nx, j in 1:ny]
+    Vy_pred = [2.0 + 0.20i - 0.05j for i in 1:nx, j in 1:ny]
+    Vx_ref = [1.2 + 0.10i - 0.05j for i in 1:nx, j in 1:ny]
+    Vy_ref = [1.5 - 0.15i + 0.10j for i in 1:nx, j in 1:ny]
+    V_ref = sqrt.(Vx_ref .^ 2 .+ Vy_ref .^ 2)
+    mask = trues(nx, ny)
+    normalization = 3.0
+
+    for simpleLoss in (L2Sum(), LogSum())
+        # Effective :abs velocity loss as a function of (Vx, Vy), using the real loss fn
+        L(vx, vy) = loss(simpleLoss, sqrt.(vx .^ 2 .+ vy .^ 2), V_ref, mask, normalization)
+
+        # Adjoint, composed exactly as the `:abs` branch does
+        V_pred = sqrt.(Vx_pred .^ 2 .+ Vy_pred .^ 2)
+        ∂l∂V = backward_loss(simpleLoss, V_pred, V_ref, mask, normalization)
+        ∂Vx, ∂Vy = ODINN.VJP_λ_∂V∂Vxy(∂l∂V, Vx_pred, Vy_pred)
+
+        ∂Vx_FD, ∂Vy_FD = FiniteDifferences.grad(central_fdm(5, 1), L, Vx_pred, Vy_pred)
+
+        thres = 1e-9
+        for (a, b) in ((∂Vx, ∂Vx_FD), (∂Vy, ∂Vy_FD))
+            ratio, angle, relerr = stats_err_arrays(a, b)
+            if printDebug |
+               !((abs(ratio) < thres) & (abs(angle) < thres) & (abs(relerr) < thres))
+                printVecScientific("ratio  = ", [ratio], thres)
+                printVecScientific("angle  = ", [angle], thres)
+                printVecScientific("relerr = ", [relerr], thres)
+            end
+            @test (abs(ratio) < thres) & (abs(angle) < thres) & (abs(relerr) < thres)
+        end
+    end
+end
+
 function test_grad_L2Sum()
     function _loss!(l, a, b, norm, lossType)
         l[1] = loss(lossType, a, b, norm)
