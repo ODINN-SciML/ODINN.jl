@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
-authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 version = "1.1.0"
+authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>"]
 
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
@@ -89,7 +89,7 @@ MLStyle = "0.4"
 MLUtils = "0.4"
 MassBalanceMachine = "0.2"
 Mooncake = "0.5"
-Muninn = "0.11"
+Muninn = "0.11, 0.13"
 Optim = "1"
 Optimisers = "0.4"
 Optimization = "5"
