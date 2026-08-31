@@ -42,6 +42,7 @@ Compare two gradients at a given parameter vector and compute statistics to chec
 
     - The first gradient is either `gradient`, or, when `gradient === nothing`, a gradient
         computed with the adjoint method configured in `simulation.parameters.UDE.grad`.
+        It can be one of the manual adjoints or SciMLSensitivity adjoint.
     - The second gradient is computed with central finite differences of the ice-flow loss.
 
 When the parameter vector contains more than `max_params` entries, finite differences
@@ -128,7 +129,7 @@ function grad_finite_diff(
                     end
                 elseif (key == :A) && (Symbol("1") in keys(θ.A)) &&
                        length(θ.A) != length(glaciers)
-                    # Gridded classical inversion
+                    # Classical gridded inversion
                     for i in 1:length(glaciers)
                         glacier = glaciers[i]
                         M = glacier.H₀
@@ -138,6 +139,19 @@ function grad_finite_diff(
                         mask[idxs] .= 1
                         key_glacier = Symbol("$(i)")
                         θ_mask.A[key_glacier] .= mask
+                    end
+                elseif (key == :C) && (Symbol("1") in keys(θ.C)) &&
+                       length(θ.C) != length(glaciers)
+                    # Classical gridded inversion
+                    for i in 1:length(glaciers)
+                        glacier = glaciers[i]
+                        M = glacier.H₀
+                        non_zero = M .> 1.0
+                        idxs = rand(findall(non_zero), max_params)
+                        mask = falses(size(M) .- 1)
+                        mask[idxs] .= 1
+                        key_glacier = Symbol("$(i)")
+                        θ_mask.C[key_glacier] .= mask
                     end
                 else
                     # Mask parameter vector
