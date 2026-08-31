@@ -120,7 +120,7 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                         redirect_stdout(devnull)
                         redirect_stderr(devnull)
                         using Dates
-                        @everywhere using Revise
+                        # @everywhere using Revise
                         @everywhere using ODINN
                     finally
                         redirect_stdout(old_stdout)

@@ -1,5 +1,6 @@
 import Pkg
-Pkg.activate(dirname(Base.current_project()))
+Pkg.activate(dirname(joinpath(dirname(@__FILE__), "../test/test_env/")))
+Pkg.resolve()
 
 using ODINN
 using BenchmarkTools
