@@ -5,7 +5,6 @@ using Distributed: map
         adjointFlavor::ADJ;
         thres = [0., 0., 0.],
         target = :A,
-        finite_difference_method = :FiniteDifferences,
         finite_difference_order = 3,
         loss = LossH(),
         train_initial_conditions = false,
@@ -32,9 +31,8 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `thres::Vector{<:Real}`: Three-element vector of numerical thresholds for
     `(ratio, angle, relative error)` comparison between adjoint-based and finite-difference gradients.
   - `target::Symbol`: Model target for training/testing (`:A`, `:D`, or `:D_hybrid`), determining which physical law is parameterized by the neural network.
-  - `finite_difference_method::Symbol`: Method for finite-difference computation,
     either `:FiniteDifferences` (default, using `FiniteDifferences.jl`) or `:Manual`.
-  - `finite_difference_order::Int`: Order of accuracy for central finite differences (used only if `finite_difference_method == :FiniteDifferences`).
+  - `finite_difference_order::Int`: Order of accuracy for central finite differences.
   - `loss`: Loss function to evaluate, such as `LossH()` (height-based) or `LossV()` (velocity-based).
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
   - `multiglacier::Bool`: Whether to run the test on multiple glaciers.
@@ -54,7 +52,6 @@ function test_grad_finite_diff(
         adjointFlavor::ADJ;
         thres = [0.0, 0.0, 0.0],
         target = :A,
-        finite_difference_method = :FiniteDifferences,
         finite_difference_order = 3,
         loss = LossH(),
         train_initial_conditions = false,
@@ -305,118 +302,19 @@ function test_grad_finite_diff(
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) ODINN.loss_iceflow_transient(
         θ, simulation, map)
 
-    if finite_difference_method == :FiniteDifferences
+    ### Computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
 
-        ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
-
-        if n_params > max_params
-            # Evaluate gradient on subset of parameters to save some computation
-            @info "Testing gradient with a subset of parameters of size $(max_params) since the original parameter vector θ is of dimension $(n_params)."
-
-            # Component array with binary entry
-            θ_mask = θ .== nothing
-
-            for key in keys(θ)
-                if key == :IC
-                    # Initial condition
-                    for i in 1:length(glaciers)
-                        glacier = glaciers[i]
-                        M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter, i)
-                        non_zero = M .> 1.0
-                        idxs = rand(findall(non_zero), max_params)
-                        mask = falses(size(M)...)
-                        mask[idxs] .= 1
-                        key_glacier = Symbol("$(i)")
-                        θ_mask.IC[key_glacier] .= mask
-                    end
-                elseif (key == :A) && (Symbol("1") in keys(θ.A)) &&
-                       length(θ.A) != length(glaciers)
-                    # Gridded classical inversion
-                    for i in 1:length(glaciers)
-                        glacier = glaciers[i]
-                        M = glacier.H₀
-                        non_zero = M .> 1.0
-                        idxs = rand(findall(non_zero), max_params)
-                        mask = falses(size(M) .- 1)
-                        mask[idxs] .= 1
-                        key_glacier = Symbol("$(i)")
-                        θ_mask.A[key_glacier] .= mask
-                    end
-                else
-                    # Mask parameter vector
-                    if mask_parameter_vector && (length(θ[key]) > max_params)
-                        indx = ODINN.sample(1:length(θ[key]), max_params; replace = false)
-                    else
-                        indx = 1:length(θ[key]) |> collect
-                    end
-                    view(θ_mask, key)[indx] .= true
-                end
-            end
-
-            function f_subset(x, simulation, mask)
-                α = copy(θ)
-                α[mask] = x
-                return f(α, simulation)
-            end
-
-            dθ_FD, = FiniteDifferences.grad(
-                central_fdm(finite_difference_order, 1),
-                α -> f_subset(α, simulation, θ_mask),
-                θ[θ_mask]
-            )
-            dθ = dθ[θ_mask]
-        else
-            # Compute gradient with all parameters
-            dθ_FD, = FiniteDifferences.grad(
-                central_fdm(finite_difference_order, 1),
-                _θ -> f(_θ, simulation),
-                θ
-            )
-        end
-
-        ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
-        printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
-        printVecScientific("angle  = ", [angle_FD], thres_angle)
-        printVecScientific("relerr = ", [relerr_FD], thres_relerr)
-        @test abs(ratio_FD) < thres_ratio
-        @test abs(angle_FD) < thres_angle
-        @test abs(relerr_FD) < thres_relerr
-
-    elseif finite_difference_method == :Manual
-
-        ### Manual finite differences with different choices of stepsize
-
-        ratio = []
-        angle = []
-        relerr = []
-        eps = []
-        for k in range(3, 8)
-            ϵ = 10.0^(-k)
-            push!(eps, ϵ)
-            dθ_num = compute_numerical_gradient(θ, (simulation), f, ϵ; varStr = "of θ")
-            ratio_k, angle_k, relerr_k = stats_err_arrays(dθ, dθ_num)
-            push!(ratio, ratio_k)
-            push!(angle, angle_k)
-            push!(relerr, relerr_k)
-        end
-        min_ratio = minimum(abs.(ratio))
-        min_angle = minimum(abs.(angle))
-        min_relerr = minimum(abs.(relerr))
-
-        if printDebug | !((min_ratio < thres_ratio) & (min_angle < thres_angle) &
-             (min_relerr < thres_relerr))
-            println("eps    = ", printVecScientific(eps))
-            printVecScientific("ratio  = ", ratio, thres_ratio)
-            printVecScientific("angle  = ", angle, thres_angle)
-            printVecScientific("relerr = ", relerr, thres_relerr)
-        end
-        @test min_ratio < thres_ratio
-        @test min_angle < thres_angle
-        @test min_relerr < thres_relerr
-
-    else
-        throw("Finite difference method not implemented.")
-    end
+    ratio_FD, angle_FD,
+    relerr_FD,
+    _ = grad_finite_diff(
+        simulation; θ = θ, finite_difference_order = finite_difference_order,
+        max_params = max_params, mask_parameter_vector = mask_parameter_vector)
+    printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
+    printVecScientific("angle  = ", [angle_FD], thres_angle)
+    printVecScientific("relerr = ", [relerr_FD], thres_relerr)
+    @test abs(ratio_FD) < thres_ratio
+    @test abs(angle_FD) < thres_angle
+    @test abs(relerr_FD) < thres_relerr
 end
 
 """

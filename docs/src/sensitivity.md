@@ -180,3 +180,16 @@ UDE = UDEparameters(
     grad = ContinuousAdjoint(VJP_method = EnzymeVJP()),
 )
 ```
+
+## Numerical verification of the gradient
+
+Most of the use-cases are covered by our continuous integration (CI) test suite and the gradient can be considered as correct.
+However, if you suspect an issue in the computed gradient (for example if the returned gradient is not a direction of ascent and the optimizer stops after a few iterations), you can check the computed gradient directly from a `simulation` object.
+For this use
+
+```julia
+using FiniteDifferences  # Required to use grad_finite_diff
+ratio, angle, relerr, (dθ, dθ_FD) = grad_finite_diff(simulation)
+```
+
+which returns respectively the ratio (normalized to zero), angle (normalized to zero) and relative error between the gradient obtained through the adjoint `dθ` and the one obtained with finite differences `dθ_FD`.

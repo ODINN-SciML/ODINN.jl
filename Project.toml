@@ -53,9 +53,11 @@ Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [weakdeps]
+FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 
 [extensions]
+FiniteDifferencesExt = "FiniteDifferences"
 GLMakieExt = "GLMakie"
 
 [compat]

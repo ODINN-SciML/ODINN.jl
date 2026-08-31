@@ -1,4 +1,8 @@
-# export compute_numerical_gradient, stats_err_arrays, printVecScientific
+export grad_finite_diff, stats_err_arrays, printVecScientific
+
+function grad_finite_diff(::Simulation)
+    throw("Function not implemented. Load `FiniteDifferences` alongside `ODINN` to use it.")
+end
 
 """
     compute_numerical_gradient(
@@ -88,23 +92,9 @@ function stats_err_arrays(a::T, b::T) where {T}
     return ratio, angle, relerr
 end
 
-printVecScientific(v) = join([@sprintf("%9.2e", e) for e in v], " ")
-function printVecScientific(baseVarName, v, thres = nothing)
-    print(baseVarName)
-    for e in v
-        if isnothing(thres)
-            print(@sprintf("%9.2e", e))
-        else
-            if abs(e)<=thres
-                printstyled(@sprintf("%9.2e", e); color = :green)
-            else
-                printstyled(@sprintf("%9.2e", e); color = :red)
-            end
-        end
-        print(" ")
-    end
-    if !isnothing(thres)
-        printstyled("< $(thres)"; color = :blue)
-    end
-    println("")
+function printVecScientific(v::AbstractArray)
+    throw("Function not implemented. Load `FiniteDifferences` alongside `ODINN` to use it.")
+end
+function printVecScientific(baseVarName::String, v::AbstractArray, thres = nothing)
+    throw("Function not implemented. Load `FiniteDifferences` alongside `ODINN` to use it.")
 end
