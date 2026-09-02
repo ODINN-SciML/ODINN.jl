@@ -53,7 +53,6 @@ using CairoMakie
 import Pkg
 using Distributed
 using ProgressMeter
-using Downloads
 using ImageFiltering
 using Printf
 using Interpolations
