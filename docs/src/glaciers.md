@@ -33,7 +33,7 @@ The main climate data supported include:
 
 ### Standard workflow
 
-Alpine glaciers are identified based on RGI (Randolph Glacier Inventory) IDs. There are two options to create `Glacier` types containing information about a given glacier for a simulation:
+Glaciers are identified based on the [RGI](https://rgidata.org/) (Randolph Glacier Inventory) IDs. There are two options to create `Glacier` types containing information about a given glacier for a simulation:
 
   - If the glacier is available in the preprocessed directory hosted on the [ODINN Hugging Face dataset](https://huggingface.co/datasets/ODINN-SciML/ODINN_prepro), there is nothing to do: ODINN downloads the required data automatically at precompilation. The list of already processed glaciers can be obtained with `get_rgi_paths()`.
   - If that is not the case, you have to use `Gungnir` to download all the necessary data for those glaciers locally. This package retrieves data from ERA5 (accessible through the Copernicus Climate Data Store) and from OGGM for the glacier outlines. [Here](https://github.com/ODINN-SciML/Gungnir/blob/main/notebooks/Example.ipynb) you will find a notebook showing how to do so. Once you have a local directory containing the data, you can override where ODINN looks for preprocessed directories by creating an `Overrides.toml` which should be placed in `~/.julia/artifacts/Overrides.toml`. It must contain the UUID of Sleipnir together with the path to your custom preprocessed directory:
