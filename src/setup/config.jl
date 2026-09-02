@@ -126,9 +126,10 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                             scripts_env = normpath(joinpath(dirname(main_env), "scripts", "Project.toml"))
                             docs_env = normpath(joinpath(dirname(main_env), "docs", "Project.toml"))
                             active = Base.active_project()
-                            if active == $main_env
+                            if active == main_env
                                 # intentionally skip
-                            elseif active == $test_env || active == $scripts_env || active == $docs_env
+                            elseif active == test_env || active == scripts_env ||
+                                   active == docs_env
                                 using Revise
                             end
                         end
