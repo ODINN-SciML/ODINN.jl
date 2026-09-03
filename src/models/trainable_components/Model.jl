@@ -41,7 +41,7 @@ include("./GriddedInv.jl")
 function _construct_Model(
         iceflow::Union{IFM, Nothing},
         mass_balance::Union{MBM, Nothing},
-        regressors::NamedTuple;
+        regressors::NamedTuple,
         target::Union{TAR, Nothing} = nothing
 ) where {IFM <: IceflowModel, MBM <: MBmodel, TAR <: AbstractTarget}
 
