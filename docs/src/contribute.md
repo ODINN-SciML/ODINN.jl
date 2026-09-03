@@ -96,3 +96,9 @@ This will print a localhost URL that you can open in your browser. Then, click o
 !!! note "What to do when `make.jl` freezes?"
 
     If the building of the documentation freezes, there can be several reasons that cause this. First try to run `include("testdocs.jl")` which will run the tutorial examples. If there is an error during the execution, this will be easier to spot it as [Literate.jl](https://github.com/fredrikekre/Literate.jl) does not always report the error. If after making sure that the code runs smoothly this still freezes, inspect the generated `.md` files (see the list of files at the beginning of `make.jl`) and check that the markdown file was generated properly (code in `@example` sections).
+
+## Debugging with `Revise.jl`
+
+Because [Revise.jl](https://timholy.github.io/Revise.jl/) is not in the main ODINN environment, its support for multiprocessing should be handled carefully.
+When ODINN is executed with multiprocessing enabled in either the test environment (`test/test_env/Project.toml`), the docs environment (`docs/Project.toml`), or the scripts environment (`scripts/Project.toml`), it automatically detects that `Revise` should be used and imports `Revise` in all the workers, ensuring the implementation is revised in the same way as in the main environment.
+If you want Revise to be enabled in other environments, you will need to change the behavior of `enable_multiprocessing` in `ODINN/src/setup/config.jl`.

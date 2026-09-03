@@ -166,9 +166,9 @@ function Parameters(;
         UDE::UDEparameters = UDEparameters()
 )
     # Check Julia version during runtime (in addition to the precompilation check in ODINN.jl) to ensure that users are aware of compatibility issues when they run the code.
-    if !(v"1.10.0" <= VERSION <= v"1.11.999")
+    if !(v"1.11.0" <= VERSION <= v"1.11.999")
         # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/463
-        error("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
+        error("""ODINN requires Julia 1.11. You are using Julia $VERSION, which is not supported.""")
     end
 
     parameters = Sleipnir.Parameters{

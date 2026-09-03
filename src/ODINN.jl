@@ -15,9 +15,9 @@ __precompile__() # this module is safe to precompile
 module ODINN
 
 # Check Julia version during precompilation
-if !(v"1.10.0" <= VERSION <= v"1.11.999")
+if !(v"1.11.0" <= VERSION <= v"1.11.999")
     # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/463
-    @warn("""ODINN requires Julia 1.10 or 1.11. You are using Julia $VERSION, which is not supported.""")
+    @warn("""ODINN requires Julia 1.11. You are using Julia $VERSION, which is not supported.""")
 end
 
 # ##############################################
@@ -53,7 +53,6 @@ using CairoMakie
 import Pkg
 using Distributed
 using ProgressMeter
-using Downloads
 using ImageFiltering
 using Printf
 using Interpolations
@@ -70,8 +69,7 @@ using StaticArrays
 # ############    PARAMETERS     ###############
 # ##############################################
 
-cd(@__DIR__)
-const global root_dir::String = dirname(Base.current_project())
+const global root_dir::String = normpath(joinpath(dirname(@__FILE__), ".."))
 const global root_plots::String = joinpath(root_dir, "plots")
 
 # const SYSIMAGE_DIR = joinpath(homedir(), ".ODINN")
