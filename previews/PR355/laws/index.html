@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Laws · ODINN.jl</title><meta name="title" content="Laws · ODINN.jl"/><meta property="og:title" content="Laws · ODINN.jl"/><meta property="twitter:title" content="Laws · ODINN.jl"/><meta name="description" content="Documentation for ODINN.jl."/><meta property="og:description" content="Documentation for ODINN.jl."/><meta property="twitter:description" content="Documentation for ODINN.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="ODINN.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">ODINN.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><input class="collapse-toggle" id="menuitem-2" type="checkbox" checked/><label class="tocitem" for="menuitem-2"><span class="docs-label">Tutorials</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../forward_simulation/">Forward simulation</a></li><li><a class="tocitem" href="../functional_inversion/">Functional inversion</a></li><li class="is-active"><a class="tocitem" href>Laws</a><ul class="internal"><li><a class="tocitem" href="#Non-learnable-laws"><span>Non learnable laws</span></a></li><li><a class="tocitem" href="#Learnable-laws"><span>Learnable laws</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../funcs_types/">Types and functions</a></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Laws</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Laws</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ODINN-SciML/ODINN.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ODINN-SciML/ODINN.jl/blob/main/docs/src/laws.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Laws-tutorial"><a class="docs-heading-anchor" href="#Laws-tutorial">Laws tutorial</a><a id="Laws-tutorial-1"></a><a class="docs-heading-anchor-permalink" href="#Laws-tutorial" title="Permalink"></a></h1><pre><code class="language-julia hljs"># This tutorial provides simple examples on how to create laws and how to inject them into the iceflow model.
+
+using ODINN
+
+# Define the working directory
+working_dir = joinpath(ODINN.root_dir, &quot;demos&quot;)
+
+## We fetch the paths with the files for the available glaciers on disk
+rgi_paths = get_rgi_paths()
+
+# Ensure the working directory exists
+mkpath(working_dir)
+
+# Define which glacier RGI IDs we want to work with
+rgi_ids = [&quot;RGI60-11.03638&quot;, &quot;RGI60-11.01450&quot;, &quot;RGI60-11.02346&quot;, &quot;RGI60-07.00065&quot;]
+# Define the time step for the simulation output and for the adjoint calculation. In this case, a month.
+δt = 1/12
+
+params = Parameters(
+    simulation = SimulationParameters(
+        working_dir=working_dir,
+        use_MB=false,
+        velocities=true,
+        tspan=(2010.0, 2015.0),
+        step=δt,
+        multiprocessing=true,
+        workers=5,
+        test_mode=false,
+        rgi_paths=rgi_paths),
+    hyper = Hyperparameters(
+        batch_size=length(rgi_ids), # We set batch size equals all datasize so we test gradient
+        epochs=[2,1],
+        optimizer=[ODINN.ADAM(0.01), ODINN.LBFGS(linesearch = ODINN.LineSearches.BackTracking(iterations = 5))]),
+    physical = PhysicalParameters(
+        minA = 8e-21,
+        maxA = 8e-17),
+    UDE = UDEparameters(
+        optim_autoAD=ODINN.NoAD(),
+        grad=ContinuousAdjoint(),
+        optimization_method=&quot;AD+AD&quot;,
+        target = :A),
+    solver = Huginn.SolverParameters(
+        step=δt,
+        save_everystep=true,
+        progress=true)
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Sleipnir.Parameters{PhysicalParameters{Float64}, SimulationParameters{Int64, Float64, MeanDateVelocityMapping}, Hyperparameters{Float64, Int64}, SolverParameters{Float64, Int64}, UDEparameters{ContinuousAdjoint{Float64, Int64, DiscreteVJP}}, InversionParameters{Float64}}(PhysicalParameters{Float64}(900.0, 9.81, 1.0e-10, 1.0, 8.0e-17, 8.0e-21, 1.0, -25.0, 5.0e-18), SimulationParameters{Int64, Float64, MeanDateVelocityMapping}(false, true, true, true, false, false, (2010.0, 2015.0), 0.08333333333333333, true, 5, &quot;/home/runner/work/ODINN.jl/ODINN.jl/demos&quot;, false, Dict(&quot;RGI60-11.00897&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.00/RGI60-11.00897&quot;, &quot;RGI60-08.00213&quot; =&gt; &quot;per_glacier/RGI60-08/RGI60-08.00/RGI60-08.00213&quot;, &quot;RGI60-08.00147&quot; =&gt; &quot;per_glacier/RGI60-08/RGI60-08.00/RGI60-08.00147&quot;, &quot;RGI60-11.01270&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.01/RGI60-11.01270&quot;, &quot;RGI60-11.03646&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.03/RGI60-11.03646&quot;, &quot;RGI60-11.03232&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.03/RGI60-11.03232&quot;, &quot;RGI60-01.22174&quot; =&gt; &quot;per_glacier/RGI60-01/RGI60-01.22/RGI60-01.22174&quot;, &quot;RGI60-07.00274&quot; =&gt; &quot;per_glacier/RGI60-07/RGI60-07.00/RGI60-07.00274&quot;, &quot;RGI60-03.04207&quot; =&gt; &quot;per_glacier/RGI60-03/RGI60-03.04/RGI60-03.04207&quot;, &quot;RGI60-04.04351&quot; =&gt; &quot;per_glacier/RGI60-04/RGI60-04.04/RGI60-04.04351&quot;…), &quot;Farinotti19&quot;, MeanDateVelocityMapping(:nearest), 1), Hyperparameters{Float64, Int64}(1, 1, Float64[], Any[Optimisers.Adam(eta=0.01, beta=(0.9, 0.999), epsilon=1.0e-8), Optim.LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.BackTracking{Float64, Int64}, Returns{Nothing}}(10, LineSearches.InitialStatic{Float64}
+  alpha: Float64 1.0
+  scaled: Bool false
+, LineSearches.BackTracking{Float64, Int64}
+  c_1: Float64 0.0001
+  ρ_hi: Float64 0.5
+  ρ_lo: Float64 0.1
+  iterations: Int64 5
+  order: Int64 3
+  maxstep: Float64 Inf
+  cache: Nothing nothing
+, nothing, Returns{Nothing}(nothing), Optim.Flat(), true)], 0.0, [2, 1], 4), SolverParameters{Float64, Int64}(OrdinaryDiffEqLowStorageRK.RDPK3Sp35{typeof(OrdinaryDiffEqCore.trivial_limiter!), typeof(OrdinaryDiffEqCore.trivial_limiter!), Static.False}(OrdinaryDiffEqCore.trivial_limiter!, OrdinaryDiffEqCore.trivial_limiter!, static(false)), 1.0e-12, 0.08333333333333333, nothing, true, true, 10, 100000), UDEparameters{ContinuousAdjoint{Float64, Int64, DiscreteVJP}}(SciMLSensitivity.GaussAdjoint{0, true, Val{:central}, SciMLSensitivity.EnzymeVJP}(SciMLSensitivity.EnzymeVJP(0), false), SciMLBase.NoAD(), ContinuousAdjoint{Float64, Int64, DiscreteVJP}(DiscreteVJP(), OrdinaryDiffEqLowStorageRK.RDPK3Sp35{typeof(OrdinaryDiffEqCore.trivial_limiter!), typeof(OrdinaryDiffEqCore.trivial_limiter!), Static.False}(OrdinaryDiffEqCore.trivial_limiter!, OrdinaryDiffEqCore.trivial_limiter!, static(false)), 1.0e-8, 1.0e-8, 0.08333333333333333, :Linear, 200), &quot;AD+AD&quot;, &quot;V&quot;, L2Sum(), true, :A), InversionParameters{Float64}([1.0], [0.0], [Inf], [1, 1], 0.001, 0.001, Optim.BFGS{LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Nothing, Nothing, Optim.Flat}(LineSearches.InitialStatic{Float64}
+  alpha: Float64 1.0
+  scaled: Bool false
+, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}
+  delta: Float64 0.1
+  sigma: Float64 0.9
+  alphamax: Float64 Inf
+  rho: Float64 5.0
+  epsilon: Float64 1.0e-6
+  gamma: Float64 0.66
+  linesearchmax: Int64 50
+  psi3: Float64 0.1
+  display: Int64 0
+  mayterminate: Base.RefValue{Bool}
+  cache: Nothing nothing
+  check_flatness: Bool false
+, nothing, nothing, Optim.Flat())))</code></pre><h2 id="Non-learnable-laws"><a class="docs-heading-anchor" href="#Non-learnable-laws">Non learnable laws</a><a id="Non-learnable-laws-1"></a><a class="docs-heading-anchor-permalink" href="#Non-learnable-laws" title="Permalink"></a></h2><p>We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).</p><pre><code class="language-julia hljs">A_law = CuffeyPaterson()
+
+model = Huginn.Model(
+    iceflow = SIA2Dmodel(params; A=A_law),
+    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"></code></pre><h2 id="Learnable-laws"><a class="docs-heading-anchor" href="#Learnable-laws">Learnable laws</a><a id="Learnable-laws-1"></a><a class="docs-heading-anchor-permalink" href="#Learnable-laws" title="Permalink"></a></h2><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../functional_inversion/">« Functional inversion</a><a class="docs-footer-nextpage" href="../funcs_types/">Types and functions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 24 July 2025 08:57">Thursday 24 July 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
