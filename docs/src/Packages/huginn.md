@@ -4,7 +4,7 @@
 
 The main entry point is the `Prediction` simulation container, which holds the ice flow model, a list of glaciers, simulation parameters, and pre-allocated cache arrays. Calling `run!(prediction)` solves the ice thickness PDE for every glacier in the list (in parallel if `multiprocessing=true` in the simulation parameters) and stores time series of thickness, surface elevation, velocity, and mass balance in a `Results` object.
 
-SIA2D is implemented as a fully in-place ODE right-hand side: `SIA2D!(dH, H, sim, t, θ)`. All intermediate fields (diffusivity `D`, fluxes, staggered-grid averages) are stored in a `SIA2DCache` and reused across time steps, making the solver memory-efficient and AD-compatible via Enzyme.
+SIA2D is implemented using the method of lines to transform the original PDE into a sistem of fully in-place ODE: `SIA2D!(dH, H, sim, t, θ)`. All intermediate fields (diffusivity `D`, fluxes, staggered-grid averages) are stored in a `SIA2DCache` and reused across time steps, making the solver memory-efficient and AD-compatible via Enzyme.
 
 ## Use directly vs. use `ODINN.jl`
 
