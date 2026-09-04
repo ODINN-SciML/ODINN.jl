@@ -28,7 +28,7 @@ Alternatively, use the `Makefile` to create the environment and register the Jup
 make env
 ```
 
-If you only need the `gungnir` Python module (without the full notebook environment):
+Alternatively, if you just want to install the `gungnir` module, you can clone this repository and do:
 
 ```bash
 pip install gungnir
