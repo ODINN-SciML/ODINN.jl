@@ -18,7 +18,7 @@ Use `ODINN.jl` (i.e. `using ODINN`) when you need:
   - Gradient-based optimization through the glacier PDE.
   - Access to the full `Inversion` workflow.
 
-Use `Huginn` alone when you only need **forward simulation** (no gradients, no NN training). Use `Muninn` alone for mass balance computation. Use `Sleipnir` alone for data structure manipulation. This modular structure means each downstream use case only pays the compilation cost of what it needs.
+Use `Huginn` alone when you only need **forward modelling**, which does not need any form of  automatic differentiation. Use `Muninn` alone for mass balance computation. Use `Sleipnir` alone for data structure manipulation. This modular structure means each downstream use case only pays the compilation cost of what it needs.
 
 ## Minimal usage example
 
