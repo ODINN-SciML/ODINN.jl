@@ -76,6 +76,11 @@ function time_aggregated_loss(
     H0 = H_pred[ind[1]]
     H1 = H_pred[ind[2]]
     mask = H0 .> 1e-2
+    # Glacier fully melted out at the start of the window: no ice-covered pixels
+    # to compare against, so this window contributes no loss.
+    if !any(mask)
+        return zero(F)
+    end
     dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
     return (dhdt-dhdt_ref)^2
 end
@@ -100,11 +105,17 @@ function backward_time_aggregated_loss(
     H0 = H_pred[ind[1]]
     H1 = H_pred[ind[2]]
     mask = H0 .> 1e-2
-    dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
-    N = length(H0[mask])
 
     # ∂L∂H = zero(H_pred) # With Julia 1.10 in test mode H_pred is of type Type{Matrix{Float64}} which seems to be a bug, we bypass it by making a copy
     ∂L∂H = [zero(H) for H in H_pred]
+    # Glacier fully melted out at the start of the window: no ice-covered pixels
+    # to compare against, so this window contributes no gradient.
+    if !any(mask)
+        return ∂L∂H, zero(θ)
+    end
+    dhdt = mean(H1[mask] .- H0[mask])/(tLoss[2]-tLoss[1])
+    N = length(H0[mask])
+
     ∂L∂H[ind[1]] = -2*(dhdt-dhdt_ref)*mask/(N*(tLoss[2]-tLoss[1]))
     ∂L∂H[ind[2]] = 2*(dhdt-dhdt_ref)*mask/(N*(tLoss[2]-tLoss[1]))
     return ∂L∂H, zero(θ)
@@ -122,6 +133,7 @@ It is particularly useful for constraining glacier flow dynamics when velocity d
 
 # Fields
 
+  - `velocityProduct::Symbol = :Millan22`: Velocity product to use as reference. Defaults to `:Millan22`.
   - `loss::L = L2Sum()`: The underlying loss function type used to compare predicted and reference velocities
   - `component::Symbol = :xy`: Which velocity component(s) to use in the loss:
       + `:xy`: Compare x and y velocity components separately (sum of losses)
@@ -138,6 +150,7 @@ The loss computation involves:
  4. Comparing the averaged velocity to reference observations using the specified loss function
 """
 @kwdef struct LossAvgV{F <: AbstractFloat, L <: AbstractSimpleLoss} <: TimeAggregatedLoss
+    velocityProduct::Symbol = :Millan22
     loss::L = L2Sum()
     component::Symbol = :xy
     step::F = 1/12
@@ -228,8 +241,11 @@ function backward_time_aggregated_loss(
         ∂l∂Vy = backward_loss(lossType.loss, avg_Vy_pred, Vy_ref, mask, normalization)
     elseif lossType.component == :abs
         ∂l∂V = backward_loss(lossType.loss, avg_V_pred, V_ref, mask, normalization)
-        ∂l∂Vx = ifelse.(mask, ∂l∂V .* (avg_Vx_pred .- Vx_ref) ./ (avg_V_pred .- V_ref), 0.0)
-        ∂l∂Vy = ifelse.(mask, ∂l∂V .* (avg_Vy_pred .- Vy_ref) ./ (avg_V_pred .- V_ref), 0.0)
+        # Chain rule through V = √(Vx² + Vy²): ∂l/∂Vx = ∂l/∂V · Vx/V (and similarly Vy)
+        ∂Vx_dir, ∂Vy_dir = VJP_λ_∂V∂Vxy(∂l∂V, avg_Vx_pred, avg_Vy_pred)
+        valid = mask .& (avg_V_pred .> 0.0)
+        ∂l∂Vx = ifelse.(valid, ∂Vx_dir, 0.0)
+        ∂l∂Vy = ifelse.(valid, ∂Vy_dir, 0.0)
     end
 
     # ∂L∂H = zero(H_pred) # With Julia 1.10 in test mode H_pred is of type Type{Matrix{Float64}} which seems to be a bug, we bypass it by making a copy
@@ -256,6 +272,7 @@ function backward_time_aggregated_loss(
 end
 
 loss_uses_velocity(lossType::LossAvgV) = true
+velocityProduct(lossType::LossAvgV) = :Millan22
 
 # Fallback methods for subtypes of `AbstractLoss` that do not implement `time_aggregated_loss` and `backward_time_aggregated_loss`, which is typically the case of all losses which are not subtypes of `TimeAggregatedLoss`
 function time_aggregated_loss(

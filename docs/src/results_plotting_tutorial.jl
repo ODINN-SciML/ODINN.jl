@@ -5,7 +5,6 @@
 # It covers the main plot types available after running a forward simulation.
 
 using ODINN
-using Sleipnir
 using CairoMakie
 
 # ## Running a forward simulation
@@ -38,7 +37,7 @@ params = Parameters(
 
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 2.0 / 1000.0, acc_factor = 1.4 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 2.0 / 1000.0, prcp_fac = 1.4)
 )
 
 glaciers = initialize_glaciers(rgi_ids, params)

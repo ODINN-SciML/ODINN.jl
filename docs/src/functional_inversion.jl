@@ -69,7 +69,7 @@ A_law = CuffeyPaterson(scalar = true)
 
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2)
 )
 
 ## We initialize the glaciers with all the necessary data
@@ -88,7 +88,7 @@ nn_model = NeuralNetwork(params; seed = MersenneTwister(1))
 A_law = LawA(nn_model, params)
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2),
     regressors = (; A = nn_model)
 )
 
@@ -173,7 +173,7 @@ A_law = CuffeyPaterson(scalar = true)
 # The model is initialized using the `Model` constructor:
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2)
 )
 
 # We define the time snapshots for transient inversion, i.e. the time steps at which we want to save the results, which will be used to compute the adjoint in reverse mode.
@@ -213,7 +213,7 @@ iceflow = SIA2Dmodel(params; A = A_law)
 # It must match how the laws are defined in the iceflow model.
 model = Model(
     iceflow = iceflow,
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2),
     regressors = (; A = nn_model)
 )
 

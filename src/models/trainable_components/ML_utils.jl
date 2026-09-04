@@ -86,7 +86,11 @@ function build_simulation_batch(
     θi = splitθ(simulation.model.trainable_components.θ, i, simulation.model.trainable_components)
 
     iceflow = simulation.model.iceflow
-    massbalance = simulation.model.mass_balance
+    # Extract this glacier's MB model so the single-glacier batch holds a single
+    # model (matches the batch's glacier indexing when MB is calibrated per glacier).
+    # When there is no mass balance model there is nothing to extract.
+    massbalance = isnothing(simulation.model.mass_balance) ? nothing :
+                  get_mb_model(simulation.model.mass_balance, i)
     submodels = TrainableComponents(simulation.model.trainable_components, θi)
 
     # TODO: in the future we could avoid a copy of model since it is stateless

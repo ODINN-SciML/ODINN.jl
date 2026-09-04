@@ -5,12 +5,13 @@ using Distributed: map
         adjointFlavor::ADJ;
         thres = [0., 0., 0.],
         target = :A,
-        finite_difference_method = :FiniteDifferences,
         finite_difference_order = 3,
         loss = LossH(),
         train_initial_conditions = false,
         multiglacier = false,
         use_MB = false,
+        temp_bias = 0.0,
+        calibrate_MB = false,
         functional_inv = true,
         custom_NN = false,
         max_params = 60,
@@ -30,13 +31,17 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `thres::Vector{<:Real}`: Three-element vector of numerical thresholds for
     `(ratio, angle, relative error)` comparison between adjoint-based and finite-difference gradients.
   - `target::Symbol`: Model target for training/testing (`:A`, `:D`, or `:D_hybrid`), determining which physical law is parameterized by the neural network.
-  - `finite_difference_method::Symbol`: Method for finite-difference computation,
     either `:FiniteDifferences` (default, using `FiniteDifferences.jl`) or `:Manual`.
-  - `finite_difference_order::Int`: Order of accuracy for central finite differences (used only if `finite_difference_method == :FiniteDifferences`).
+  - `finite_difference_order::Int`: Order of accuracy for central finite differences.
   - `loss`: Loss function to evaluate, such as `LossH()` (height-based) or `LossV()` (velocity-based).
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
   - `multiglacier::Bool`: Whether to run the test on multiple glaciers.
   - `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
+  - `temp_bias`: Temperature bias of the tested `TImodel1`, in °C. A nonzero value shifts
+    where the PDD and snow clamps activate, so it exercises that dependency in the MB VJP.
+  - `calibrate_MB::Bool`: Whether to calibrate the mass balance model against the geodetic
+    observations. Off by default so the `TImodel1` built below is the one actually tested;
+    turn it on to check the adjoint against a per-glacier calibrated vector of MB models.
   - `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
   - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network. If the custom neural network is used, the glacier grid and the number of points in the VJP interpolation are reduced to spare computation time and memory.
   - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
@@ -47,12 +52,13 @@ function test_grad_finite_diff(
         adjointFlavor::ADJ;
         thres = [0.0, 0.0, 0.0],
         target = :A,
-        finite_difference_method = :FiniteDifferences,
         finite_difference_order = 3,
         loss = LossH(),
         train_initial_conditions = false,
         multiglacier = false,
         use_MB = false,
+        temp_bias = 0.0,
+        calibrate_MB = false,
         functional_inv = true,
         scalar = true,
         custom_NN = false,
@@ -87,7 +93,14 @@ function test_grad_finite_diff(
     working_dir = joinpath(ODINN.root_dir, "test/data")
 
     δt = 1/12
-    tspan = use_MB ? (1980.0, 2019.0) : (2010.0, 2012.0)
+    # Short window: over 1980-2019 the melt empties the mask and ∂dhdt/∂A vanishes.
+    tspan = if aggregated_loss == :dhdt
+        (2010.0, 2015.0)
+    elseif use_MB
+        (1980.0, 2019.0)
+    else
+        (2010.0, 2012.0)
+    end
 
     useSciMLSenseAlg = isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
     if useSciMLSenseAlg
@@ -115,6 +128,7 @@ function test_grad_finite_diff(
             multiprocessing = false,
             workers = 1,
             test_mode = true,
+            calibrate_MB = calibrate_MB,
             rgi_paths = rgi_paths,
             gridScalingFactor = custom_NN ? 8 : 4,
             f_surface_velocity_factor = 0.8
@@ -157,7 +171,7 @@ function test_grad_finite_diff(
     ground_truth_A_law = scalar ? ConstantA(2.21e-18) : CuffeyPaterson(scalar = scalar)
     model = Model(
         iceflow = SIA2Dmodel(params; A = ground_truth_A_law),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
     )
     glaciers = initialize_glaciers(rgi_ids, params; kwargs...)
     if !functional_inv
@@ -222,10 +236,10 @@ function test_grad_finite_diff(
     end
 
     mass_balance = if aggregated_loss==:dhdt
-        # Intensify melting to make dhdt negative
-        TImodel1(params; DDF = 15.0/1000.0, acc_factor = 0.4/1000.0)
+        # Intensify melting to make dhdt negative, without melting the glacier out.
+        TImodel1(params; DDF = 9.0/1000.0, prcp_fac = 0.8, temp_bias = temp_bias)
     else
-        TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2, temp_bias = temp_bias)
     end
     model = @match target begin
         :A => Model(
@@ -288,117 +302,71 @@ function test_grad_finite_diff(
     JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) ODINN.loss_iceflow_transient(
         θ, simulation, map)
 
-    if finite_difference_method == :FiniteDifferences
+    ### Computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
 
-        ### Further computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
+    ratio_FD, angle_FD,
+    relerr_FD,
+    _ = grad_finite_diff(
+        simulation; θ = θ, finite_difference_order = finite_difference_order,
+        max_params = max_params, mask_parameter_vector = mask_parameter_vector)
+    printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
+    printVecScientific("angle  = ", [angle_FD], thres_angle)
+    printVecScientific("relerr = ", [relerr_FD], thres_relerr)
+    @test abs(ratio_FD) < thres_ratio
+    @test abs(angle_FD) < thres_angle
+    @test abs(relerr_FD) < thres_relerr
+end
 
-        if n_params > max_params
-            # Evaluate gradient on subset of parameters to save some computation
-            @info "Testing gradient with a subset of parameters of size $(max_params) since the original parameter vector θ is of dimension $(n_params)."
+"""
+    test_grad_V_from_Vxy()
 
-            # Component array with binary entry
-            θ_mask = θ .== nothing
+Solver-free finite-difference check for the `:abs` component of the velocity losses
+(`LossV` / `LossAvgV`). The `:abs` branch builds the loss from the velocity magnitude
+`V = √(Vx² + Vy²)` and must propagate the gradient back to `(Vx, Vy)` with the exact
+chain rule `∂ℓ/∂Vx = ∂ℓ/∂V · Vx/V`. This reproduces that branch with the **real** loss
+functions (`loss` / `backward_loss` of the simple loss, composed with `ODINN.VJP_λ_∂V∂Vxy`)
+and compares to finite differences of the same velocity loss.
 
-            for key in keys(θ)
-                if key == :IC
-                    # Initial condition
-                    for i in 1:length(glaciers)
-                        glacier = glaciers[i]
-                        M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter, i)
-                        non_zero = M .> 1.0
-                        idxs = rand(findall(non_zero), max_params)
-                        mask = falses(size(M)...)
-                        mask[idxs] .= 1
-                        key_glacier = Symbol("$(i)")
-                        θ_mask.IC[key_glacier] .= mask
-                    end
-                elseif (key == :A) && (Symbol("1") in keys(θ.A)) &&
-                       length(θ.A) != length(glaciers)
-                    # Gridded classical inversion
-                    for i in 1:length(glaciers)
-                        glacier = glaciers[i]
-                        M = glacier.H₀
-                        non_zero = M .> 1.0
-                        idxs = rand(findall(non_zero), max_params)
-                        mask = falses(size(M) .- 1)
-                        mask[idxs] .= 1
-                        key_glacier = Symbol("$(i)")
-                        θ_mask.A[key_glacier] .= mask
-                    end
-                else
-                    # Mask parameter vector
-                    if mask_parameter_vector && (length(θ[key]) > max_params)
-                        indx = ODINN.sample(1:length(θ[key]), max_params; replace = false)
-                    else
-                        indx = 1:length(θ[key]) |> collect
-                    end
-                    view(θ_mask, key)[indx] .= true
-                end
+It guards against regressing to the previous secant-slope form
+`∂ℓ/∂V · (Vx_pred - Vx_ref)/(V_pred - V_ref)`, which equals the chain rule only when the
+predicted and reference flow directions coincide — a condition that holds closely enough
+for SIA that no integration test reliably exposes the error (the secant blows up as
+`V_pred → V_ref`). Here FD is exact and the secant would fail by O(1).
+"""
+function test_grad_V_from_Vxy()
+    nx, ny = 6, 5
+    # Deterministic, strictly-positive fields; predicted and reference flow directions
+    # deliberately differ so the (buggy) secant slope departs from the true chain rule.
+    Vx_pred = [1.0 + 0.30i + 0.10j for i in 1:nx, j in 1:ny]
+    Vy_pred = [2.0 + 0.20i - 0.05j for i in 1:nx, j in 1:ny]
+    Vx_ref = [1.2 + 0.10i - 0.05j for i in 1:nx, j in 1:ny]
+    Vy_ref = [1.5 - 0.15i + 0.10j for i in 1:nx, j in 1:ny]
+    V_ref = sqrt.(Vx_ref .^ 2 .+ Vy_ref .^ 2)
+    mask = trues(nx, ny)
+    normalization = 3.0
+
+    for simpleLoss in (L2Sum(), LogSum())
+        # Effective :abs velocity loss as a function of (Vx, Vy), using the real loss fn
+        L(vx, vy) = loss(simpleLoss, sqrt.(vx .^ 2 .+ vy .^ 2), V_ref, mask, normalization)
+
+        # Adjoint, composed exactly as the `:abs` branch does
+        V_pred = sqrt.(Vx_pred .^ 2 .+ Vy_pred .^ 2)
+        ∂l∂V = backward_loss(simpleLoss, V_pred, V_ref, mask, normalization)
+        ∂Vx, ∂Vy = ODINN.VJP_λ_∂V∂Vxy(∂l∂V, Vx_pred, Vy_pred)
+
+        ∂Vx_FD, ∂Vy_FD = FiniteDifferences.grad(central_fdm(5, 1), L, Vx_pred, Vy_pred)
+
+        thres = 1e-9
+        for (a, b) in ((∂Vx, ∂Vx_FD), (∂Vy, ∂Vy_FD))
+            ratio, angle, relerr = stats_err_arrays(a, b)
+            if printDebug |
+               !((abs(ratio) < thres) & (abs(angle) < thres) & (abs(relerr) < thres))
+                printVecScientific("ratio  = ", [ratio], thres)
+                printVecScientific("angle  = ", [angle], thres)
+                printVecScientific("relerr = ", [relerr], thres)
             end
-
-            function f_subset(x, simulation, mask)
-                α = copy(θ)
-                α[mask] = x
-                return f(α, simulation)
-            end
-
-            dθ_FD, = FiniteDifferences.grad(
-                central_fdm(finite_difference_order, 1),
-                α -> f_subset(α, simulation, θ_mask),
-                θ[θ_mask]
-            )
-            dθ = dθ[θ_mask]
-        else
-            # Compute gradient with all parameters
-            dθ_FD, = FiniteDifferences.grad(
-                central_fdm(finite_difference_order, 1),
-                _θ -> f(_θ, simulation),
-                θ
-            )
+            @test (abs(ratio) < thres) & (abs(angle) < thres) & (abs(relerr) < thres)
         end
-
-        ratio_FD, angle_FD, relerr_FD = stats_err_arrays(dθ, dθ_FD)
-        printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
-        printVecScientific("angle  = ", [angle_FD], thres_angle)
-        printVecScientific("relerr = ", [relerr_FD], thres_relerr)
-        @test abs(ratio_FD) < thres_ratio
-        @test abs(angle_FD) < thres_angle
-        @test abs(relerr_FD) < thres_relerr
-
-    elseif finite_difference_method == :Manual
-
-        ### Manual finite differences with different choices of stepsize
-
-        ratio = []
-        angle = []
-        relerr = []
-        eps = []
-        for k in range(3, 8)
-            ϵ = 10.0^(-k)
-            push!(eps, ϵ)
-            dθ_num = compute_numerical_gradient(θ, (simulation), f, ϵ; varStr = "of θ")
-            ratio_k, angle_k, relerr_k = stats_err_arrays(dθ, dθ_num)
-            push!(ratio, ratio_k)
-            push!(angle, angle_k)
-            push!(relerr, relerr_k)
-        end
-        min_ratio = minimum(abs.(ratio))
-        min_angle = minimum(abs.(angle))
-        min_relerr = minimum(abs.(relerr))
-
-        if printDebug | !((min_ratio < thres_ratio) & (min_angle < thres_angle) &
-             (min_relerr < thres_relerr))
-            println("eps    = ", printVecScientific(eps))
-            printVecScientific("ratio  = ", ratio, thres_ratio)
-            printVecScientific("angle  = ", angle, thres_angle)
-            printVecScientific("relerr = ", relerr, thres_relerr)
-        end
-        @test min_ratio < thres_ratio
-        @test min_angle < thres_angle
-        @test min_relerr < thres_relerr
-
-    else
-        throw("Finite difference method not implemented.")
     end
 end
 
@@ -725,14 +693,14 @@ function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
     # Ground truth using a known constant A
     model_gt = Model(
         iceflow = SIA2Dmodel(params_sciml; A = ConstantA(2.21e-18)),
-        mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+        mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, prcp_fac = 1.2)
     )
     glaciers = initialize_glaciers(rgi_ids, params_sciml)
     glaciers = generate_ground_truth(glaciers, params_sciml, model_gt, tstops)
 
     # Single NN shared across both simulations so both start at the same θ
     nn_model = NeuralNetwork(params_sciml)
-    mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    mass_balance = TImodel1(params_sciml; DDF = 6.0/1000.0, prcp_fac = 1.2)
 
     sim_sciml = Inversion(
         Model(
