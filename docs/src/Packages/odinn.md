@@ -8,7 +8,7 @@
   - **Functional inversion (UDE training)** — replace or augment a physical law with a neural network, train it with automatic differentiation through the PDE solver.
   - A **law system** (`LawA`, `LawY`, `LawU`) that wraps neural networks or custom functions into the SIA2D solver in a composable, AD-compatible way.
   - A **loss system** (`LossH`, `LossV`, `LossHV`, `MultiLoss`) for fitting to thickness and/or velocity observations.
-  - **Sensitivity configuration** (`UDEparameters`, `sensealg`) exposing the full SciMLSensitivity adjoint zoo: continuous/discrete adjoints, Enzyme VJP, Mooncake, and manual adjoints.
+  - **Sensitivity configuration** (`UDEparameters`, `sensealg`) exposing the full differentiable programming ecosystem: continuous/discrete adjoints within SciMLSensitivity, automatic differentiation (e.g., Enzyme VJP, Mooncake), and manual adjoints.
 
 ## Use directly vs. using lower-level packages
 
