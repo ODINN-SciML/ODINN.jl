@@ -95,7 +95,7 @@ On the Julia side, `Sleipnir.initialize_glaciers()` reads `rgi_paths.json` to lo
 
 Climate retrieval is wired directly into the preprocessing loop in `gungnir/gungnir/preprocessing.py` — there is no plugin registry. The existing sources are the template: W5E5 via `process_w5e5_data` (from MBsandbox), and ERA5 via `ensure_era5_file_for_gdir` in `gungnir/gungnir/era5_climate.py`.
 
- 1. Add a downloader/processor that writes a per-glacier NetCDF file, following the ERA5 pattern in `era5_climate.py`.
+ 1. To add a new climate source, create a downloader/processor that writes a per-glacier NetCDF file, following the ERA5 pattern in `era5_climate.py`.
  2. Call it for each glacier inside `preprocessing_glaciers` in `preprocessing.py`, next to the existing W5E5/ERA5 calls.
  3. Ensure the new variables are written to the output NetCDF file with field names that match the `Climate2Dstep` fields defined in `Sleipnir`.
  4. If new fields are needed in `Climate2Dstep`, add them in `Sleipnir/src/glaciers/climate/Climate2D.jl` and update `downscale_2D_climate!` accordingly.
