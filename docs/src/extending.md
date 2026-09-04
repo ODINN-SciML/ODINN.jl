@@ -218,7 +218,7 @@ For the conceptual overview of how `Law` binds inputs and a regressor to a targe
 
 ## Add a new loss function
 
-A *loss function* measures the mismatch between the model's predicted state (ice thickness, surface velocity, etc.) and observations. The metric itself is a **simple loss** (`AbstractSimpleLoss`, like the built-in `L2Sum` and `LogSum`); the composites `LossH`, `LossV`, `LossHV` (subtypes of `AbstractLoss`) then apply that metric to ice thickness and/or velocity. To add a new metric (e.g. a mean absolute error), subtype `AbstractSimpleLoss`. It needs a `distance` field — the composite uses it to build the in-glacier mask — and a `loss` method returning a scalar:
+A *loss function* measures the mismatch between the model's predicted state (ice thickness, surface velocity, etc.) and observations. For most of the losses, the metric itself is a **simple loss** (`AbstractSimpleLoss`, like the built-in `L2Sum` and `LogSum`); the composites `LossH`, `LossV`, `LossHV` (subtypes of `AbstractLoss`) then apply that metric to ice thickness and/or velocity. To add a new metric (e.g. a mean absolute error), subtype `AbstractSimpleLoss`. It needs a `distance` field — the composite uses it to build the in-glacier mask — and a `loss` method returning a scalar:
 
 ```julia
 using ODINN
