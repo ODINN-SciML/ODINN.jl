@@ -1,6 +1,6 @@
 # ODINN.jl
 
-[`ODINN.jl`](https://github.com/ODINN-SciML/ODINN.jl) is the top-level package of the ecosystem. It ties together the ice flow solver (`Huginn`), the mass balance models (`Muninn`), and the core data structures (`Sleipnir`) into an end-to-end differentiable glacier model. Its primary purpose is to enable **Universal Differential Equations (UDEs)**: hybrid models that combine physical PDEs with data-driven regressors such as neural networks, trained end-to-end with gradient-based optimization.
+[`ODINN.jl`](https://github.com/ODINN-SciML/ODINN.jl) is the top-level package of the ecosystem. It ties together the ice flow solver (`Huginn`), the mass balance models (`Muninn`), and the core data structures (`Sleipnir`) into an end-to-end differentiable glacier model. Its primary purpose is to enable inverse modelling via **Universal Differential Equations (UDEs)**: hybrid models that combine physical PDEs with data-driven regressors.
 
 `ODINN` provides:
 
