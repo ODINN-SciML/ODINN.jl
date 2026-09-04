@@ -33,7 +33,7 @@ Alternatively, if you just want to install the `gungnir` module, you can clone t
 ```bash
 pip install gungnir
 # or in developer mode:
-pip install -e gungnir
+# pip install -e gungnir
 ```
 
 ERA5 high-resolution downloads for `MassBalanceMachine.jl` additionally require a CDS API key. See the [CDS API setup guide](https://cds.climate.copernicus.eu/how-to-api) for registration and configuration of `~/.cdsapirc`.
