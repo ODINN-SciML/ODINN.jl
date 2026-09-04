@@ -9,10 +9,8 @@ using ODINN
 
 rgi_paths = get_rgi_paths()
 
-# The value of this does not really matter, it is hardcoded in Sleipnir right now.
+# The value of this does not really matter.
 working_dir = joinpath(homedir(), ".OGGM/ODINN_tests")
-# Re-set global constant for working directory
-# const global Sleipnir.prepro_dir = joinpath(homedir(),  ".OGGM/ODINN_tests")
 
 ## Retrieving simulation data for the following glaciers
 # rgi_ids = collect(keys(rgi_paths))
