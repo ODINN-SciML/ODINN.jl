@@ -55,8 +55,8 @@ Create a text file listing the RGI IDs of the glaciers to preprocess (one per li
 
 ```
 # European Alps
-RGI60-11.00897
-RGI60-11.01450
+RGI60-11.00897;
+RGI60-11.01450;
 ```
 
 Then run:
