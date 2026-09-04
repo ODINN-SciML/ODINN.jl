@@ -2,7 +2,7 @@
 
 [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl) is the ice flow dynamics module of the ODINN ecosystem. It implements numerical solvers for glacier ice flow PDEs, with the 2D Shallow Ice Approximation (SIA2D) as the primary model. Ice flow PDEs are integrated using [`OrdinaryDiffEq.jl`](https://github.com/SciML/OrdinaryDiffEq.jl), giving access to a wide range of adaptive time-stepping solvers and making the forward model compatible with SciML's sensitivity and adjoint infrastructure.
 
-The main entry point is the `Prediction` simulation container, which holds the ice flow model, a list of glaciers, simulation parameters, and pre-allocated cache arrays. Calling `run!(prediction)` solves the ice thickness PDE for every glacier in the list (in parallel if `multiprocessing=true`) and stores time series of thickness, surface elevation, velocity, and mass balance in a `Results` object.
+The main entry point is the `Prediction` simulation container, which holds the ice flow model, a list of glaciers, simulation parameters, and pre-allocated cache arrays. Calling `run!(prediction)` solves the ice thickness PDE for every glacier in the list (in parallel if `multiprocessing=true` in the simulation parameters) and stores time series of thickness, surface elevation, velocity, and mass balance in a `Results` object.
 
 SIA2D is implemented as a fully in-place ODE right-hand side: `SIA2D!(dH, H, sim, t, θ)`. All intermediate fields (diffusivity `D`, fluxes, staggered-grid averages) are stored in a `SIA2DCache` and reused across time steps, making the solver memory-efficient and AD-compatible via Enzyme.
 
