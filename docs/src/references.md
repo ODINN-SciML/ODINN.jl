@@ -40,7 +40,8 @@ In this page we provide the main references used in the ODINN project, grouped b
 
   - GlaThiDa: Glacier ice thickness database, Welty et al. (2020), ESSD [welty_worldwide_2020](@cite).
   - Ice velocity and thickness of the world’s glaciers, Millan et al. (2022), Nature Geoscience [millan_ice_2022](@cite).
-  - Satellite-Derived Annual Glacier Surface Flow Velocity Products for the European Alps, 2015–2021, Rabatel et al. (2023) [rabatel_satellite-derived_2023](@cite)
+  - Satellite-Derived Annual Glacier Surface Flow Velocity Products for the European Alps, 2015–2021, Rabatel et al. (2023) [rabatel_satellite-derived_2023](@cite).
+  - Accelerated global glacier mass loss in the early twenty-first century, Hugonnet et al. (2021), Nature [hugonnet_accelerated_2021](@cite).
 
 ## Full bibliography
 

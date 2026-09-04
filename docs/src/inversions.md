@@ -25,6 +25,13 @@ The optimization problem is
 
 where $\theta$ is the vector of parameters to invert, for example $\theta=[A]$; $L(\hat S, S)$ is the empirical loss function between a predicted state $\hat S$ and observations $S$ (for example, the ice thickness or the ice surface velocity); and $R(\hat S, p)$ is a regularization term.
 
+### Which parameters can be inverted?
+
+The answer depends on which adjoint method is used (see [Sensitivity analysis](sensitivity.md)):
+
+  - **Manual adjoints** (`ContinuousAdjoint`, `DiscreteAdjoint`): Inversion is implemented for `A` (Glen flow rate factor) and `D` (diffusivity), via the `SIA2D_A_target`, `SIA2D_D_target`, and `SIA2D_D_hybrid_target` types. These targets hand-code how the target quantity enters the PDE Jacobians.
+  - **`SciMLSensitivityAdjoint`**: Can invert any parameter that is wired into `TrainableComponents` as a `Law` — including the basal sliding coefficient `C` — because Zygote + SciMLSensitivity differentiate through the entire ODE automatically, without needing a custom target. No `SIA2D_C_target` is needed in this path.
+
 ### Classical inversions tutorial
 
 The [classical inversion tutorial](./classical_inversion.md) provides an example on how to use these methods to invert in a scalar or gridded way a parameter of the Shallow Ice Approximation.
@@ -153,7 +160,7 @@ Creating a `Law` implies declaring different components which are provided to th
   - (3) `init_cache`: A function that describes how the cache needs to be initialized for the law to interact with the simulation. It returns an initialized cache.
   - (4) `callback_freq`: Optionally the callback frequency which determines the time frequency on which the law will be called during the simulation (e.g. weekly).
     It is also possible to not provide the `inputs` in which case the `f!` function is in charge of retrieving the appropriate variables to use in the law.
-    See in the API the docstring of [`Sleipnir.Law`](./api.md#Sleipnir.Law-api).
+    See in the [Sleipnir API](API/api_sleipnir.md) the docstring of [`Sleipnir.Law`].
 
 Functional inversions in ODINN are also handled by the `Inversion` subtype of `Simulation`.
 Whether a classical or a functional inversion should be made with respect to some of the components of the PDE depends on how the law is defined.
