@@ -129,11 +129,10 @@ plot_glacier_vid(
     framerate = 12,
     baseTitle = "Ice thickness"
 )
-nothing #hide
 
-# ```@raw html
-# <img src="./results_plots/thickness_evolution.gif" width="500"/>
-# ```
+## Pretty URLs serve each page one directory deeper, changing the path back to the gif
+prefix = get(ENV, "ODINN_DOCS_PRETTYURLS", "false")=="true" ? ".." : "."
+HTML("""<img src="$(prefix)/results_plots/thickness_evolution.gif" width="500"/>""")
 
 # ## Saving figures
 

@@ -63,6 +63,10 @@ for tutorial_file in tutorial_files
     Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
 end
 
+# Exposed to the tutorials, which need it to build relative links to generated files
+prettyurls = get(ENV, "CI", nothing)=="true"
+ENV["ODINN_DOCS_PRETTYURLS"] = string(prettyurls)
+
 # Which markdown files to compile to HTML
 makedocs(
     modules = [ODINN, Huginn, Muninn, Sleipnir, MassBalanceMachine],
@@ -70,7 +74,7 @@ makedocs(
     repo = Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
     sitename = "ODINN.jl",
     format = Documenter.HTML(
-        prettyurls = get(ENV, "CI", nothing)=="true",
+        prettyurls = prettyurls,
         ansicolor = true, collapselevel = 3,
         size_threshold = 2000 * 1024,  # Increase size threshold to 500 KiB
         size_threshold_warn = 1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
@@ -92,8 +96,7 @@ makedocs(
             "Parameters" => "parameters.md",
             "Glaciers" => "glaciers.md",
             "Models" => "models.md",
-            "Results and plotting" => "results_plotting.md",
-            "Plotting tutorial" => "results_plotting_tutorial.md"
+            "Results and plotting" => "results_plotting.md"
         ],
         "Inversions" => [
             "Inversion types" => "inversions.md",
@@ -108,7 +111,7 @@ makedocs(
             "Laws" => "laws.md",
             "Laws inputs" => "input_laws.md",
             "Laws VJP customization" => "vjp_laws.md",
-            "Plotting tutorial" => "results_plotting_tutorial.md"
+            "Plots" => "results_plotting_tutorial.md"
         ],
         "API" => [
             "Sleipnir.jl" => "API/api_sleipnir.md",
