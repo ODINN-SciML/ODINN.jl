@@ -34,7 +34,7 @@ const OUTPUT_DIR = joinpath(@__DIR__, "..", "plots", "visual_tests_realistic")
 const RGI_ID = "RGI60-11.01450"
 const TSPAN = (2010.0, 2015.0)
 const PLOT_TEST_DDF = 2.0 / 1000.0
-const PLOT_TEST_ACC_FACTOR = 1.4 / 1000.0
+const PLOT_TEST_PRCP_FAC = 1.4
 const LAW_PLOT_RGI_ID = "RGI60-11.03638"
 const LAW_PLOT_STEP = 1 / 12
 const LAW_PLOT_TSPAN = (2010.0, 2015.0)
@@ -122,7 +122,7 @@ end
 
 function stable_plot_mb_model(params)
     println("  ℹ Using conservative TImodel1 SMB for stable plotting.")
-    return TImodel1(params; DDF = PLOT_TEST_DDF, acc_factor = PLOT_TEST_ACC_FACTOR)
+    return TImodel1(params; DDF = PLOT_TEST_DDF, prcp_fac = PLOT_TEST_PRCP_FAC)
 end
 
 function build_prediction()
