@@ -40,7 +40,7 @@ function test_MB_VJP(
 
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
-        mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+        mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2),
         regressors = (; A = nn_model)
     )
 
@@ -75,7 +75,7 @@ function test_MB_VJP(
     for k in range(-5, 1, step = 2)
         ϵ = 10.0^(-k)
         push!(eps, ϵ)
-        ∂H_num = compute_numerical_gradient(
+        ∂H_num = ODINN.compute_numerical_gradient(
             H, (simulation, t, δt, λ, glacier), f_H, ϵ; varStr = "of H")
         ratio_k, angle_k, relerr_k = stats_err_arrays(∂H, ∂H_num)
         push!(ratio, ratio_k)

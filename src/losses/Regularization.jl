@@ -45,7 +45,7 @@ struct TikhonovRegularization{I <: Integer} <: AbstractSimpleRegularization
 end
 
 """
-    InitialThicknessRegularization(; reg = TikhonovRegularization(), t₀ = 1994.0)
+    InitialThicknessRegularization(t₀::AbstractFloat; reg::AbstractSimpleRegularization = TikhonovRegularization())
 
 A composite regularization type designed for initial ice thickness.
 It combines a simple spatial regularization (e.g., `TikhonovRegularization`) with a reference initial time.
@@ -55,10 +55,15 @@ It combines a simple spatial regularization (e.g., `TikhonovRegularization`) wit
   - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
   - `t₀::AbstractFloat = 1994.0`: The reference initial time (e.g., year) at which the regularization applies.
 """
-@kwdef struct InitialThicknessRegularization{
+struct InitialThicknessRegularization{
     R <: AbstractSimpleRegularization, F <: AbstractFloat} <: AbstractRegularization
-    reg::R = TikhonovRegularization()
-    t₀::F = 1994.0
+    reg::R
+    t₀::F
+
+    function InitialThicknessRegularization(
+            t₀::AbstractFloat; reg::AbstractSimpleRegularization = TikhonovRegularization())
+        return new{typeof(reg), typeof(t₀)}(reg, t₀)
+    end
 end
 
 """

@@ -31,7 +31,7 @@ params = Parameters(
 ## and a machine learning model
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2)
 )
 
 ## We initialize the glaciers with all the necessary data
@@ -103,7 +103,7 @@ params = Parameters(
 
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2)
 )
 
 # ### Step 3: Glacier initialization

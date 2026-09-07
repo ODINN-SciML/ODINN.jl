@@ -191,3 +191,16 @@ function discreteLossSteps(lossType::MultiLoss, tspan)
     end
     return vcat(ts...)
 end
+function velocityProduct(lossType::MultiLoss)
+    res = map(lossType.losses) do l
+        velocityProduct(l)
+    end
+    res = collect(res)
+    filter!(e -> !isnothing(e), res)
+    if length(res) == 0
+        return nothing
+    else
+        @assert length(res) == 1 "Cannot determine the velocity product since multiple distinct products are being used in the MultiLoss: $(res)."
+        return only(res)
+    end
+end

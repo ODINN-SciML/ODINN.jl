@@ -198,12 +198,16 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
                 )
 
+                # State at which the SIA VJP is linearized. At an MB step the SIA flow over
+                # the interval ends at the pre-MB state, so undo the MB increment here.
+                H_SIA = H[j]
                 if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
                     # Retrieve H before MB callback because the solution is stored only after MB has been applied
                     indMB = findfirst(result.t_MB .== tj)
                     H_preMB = H[j] - result.MB[indMB]
                     λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP,
                         λ[j], H_preMB, simulation, glacier, tj)
+                    H_SIA = H_preMB
                 end
 
                 # Compute derivative of local contribution to loss function
@@ -234,7 +238,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 ### Custom VJP to compute the adjoint
                 λ_∂f∂H,
                 dH_H = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method,
-                    λ[j], H[j], θ, simulation, tj)
+                    λ[j], H_SIA, θ, simulation, tj)
 
                 ### Update adjoint
                 if j>1
@@ -243,7 +247,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
                     ### Custom VJP for grad of loss function
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method,
-                        λ[j - 1], H[j], θ, dH_H, simulation, tj)
+                        λ[j - 1], H_SIA, θ, dH_H, simulation, tj)
 
                     ### Contribution to the loss
                     dLdθ .+= Δt[j - 1] * λ_∂f∂θ
@@ -260,6 +264,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
             # Compute gradient wrt initial condition because this is not taken into account in the loop above
             if haskey(θ, :IC)
+                @warn "DiscreteAdjoint initial-condition (H₀) gradients are unreliable \
+                    for the stiff SIA at practical time steps and may be unstable; \
+                    prefer ContinuousAdjoint for initial-condition inversion." maxlog=1
                 λ₀ = λ[begin]
                 s₀ = evaluate_∂H₀(
                     θ,
@@ -303,6 +310,26 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 throw("Interpolation method for continuous adjoint not defined.")
             end
 
+            # Linear interpolant (as above) used only for the SIA VJP linearization. The forward SIA flow over
+            # each interval ends at the pre-MB state (MB is applied at the right endpoint),
+            # but H stores post-MB states. Interpolate post-MB at the left node and pre-MB at
+            # the right node so the SIA VJP is linearized on the true forward trajectory.
+            H_itp_SIA = if simulation.parameters.simulation.use_MB
+                H_preMB_nodes = map(eachindex(t)) do j
+                    indMB = findfirst(result.t_MB .== t[j])
+                    isnothing(indMB) ? H[j] : H[j] .- result.MB[indMB]
+                end
+                let t = t, H = H, H_preMB_nodes = H_preMB_nodes
+                    function (tq)
+                        j = clamp(searchsortedlast(t, tq), firstindex(t), lastindex(t) - 1)
+                        frac = (tq - t[j]) / (t[j + 1] - t[j])
+                        H[j] .+ frac .* (H_preMB_nodes[j + 1] .- H[j])
+                    end
+                end
+            else
+                H_itp
+            end
+
             # Nodes and weights for numerical quadrature
             t_nodes,
             weights = GaussQuadrature(tspan..., simulation.parameters.UDE.grad.n_quadrature)
@@ -313,12 +340,12 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                  (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP))
                 throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
             end
-            f_adjoint_rev = let simulation=simulation, H_itp=H_itp, θ=θ
+            f_adjoint_rev = let simulation=simulation, H_itp_SIA=H_itp_SIA, θ=θ
                 function (dλ, λ, p, τ)
                     t = -τ
                     λ_∂f∂H,
                     _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method,
-                        λ, H_itp(t), θ, simulation, t)
+                        λ, H_itp_SIA(t), θ, simulation, t)
                     dλ .= λ_∂f∂H
                 end
             end
@@ -494,7 +521,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                Union{DiscreteVJP, EnzymeVJP, ContinuousVJP}
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(- t_nodes[j])
-                    _H = H_itp(t_nodes[j])
+                    _H = H_itp_SIA(t_nodes[j])
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method,
                         λ_sol, _H, θ, nothing, simulation, t_nodes[j])
                     dLdθ .+= weights[j] .* (λ_∂f∂θ .+ ∂L∂θ[j])
@@ -505,7 +532,17 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
             # Compute gradient wrt initial condition because this is not taken into account in the quadrature
             if haskey(θ, :IC)
-                λ₀ = sol_rev(-tspan[1])
+                λ₀ = copy(sol_rev(-tspan[1]))
+                # The callbacks do deposit the t₀ loss during the reverse solve, but
+                # `sol_rev` interpolated at -tspan[1] does not carry that jump. Since
+                # dL/dH₀ = λ(t₀⁻) must include it, apply it explicitly here; otherwise the
+                # initial-condition gradient is too small.
+                if tspan[1] ∈ tstops
+                    effect_loss!(tspan[1], λ₀)
+                end
+                if length(tstopsAggregatedLoss) > 0 && tspan[1] ∈ tstopsAggregatedLoss
+                    effect_aggregated_loss!(tspan[1], λ₀)
+                end
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,

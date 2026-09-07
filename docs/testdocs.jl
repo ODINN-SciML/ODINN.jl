@@ -3,23 +3,19 @@
 
 using Pkg
 
-# Change back to the `docs` directory if necessary
-if basename(pwd()) != "docs"
-    cd("docs")
-end
-
-Pkg.activate(".")
+Pkg.activate(@__DIR__)
+Pkg.resolve()
 
 using Revise
 using ODINN
 using Test
 
 @testset "Run all tutorials" begin
-    @testset "Forward simulation" include("src/forward_simulation.jl")
-    @testset "Classical inversion" include("src/classical_inversion.jl")
-    @testset "Functional inversion" include("src/functional_inversion.jl")
-    @testset "Laws" include("src/laws.jl")
-    @testset "Laws VJPs" include("src/vjp_laws.jl")
-    @testset "Laws inputs" include("src/input_laws.jl")
-    @testset "Quick start" include("src/quick_start.jl")
+    @testset "Forward simulation" include(pkgdir(ODINN)*"/docs/src/forward_simulation.jl")
+    @testset "Classical inversion" include(pkgdir(ODINN)*"/docs/src/classical_inversion.jl")
+    @testset "Functional inversion" include(pkgdir(ODINN)*"/docs/src/functional_inversion.jl")
+    @testset "Laws" include(pkgdir(ODINN)*"/docs/src/laws.jl")
+    @testset "Laws VJPs" include(pkgdir(ODINN)*"/docs/src/vjp_laws.jl")
+    @testset "Laws inputs" include(pkgdir(ODINN)*"/docs/src/input_laws.jl")
+    @testset "Quick start" include(pkgdir(ODINN)*"/docs/src/quick_start.jl")
 end

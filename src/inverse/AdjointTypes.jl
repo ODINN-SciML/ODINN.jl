@@ -75,6 +75,16 @@ end
 Discrete adjoint of SIA2D with manual implementation of the backward in the ODE
 scheme.
 
+!!! warning "Initial-condition gradients are unreliable"
+
+    `DiscreteAdjoint` runs the reverse pass with a single explicit-Euler step of the
+    stored trajectory. For the stiff SIA at practical time steps (e.g. monthly), this
+    makes the **initial-condition (H₀) gradient unreliable**: badly inaccurate at the
+    default step, and numerically unstable for smooth/uniform rheology fields. The
+    rheology (`A`) gradient is far more robust. To invert initial conditions — or any
+    velocity-loss + initial-condition setup — use [`ContinuousAdjoint`](@ref), whose
+    reverse ODE resolves the stiff dynamics.
+
 # Fields
 
   - `VJP_method`: Type of AbstractVJPMethod used to compute VJPs inside adjoint

@@ -15,11 +15,7 @@ julia> Pkg.add("ODINN")
 
 !!! info
 
-    `ODINN.jl` and the rest of the ODINN ecosystem packages require Julia v1.11 or later, which are the ones used and tested during continuous integration (CI).
-
-!!! info
-
-    For the moment the full CI tests in `ODINN.jl` are broken with Julia v1.11, and therefore they are tested with Julia v1.10 (in contrast to the other packages). The split tests (`CI_fast`) still run with Julia v1.11. This comes from a segmentation fault from Enzyme in the test environment.
+    `ODINN.jl` and the rest of the ODINN ecosystem packages require Julia v1.11, which is the one used and tested during continuous integration (CI).
 
 ## Documentation overview
 
@@ -29,7 +25,7 @@ The documentation, which you can navigate through the left-hand-side panel, is s
   - *Ecosystem Packages*: Per-package landing pages for each component of the ODINN ecosystem, including scientific role, standalone usage guidance, minimal examples, and developer extension guides.
   - *Tutorials*: They provide clear examples of the main types of simulations and workflows that you can work with in `ODINN.jl`.
   - *How to use ODINN*: Explains the basic building blocks (i.e. types) used in `ODINN.jl` simulations, and how they are assembled together.
-  - *API*: Full API reference for each package (`Sleipnir`, `Huginn`, `Muninn`, `ODINN`), split into separate pages for easy navigation.
+  - *API*: Full API reference for each package (`Sleipnir`, `Muninn`, `Huginn`, `MassBalanceMachine`, `ODINN`), split into separate pages for easy navigation.
   - *Inversions*: Addresses more advanced questions related to inverse modelling, computing gradients, optimization, and machine learning.
   - *Community*: Explains the aspects related to how to contribute to the model(s), code style, building the documentation in local, and the code of conduct.
   - *Ongoing changes and future plans*: Self-explanatory.

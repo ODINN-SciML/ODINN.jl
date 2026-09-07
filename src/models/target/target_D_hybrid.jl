@@ -370,3 +370,7 @@ function compute_Velocityꜛ(
     )
     return D
 end
+
+function assign_∂θ!(target::SIA2D_D_hybrid_target, ∂θ, ∂θ_v)
+    ∂θ.Y .= vec(∂θ_v)
+end

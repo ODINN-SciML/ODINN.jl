@@ -16,7 +16,8 @@ function save_simulation_test!(;
             multiprocessing = false,
             workers = 1,
             test_mode = true,
-            rgi_paths = rgi_paths
+            rgi_paths = rgi_paths,
+            gridScalingFactor = 4
         ),
         hyper = Hyperparameters(
             batch_size = length(rgi_ids), # We set batch size equals all datasize so we test gradient

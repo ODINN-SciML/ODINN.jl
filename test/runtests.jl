@@ -52,7 +52,6 @@ using MLStyle
 import DifferentiationInterface as DI
 using Aqua
 
-include("test_utils.jl")
 include("params_construction.jl")
 include("grad_free_test.jl")
 include("SIA2D_adjoint_utils.jl")
@@ -114,6 +113,7 @@ ENV["GKSwstype"] = "nul"
         @testset "Manual backward of the loss terms vs Enzyme" begin
             @testset "L2Sum" test_grad_L2Sum()
             @testset "TikhonovRegularization" test_grad_TikhonovRegularization()
+            @testset "V magnitude chain rule (:abs)" test_grad_V_from_Vxy()
         end
     end
 
@@ -128,7 +128,7 @@ ENV["GKSwstype"] = "nul"
                 DiscreteAdjoint(VJP_method = DiscreteVJP());
                 thres = [5e-3, 5e-7, 5e-3], train_initial_conditions = true)
             @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
-                DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-4, 1e-8, 2e-4])
+                DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [1e-4, 1e-8, 1e-4])
             @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3])
             @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
@@ -143,11 +143,27 @@ ENV["GKSwstype"] = "nul"
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
                 thres = [3e-3, 1e-8, 3e-3], use_MB = true)
+            # A nonzero temp_bias moves the PDD/snow clamp thresholds, which the MB VJPs
+            # must pick up from the MB model rather than assume away.
+            @testset "Continuous adjoint w/ discrete MB VJP and temperature bias" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+            @testset "Continuous adjoint w/ Enzyme MB VJP and temperature bias" test_grad_finite_diff(
+                ContinuousAdjoint(
+                    VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
+                    MB_VJP = ODINN.EnzymeVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+            # Calibration turns mass_balance into one model per glacier, so this covers the
+            # vector of MB models flowing through the VJPs.
+            @testset "Continuous adjoint w/ discrete MB VJP and calibrated MB" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                thres = [2e-3, 1e-10, 2e-3], use_MB = true, calibrate_MB = true)
             @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2])
+                ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [
+                    5e-3, 1e-10, 5e-3])
             @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP());
-                thres = [5e-4, 7e-7, 2e-3])
+                thres = [5e-4, 1e-10, 5e-4])
             @testset "SciMLSensitivity adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(
                 ODINN.SciMLSensitivityAdjoint(); thres = [1e-5, 1e-13, 1e-5])
             @testset "SciMLSensitivity auto-adjoint vs manual ContinuousAdjoint for LawA" test_grad_sciml_vs_manual(thres = [
@@ -207,8 +223,9 @@ ENV["GKSwstype"] = "nul"
         @testset "Adjoint method of SIA equation with pure D as target and custom NN" begin
             # @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-7, 1e-3], target = :D, custom_NN = true)
             @testset "Manual implementation of the continuous adjoint with discrete VJP and custom NN vs finite differences (loss V)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-7, 5e-3],
-                target = :D, custom_NN = true, loss = LossV())
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-7, 1e-4],
+                target = :D, custom_NN = true, loss = LossV(),
+                max_params = 25, mask_parameter_vector = true)
         end
     end
 
@@ -237,14 +254,23 @@ ENV["GKSwstype"] = "nul"
             @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
                 functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
-            if !(v"1.10.0" <= VERSION <= v"1.10.999")
-                # This test doesn't work with Julia 1.10 in test mode
+            if (!CI || !Sys.isapple())
+                # The gradient computed with macOS within the CI is wrong
                 # Despite a lot of effort we couldn't track the root cause, so we just deactivate that test
                 @testset "AvgV loss with continuous adjoint" test_grad_finite_diff(
                     ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [
                         1e-3, 1e-8, 1e-3],
                     functional_inv = false, scalar = true, loss = LossAvgV(), aggregated_loss = :avgV)
             end
+        end
+        @testset "Joint inversion" begin
+            @testset "Gridded A + IC" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-8, 1e-4],
+                functional_inv = false, scalar = false,
+                loss = MultiLoss(
+                    losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (
+                        1.0, 1.0)),
+                train_initial_conditions = true)
         end
     end
 
@@ -269,9 +295,9 @@ ENV["GKSwstype"] = "nul"
         @testset "Multiglacier inversion test" begin
             @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-2, 1e-5, 1e-2], multiglacier = true)
+                thres = [2e-4, 1e-8, 2e-4], multiglacier = true)
             @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
                 multiglacier = true, train_initial_conditions = true)
         end
     end

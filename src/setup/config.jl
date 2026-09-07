@@ -120,7 +120,19 @@ function enable_multiprocessing(params::Sleipnir.Parameters)
                         redirect_stdout(devnull)
                         redirect_stderr(devnull)
                         using Dates
-                        @everywhere using Revise
+                        @everywhere begin
+                            main_env = normpath(joinpath(dirname(dirname(dirname(@__FILE__))), "Project.toml"))
+                            test_env = normpath(joinpath(dirname(main_env), "test", "test_env", "Project.toml"))
+                            scripts_env = normpath(joinpath(dirname(main_env), "scripts", "Project.toml"))
+                            docs_env = normpath(joinpath(dirname(main_env), "docs", "Project.toml"))
+                            active = Base.active_project()
+                            if active == main_env
+                                # intentionally skip
+                            elseif active == test_env || active == scripts_env ||
+                                   active == docs_env
+                                using Revise
+                            end
+                        end
                         @everywhere using ODINN
                     finally
                         redirect_stdout(old_stdout)
