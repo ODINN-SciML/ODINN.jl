@@ -4,7 +4,7 @@
 
 The main entry point is the `Prediction` simulation container, which holds the ice flow model, a list of glaciers, simulation parameters, and pre-allocated cache arrays. Calling `run!(prediction)` solves the ice thickness PDE for every glacier in the list (in parallel if `multiprocessing=true` in the simulation parameters) and stores time series of thickness, surface elevation, velocity, and mass balance in a `Results` object.
 
-SIA2D is implemented using the method of lines to transform the original PDE into a sistem of fully in-place ODE: `SIA2D!(dH, H, sim, t, θ)`. All intermediate fields (diffusivity `D`, fluxes, staggered-grid averages) are stored in a `SIA2DCache` and reused across time steps, making the solver memory-efficient and AD-compatible via Enzyme.
+SIA2D is implemented using the method of lines to transform the original PDE into a system of fully in-place ODEs: `SIA2D!(dH, H, sim, t, θ)`. All intermediate fields (diffusivity `D`, fluxes, staggered-grid averages) are stored in a `SIA2DCache` and reused across time steps, making the solver memory-efficient and AD-compatible via [`Enzyme.jl`](https://github.com/EnzymeAD/Enzyme.jl).
 
 ## Use directly vs. use `ODINN.jl`
 
@@ -12,7 +12,6 @@ Use `Huginn` directly when you want to:
 
   - Run **forward ice flow simulations** without UDE training or inversion — e.g. projecting glacier evolution under a climate scenario.
   - Benchmark or validate a new ice flow law against an analytical solution (e.g. the Halfar solution) or a mass conservation test.
-  - Build a custom downstream tool that wraps the `Prediction` workflow without the full ODINN.jl training stack.
 
 Use `ODINN.jl` when you need automatic differentiation through the ice flow solver, UDE training, or classical/functional inversion — `ODINN` wraps `Huginn`'s forward solver and adds the gradient/adjoint infrastructure.
 
@@ -54,16 +53,18 @@ Understanding how SIA2D connects to OrdinaryDiffEq.jl is useful context for user
 
 ```
 run!(prediction)
-  └── batch_iceflow_PDE!(glacier_idx, simulation)        # dispatch point — override this for a new model
-        ├── init_cache(model, ...)                       # allocate model cache
-        ├── build_callback(model, cache, ...)            # law-update callbacks
+  └── batch_iceflow_PDE!(glacier_idx, simulation)             # dispatch point — override this for a new model
+        ├── init_cache(model, ...)                            # allocate model cache
+        ├── build_callback(iceflow_model, iceflow_cache, ...) # law-update callbacks
         └── simulate_iceflow_PDE!(sim, cb, SIA2D_PDE!, tstops)
               └── ODEProblem(SIA2D_PDE!, H₀, tspan, simulation)
-                    └── SIA2D_PDE!(dH, H, simulation, t)  # called at each ODE step
-                          └── SIA2D!(dH, H, sim, t, θ)    # actual PDE kernel
+                    └── SIA2D_PDE!(dH, H, simulation, t)      # called at each ODE step
+                          └── SIA2D!(dH, H, sim, t, θ)        # actual PDE kernel
 ```
 
-There are two distinct RHS functions: **`SIA2D!`** is the PDE kernel (signature `(dH, H, simulation, t, θ)`, keeps `θ` for AD); **`SIA2D_PDE!`** is a thin adapter that drops `θ` to match OrdinaryDiffEq's `f(du, u, p, t)` convention. Both live in `prediction_utils.jl` / `SIA2D_utils.jl`.
+Note that `init_cache` returns the **full model cache**, while `build_callback` receives only its iceflow slice (`cache.iceflow`) together with the iceflow model (`model.iceflow`) — a distinction worth keeping in mind when implementing a new iceflow model.
+
+There are two distinct RHS functions: **`SIA2D!`** is the PDE kernel (signature `(dH, H, simulation, t, θ)`, keeps `θ` for AD); **`SIA2D_PDE!`** is a thin adapter that drops `θ` to match OrdinaryDiffEq's `f(du, u, p, t)` convention. `SIA2D!` lives in `SIA2D_utils.jl` and `SIA2D_PDE!` in `prediction_utils.jl`.
 
 ## Extending Huginn
 

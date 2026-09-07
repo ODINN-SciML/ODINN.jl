@@ -31,6 +31,11 @@ In this page we provide the main references used in the ODINN project, grouped b
   - The Physics of Glaciers, Cuffey and Paterson (2010) [cuffey_physics_2010](@cite).
   - Ice-Dynamical Glacier Evolution Modeling - A Review, Zekollari et al. (2022) [zekollari_ice_dynamical_2022](@cite).
   - Do existing theories explain seasonal to multi-decadal changes in glacier basal sliding speed?, Gimbert et al. (2021) [gimbert_existing_2021](@cite).
+  - The Open Global Glacier Model (OGGM) v1.1, Maussion et al. (2019), Geoscientific Model Development [maussion_open_2019](@cite).
+
+### Papers about surface mass balance modelling
+
+  - Temperature index melt modelling in mountain areas, Hock (2003), Journal of Hydrology [hock_temperature_2003](@cite).
 
 ### Papers about the MassBalanceMachine
 

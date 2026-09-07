@@ -30,9 +30,9 @@ The interface builds up in three layers depending on what you need:
 
 **Layer 3 — Surface velocity diagnostics** (optional):
 
-| What you need to provide                | Why                                                                                                                                                         |
-|:--------------------------------------- |:----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `surface_V!` / `surface_V` / `V_from_H` | Only needed if your model's velocity field is computed differently from SIA. The existing SIA implementations in `SIA2D_utils.jl` work for any SIA variant. |
+| What you need to provide                | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|:--------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `surface_V!` / `surface_V` / `V_from_H` | In the SIA the velocity is a **diagnostic** quantity: it is not part of the PDE state, so it has to be reconstructed from `H` and the surface gradient whenever velocities are needed for output or for a velocity loss. Models that solve a momentum balance directly — SSA, DIVA — carry the velocity in the PDE solution itself and do not need this reconstruction step. Implement these only if your model reconstructs velocity and does not inherit the SIA implementations in `SIA2D_utils.jl`. |
 
 !!! note
 

@@ -2,7 +2,7 @@
 
 [`Sleipnir.jl`](https://github.com/ODINN-SciML/Sleipnir.jl) is the foundational package of the ODINN ecosystem, providing the core data structures and infrastructure on which all other packages are built. Every other ODINN package (`Huginn`, `Muninn`, `ODINN`) depends on `Sleipnir`, and each re-exports its symbols so downstream users rarely need to import `Sleipnir` directly.
 
-`Sleipnir` defines the glacier geometry and climate data containers (`Glacier2D`, `Climate2D`), the simulation parameter hierarchy (`Parameters`, `SimulationParameters`, `PhysicalParameters`), the law abstraction used to plug physical or machine-learning computations into the PDE solvers (`Law`, `AbstractLaw`), and the results container (`Results`). It also hosts the VJP infrastructure (`MatrixCache`, `ScalarCache`) used by inverse modelling workflows.
+`Sleipnir` defines the glacier geometry and climate data containers (`Glacier2D`, `Climate2D`), the simulation parameter hierarchy (`Parameters`, `SimulationParameters`, `PhysicalParameters`), the law abstraction used to plug physical or machine-learning computations into the PDE solvers (`Law`, `AbstractLaw`), and the results container (`Results`). It also hosts the cache infrastructure (`MatrixCache`, `ScalarCache`, and their `NoVJP` variants), which is central both to memory-efficient forward simulation and to the VJP computations used by inverse modelling workflows.
 
 Data for `Sleipnir` is preprocessed by the Python package [`Gungnir`](gungnir.md) and stored under `~/.ODINN/ODINN_prepro/`. When preprocessing has been run, glacier objects are assembled with `initialize_glaciers()`, which reads the stored NetCDF files via `Rasters.jl`. Pre-built datasets for common regions can be downloaded automatically without running `Gungnir` yourself.
 
@@ -14,7 +14,7 @@ Use `Sleipnir` directly when you want to:
   - Prototype a new `Law` type or `AbstractInput` that will later be used in `Huginn` or `ODINN`.
   - Write a lightweight script that reads preprocessed glacier data and extracts fields (thickness, surface elevation, climate) without loading the full simulation stack.
 
-Use `ODINN.jl` when you need the end-to-end pipeline (forward simulation, calibration, UDE training, inversion) — it assembles `Sleipnir` types into runnable workflows for you.
+Use `Huginn` when you need to actually run a **forward** ice flow simulation on those data structures, and `ODINN.jl` when you need the end-to-end differentiable pipeline (UDE training, classical and functional inversion) — both assemble `Sleipnir` types into runnable workflows for you.
 
 ## Minimal usage example
 

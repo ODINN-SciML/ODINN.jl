@@ -10,15 +10,17 @@
   - A **loss system** (`LossH`, `LossV`, `LossHV`, `MultiLoss`) for fitting to thickness and/or velocity observations.
   - **Sensitivity configuration** (`UDEparameters`, `sensealg`) exposing the full differentiable programming ecosystem: continuous/discrete adjoints within SciMLSensitivity, automatic differentiation (e.g., Enzyme VJP, Mooncake), and manual adjoints.
 
+These ingredients can be mixed together, for example `ODINN` can perform a functional inversion and a classical inversion at the same time by fitting initial conditions and a parameterization of the iceflow equations.
+
 ## Use directly vs. using lower-level packages
 
 Use `ODINN.jl` (i.e. `using ODINN`) when you need:
 
   - End-to-end UDE training or classical inversion.
   - Gradient-based optimization through the glacier PDE.
-  - Access to the full `Inversion` workflow.
+  - Inversion of glacier-wide or spatially distributed parameters (`GlacierWideInv`, `GriddedInv`) and of initial conditions (`InitialCondition`), batched over many glaciers within a single `Inversion`.
 
-Use `Huginn` alone when you only need **forward modelling**, which does not need any form of  automatic differentiation. Use `Muninn` alone for mass balance computation. Use `Sleipnir` alone for data structure manipulation. This modular structure means each downstream use case only pays the compilation cost of what it needs.
+Use `Huginn` alone when you only need **forward modelling**, which does not need any form of automatic differentiation. Use `Muninn` alone for mass balance computation. Use `Sleipnir` alone for data structure manipulation. This modular structure means each downstream use case only pays the compilation cost of what it needs.
 
 ## Minimal usage example
 

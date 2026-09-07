@@ -2,9 +2,9 @@
 
 [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl) is the surface mass balance (SMB) module of the ODINN ecosystem. It computes the net ice accumulation and ablation at the glacier surface — the key atmospheric forcing that drives glacier volume change over time.
 
-The default model is a distributed temperature-index (TI) model, which approximates ablation from positive degree-days (PDD) and accumulation from solid precipitation. Two variants are provided: `TImodel1` (a single degree-day factor) and `TImodel2` (separate snow and ice degree-day factors).
+The default model is a distributed temperature-index (TI) model, which approximates ablation from positive degree-days (PDD) and accumulation from solid precipitation — see Hock (2003) [hock_temperature_2003](@cite) for a review of temperature-index melt modelling in mountain areas. Two variants are provided: `TImodel1` (a single degree-day factor) and `TImodel2` (separate snow and ice degree-day factors). The climate forcing and glacier geometry driving these models are preprocessed with [OGGM](https://github.com/OGGM/oggm), Maussion et al. (2019) [maussion_open_2019](@cite), through [`Gungnir`](gungnir.md).
 
-Neural-network-based mass balance is supported via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) extension, which ports pre-trained PyTorch models exported as JSON into `Lux.jl` as a `CustomMLP <: MBmodel`. See the [Models page](../models.md) for details.
+Neural-network-based mass balance is supported via [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl), which ports pre-trained PyTorch models exported as JSON into `Lux.jl` as a `CustomMLP <: MBmodel`. See the [MassBalanceMachine package page](massbalancemachine.md) and the [Models page](../models.md) for details.
 
 `Muninn` re-exports all of `Sleipnir`, so importing `Muninn` gives access to the full Sleipnir API without a separate `using Sleipnir` statement.
 
@@ -14,9 +14,9 @@ Use `Muninn` directly when you want to:
 
   - Compute mass balance independently of ice flow (e.g. sensitivity studies, regional mass balance assessments).
   - Plug in a custom SMB model into a downstream tool that accepts a `MBmodel` object.
-  - Experiment with a new mass balance parameterization before integrating it into a full ODINN simulation.
+  - Experiment with a new mass balance parameterization before integrating it into a full Huginn or ODINN simulation.
 
-Use `ODINN.jl` when you need the coupled ice dynamics + mass balance simulation, or when training a UDE that involves the mass balance component.
+Use `Huginn` when you need the coupled ice dynamics + mass balance **forward** simulation, and `ODINN.jl` when you additionally need gradients through that coupling — for instance when training a UDE that involves the mass balance component.
 
 ## Minimal usage example
 

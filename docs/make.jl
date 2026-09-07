@@ -24,6 +24,7 @@ ENV["GKSwstype"]="nul"
 using Revise
 using Documenter, Literate
 using ODINN
+using MassBalanceMachine
 using DocumenterCitations
 
 cd(dirname(Base.active_project()))
@@ -62,7 +63,7 @@ end
 
 # Which markdown files to compile to HTML
 makedocs(
-    modules = [ODINN, Huginn, Muninn, Sleipnir],
+    modules = [ODINN, Huginn, Muninn, Sleipnir, MassBalanceMachine],
     authors = "Jordi Bolibar, Facu Sapienza, Alban Gossard, Mathieu le Séac'h, Vivek Gajadhar",
     repo = Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
     sitename = "ODINN.jl",
@@ -80,6 +81,7 @@ makedocs(
             "Sleipnir.jl" => "Packages/sleipnir.md",
             "Muninn.jl" => "Packages/muninn.md",
             "Huginn.jl" => "Packages/huginn.md",
+            "MassBalanceMachine.jl" => "Packages/massbalancemachine.md",
             "Gungnir" => "Packages/gungnir.md",
             "ODINN.jl" => "Packages/odinn.md",
             "Extending ODINN" => "extending.md"
@@ -108,6 +110,7 @@ makedocs(
             "Sleipnir.jl" => "API/api_sleipnir.md",
             "Muninn.jl" => "API/api_muninn.md",
             "Huginn.jl" => "API/api_huginn.md",
+            "MassBalanceMachine.jl" => "API/api_massbalancemachine.md",
             "ODINN.jl" => "API/api_odinn.md"
         ],
         "Community" => [

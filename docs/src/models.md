@@ -27,7 +27,7 @@ Huginn.SIA2D!
 
 ## Mass balance models
 
-(Surface) Mass balance models are used to simulate the simplified thermodynamics of the forcing of the atmosphere on glaciers. As per ice flow models, all specific mass balance models needs to be a subtype of the abstract type `MBmodel`. Mass balance models are managed by [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl). For now, we have simple temperature-index models, with either one or two degree-day factors (DDFs) *(Hock, 2003)*:
+(Surface) Mass balance models are used to simulate the simplified thermodynamics of the forcing of the atmosphere on glaciers. As per ice flow models, all specific mass balance models needs to be a subtype of the abstract type `MBmodel`. Mass balance models are managed by [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl). For now, we have simple temperature-index models, with either one or two degree-day factors (DDFs), Hock (2003) [hock_temperature_2003](@cite):
 
 ```@docs
 Muninn.TImodel1

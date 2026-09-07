@@ -2,7 +2,7 @@
 
 [`Gungnir`](https://github.com/ODINN-SciML/Gungnir) is a Python preprocessing pipeline that produces the glacier and climate data files consumed by the Julia ODINN ecosystem. It uses [OGGM](https://github.com/OGGM/oggm) to retrieve glacier geometry (DEMs, ice thickness, outlines) from the Randolph Glacier Inventory (RGI), and downloads climate reanalyses (W5E5 or ERA5) to force the mass balance models. The output is written to `~/.ODINN/ODINN_prepro/` as NetCDF files, which `Sleipnir.initialize_glaciers()` reads via `Rasters.jl` at simulation time.
 
-'Gungnir` is the only package in the ODINN ecosystem writen and executed in Python. It sits at the bottom of the dependency hierarchy: Gungnir → Sleipnir → Muninn/Huginn → ODINN.
+`Gungnir` is the only package in the ODINN ecosystem written and executed in Python. It sits at the bottom of the dependency hierarchy: Gungnir → Sleipnir → Muninn/Huginn → ODINN.
 
 ## When do you need to run Gungnir yourself?
 
@@ -22,7 +22,7 @@ conda env create -f environment.yml
 conda activate oggm_env_gungnir
 ```
 
-Alternatively, use the `Makefile` to create the environment and register the Jupyter kernel in one step:
+You can also use the `Makefile` to create the environment and register the Jupyter kernel in one step:
 
 ```bash
 make env
