@@ -6,7 +6,7 @@
 
 ## When do you need to run Gungnir yourself?
 
-For many use cases, **you do not need to run Gungnir**. Pre-built preprocessed datasets for a selection of glaciers can be downloaded automatically when you call `initialize_glaciers()` from `Sleipnir`. Gungnir is only required when:
+For many use cases, **you do not need to run Gungnir**. Preprocessed glacier directories are hosted on the [ODINN Hugging Face dataset](https://huggingface.co/datasets/ODINN-SciML/ODINN_prepro) and downloaded automatically at precompilation, so `initialize_glaciers()` just works for any glacier already covered. The list of available glaciers is returned by `get_rgi_paths()`. Gungnir is only required when:
 
   - You want to simulate a **glacier not covered** by the existing pre-built datasets.
   - You want to switch or customize the **climate data source** (e.g. use ERA5 daily instead of W5E5, or add a new atmospheric variable).
@@ -74,6 +74,7 @@ python gungnir/gungnir/preprocessing.py glaciers.txt /path/to/output
 
 After running, `Sleipnir.initialize_glaciers(rgi_ids, params)` will detect and load the generated files automatically.
 This function assumes that the preprocessed data are in `~/.ODINN/ODINN_prepro`.
+If you wrote them somewhere else, point ODINN at your directory with an `Overrides.toml` artifact override — see [Glaciers](../glaciers.md#Standard-workflow) for the exact syntax.
 
 ## The Gungnir → Sleipnir handoff
 

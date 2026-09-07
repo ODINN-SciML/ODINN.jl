@@ -33,7 +33,7 @@ glaciers = initialize_glaciers(["RGI60-11.00897"], params)
 # Build the ice flow model (SIA2D + temperature-index mass balance)
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2)
 )
 
 # Run a forward simulation

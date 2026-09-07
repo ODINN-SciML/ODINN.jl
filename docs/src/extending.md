@@ -98,7 +98,7 @@ end
 
 # ── Callbacks: periodic law updates ───────────────────────────────────────
 function Huginn.build_callback(model::SSA2Dmodel, cache::SSA2DCache,
-        glacier_idx, θ, tspan)
+        glacier_idx, tspan)
     return CallbackSet()
 end
 
@@ -119,7 +119,7 @@ function Huginn.batch_iceflow_PDE!(glacier_idx::Int,
     simulation.cache = Sleipnir.init_cache(simulation.model, simulation, glacier_idx, nothing)
     tstops = Huginn.define_callback_steps(params.simulation.tspan, params.solver.step)
     cb = build_callback(simulation.model.iceflow, simulation.cache.iceflow,
-        glacier_idx, nothing, params.simulation.tspan)
+        glacier_idx, params.simulation.tspan)
     return Huginn.simulate_iceflow_PDE!(simulation, cb, SSA2D_PDE!, tstops)
 end
 ```
@@ -132,7 +132,7 @@ New mass balance models subtype `MBmodel` (defined in `Muninn`). The MB callback
 
 ```
 MB callback (every step_MB):
-  ├── MB_timestep!(cache, model, glacier, step, t)          # writes the MB into cache.iceflow.MB
+  ├── MB_timestep!(cache, model, glacier, step, t, glacier_idx)  # writes the MB into cache.iceflow.MB
   │     └── compute_MB(mb_model, climate_2D_step, step)     ← implement this for your model
   ├── apply_MB_mask!(H, cache.iceflow)                      # applies the MB to the ice thickness H, clipping to avoid negative thickness
   └── push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))   # records the MB snapshot
@@ -166,7 +166,7 @@ Muninn.required_climate_data_source(::MyMBmodel) = nothing # :ERA5 or :W5E5
 Muninn.get_temp_bias(::MyMBmodel) = 0.0     # temperature offset (°C)
 ```
 
-Pass your model to `Model(iceflow_model, MyMBmodel(...), trainable_components)` as usual.
+Pass your model to `Model(; iceflow = iceflow_model, mass_balance = MyMBmodel(...), regressors = ...)` as usual. Note that `Model` itself is defined in `Sleipnir`; `ODINN` only extends it (through `_construct_Model`) to build the `TrainableComponents` when `regressors` are provided.
 
 !!! warning "TImodel2 is not yet fully implemented"
 
@@ -220,6 +220,12 @@ For the conceptual overview of how `Law` binds inputs and a regressor to a targe
 
 A *loss function* measures the mismatch between the model's predicted state (ice thickness, surface velocity, etc.) and observations. For most of the losses, the metric itself is a **simple loss** (`AbstractSimpleLoss`, like the built-in `L2Sum` and `LogSum`); the composites `LossH`, `LossV`, `LossHV` (subtypes of `AbstractLoss`) then apply that metric to ice thickness and/or velocity. To add a new metric (e.g. a mean absolute error), subtype `AbstractSimpleLoss`. It needs a `distance` field — the composite uses it to build the in-glacier mask — and a `loss` method returning a scalar:
 
+!!! note "Where the loss types live"
+
+    The abstract types `GeneralAbstractLoss`, `AbstractSimpleLoss` and `AbstractLoss` are defined in `Sleipnir`, so that the velocity product needed by a loss can be determined from its type. The concrete losses (`L2Sum`, `LogSum`, `LossH`, `LossV`, `LossHV`, …) and the `loss`/`backward_loss` functions live in `ODINN`, which re-imports the abstract types. Subtyping `AbstractSimpleLoss` after `using ODINN` therefore works unchanged.
+
+Beyond the per-timestep composites above, `ODINN` also provides **time-aggregated losses** (`LossDhdt`, `LossAvgV`, subtypes of `TimeAggregatedLoss`) which compare quantities integrated over the simulation window rather than pointwise in time, `MultiLoss` to combine several losses with weights, and a family of **regularization** terms (`TikhonovRegularization`, `InitialThicknessRegularization`, `VelocityRegularization`, `RheologyRegularization`, `DiffusivityRegularization`). Not all of these decompose into a simple-loss metric — `LossDhdt`, for instance, defines its own aggregation — so use them as templates when your new loss does not fit the `AbstractSimpleLoss` shape.
+
 ```julia
 using ODINN
 
@@ -258,6 +264,10 @@ end
 ```
 
 See [Sensitivity analysis](sensitivity.md) for a guide to choosing between adjoint methods.
+
+!!! tip "Check your gradient numerically"
+
+    After adding a loss (or an inversion target), verify the resulting gradient against finite differences with `grad_finite_diff(simulation)`, which returns the ratio, angle and relative error between the adjoint gradient and the finite-difference one. See [Numerical verification of the gradient](sensitivity.md#Numerical-verification-of-the-gradient).
 
 ## Add a new inversion target
 

@@ -4,7 +4,7 @@
 
 `Sleipnir` defines the glacier geometry and climate data containers (`Glacier2D`, `Climate2D`), the simulation parameter hierarchy (`Parameters`, `SimulationParameters`, `PhysicalParameters`), the law abstraction used to plug physical or machine-learning computations into the PDE solvers (`Law`, `AbstractLaw`), and the results container (`Results`). It also hosts the cache infrastructure (`MatrixCache`, `ScalarCache`, and their `NoVJP` variants), which is central both to memory-efficient forward simulation and to the VJP computations used by inverse modelling workflows.
 
-Data for `Sleipnir` is preprocessed by the Python package [`Gungnir`](gungnir.md) and stored under `~/.ODINN/ODINN_prepro/`. When preprocessing has been run, glacier objects are assembled with `initialize_glaciers()`, which reads the stored NetCDF files via `Rasters.jl`. Pre-built datasets for common regions can be downloaded automatically without running `Gungnir` yourself.
+Data for `Sleipnir` is preprocessed by the Python package [`Gungnir`](gungnir.md) and stored under `~/.ODINN/ODINN_prepro/`. Glacier objects are assembled with `initialize_glaciers()`, which reads the stored NetCDF files via `Rasters.jl`. For glaciers already covered by the [ODINN Hugging Face dataset](https://huggingface.co/datasets/ODINN-SciML/ODINN_prepro) the data is downloaded automatically at precompilation, so running `Gungnir` yourself is only needed for new glaciers or custom climate sources — see [Glaciers](../glaciers.md#Standard-workflow) for both paths and for the `Overrides.toml` mechanism that points ODINN at a custom directory.
 
 ## Use directly vs. use `ODINN.jl`
 

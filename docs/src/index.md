@@ -55,7 +55,7 @@ Rather than focusing on global-scale simulations and sea-level rise contribution
 
 ## Developers
 
-`ODINN.jl` is being developed by [Jordi Bolibar](https://jordibolibar.org/) (*CNRS, IGE*), [Facundo Sapienza](https://facusapienza.org/) (*Stanford University*) and [Alban Gossard](https://albangossard.github.io/) (*Université Grenoble Alpes, IGE*).
+`ODINN.jl` is being developed by [Jordi Bolibar](https://jordibolibar.org/) (*CNRS, IGE*), [Facundo Sapienza](https://facusapienza.org/) (*Stanford University*), [Alban Gossard](https://albangossard.github.io/) (*Université Grenoble Alpes, IGE*) and Lisa Girod (*PhD student, Université Grenoble Alpes, IGE*).
 
 Past developers include Mathieu Le Séac'h (*Université Grenoble Alpes, IGE*), Lucille Gimenes (*Université Grenoble Alpes, IGE*), and Vivek Gajadhar (*TU Delft*).
 
