@@ -51,15 +51,16 @@ tutorial_files = [
 
 # Generate independent Markdown files for each tutorial.
 # Set ODINN_SKIP_LITERATE=true to reuse previously generated .md files (faster local iteration).
-# Even when set, Literate still runs if any generated .md file is missing.
-generated_mds_exist = all(
-    isfile("./src/$(splitext(basename(f))[1]).md") for f in tutorial_files
-)
-if get(ENV, "ODINN_SKIP_LITERATE", "false") != "true" || !generated_mds_exist
-    for tutorial_file in tutorial_files
-        tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
-        Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
+# Only the tutorials whose .md is missing are regenerated, so adding a new tutorial does not
+# force regenerating the others.
+skip_literate = get(ENV, "ODINN_SKIP_LITERATE", "false") == "true"
+for tutorial_file in tutorial_files
+    tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
+    if skip_literate && isfile("./src/$(tutorial_name).md")
+        @info "ODINN_SKIP_LITERATE: reusing existing $(tutorial_name).md"
+        continue
     end
+    Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
 end
 
 # Which markdown files to compile to HTML
@@ -106,7 +107,8 @@ makedocs(
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
             "Laws inputs" => "input_laws.md",
-            "Laws VJP customization" => "vjp_laws.md"
+            "Laws VJP customization" => "vjp_laws.md",
+            "Plotting tutorial" => "results_plotting_tutorial.md"
         ],
         "API" => [
             "Sleipnir.jl" => "API/api_sleipnir.md",
@@ -122,6 +124,9 @@ makedocs(
         "References" => "references.md"
     ],
     checkdocs = :none,
+    # Set ODINN_DRAFT_DOCS=true to skip evaluating @example/@repl blocks. Useful to check
+    # layout, navigation and links locally without running the tutorial simulations.
+    draft = get(ENV, "ODINN_DRAFT_DOCS", "false") == "true",
     plugins = [bib]
 )
 
