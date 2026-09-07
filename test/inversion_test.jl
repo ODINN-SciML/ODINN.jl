@@ -271,3 +271,43 @@ function inversion_test(;
         @test minimum(rel_error) < 1e-4
     end
 end
+
+"""
+    test_C_parameterization()
+
+Check that the θ₀ built for `:C` inverts the tanh parameterization applied by `LawC`.
+`maxC` is set well apart from the A bounds so that applying the A bounds to C is caught.
+The `:A` round-trip is already covered by the scalar and gridded inversion tests above.
+"""
+function test_C_parameterization()
+    maxC = 1e-15
+    C = 3e-16
+    params = Parameters(
+        simulation = SimulationParameters(
+            tspan = (2010.0, 2012.0), multiprocessing = false,
+            use_MB = false, test_mode = true, working_dir = Huginn.root_dir),
+        physical = PhysicalParameters(minA = 8e-21, maxA = 8e-18, maxC = maxC)
+    )
+
+    nx, ny = 5, 5
+    toy_glacier(C) = Glacier2D(
+        rgi_id = "toy", H₀ = ones(nx, ny), S = ones(nx, ny), B = zeros(nx, ny),
+        A = 5e-19, C = C, n = 3.0, Δx = 50.0, Δy = 50.0, nx = nx, ny = ny)
+
+    forwardC(θ) = maxC * (tanh(θ) + 1) / 2 # The map applied by LawC
+    glaciers = Vector{Sleipnir.AbstractGlacier}([toy_glacier(C)])
+
+    @test all(forwardC.(GlacierWideInv(params, glaciers, :C).θ.θ[Symbol("1")]) .≈ C)
+    @test all(forwardC.(GriddedInv(params, glaciers, :C).θ.θ[Symbol("1")]) .≈ C)
+
+    # C = 0 is the Glacier2D default and has no finite preimage, so it must be seeded
+    # rather than sent to atanh(-1) = -Inf
+    zero_C = Vector{Sleipnir.AbstractGlacier}([toy_glacier(0.0)])
+    for θ in (GlacierWideInv(params, zero_C, :C).θ, GriddedInv(params, zero_C, :C).θ)
+        @test all(isfinite, θ.θ[Symbol("1")])
+        @test all(forwardC.(θ.θ[Symbol("1")]) .< 1e-3 * maxC)
+    end
+
+    @test_throws ErrorException GlacierWideInv(params, glaciers, :n)
+    @test_throws ErrorException GriddedInv(params, glaciers, :n)
+end
