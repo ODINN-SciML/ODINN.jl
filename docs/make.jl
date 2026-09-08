@@ -137,7 +137,7 @@ if get(ENV, "CI", nothing)=="true"
     deploydocs(
         repo = "github.com/ODINN-SciML/ODINN.jl",
         branch = "gh-pages",
-        devbranch = "main",
+        devbranch = "dev",
         push_preview = true,
         forcepush = true
     )
