@@ -75,6 +75,8 @@ The VJP methods in ODINN are implemented as concrete types of `AbstractVJPMethod
 
 Gradients can also be computed using [SciMLSensitivity.jl](https://docs.sciml.ai/SciMLSensitivity/). It enables to automate the computation of the adjoint method and the VJPs (Vector-Jacobian Products), done using automatic differentiation via `Enzyme.jl`.
 
+Because this path differentiates through the entire ODE solve automatically, it can invert **any parameter that is wired as a `Law` in `TrainableComponents`** — including the basal sliding coefficient `C` — without requiring a manually implemented inversion target (`AbstractSIA2DTarget`). By contrast, ODINN's manual adjoints (`ContinuousAdjoint`, `DiscreteAdjoint`) require a dedicated target type for each invertible quantity; currently only `A` and `D` have one. This makes `SciMLSensitivityAdjoint` the practical choice when inverting parameters beyond `A` and `D`.
+
 In order to ensure end-to-end differentiability of the whole model using `Enzyme.jl`, special attention needs to be taken in terms of code style and type stability. For this, we leverage the adjoint capabilities of `SciMLSensitivity.jl` from the SciML ecosystem.
 
 Here, we compile the main considerations and things that need to be taken into account when developing differentiable code within ODINN:
