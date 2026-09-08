@@ -38,7 +38,7 @@ pip install gungnir
 
 ERA5 high-resolution downloads for `MassBalanceMachine.jl` additionally require a CDS API key. See the [CDS API setup guide](https://cds.climate.copernicus.eu/how-to-api) for registration and configuration of `~/.cdsapirc`.
 
-W5E5 data (the default) does not require an API key and is recommended for most use cases.
+W5E5 data (the default) does not require an API key and is recommended for most use cases. These data are provided directly by OGGM.
 
 ## Climate data sources
 
