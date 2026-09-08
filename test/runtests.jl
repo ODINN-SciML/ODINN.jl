@@ -77,6 +77,7 @@ ENV["GKSwstype"] = "nul"
         @testset "Training workflow without sensitivity analysis and AD (with MB)" grad_free_test(use_MB = true)
         @testset "Parameters constructors with specified values" params_constructor_specified()
         @testset "Inversion instantiation" test_inversion_instantiation()
+        @testset "C parameterization of inversion containers" test_C_parameterization()
 
         @testset "Adjoint of unit operations inside SIA2D" begin
             @testset "Adjoint of diff" test_adjoint_diff()
