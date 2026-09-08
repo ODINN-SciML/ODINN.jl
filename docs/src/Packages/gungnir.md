@@ -73,7 +73,6 @@ python gungnir/gungnir/preprocessing.py glaciers.txt /path/to/output
 ```
 
 After running, `Sleipnir.initialize_glaciers(rgi_ids, params)` will detect and load the generated files automatically.
-This function assumes that the preprocessed data are in `~/.ODINN/ODINN_prepro`.
 If you wrote them somewhere else, point ODINN at your directory with an `Overrides.toml` artifact override — see [Glaciers](../glaciers.md#Standard-workflow) for the exact syntax.
 
 ## The Gungnir → Sleipnir handoff
