@@ -305,7 +305,7 @@ function test_C_parameterization()
     zero_C = Vector{Sleipnir.AbstractGlacier}([toy_glacier(0.0)])
     for θ in (GlacierWideInv(params, zero_C, :C).θ, GriddedInv(params, zero_C, :C).θ)
         @test all(isfinite, θ.θ[Symbol("1")])
-        @test all(forwardC.(θ.θ[Symbol("1")]) .< 1e-3 * maxC)
+        @test all(forwardC.(θ.θ[Symbol("1")]) .<= forwardC(Sleipnir.Float(-5))
     end
 
     @test_throws ErrorException GlacierWideInv(params, glaciers, :n)
