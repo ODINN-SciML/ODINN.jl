@@ -79,7 +79,7 @@ If you wrote them somewhere else, point ODINN at your directory with an `Overrid
 
 This is the boundary between Python and Julia: Gungnir (Python) writes NetCDF files to disk; everything from `Sleipnir.initialize_glaciers()` onward is Julia.
 
-Gungnir writes output under `~/.ODINN/ODINN_prepro/`. The root contains two JSON index files:
+Gungnir writes output to a dedicated folder, and by default this is `~/.ODINN/ODINN_prepro/`. The root contains two JSON index files:
 
   - `rgi_paths.json` — maps each RGI ID to the relative path of its glacier directory
   - `rgi_names.json` — maps each RGI ID to the glacier name
