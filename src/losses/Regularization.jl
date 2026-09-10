@@ -1,6 +1,6 @@
 export TikhonovRegularization
 export InitialThicknessRegularization, VelocityRegularization, RheologyRegularization,
-       DiffusivityRegularization
+       SlidingRegularization, DiffusivityRegularization
 
 # Abstract regularization type as subtype of loss
 abstract type AbstractRegularization <: AbstractLoss end
@@ -95,6 +95,26 @@ It can include a spatial smoothing operator through the field `reg`.
   - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
 """
 @kwdef struct RheologyRegularization{R <: AbstractSimpleRegularization} <:
+              AbstractRegularization
+    reg::R = TikhonovRegularization()
+end
+
+"""
+    SlidingRegularization(; reg = TikhonovRegularization())
+
+Regularization of the gridded sliding coefficient `C` in the context of classical
+inversions. It is the counterpart of [`RheologyRegularization`](@ref) for `C` and it can
+include a spatial smoothing operator through the field `reg`.
+
+The penalty is evaluated on `C` in physical units, that is after mapping `θ.C` through the
+same tanh parameterisation used by [`LawC`](@ref), so the weight `λ` is expressed relative
+to the physical magnitude of `C`.
+
+# Keyword Arguments
+
+  - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+"""
+@kwdef struct SlidingRegularization{R <: AbstractSimpleRegularization} <:
               AbstractRegularization
     reg::R = TikhonovRegularization()
 end
@@ -316,6 +336,63 @@ function backward_loss(
     end
 end
 
+function loss(
+        regType::SlidingRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
+) where {F <: AbstractFloat}
+    if t == simulation.parameters.simulation.tspan[1]
+        glacier = simulation.glaciers[glacier_idx]
+        Δx, Δy = glacier.Δx, glacier.Δy
+        max_C = simulation.parameters.physical.maxC
+
+        key = Symbol("$(glacier_idx)")
+        # Same tanh mapping as LawC, whose lower bound is always 0
+        C = @. max_C*(tanh.(θ.C[key])+1)/2
+        mask = trues(size(H) .- 1)
+
+        return loss(regType.reg, C, Δx, Δy, mask, normalization)
+    else
+        return 0.0
+    end
+end
+function backward_loss(
+        regType::SlidingRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
+) where {F <: AbstractFloat}
+    if t == simulation.parameters.simulation.tspan[1]
+        glacier = simulation.glaciers[glacier_idx]
+        Δx, Δy = glacier.Δx, glacier.Δy
+        max_C = simulation.parameters.physical.maxC
+
+        key = Symbol("$(glacier_idx)")
+        C = @. max_C*(tanh.(θ.C[key])+1)/2
+        mask = trues(size(H) .- 1)
+        ∂L∂θ = zero(θ)
+        ∂L∂θ.C[key] = backward_loss(regType.reg, C, Δx, Δy, mask, normalization) .*
+                      max_C .* (1 .- (tanh.(θ.C[key])) .^ 2) ./ 2
+
+        return zero(H), ∂L∂θ
+    else
+        return zero(H), zero(θ)
+    end
+end
+
 """
     ∇²(a::Matrix{F}, Δx::F, Δy::F) where {F<:AbstractFloat}
 
@@ -393,3 +470,4 @@ function loss_uses_velocity(lossType::Union{
 end
 discreteLossSteps(lossType::InitialThicknessRegularization, tspan) = [lossType.t₀]
 discreteLossSteps(lossType::RheologyRegularization, tspan) = [tspan[1]]
+discreteLossSteps(lossType::SlidingRegularization, tspan) = [tspan[1]]
