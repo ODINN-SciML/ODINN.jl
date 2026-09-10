@@ -326,8 +326,9 @@ Compute the gradient with respect to θ for all the glaciers and return the resu
 See the in-place implementation for more information.
 """
 function grad_loss_iceflow!(θ, simulation::Inversion, mappingFct)
-    if simulation.parameters.simulation.use_MB
-        @assert simulation.parameters.UDE.optim_autoAD isa NoAD "Differentiation of callbacks with SciMLStruct is not supported by SciMLSensitivity yet. You get this error because you are using MB + gradient computation with SciMLSensitivity."
+    if simulation.parameters.simulation.use_MB &&
+       simulation.parameters.simulation.MB_scheme == :discrete
+        @assert simulation.parameters.UDE.optim_autoAD isa NoAD "Differentiation of callbacks with SciMLStruct is not supported by SciMLSensitivity yet. You get this error because you are using MB + gradient computation with SciMLSensitivity. Use MB_scheme = :continuous to evaluate the mass balance in the ice flow right hand side instead."
     end
 
     simulation.model.trainable_components.θ = θ
@@ -504,8 +505,10 @@ function _batch_iceflow_UDE(
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
         tstopsDiscreteLoss, tstopsAggregatedLoss)))
 
-    # Create mass balance callback
-    cb_MB = if params.simulation.use_MB
+    # Create mass balance callback. Not needed when the mass balance is a source term of the
+    # ice flow right hand side, which is the whole point: no callback left to differentiate.
+    cb_MB = if params.simulation.use_MB &&
+               params.simulation.MB_scheme == :discrete
         # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
         mb_action! = let model = container.simulation.model,
             cache = container.simulation.cache, glacier = glacier, step_MB = step_MB,
@@ -543,10 +546,15 @@ function _batch_iceflow_UDE(
 
     # Compute simulation results
     # No need to generate the velocities since this is automatically computed directly inside the loss function when needed
+    # Diagnostics only, and it writes into the mass balance cache, so keep it out of the
+    # differentiated region
+    MB,
+    t_MB = Zygote.@ignore_derivatives Huginn.MB_diagnostics(
+        container.simulation, iceflow_sol)
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, tstops;
-        MB = container.simulation.cache.iceflow.MB_history,
-        t_MB = container.simulation.cache.iceflow.MB_times,
+        MB = MB,
+        t_MB = t_MB,
         processVelocity = processVelocity
     )
 end
@@ -568,16 +576,26 @@ function simulate_iceflow_UDE!(
         tstops
 )
     params = container.simulation.parameters
+    solver_tstops, saveat = Huginn.MB_solver_stops(container.simulation, tstops)
+    # `dt` only when stepping is fixed: in adaptive mode supplying one overrides the solver's
+    # own initial step, and supplying zero aborts the solve.
+    step_kw = params.solver.adaptive ? NamedTuple() : (; dt = params.solver.dt)
     iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
-        params.solver.solver,
+        Huginn.with_eigen_est(params.solver.solver, container.simulation);
         callback = cb,
         sensealg = params.UDE.sensealg,
         reltol = params.solver.reltol,
+        abstol = params.solver.scale_abstol ?
+                 Huginn.effective_abstol(params.solver.abstol, params.simulation.tspan;
+            verbose = false) : params.solver.abstol,
+        adaptive = params.solver.adaptive,
+        saveat = saveat,
         progress = false,
         maxiters = params.solver.maxiters,
-        tstops = tstops
+        tstops = solver_tstops,
+        step_kw...
     )
     @assert iceflow_sol.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
 

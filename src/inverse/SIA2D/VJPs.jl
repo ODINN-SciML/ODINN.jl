@@ -1,12 +1,14 @@
 
 function VJP_λ_∂SIA∂H(VJPMode::DiscreteVJP, λ, H, θ, simulation::Simulation, t)
     λ_∂f∂H = VJP_λ_∂SIA∂H_discrete(λ, H, θ, simulation, t)
-    return λ_∂f∂H, nothing
+    λ_MB = λ_∂ṁ∂H(simulation.parameters.UDE.grad.MB_VJP, λ, H, simulation, t)
+    return λ_∂f∂H .+ λ_MB, nothing
 end
 
 function VJP_λ_∂SIA∂H(VJPMode::ContinuousVJP, λ, H, θ, simulation::Simulation, t)
     λ_∂f∂H = VJP_λ_∂SIA∂H_continuous(λ, H, θ, simulation, t)
-    return λ_∂f∂H, nothing
+    λ_MB = λ_∂ṁ∂H(simulation.parameters.UDE.grad.MB_VJP, λ, H, simulation, t)
+    return λ_∂f∂H .+ λ_MB, nothing
 end
 
 function VJP_λ_∂SIA∂H(VJPMode::EnzymeVJP, λ, H, θ, simulation::Simulation, t)
@@ -66,6 +68,36 @@ end
 function VJP_λ_∂surface_V∂θ(VJPMode::DiscreteVJP, λx, λy, H, θ, simulation, t)
     λ_∂V∂H = VJP_λ_∂surface_V∂θ_discrete(λx, λy, H, θ, simulation, t)
     return λ_∂V∂H, nothing
+end
+
+"""
+    λ_∂ṁ∂H(VJPMode::AbstractVJPMethod, λ, H, simulation::Simulation, t)
+
+Contribution of the mass balance source term to the vector-Jacobian product of the ice flow
+right hand side.
+
+The mass balance rate at a cell depends only on that cell's ice thickness, so its Jacobian is
+diagonal and the product is an elementwise multiplication. Returns zero when the mass balance
+is not evaluated in the right hand side. The Enzyme VJP differentiates the right hand side
+directly and so already accounts for this term.
+
+Dispatches on the mass balance VJP method so that `NoVJP` drops the elevation feedback. That
+is what gives the gradient tests teeth: a threshold worth having is one the feedback-free
+gradient fails.
+"""
+λ_∂ṁ∂H(::NoVJP, λ, H, simulation::Simulation, t) = zero(λ)
+
+function λ_∂ṁ∂H(::AbstractVJPMethod, λ, H, simulation::Simulation, t)
+    mb_cache = simulation.cache.mass_balance
+    mb_cache_active(mb_cache) || return zero(λ)
+
+    glacier_idx = simulation.cache.iceflow.glacier_idx
+    glacier = simulation.glaciers[glacier_idx]
+    mb_model = get_mb_model(simulation.model.mass_balance, glacier_idx)
+
+    ∂ṁ = similar(H)
+    MB_rate_∂H!(∂ṁ, H, mb_cache, mb_model, glacier, t)
+    return ∂ṁ .* λ
 end
 
 function MB_wrapper!(MB, H, simulation, glacier, mb_model, step)

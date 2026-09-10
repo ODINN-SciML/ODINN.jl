@@ -127,7 +127,10 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
-            tstopsMB = if simulation.parameters.simulation.use_MB
+            # Only the discrete scheme applies the mass balance as a jump. As a source term
+            # it is already part of the SIA VJP, so there are no MB stops to align with.
+            tstopsMB = if simulation.parameters.simulation.use_MB &&
+                          simulation.parameters.simulation.MB_scheme == :discrete
                 tstopsMB = Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)[2:end] # Discard first time step to be aligned with the forward
                 @assert all(map(ti -> ti in t, tstopsMB)) "When using the DiscreteAdjoint the tstops of the MB callback must all be included in the tstops from the results."
                 tstopsMB
@@ -314,7 +317,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             # each interval ends at the pre-MB state (MB is applied at the right endpoint),
             # but H stores post-MB states. Interpolate post-MB at the left node and pre-MB at
             # the right node so the SIA VJP is linearized on the true forward trajectory.
-            H_itp_SIA = if simulation.parameters.simulation.use_MB
+            H_itp_SIA = if simulation.parameters.simulation.use_MB &&
+                           simulation.parameters.simulation.MB_scheme == :discrete
                 H_preMB_nodes = map(eachindex(t)) do j
                     indMB = findfirst(result.t_MB .== t[j])
                     isnothing(indMB) ? H[j] : H[j] .- result.MB[indMB]
@@ -450,7 +454,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     integrator.u .+= λ_∂MB∂H
                 end
             end
-            cb_adjoint_MB = if simulation.parameters.simulation.use_MB
+            cb_adjoint_MB = if simulation.parameters.simulation.use_MB &&
+                               simulation.parameters.simulation.MB_scheme == :discrete
                 # For the moment the time stepping used in the loss, and the one for the MB gradient computation must match
                 # The plan in the future is to be able to customize the time stepping for the MB gradient computation
                 # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/373
