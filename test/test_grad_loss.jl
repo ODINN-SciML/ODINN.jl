@@ -32,7 +32,6 @@ end
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
-        MB_scheme = :discrete,
         functional_inv = true,
         custom_NN = false,
         max_params = 60,
@@ -80,7 +79,6 @@ function test_grad_finite_diff(
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
-        MB_scheme = :discrete,
         abstol = 1e-6,
         solver = nothing,
         A_range = nothing,
@@ -162,7 +160,6 @@ function test_grad_finite_diff(
             workers = 1,
             test_mode = true,
             calibrate_MB = calibrate_MB,
-            MB_scheme = MB_scheme,
             rgi_paths = rgi_paths,
             gridScalingFactor = custom_NN ? 8 : 4,
             f_surface_velocity_factor = 0.8

@@ -135,30 +135,37 @@ ENV["GKSwstype"] = "nul"
             @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
                 thres = [5e-4, 1e-8, 5e-4], train_initial_conditions = true)
+            # These shrink A so the gradient is mass balance dominated, which also makes it
+            # ~1e-3 rather than ~1. A finite difference has to be measured accordingly: with
+            # an adaptive solver the loss is discontinuous in θ, and a step suited to a
+            # gradient of order one sits deep in the cancellation regime here. Sweeping it
+            # (GROUP = "Core3MBfd") shows the difference converging onto the adjoint —
+            # 4.8e-1 off at 1e-9 on the smallest component, 2.1e-4 at 1e-5.
+            mb_fd = (adaptive = false, dt = 1.0/240.0, fd_delta = 1e-5, thres_fd = 5e-3)
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(
                     VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
                     MB_VJP = ODINN.EnzymeVJP());
                 thres = [3e-3, 1e-8, 3e-3],
-                use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
+                use_MB = true, mb_fd...) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [3e-3, 1e-8, 3e-3], use_MB = true)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, mb_fd...)
             # A nonzero temp_bias moves the PDD/snow clamp thresholds, which the MB VJPs
             # must pick up from the MB model rather than assume away.
             @testset "Continuous adjoint w/ discrete MB VJP and temperature bias" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0, mb_fd...)
             @testset "Continuous adjoint w/ Enzyme MB VJP and temperature bias" test_grad_finite_diff(
                 ContinuousAdjoint(
                     VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
                     MB_VJP = ODINN.EnzymeVJP());
-                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0, mb_fd...)
             # Calibration turns mass_balance into one model per glacier, so this covers the
             # vector of MB models flowing through the VJPs.
             @testset "Continuous adjoint w/ discrete MB VJP and calibrated MB" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [2e-3, 1e-10, 2e-3], use_MB = true, calibrate_MB = true)
+                thres = [2e-3, 1e-10, 2e-3], use_MB = true, calibrate_MB = true, mb_fd...)
             @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [
                     5e-3, 1e-10, 5e-3])
@@ -325,8 +332,8 @@ ENV["GKSwstype"] = "nul"
         # component, 1e-13 returns the wrong sign, 1e-11 is still 1.0e-1 off, and 1e-9 lands
         # within 3e-4. Anything below ~1e-10 measures cancellation, not a derivative. The
         # teeth testset below is what keeps the threshold honest.
-        fixed = (use_MB = true, MB_scheme = :continuous, A_range = (2e-18, 8e-18),
-            adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-2)
+        fixed = (use_MB = true, A_range = (2e-18, 8e-18),
+            adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
         @testset "Mass balance as a continuous source term" begin
             @testset "Continuous adjoint vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); fixed...)
@@ -339,7 +346,7 @@ ENV["GKSwstype"] = "nul"
         # The scalar case cannot show direction bias: θ feeds a network with a single scalar
         # output, so every gradient is parallel to ∂A/∂θ whatever the solver does. A gridded
         # inversion gives θ one component per cell, where the direction is free to move.
-        common = (; use_MB = true, MB_scheme = :continuous, A_range = (2e-18, 8e-18),
+        common = (; use_MB = true, A_range = (2e-18, 8e-18),
             solver = ROCK2(), functional_inv = false, scalar = false, return_grad = true)
         b = collect(test_grad_finite_diff(
             ContinuousAdjoint(VJP_method = DiscreteVJP()); abstol = 1e-6, common...))
@@ -362,14 +369,14 @@ ENV["GKSwstype"] = "nul"
         # from magnitude because an optimiser follows the direction.
         base = test_grad_finite_diff(
             ContinuousAdjoint(VJP_method = DiscreteVJP()); use_MB = true,
-            MB_scheme = :continuous, A_range = (2e-18, 8e-18), solver = ROCK2(),
+            A_range = (2e-18, 8e-18), solver = ROCK2(),
             abstol = 1e-6, return_grad = true)
         b = collect(base)
         println("  reference |g| = ", norm(b), "   (ROCK2, abstol 1e-6)")
         for atol in (1e-5, 1e-4, 1e-3, 1e-2)
             g = collect(test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); use_MB = true,
-                MB_scheme = :continuous, A_range = (2e-18, 8e-18), solver = ROCK2(),
+                A_range = (2e-18, 8e-18), solver = ROCK2(),
                 abstol = atol, return_grad = true))
             cosang = dot(g, b) / (norm(g) * norm(b))
             @printf("  abstol=%.0e  |g|=%.6e  rel|g| err=%.2e  angle=%.2e rad  relerr=%.2e\n",
@@ -384,8 +391,49 @@ ENV["GKSwstype"] = "nul"
         # that threshold demonstrates nothing about the mass balance term.
         @testset "Teeth: elevation feedback removed (expected to fail)" test_grad_finite_diff(
             ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = NoVJP());
-            use_MB = true, MB_scheme = :continuous, A_range = (2e-18, 8e-18),
-            adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-2)
+            use_MB = true, A_range = (2e-18, 8e-18),
+            adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
+    end
+
+    if GROUP == "Core3MB"
+        # The mass balance gradient cases of Core3 on their own, with the same settings:
+        # Core3 takes over an hour and most of it is unrelated to them.
+        mb_fd = (adaptive = false, dt = 1.0/240.0, fd_delta = 1e-5, thres_fd = 5e-3)
+        @testset "MB gradient cases" begin
+            @testset "Enzyme MB VJP" test_grad_finite_diff(
+                ContinuousAdjoint(
+                    VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
+                    MB_VJP = ODINN.EnzymeVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, mb_fd...)
+            @testset "discrete MB VJP" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, mb_fd...)
+            @testset "discrete MB VJP w/ temperature bias" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0, mb_fd...)
+            @testset "Enzyme MB VJP w/ temperature bias" test_grad_finite_diff(
+                ContinuousAdjoint(
+                    VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
+                    MB_VJP = ODINN.EnzymeVJP());
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0, mb_fd...)
+            @testset "discrete MB VJP w/ calibrated MB" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                thres = [2e-3, 1e-10, 2e-3], use_MB = true, calibrate_MB = true, mb_fd...)
+        end
+    end
+
+    if GROUP == "Core3MBfd"
+        # Diagnostic. These cases shrink A so the gradient is mass balance dominated, which
+        # also makes it ~1e-3 where Core12's is ~1: a thousand times smaller, so the step that
+        # suits Core12 sits deep in the cancellation regime here. Sweep it and see whether the
+        # difference converges onto the adjoint, as it did for Core12.
+        for δ in (1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4)
+            @printf("\n  fd_delta = %.0e\n", δ)
+            test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
+                use_MB = true, adaptive = false, dt = 1.0/240.0,
+                fd_delta = δ, thres_fd = 1e9, thres = [1e9, 1e9, 1e9])
+        end
     end
 
     if GROUP == "Core12fd"
@@ -398,7 +446,7 @@ ENV["GKSwstype"] = "nul"
             @printf("\n  fd_delta = %.0e\n", δ)
             test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
-                use_MB = true, MB_scheme = :continuous, A_range = (2e-18, 8e-18),
+                use_MB = true, A_range = (2e-18, 8e-18),
                 adaptive = false, dt = 1.0/240.0, fd_delta = δ, thres_fd = 1e9)
         end
     end

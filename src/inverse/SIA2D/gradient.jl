@@ -127,17 +127,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             simulation.model.iceflow, simulation.cache.iceflow, simulation, i, tspan[2], θ)
 
         if typeof(simulation.parameters.UDE.grad) <: DiscreteAdjoint
-            # Only the discrete scheme applies the mass balance as a jump. As a source term
-            # it is already part of the SIA VJP, so there are no MB stops to align with.
-            tstopsMB = if simulation.parameters.simulation.use_MB &&
-                          simulation.parameters.simulation.MB_scheme == :discrete
-                tstopsMB = Huginn.define_callback_steps(tspan, simulation.parameters.simulation.step_MB)[2:end] # Discard first time step to be aligned with the forward
-                @assert all(map(ti -> ti in t, tstopsMB)) "When using the DiscreteAdjoint the tstops of the MB callback must all be included in the tstops from the results."
-                tstopsMB
-            else
-                []
-            end
-
             # Adjoint setup
             # Define empty object to store adjoint in reverse mode
             λ = [zero(result.B) for _ in 1:k]
@@ -201,17 +190,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
                 )
 
-                # State at which the SIA VJP is linearized. At an MB step the SIA flow over
-                # the interval ends at the pre-MB state, so undo the MB increment here.
+                # Mass balance is a source term of the RHS, so it is already inside the SIA
+                # VJP and the stored state is the one to linearize on.
                 H_SIA = H[j]
-                if simulation.parameters.simulation.use_MB && (tj in tstopsMB)
-                    # Retrieve H before MB callback because the solution is stored only after MB has been applied
-                    indMB = findfirst(result.t_MB .== tj)
-                    H_preMB = H[j] - result.MB[indMB]
-                    λ[j] .+= VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP,
-                        λ[j], H_preMB, simulation, glacier, tj)
-                    H_SIA = H_preMB
-                end
 
                 # Compute derivative of local contribution to loss function
                 ∂ℓ∂H = ∂L∂H[j]
@@ -313,27 +294,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 throw("Interpolation method for continuous adjoint not defined.")
             end
 
-            # Linear interpolant (as above) used only for the SIA VJP linearization. The forward SIA flow over
-            # each interval ends at the pre-MB state (MB is applied at the right endpoint),
-            # but H stores post-MB states. Interpolate post-MB at the left node and pre-MB at
-            # the right node so the SIA VJP is linearized on the true forward trajectory.
-            H_itp_SIA = if simulation.parameters.simulation.use_MB &&
-                           simulation.parameters.simulation.MB_scheme == :discrete
-                H_preMB_nodes = map(eachindex(t)) do j
-                    indMB = findfirst(result.t_MB .== t[j])
-                    isnothing(indMB) ? H[j] : H[j] .- result.MB[indMB]
-                end
-                let t = t, H = H, H_preMB_nodes = H_preMB_nodes
-                    function (tq)
-                        j = clamp(searchsortedlast(t, tq), firstindex(t), lastindex(t) - 1)
-                        frac = (tq - t[j]) / (t[j + 1] - t[j])
-                        H[j] .+ frac .* (H_preMB_nodes[j + 1] .- H[j])
-                    end
-                end
-            else
-                H_itp
-            end
-
             # Nodes and weights for numerical quadrature
             t_nodes,
             weights = GaussQuadrature(tspan..., simulation.parameters.UDE.grad.n_quadrature)
@@ -344,12 +304,12 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                  (typeof(simulation.parameters.UDE.grad.VJP_method) <: ContinuousVJP))
                 throw("VJP method $(simulation.parameters.UDE.grad.VJP_method) is not supported yet.")
             end
-            f_adjoint_rev = let simulation=simulation, H_itp_SIA=H_itp_SIA, θ=θ
+            f_adjoint_rev = let simulation=simulation, H_itp=H_itp, θ=θ
                 function (dλ, λ, p, τ)
                     t = -τ
                     λ_∂f∂H,
                     _ = VJP_λ_∂SIA∂H(simulation.parameters.UDE.grad.VJP_method,
-                        λ, H_itp_SIA(t), θ, simulation, t)
+                        λ, H_itp(t), θ, simulation, t)
                     dλ .= λ_∂f∂H
                 end
             end
@@ -442,29 +402,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 CallbackSet()
             end
 
-            # Mass balance contribution
-            effect_MB! = let simulation=simulation, glacier=glacier, H_itp=H_itp
-                function (integrator)
-                    t = - integrator.t
-                    # Retrieve H before MB callback because the solution is stored only after MB has been applied
-                    indMB = findfirst(result.t_MB .== t)
-                    H_preMB = H_itp(t) - result.MB[indMB]
-                    λ_∂MB∂H = VJP_λ_∂MB∂H(simulation.parameters.UDE.grad.MB_VJP,
-                        integrator.u, H_preMB, simulation, glacier, t)
-                    integrator.u .+= λ_∂MB∂H
-                end
-            end
-            cb_adjoint_MB = if simulation.parameters.simulation.use_MB &&
-                               simulation.parameters.simulation.MB_scheme == :discrete
-                # For the moment the time stepping used in the loss, and the one for the MB gradient computation must match
-                # The plan in the future is to be able to customize the time stepping for the MB gradient computation
-                # Cf https://github.com/ODINN-SciML/ODINN.jl/issues/373
-                PeriodicCallback(effect_MB!, simulation.parameters.simulation.step_MB;
-                    initial_affect = true, final_affect = false) # Exchange the role of initial_affect/final_affect in comparison to the forward
-            else
-                CallbackSet()
-            end
-            cb = CallbackSet(cb_adjoint_MB, cb_adjoint_loss, cb_adjoint_aggregated_loss)
+            # Mass balance needs no callback of its own: it is a source term of the ice flow
+            # RHS, so its contribution reaches the adjoint through the SIA VJP.
+            cb = CallbackSet(cb_adjoint_loss, cb_adjoint_aggregated_loss)
 
             # Final condition
             λ₁ = zero(H[end])
@@ -526,7 +466,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                Union{DiscreteVJP, EnzymeVJP, ContinuousVJP}
                 for j in 1:length(t_nodes)
                     λ_sol = sol_rev(- t_nodes[j])
-                    _H = H_itp_SIA(t_nodes[j])
+                    _H = H_itp(t_nodes[j])
                     λ_∂f∂θ = VJP_λ_∂SIA∂θ(simulation.parameters.UDE.grad.VJP_method,
                         λ_sol, _H, θ, nothing, simulation, t_nodes[j])
                     dLdθ .+= weights[j] .* (λ_∂f∂θ .+ ∂L∂θ[j])

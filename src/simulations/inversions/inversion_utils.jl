@@ -326,11 +326,6 @@ Compute the gradient with respect to θ for all the glaciers and return the resu
 See the in-place implementation for more information.
 """
 function grad_loss_iceflow!(θ, simulation::Inversion, mappingFct)
-    if simulation.parameters.simulation.use_MB &&
-       simulation.parameters.simulation.MB_scheme == :discrete
-        @assert simulation.parameters.UDE.optim_autoAD isa NoAD "Differentiation of callbacks with SciMLStruct is not supported by SciMLSensitivity yet. You get this error because you are using MB + gradient computation with SciMLSensitivity. Use MB_scheme = :continuous to evaluate the mass balance in the ice flow right hand side instead."
-    end
-
     simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     grads = mappingFct(simulations) do simulation
@@ -505,31 +500,6 @@ function _batch_iceflow_UDE(
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
         tstopsDiscreteLoss, tstopsAggregatedLoss)))
 
-    # Create mass balance callback. Not needed when the mass balance is a source term of the
-    # ice flow right hand side, which is the whole point: no callback left to differentiate.
-    cb_MB = if params.simulation.use_MB &&
-               params.simulation.MB_scheme == :discrete
-        # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
-        mb_action! = let model = container.simulation.model,
-            cache = container.simulation.cache, glacier = glacier, step_MB = step_MB,
-            glacier_idx = glacier_idx
-
-            function (integrator)
-                # Compute mass balance
-                glacier.S .= glacier.B .+ integrator.u
-                MB_timestep!(cache, model, glacier, step_MB, integrator.t, glacier_idx)
-                apply_MB_mask!(integrator.u, cache.iceflow)
-                push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))
-                push!(cache.iceflow.MB_times, integrator.t)
-            end
-        end
-        # A simulation period is sliced in time windows that are separated by `step_MB`
-        # The mass balance is applied at the end of each of the windows
-        PeriodicCallback(mb_action!, step_MB; initial_affect = false, final_affect = true)
-    else
-        CallbackSet()
-    end
-
     # Create iceflow law callback
     cb_iceflow = Huginn.build_callback(
         container.simulation.model.iceflow,
@@ -539,7 +509,8 @@ function _batch_iceflow_UDE(
         params.simulation.tspan
     )
 
-    cb = CallbackSet(cb_MB, cb_iceflow)
+    # Mass balance is a source term of the ice flow RHS, so there is no callback for it
+    cb = CallbackSet(cb_iceflow)
 
     # Run iceflow UDE for this glacier
     iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob, tstops)

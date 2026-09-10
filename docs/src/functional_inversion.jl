@@ -238,3 +238,49 @@ plot_law(functional_inversion.model.iceflow.A, functional_inversion, law_input, 
 # Just to have some additional context, here is how the synthetic law looks like for the full range of temperatures:
 plot_law(prediction.model.iceflow.A, prediction,
     law_input, nothing; plot_full_input_range = true)
+
+# ## Training with mass balance
+
+# The inversion above runs with `use_MB = false`. Turning mass balance on needs no change to
+# how the gradient is computed, because mass balance is a source term of the ice flow right
+# hand side rather than a periodic jump applied to the ice thickness:
+
+# ```math
+# \frac{\partial H}{\partial t} = -\nabla\cdot(D\nabla S) + \dot m(H, t)
+# ```
+
+# So it is differentiated like any other term of the right hand side, and both adjoints
+# support it:
+
+# ```julia
+# params = Parameters(
+#     simulation = SimulationParameters(
+#         use_MB = true,          # mass balance on
+#         tspan = tspan,
+#         rgi_paths = rgi_paths,
+#     ),
+#     UDE = UDEparameters(
+#         grad = SciMLSensitivityAdjoint(),   # or ContinuousAdjoint()
+#         optim_autoAD = ODINN.NoAD(),
+#         optimization_method = "AD+AD",
+#     ),
+# )
+# model = Model(
+#     iceflow = SIA2Dmodel(params; A = law_A),
+#     mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2),
+#     regressors = (; A = nn_model),
+# )
+# ```
+
+# `SciMLSensitivityAdjoint` with mass balance was not possible before: differentiating the
+# periodic callback that applied it was unsupported, so mass balance and the automatic
+# adjoint were mutually exclusive.
+
+# Note that the mass balance rate depends on the ice thickness through the surface `S = B + H`, so
+# `∂ṁ/∂H` is nonzero and reaches the gradient with respect to `A` even though no mass
+# balance parameter is being trained. That elevation feedback is what the gradient tests in
+# `test/runtests.jl` (group `Core12`) check against finite differences, for both adjoints.
+
+# Only mass balance models with a right hand side form can be used this way, which today
+# means `TImodel1`. See [Add a new mass balance model](./extending.md) for the interface a
+# new model has to implement.
