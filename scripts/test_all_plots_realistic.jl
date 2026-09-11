@@ -128,7 +128,7 @@ end
 function build_prediction()
     params = Parameters(
         simulation = SimulationParameters(
-            working_dir = Sleipnir.prepro_dir,
+            working_dir = Sleipnir.prepro_dir(),
             tspan = TSPAN,
             multiprocessing = false,
             workers = 1,
@@ -228,7 +228,7 @@ function build_law_plot_prediction()
 
     params = Parameters(
         simulation = SimulationParameters(
-            working_dir = Sleipnir.prepro_dir,
+            working_dir = Sleipnir.prepro_dir(),
             tspan = LAW_PLOT_TSPAN,
             multiprocessing = false,
             workers = 1,

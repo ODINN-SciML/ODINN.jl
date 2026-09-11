@@ -22,7 +22,7 @@ const MBM_DIR = "/Users/Bolib001/Desktop/Jordi/Julia/MassBalanceMachine.jl/data/
 # ── Build simulation parameters ─────────────────────────────────────────────── #
 params = Parameters(
     simulation = SimulationParameters(
-        working_dir = Sleipnir.prepro_dir,
+        working_dir = Sleipnir.prepro_dir(),
         tspan = TSPAN,
         multiprocessing = false,
         workers = 1,
