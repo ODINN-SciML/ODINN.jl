@@ -24,6 +24,7 @@ ENV["GKSwstype"]="nul"
 using Revise
 using Documenter, Literate
 using ODINN
+using MassBalanceMachine
 using DocumenterCitations
 
 cd(dirname(Base.active_project()))
@@ -48,20 +49,32 @@ tutorial_files = [
     "./src/results_plotting_tutorial.jl"
 ]
 
-# Generate independent Markdown files for each tutorial
+# Generate independent Markdown files for each tutorial.
+# Set ODINN_SKIP_LITERATE=true to reuse previously generated .md files (faster local iteration).
+# Only the tutorials whose .md is missing are regenerated, so adding a new tutorial does not
+# force regenerating the others.
+skip_literate = get(ENV, "ODINN_SKIP_LITERATE", "false") == "true"
 for tutorial_file in tutorial_files
     tutorial_name = splitext(basename(tutorial_file))[1]  # Extract the file name without extension
+    if skip_literate && isfile("./src/$(tutorial_name).md")
+        @info "ODINN_SKIP_LITERATE: reusing existing $(tutorial_name).md"
+        continue
+    end
     Literate.markdown(tutorial_file, "./src"; name = tutorial_name)
 end
 
+# Exposed to the tutorials, which need it to build relative links to generated files
+prettyurls = get(ENV, "CI", nothing)=="true"
+ENV["ODINN_DOCS_PRETTYURLS"] = string(prettyurls)
+
 # Which markdown files to compile to HTML
 makedocs(
-    modules = [ODINN, Huginn, Muninn, Sleipnir],
+    modules = [ODINN, Huginn, Muninn, Sleipnir, MassBalanceMachine],
     authors = "Jordi Bolibar, Facu Sapienza, Alban Gossard, Mathieu le Séac'h, Vivek Gajadhar",
     repo = Remotes.GitHub("ODINN-SciML", "ODINN.jl"),
     sitename = "ODINN.jl",
     format = Documenter.HTML(
-        prettyurls = get(ENV, "CI", nothing)=="true",
+        prettyurls = prettyurls,
         ansicolor = true, collapselevel = 3,
         size_threshold = 2000 * 1024,  # Increase size threshold to 500 KiB
         size_threshold_warn = 1000 * 1024,  # Increase warning threshold to 250 KiB),      # in bytes
@@ -70,6 +83,26 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "Quick start" => "quick_start.md",
+        "Ecosystem packages" => [
+            "Sleipnir.jl" => "Packages/sleipnir.md",
+            "Muninn.jl" => "Packages/muninn.md",
+            "Huginn.jl" => "Packages/huginn.md",
+            "MassBalanceMachine.jl" => "Packages/massbalancemachine.md",
+            "Gungnir" => "Packages/gungnir.md",
+            "ODINN.jl" => "Packages/odinn.md",
+            "Extending ODINN" => "extending.md"
+        ],
+        "How to use ODINN" => [
+            "Parameters" => "parameters.md",
+            "Glaciers" => "glaciers.md",
+            "Models" => "models.md",
+            "Results and plotting" => "results_plotting.md"
+        ],
+        "Inversions" => [
+            "Inversion types" => "inversions.md",
+            "Optimization" => "optimization.md",
+            "Sensitivity analysis" => "sensitivity.md"
+        ],
         "Tutorials" => [
             "Forward simulation" => "forward_simulation.md",
             "SMB calibration" => "smb_calibration.md",
@@ -77,20 +110,15 @@ makedocs(
             "Functional inversion" => "functional_inversion.md",
             "Laws" => "laws.md",
             "Laws inputs" => "input_laws.md",
-            "Laws VJP customization" => "vjp_laws.md"
+            "Laws VJP customization" => "vjp_laws.md",
+            "Plots" => "results_plotting_tutorial.md"
         ],
-        "How to use ODINN" => [
-            "Parameters" => "parameters.md",
-            "Glaciers" => "glaciers.md",
-            "Models" => "models.md",
-            "Results and plotting" => "results_plotting.md",
-            "Plotting tutorial" => "results_plotting_tutorial.md",
-            "API" => "api.md"
-        ],
-        "Inversions" => [
-            "Inversion types" => "inversions.md",
-            "Optimization" => "optimization.md",
-            "Sensitivity analysis" => "sensitivity.md"
+        "API" => [
+            "Sleipnir.jl" => "API/api_sleipnir.md",
+            "Muninn.jl" => "API/api_muninn.md",
+            "Huginn.jl" => "API/api_huginn.md",
+            "MassBalanceMachine.jl" => "API/api_massbalancemachine.md",
+            "ODINN.jl" => "API/api_odinn.md"
         ],
         "Community" => [
             "How to contribute" => "contribute.md",
@@ -99,14 +127,21 @@ makedocs(
         "References" => "references.md"
     ],
     checkdocs = :none,
+    # Set ODINN_DRAFT_DOCS=true to skip evaluating @example/@repl blocks. Useful to check
+    # layout, navigation and links locally without running the tutorial simulations.
+    draft = get(ENV, "ODINN_DRAFT_DOCS", "false") == "true",
     plugins = [bib]
 )
 
 if get(ENV, "CI", nothing)=="true"
+    # `dev` and `main` are deployed by independent CI triggers, each into its own folder
+    deployed_branch = get(ENV, "GITHUB_REF_NAME", "") == "main" ? "main" : "dev"
     deploydocs(
         repo = "github.com/ODINN-SciML/ODINN.jl",
         branch = "gh-pages",
-        devbranch = "main",
+        devbranch = deployed_branch,
+        devurl = deployed_branch,
+        versions = ["dev" => "dev", "main" => "main"],
         push_preview = true,
         forcepush = true
     )

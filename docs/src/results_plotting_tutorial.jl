@@ -11,6 +11,10 @@ using CairoMakie
 
 # We first run a short forward simulation on Great Aletsch glacier (RGI60-11.01450)
 # over a 5-year period, which will serve as the basis for all the plots below.
+# The temperature-index mass balance model is calibrated against the Hugonnet et al. (2021)
+# geodetic observations, so that the simulated evolution is realistic rather than driven by
+# arbitrary degree-day and precipitation factors. See the
+# [SMB calibration tutorial](smb_calibration.md) for details on the calibration itself.
 
 rgi_ids = ["RGI60-11.01450"]
 rgi_paths = get_rgi_paths()
@@ -35,12 +39,16 @@ params = Parameters(
     )
 )
 
+glaciers = initialize_glaciers(rgi_ids, params)
+
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 2.0 / 1000.0, prcp_fac = 1.4)
+    mass_balance = TImodel1(params)
 )
 
-glaciers = initialize_glaciers(rgi_ids, params)
+## Returns a new `Model`, since it builds one mass balance model per glacier
+model = calibrate_MB_model(model, glaciers, params)
+
 prediction = Prediction(model, glaciers, params)
 run!(prediction)
 
@@ -113,7 +121,8 @@ plot_glacier_dem(results)
 # `plot_glacier_vid` generates an animation of the ice-thickness evolution. The
 # output format is inferred from the file extension, so passing a `.gif` path
 # produces an animated GIF that can be embedded directly in the documentation
-# (a `.mp4` path works the same way for local use).
+# (a `.mp4` path works the same way for local use). The fluctuations seen in the animation
+# are due to seasonal accumulation and ablation.
 
 folder = "results_plots"
 mkpath(folder)
@@ -129,11 +138,10 @@ plot_glacier_vid(
     framerate = 12,
     baseTitle = "Ice thickness"
 )
-nothing #hide
 
-# ```@raw html
-# <img src="./results_plots/thickness_evolution.gif" width="500"/>
-# ```
+## Pretty URLs serve each page one directory deeper, changing the path back to the gif
+prefix = get(ENV, "ODINN_DOCS_PRETTYURLS", "false")=="true" ? ".." : "."
+HTML("""<img src="$(prefix)/results_plots/thickness_evolution.gif" width="500"/>""")
 
 # ## Saving figures
 
