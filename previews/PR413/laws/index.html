@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Laws · ODINN.jl</title><meta name="title" content="Laws · ODINN.jl"/><meta property="og:title" content="Laws · ODINN.jl"/><meta property="twitter:title" content="Laws · ODINN.jl"/><meta name="description" content="Documentation for ODINN.jl."/><meta property="og:description" content="Documentation for ODINN.jl."/><meta property="twitter:description" content="Documentation for ODINN.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="ODINN.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">ODINN.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../quick_start/">Quick start</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../forward_simulation/">Forward simulation</a></li><li><a class="tocitem" href="../functional_inversion/">Functional inversion</a></li><li class="is-active"><a class="tocitem" href>Laws</a><ul class="internal"><li><a class="tocitem" href="#Learnable-laws"><span>Learnable laws</span></a></li><li><a class="tocitem" href="#Non-learnable-laws"><span>Non learnable laws</span></a></li></ul></li><li><a class="tocitem" href="../vjp_laws/">VJP law customization</a></li><li><a class="tocitem" href="../input_laws/">Laws inputs</a></li></ul></li><li><span class="tocitem">How to use ODINN</span><ul><li><a class="tocitem" href="../parameters/">Parameters</a></li><li><a class="tocitem" href="../glaciers/">Glaciers</a></li><li><a class="tocitem" href="../models/">Models</a></li><li><a class="tocitem" href="../results_plotting/">Results and plotting</a></li><li><a class="tocitem" href="../api/">API</a></li></ul></li><li><span class="tocitem">Inversions</span><ul><li><a class="tocitem" href="../inversions/">Inversion types</a></li><li><a class="tocitem" href="../optimization/">Optimization</a></li><li><a class="tocitem" href="../sensitivity/">Sensitivity analysis</a></li></ul></li><li><a class="tocitem" href="../contribute/">How to contribute</a></li><li><a class="tocitem" href="../changes_plans/">Ongoing changes and future plans</a></li><li><a class="tocitem" href="../references/">References</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Laws</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Laws</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ODINN-SciML/ODINN.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ODINN-SciML/ODINN.jl/blob/main/docs/src/laws.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Laws-tutorial"><a class="docs-heading-anchor" href="#Laws-tutorial">Laws tutorial</a><a id="Laws-tutorial-1"></a><a class="docs-heading-anchor-permalink" href="#Laws-tutorial" title="Permalink"></a></h1><p>This tutorial provides simple examples on how to create learnable and non learnable laws and how to inject them into the iceflow model.</p><p>Let&#39;s say we have followed the classical workflow from ODINN, shown in the <a href="../forward_simulation/">Forward simulation</a> and <a href="../functional_inversion/">Functional inversion</a> tutorials. When we declare the <code>Model</code> type, we can specify the laws that we want to use in the iceflow model. Here we will briefly show how to do it. For more details you can check the <a href="../inversions/">Understanding the Law interface section</a>.</p><pre><code class="language-julia hljs">using ODINN
+using Plots
+using Dates
+using PlotlyJS
+
+# Dummy parameters, only specifying the type of loss function to be used
+params = Parameters(UDE = UDEparameters(empirical_loss_function=LossH()))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Sleipnir.Parameters{PhysicalParameters{Float64}, SimulationParameters{Int64, Float64, MeanDateVelocityMapping}, Hyperparameters{Float64, Int64}, SolverParameters{Float64, Int64}, UDEparameters{ODINN.SciMLSensitivityAdjoint}, InversionParameters{Float64}}(PhysicalParameters{Float64}(900.0, 9.81, 1.0e-10, 1.0, 8.0e-17, 8.5e-20, 8.0e-17, 8.5e-20, 1.0, -25.0, 5.0e-18), SimulationParameters{Int64, Float64, MeanDateVelocityMapping}(true, true, true, true, false, false, (2010.0, 2015.0), 0.08333333333333333, true, 4, &quot;&quot;, false, Dict{String, String}(), &quot;Farinotti19&quot;, MeanDateVelocityMapping(:nearest, 0.1643835616438356), 1), Hyperparameters{Float64, Int64}(1, 1, Float64[], Optim.BFGS{LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Nothing, Float64, Optim.Flat}(LineSearches.InitialStatic{Float64}
+  alpha: Float64 1.0
+  scaled: Bool false
+, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}
+  delta: Float64 0.1
+  sigma: Float64 0.9
+  alphamax: Float64 Inf
+  rho: Float64 5.0
+  epsilon: Float64 1.0e-6
+  gamma: Float64 0.66
+  linesearchmax: Int64 50
+  psi3: Float64 0.1
+  display: Int64 0
+  mayterminate: Base.RefValue{Bool}
+  cache: Nothing nothing
+  check_flatness: Bool false
+, nothing, 0.001, Optim.Flat()), 0.0, 50, 15), SolverParameters{Float64, Int64}(OrdinaryDiffEqLowStorageRK.RDPK3Sp35{typeof(OrdinaryDiffEqCore.trivial_limiter!), typeof(OrdinaryDiffEqCore.trivial_limiter!), Static.False}(OrdinaryDiffEqCore.trivial_limiter!, OrdinaryDiffEqCore.trivial_limiter!, static(false)), 1.0e-12, 0.08333333333333333, nothing, false, true, 10, 100000), UDEparameters{ODINN.SciMLSensitivityAdjoint}(SciMLSensitivity.GaussAdjoint{0, true, Val{:central}, SciMLSensitivity.EnzymeVJP}(SciMLSensitivity.EnzymeVJP(0), false), ADTypes.AutoEnzyme(), ODINN.SciMLSensitivityAdjoint(), &quot;AD+AD&quot;, LossH{L2Sum{Int64}}(L2Sum{Int64}(3)), :A, :identity), InversionParameters{Float64}([1.0], [0.0], [Inf], [1, 1], 0.001, 0.001, Optim.BFGS{LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Nothing, Nothing, Optim.Flat}(LineSearches.InitialStatic{Float64}
+  alpha: Float64 1.0
+  scaled: Bool false
+, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}
+  delta: Float64 0.1
+  sigma: Float64 0.9
+  alphamax: Float64 Inf
+  rho: Float64 5.0
+  epsilon: Float64 1.0e-6
+  gamma: Float64 0.66
+  linesearchmax: Int64 50
+  psi3: Float64 0.1
+  display: Int64 0
+  mayterminate: Base.RefValue{Bool}
+  cache: Nothing nothing
+  check_flatness: Bool false
+, nothing, nothing, Optim.Flat())))</code></pre><h2 id="Learnable-laws"><a class="docs-heading-anchor" href="#Learnable-laws">Learnable laws</a><a id="Learnable-laws-1"></a><a class="docs-heading-anchor-permalink" href="#Learnable-laws" title="Permalink"></a></h2><p>Learnable laws are laws that can be trained using a regressor. They are used to map input variables to a target variable in the iceflow model. In ODINN, we have implemented several learnable laws that can be used in the iceflow model.</p><pre><code class="language-julia hljs">nn_model = NeuralNetwork(params)
+
+A_law = LawA(nn_model, params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:T,) -&gt; Array{Float64, 0}   (⟳  custom VJP  ✅ precomputed)
+</code></pre><p>The output of the law definition above states that it maps the long term air temperature <code>T</code> to a float value which corresponds to the creep coefficient <code>A</code>. It is defined as a neural network that takes as input the long term air temperature <code>T</code> and returns the creep coefficient <code>A</code>. The parameters <code>θ</code> of the neural network are learned during the inversion process, by minimizing the loss function given some target data (for this case the ice thickness).</p><p>As explained in the <a href="../sensitivity/">Sensitivity analysis</a> section, ODINN needs to compute the vector-Jacobian products (VJPs). The part of the VJP concerning the law can be computed from different ways and it is possible to customize this, or use a default automatic differentiation backend. For this specific law the VJPs are already customized to have an efficient implementation and the user does not have to worry about this. The <a href="../vjp_laws/">VJP law customization</a> tutorial provides a complete description of how this VJP computation can be customized.</p><p>The ouput above shows that the law is applied at each iteration of the iceflow PDE. Additionally it says that custom VJPs are used to compute the gradient and that these VJPs are precomputed as the inputs of the law do not depend on the glacier state. By precomputed we mean that they are computed before solving the adjoint iceflow PDE, refer to the <a href="../vjp_laws/">VJP law customization</a> tutorial for more information.</p><p>It is then possible to visualize how the law integrates into the iceflow PDE:</p><pre><code class="language-julia hljs">model = Model(
+    iceflow = SIA2Dmodel(params; A=A_law),
+    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+    regressors = (; A=nn_model)
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">**** Model ****
+
+SIA2D iceflow equation  = ∇(<span class="sgr32">D</span> ∇S)  with <span class="sgr32">D</span> = <span class="sgr31">U</span> H̄
+  and <span class="sgr31">U</span> = (<span class="sgr35">C</span> (ρg)^<span class="sgr33">n</span> + <span class="sgr36">Γ</span> H̄) H̄^<span class="sgr33">n</span> ∇S^(<span class="sgr33">n</span>-1)
+<span class="sgr36">      Γ</span> = 2<span class="sgr34">A</span> (ρg)^<span class="sgr33">n</span> /(<span class="sgr33">n</span>+2)
+<span class="sgr34">      A: </span>(:T,) -&gt; Array{Float64, 0}   (⟳  custom VJP  ✅ precomputed)
+<span class="sgr35">      C: </span>ConstantLaw -&gt; Array{Float64, 0}
+<span class="sgr33">      n: </span>ConstantLaw -&gt; Array{Float64, 0}
+  where
+      T =&gt; long_term_temperature
+
+Temperature index mass balance model TImodel1
+   DDF = 0.006
+   acc_factor = 0.0012
+Learnable components
+  A: --- NeuralNetwork ---
+    architecture:
+      Chain(
+          layer_1 = Dense(1 =&gt; 3, #113),                # 6 parameters
+          layer_2 = Dense(3 =&gt; 10, #114),               # 40 parameters
+          layer_3 = Dense(10 =&gt; 3, #115),               # 33 parameters
+          layer_4 = Dense(3 =&gt; 1, σ),                   # 4 parameters
+      )         # Total: 83 parameters,
+                #        plus 0 states.
+    θ: ComponentVector of length 83
+
+***************</code></pre><h2 id="Non-learnable-laws"><a class="docs-heading-anchor" href="#Non-learnable-laws">Non learnable laws</a><a id="Non-learnable-laws-1"></a><a class="docs-heading-anchor-permalink" href="#Non-learnable-laws" title="Permalink"></a></h2><p>Non learnable laws are laws that are not trained using a regressor. They are used to map input variables to a target variable in the iceflow model, but they do not have any learnable parameters.</p><h3 id="Example-1:-Cuffey-and-Paterson-(2010)-1-dimensional-law"><a class="docs-heading-anchor" href="#Example-1:-Cuffey-and-Paterson-(2010)-1-dimensional-law">Example 1: Cuffey and Paterson (2010) 1-dimensional law</a><a id="Example-1:-Cuffey-and-Paterson-(2010)-1-dimensional-law-1"></a><a class="docs-heading-anchor-permalink" href="#Example-1:-Cuffey-and-Paterson-(2010)-1-dimensional-law" title="Permalink"></a></h3><p>Here is a quick example also drawn from the <a href="../functional_inversion/">Functional inversion</a> tutorial. We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010).</p><pre><code class="language-julia hljs">A_law = CuffeyPaterson()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:T,) -&gt; Array{Float64, 0}   (⟳  )
+</code></pre><p>Note that this time since there is no learnable parameter, ODINN does not need to compute the VJPs.</p><pre><code class="language-julia hljs">model = Model(
+    iceflow = SIA2Dmodel(params; A=A_law),
+    mass_balance = TImodel1(params; DDF=6.0/1000.0, acc_factor=1.2/1000.0),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">**** Model ****
+
+SIA2D iceflow equation  = ∇(<span class="sgr32">D</span> ∇S)  with <span class="sgr32">D</span> = <span class="sgr31">U</span> H̄
+  and <span class="sgr31">U</span> = (<span class="sgr35">C</span> (ρg)^<span class="sgr33">n</span> + <span class="sgr36">Γ</span> H̄) H̄^<span class="sgr33">n</span> ∇S^(<span class="sgr33">n</span>-1)
+<span class="sgr36">      Γ</span> = 2<span class="sgr34">A</span> (ρg)^<span class="sgr33">n</span> /(<span class="sgr33">n</span>+2)
+<span class="sgr34">      A: </span>(:T,) -&gt; Array{Float64, 0}   (⟳  )
+<span class="sgr35">      C: </span>ConstantLaw -&gt; Array{Float64, 0}
+<span class="sgr33">      n: </span>ConstantLaw -&gt; Array{Float64, 0}
+  where
+      T =&gt; long_term_temperature
+
+Temperature index mass balance model TImodel1
+   DDF = 0.006
+   acc_factor = 0.0012
+No learnable components
+***************</code></pre><p>In this ice flow model, the ice rigidity <code>A</code> is defined by the <code>CuffeyPaterson</code> law, which is a non-learnable law that maps the long term air temperature <code>T</code> to the creep coefficient <code>A</code>.</p><h3 id="Example-2:-Synthetic-C-(sliding)-2-dimensional-law"><a class="docs-heading-anchor" href="#Example-2:-Synthetic-C-(sliding)-2-dimensional-law">Example 2: Synthetic C (sliding) 2-dimensional law</a><a id="Example-2:-Synthetic-C-(sliding)-2-dimensional-law-1"></a><a class="docs-heading-anchor-permalink" href="#Example-2:-Synthetic-C-(sliding)-2-dimensional-law" title="Permalink"></a></h3><p>In this example, we present a synthetic non-learnable law, that maps the basal sliding coefficient <code>C</code> to the surface topographical roughness and cumulative positive degree days (CPDDs).</p><pre><code class="language-julia hljs">rgi_paths = get_rgi_paths()
+
+# Retrieving simulation data for the following glaciers
+rgi_ids = [&quot;RGI60-11.03638&quot;]
+δt = 1/12</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.08333333333333333</code></pre><p>The key part here is the definition of the law inputs, which are the variables that will be used to compute the basal sliding coefficient <code>C</code>. In this case, we use the CPDD and the topographical roughness as inputs. As you can see, there are different options to customize the way the inputs are computed. For exampe, for the CPDD, we can specify a time window over which the CPDD is integrated. For the topographical roughness, we can specify a spatial window and the type of curvature to be used.</p><pre><code class="language-julia hljs">law_inputs = (; CPDD=iCPDD(window=Week(1)), topo_roughness=iTopoRough(window=200.0, curvature_type=:variability))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(CPDD = CPDD: iCPDD{Dates.Week}(Dates.Week(1)), topo_roughness = topographic_roughness: iTopoRough{Float64}(200.0, :variability, :flow, :bed))</code></pre><p>Then, we define the parameters as for any other simulation.</p><pre><code class="language-julia hljs">params = Parameters(
+    simulation = SimulationParameters(
+        use_MB = false,
+        use_velocities = false,
+        tspan = (2010.0, 2015.0),
+        step = δt,
+        rgi_paths = rgi_paths,
+        gridScalingFactor = 4 # We reduce the size of glacier for simulation
+        ),
+    solver = Huginn.SolverParameters(
+        step = δt,
+        save_everystep = true,
+        progress = true
+        )
+    )
+
+# When declaring the model, we will indicate that the basal sliding coefficient `C` will be simulated by the `SyntheticC` law, which takes as input the parameters and the law inputs we defined before.
+
+model = Huginn.Model(
+    iceflow = SIA2Dmodel(params; C=SyntheticC(params; inputs=law_inputs)),
+    mass_balance = nothing,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">**** Model ****
+
+SIA2D iceflow equation  = ∇(<span class="sgr32">D</span> ∇S)  with <span class="sgr32">D</span> = <span class="sgr31">U</span> H̄
+  and <span class="sgr31">U</span> = (<span class="sgr35">C</span> (ρg)^<span class="sgr33">n</span> + <span class="sgr36">Γ</span> H̄) H̄^<span class="sgr33">n</span> ∇S^(<span class="sgr33">n</span>-1)
+<span class="sgr36">      Γ</span> = 2<span class="sgr34">A</span> (ρg)^<span class="sgr33">n</span> /(<span class="sgr33">n</span>+2)
+<span class="sgr34">      A: </span>ConstantLaw -&gt; Array{Float64, 0}
+<span class="sgr35">      C: </span>(:CPDD, :topo_roughness) -&gt; Matrix{Float64}   (↧0.019  )
+<span class="sgr33">      n: </span>ConstantLaw -&gt; Array{Float64, 0}
+  where
+      CPDD =&gt; CPDD
+      topo_roughness =&gt; topographic_roughness
+
+nothing
+No learnable components
+***************</code></pre><p>We retrieve some glaciers for the simulation</p><pre><code class="language-julia hljs">glaciers = initialize_glaciers(rgi_ids, params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">1-element Vector{Glacier2D} distributed over regions 11 (x1)
+RGI60-11.03638
+</code></pre><p>Time snapshots for transient inversion</p><pre><code class="language-julia hljs">tstops = collect(2010:δt:2015)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">61-element Vector{Float64}:
+ 2010.0
+ 2010.0833333333333
+ 2010.1666666666667
+ 2010.25
+ 2010.3333333333333
+ 2010.4166666666667
+ 2010.5
+ 2010.5833333333333
+ 2010.6666666666667
+ 2010.75
+    ⋮
+ 2014.3333333333333
+ 2014.4166666666667
+ 2014.5
+ 2014.5833333333333
+ 2014.6666666666667
+ 2014.75
+ 2014.8333333333333
+ 2014.9166666666667
+ 2015.0</code></pre><p>Then, we can run the <code>generate_ground_truth_prediction</code> function to simulate the glacier evolution using the defined law.</p><pre><code class="language-julia hljs">prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
+
+# Importantly, we provide the `plot_law` function to visualize 2-dimensional laws in 3D.</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Prediction{Sleipnir.ModelCache{SIA2DCache{Float64, Int64, ScalarCacheNoVJP, MatrixCacheNoVJP, ScalarCacheNoVJP, Array{Float64, 0}, Array{Float64, 0}, ScalarCacheNoVJP, ScalarCacheNoVJP}, Nothing}}(Sleipnir.Model{SIA2Dmodel{Float64, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#7#8&quot;}, Law{MatrixCacheNoVJP, Sleipnir.GenInputsAndApply{@NamedTuple{CPDD::iCPDD{Dates.Week}, topo_roughness::iTopoRough{Float64}}, Huginn.var&quot;#30#33&quot;{Sleipnir.Parameters{PhysicalParameters{Float64}, SimulationParameters{Int64, Float64, MeanDateVelocityMapping}, Hyperparameters{Float64, Int64}, SolverParameters{Float64, Int64}, UDEparameters{ODINN.SciMLSensitivityAdjoint}, InversionParameters{Float64}}}}, Sleipnir.GenInputsAndApply{@NamedTuple{CPDD::iCPDD{Dates.Week}, topo_roughness::iTopoRough{Float64}}, typeof(Sleipnir.emptyVJPWithInputs)}, Sleipnir.GenInputsAndApply{@NamedTuple{CPDD::iCPDD{Dates.Week}, topo_roughness::iTopoRough{Float64}}, typeof(Sleipnir.emptyVJPWithInputs)}, Huginn.var&quot;#32#35&quot;, Float64, Sleipnir.GenInputsAndApply{@NamedTuple{CPDD::iCPDD{Dates.Week}, topo_roughness::iTopoRough{Float64}}, typeof(Sleipnir.emptyPrepVJPWithInputs)}, DIVJP}, ConstantLaw{ScalarCacheNoVJP, Huginn.var&quot;#11#12&quot;}, NullLaw, NullLaw}, Nothing, Nothing}(SIA2D iceflow equation  = ∇(<span class="sgr32">D</span> ∇S)  with <span class="sgr32">D</span> = <span class="sgr31">U</span> H̄
+  and <span class="sgr31">U</span> = (<span class="sgr35">C</span> (ρg)^<span class="sgr33">n</span> + <span class="sgr36">Γ</span> H̄) H̄^<span class="sgr33">n</span> ∇S^(<span class="sgr33">n</span>-1)
+<span class="sgr36">      Γ</span> = 2<span class="sgr34">A</span> (ρg)^<span class="sgr33">n</span> /(<span class="sgr33">n</span>+2)
+<span class="sgr34">      A: </span>ConstantLaw -&gt; Array{Float64, 0}
+<span class="sgr35">      C: </span>(:CPDD, :topo_roughness) -&gt; Matrix{Float64}   (↧0.019  )
+<span class="sgr33">      n: </span>ConstantLaw -&gt; Array{Float64, 0}
+  where
+      CPDD =&gt; CPDD
+      topo_roughness =&gt; topographic_roughness
+, nothing, nothing), nothing, 1-element Vector{AbstractGlacier} distributed over regions 11 (x1)
+RGI60-11.03638
+, Sleipnir.Parameters{PhysicalParameters{Float64}, SimulationParameters{Int64, Float64, MeanDateVelocityMapping}, Hyperparameters{Float64, Int64}, SolverParameters{Float64, Int64}, UDEparameters{ODINN.SciMLSensitivityAdjoint}, InversionParameters{Float64}}(PhysicalParameters{Float64}(900.0, 9.81, 1.0e-10, 1.0, 8.0e-17, 8.5e-20, 8.0e-17, 8.5e-20, 1.0, -25.0, 5.0e-18), SimulationParameters{Int64, Float64, MeanDateVelocityMapping}(false, true, true, false, false, false, (2010.0, 2015.0), 0.08333333333333333, true, 4, &quot;&quot;, false, Dict(&quot;RGI60-11.00897&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.00/RGI60-11.00897&quot;, &quot;RGI60-08.00213&quot; =&gt; &quot;per_glacier/RGI60-08/RGI60-08.00/RGI60-08.00213&quot;, &quot;RGI60-08.00147&quot; =&gt; &quot;per_glacier/RGI60-08/RGI60-08.00/RGI60-08.00147&quot;, &quot;RGI60-11.01270&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.01/RGI60-11.01270&quot;, &quot;RGI60-11.03646&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.03/RGI60-11.03646&quot;, &quot;RGI60-11.03232&quot; =&gt; &quot;per_glacier/RGI60-11/RGI60-11.03/RGI60-11.03232&quot;, &quot;RGI60-01.22174&quot; =&gt; &quot;per_glacier/RGI60-01/RGI60-01.22/RGI60-01.22174&quot;, &quot;RGI60-07.00274&quot; =&gt; &quot;per_glacier/RGI60-07/RGI60-07.00/RGI60-07.00274&quot;, &quot;RGI60-03.04207&quot; =&gt; &quot;per_glacier/RGI60-03/RGI60-03.04/RGI60-03.04207&quot;, &quot;RGI60-04.04351&quot; =&gt; &quot;per_glacier/RGI60-04/RGI60-04.04/RGI60-04.04351&quot;…), &quot;Farinotti19&quot;, MeanDateVelocityMapping(:nearest, 0.1643835616438356), 4), Hyperparameters{Float64, Int64}(1, 1, Float64[], Optim.BFGS{LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Nothing, Float64, Optim.Flat}(LineSearches.InitialStatic{Float64}
+  alpha: Float64 1.0
+  scaled: Bool false
+, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}
+  delta: Float64 0.1
+  sigma: Float64 0.9
+  alphamax: Float64 Inf
+  rho: Float64 5.0
+  epsilon: Float64 1.0e-6
+  gamma: Float64 0.66
+  linesearchmax: Int64 50
+  psi3: Float64 0.1
+  display: Int64 0
+  mayterminate: Base.RefValue{Bool}
+  cache: Nothing nothing
+  check_flatness: Bool false
+, nothing, 0.001, Optim.Flat()), 0.0, 50, 15), SolverParameters{Float64, Int64}(OrdinaryDiffEqLowStorageRK.RDPK3Sp35{typeof(OrdinaryDiffEqCore.trivial_limiter!), typeof(OrdinaryDiffEqCore.trivial_limiter!), Static.False}(OrdinaryDiffEqCore.trivial_limiter!, OrdinaryDiffEqCore.trivial_limiter!, static(false)), 1.0e-12, 0.08333333333333333, nothing, true, true, 10, 100000), UDEparameters{ODINN.SciMLSensitivityAdjoint}(SciMLSensitivity.GaussAdjoint{0, true, Val{:central}, SciMLSensitivity.EnzymeVJP}(SciMLSensitivity.EnzymeVJP(0), false), ADTypes.AutoEnzyme(), ODINN.SciMLSensitivityAdjoint(), &quot;AD+AD&quot;, MultiLoss{Tuple{LossH{L2Sum{Int64}}}, Vector{Float64}}((LossH{L2Sum{Int64}}(L2Sum{Int64}(3)),), [1.0]), :A, :identity), InversionParameters{Float64}([1.0], [0.0], [Inf], [1, 1], 0.001, 0.001, Optim.BFGS{LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Nothing, Nothing, Optim.Flat}(LineSearches.InitialStatic{Float64}
+  alpha: Float64 1.0
+  scaled: Bool false
+, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}
+  delta: Float64 0.1
+  sigma: Float64 0.9
+  alphamax: Float64 Inf
+  rho: Float64 5.0
+  epsilon: Float64 1.0e-6
+  gamma: Float64 0.66
+  linesearchmax: Int64 50
+  psi3: Float64 0.1
+  display: Int64 0
+  mayterminate: Base.RefValue{Bool}
+  cache: Nothing nothing
+  check_flatness: Bool false
+, nothing, nothing, Optim.Flat()))), Sleipnir.Results[])</code></pre><p>This is especially useful when exploring the behaviour of laws with respect to different proxies, and to better understand learnable laws and their drivers.</p><pre><code class="language-julia hljs">fig = plot_law(prediction.model.iceflow.C, prediction, law_inputs, 1, nothing);</code></pre><p>Since we are in the documentation it is not possible to have an interactive plot but if you reproduce this example locally, you can run the line above without &quot;;&quot; and you can skip the lines hereafter. This will open an interactive window with a 3D plot that you can rotate.</p><pre><code class="language-julia hljs">folder = &quot;laws_plots&quot;
+mkpath(folder)
+filepath = joinpath(folder, &quot;3d_plot.png&quot;)
+PlotlyJS.savefig(fig, filepath);</code></pre><img src="./laws_plots/3d_plot.png" width="500"/><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../functional_inversion/">« Functional inversion</a><a class="docs-footer-nextpage" href="../vjp_laws/">VJP law customization »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.0 on <span class="colophon-date" title="Monday 17 November 2025 15:16">Monday 17 November 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
