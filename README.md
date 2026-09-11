@@ -6,6 +6,7 @@
 
 [![docs](https://img.shields.io/badge/documentation-main-blue.svg)](https://odinn-sciml.github.io/ODINN.jl/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8033313.svg)](https://doi.org/10.5281/zenodo.8033313)
+[![Julia 1.11](https://img.shields.io/badge/Julia-1.11-9558B2.svg)](https://julialang.org/)
 
 <img src="https://github.com/ODINN-SciML/ODINN.jl/blob/main/plots/ODINN_sticker_original.png?raw=true" width="250">
 
