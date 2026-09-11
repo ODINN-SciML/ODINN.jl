@@ -135,30 +135,37 @@ ENV["GKSwstype"] = "nul"
             @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
                 thres = [5e-4, 1e-8, 5e-4], train_initial_conditions = true)
+            # These shrink A so the gradient is mass balance dominated, which also makes it
+            # ~1e-3 rather than ~1. A finite difference has to be measured accordingly: with
+            # an adaptive solver the loss is discontinuous in θ, and a step suited to a
+            # gradient of order one sits deep in the cancellation regime here. Sweeping it
+            # (GROUP = "Core3MBfd") shows the difference converging onto the adjoint —
+            # 4.8e-1 off at 1e-9 on the smallest component, 2.1e-4 at 1e-5.
+            mb_fd = (adaptive = false, dt = 1.0/240.0, fd_delta = 1e-5, thres_fd = 5e-3)
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ Enzyme MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(
                     VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
                     MB_VJP = ODINN.EnzymeVJP());
                 thres = [3e-3, 1e-8, 3e-3],
-                use_MB = true) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
+                use_MB = true, mb_fd...) # This test uses Zygote for the differentiation of the laws because Mooncake has to store modules inside the VJPsPrepLaw struct which is not compatible with Enzyme.make_zero
             @testset "Continuous adjoint with discrete VJP vs finite differences w/ discrete MB VJP" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [3e-3, 1e-8, 3e-3], use_MB = true)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, mb_fd...)
             # A nonzero temp_bias moves the PDD/snow clamp thresholds, which the MB VJPs
             # must pick up from the MB model rather than assume away.
             @testset "Continuous adjoint w/ discrete MB VJP and temperature bias" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0, mb_fd...)
             @testset "Continuous adjoint w/ Enzyme MB VJP and temperature bias" test_grad_finite_diff(
                 ContinuousAdjoint(
                     VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote()),
                     MB_VJP = ODINN.EnzymeVJP());
-                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0)
+                thres = [3e-3, 1e-8, 3e-3], use_MB = true, temp_bias = 1.0, mb_fd...)
             # Calibration turns mass_balance into one model per glacier, so this covers the
             # vector of MB models flowing through the VJPs.
             @testset "Continuous adjoint w/ discrete MB VJP and calibrated MB" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = DiscreteVJP());
-                thres = [2e-3, 1e-10, 2e-3], use_MB = true, calibrate_MB = true)
+                thres = [2e-3, 1e-10, 2e-3], use_MB = true, calibrate_MB = true, mb_fd...)
             @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [
                     5e-3, 1e-10, 5e-3])
@@ -309,6 +316,26 @@ ENV["GKSwstype"] = "nul"
             @testset "Multiple glaciers" save_simulation_test!(multiglacier = true)
         end
     end
+
+    if GROUP == "All" || GROUP == "Core12"
+        # Mass balance evaluated in the ice flow right hand side, not applied as a jump —
+        # the SciMLSensitivity case here was impossible before. Needs adaptive = false: with
+        # an adaptive step the loss is discontinuous in θ, so a finite difference measures
+        # step-acceptance jitter, not a derivative. See gradient_diagnostics.jl for how
+        # `fd_delta`, `n_fd_components` and `thres_fd` below were chosen.
+        fixed = (use_MB = true, A_range = (2e-18, 8e-18), n_fd_components = 2,
+            adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
+        @testset "Mass balance as a continuous source term" begin
+            @testset "Continuous adjoint vs finite differences" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); fixed...)
+            @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
+                SciMLSensitivityAdjoint(); fixed...)
+        end
+    end
+
+    # Manual, non-CI groups (GradTolGrid, GradTol, Core12NegativeControl, Core3MB,
+    # Core3MBfd, Core12fd) live in gradient_diagnostics.jl, not here.
+    include("gradient_diagnostics.jl")
 
     if GROUP == "All" || GROUP == "Aqua"
         @testset "Aqua" test_Aqua()
