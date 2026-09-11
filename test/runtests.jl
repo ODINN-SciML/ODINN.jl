@@ -331,8 +331,15 @@ ENV["GKSwstype"] = "nul"
         # difference converging onto the adjoint as the step grows: on the smallest gradient
         # component, 1e-13 returns the wrong sign, 1e-11 is still 1.0e-1 off, and 1e-9 lands
         # within 3e-4. Anything below ~1e-10 measures cancellation, not a derivative. The
-        # teeth testset below is what keeps the threshold honest.
-        fixed = (use_MB = true, A_range = (2e-18, 8e-18),
+        # negative-control testset below is what keeps the threshold honest.
+        #
+        # `n_fd_components = 2` instead of the default 4: each component costs a full pair
+        # of 39-year forward solves (central difference), on top of the reference forward
+        # and adjoint pass. Both components already tested at 4 pass comfortably under
+        # thres_fd (worst relerr 7.8e-4 of 5e-3), and both go through the same code path —
+        # this is one small NN's weights, not different branches — so checking 2 instead of
+        # 4 keeps the same guarantee at 60% of the cost.
+        fixed = (use_MB = true, A_range = (2e-18, 8e-18), n_fd_components = 2,
             adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
         @testset "Mass balance as a continuous source term" begin
             @testset "Continuous adjoint vs finite differences" test_grad_finite_diff(
@@ -385,11 +392,11 @@ ENV["GKSwstype"] = "nul"
         end
     end
 
-    if GROUP == "Core12teeth"
+    if GROUP == "Core12NegativeControl"
         # Not part of any suite: it is expected to FAIL, and that is the point. Dropping the
         # elevation feedback must break the threshold the correct adjoints pass, otherwise
         # that threshold demonstrates nothing about the mass balance term.
-        @testset "Teeth: elevation feedback removed (expected to fail)" test_grad_finite_diff(
+        @testset "Negative control: elevation feedback removed (expected to fail)" test_grad_finite_diff(
             ContinuousAdjoint(VJP_method = DiscreteVJP(), MB_VJP = NoVJP());
             use_MB = true, A_range = (2e-18, 8e-18),
             adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)

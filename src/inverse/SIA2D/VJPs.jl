@@ -82,8 +82,8 @@ is not evaluated in the right hand side. The Enzyme VJP differentiates the right
 directly and so already accounts for this term.
 
 Dispatches on the mass balance VJP method so that `NoVJP` drops the elevation feedback. That
-is what gives the gradient tests teeth: a threshold worth having is one the feedback-free
-gradient fails.
+is what a negative control for the gradient tests needs: a threshold worth having is one the
+feedback-free gradient fails.
 """
 λ_∂ṁ∂H(::NoVJP, λ, H, simulation::Simulation, t) = zero(λ)
 
