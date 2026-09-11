@@ -134,9 +134,9 @@ New mass balance models subtype `MBmodel` (defined in `Muninn`). Mass balance is
 \frac{\partial H}{\partial t} = -\nabla\cdot(D\nabla S) + \dot m(H, t)
 ```
 
-so a model supplies a **rate**, evaluated at every step of the solve, rather than an increment applied by a callback. There is no mass balance callback: that is what lets the automatic adjoint differentiate through mass balance, and it removes the operator splitting error a periodic jump introduces.
+so a model supplies a **rate**, evaluated at every step of the solve — not an increment applied by a callback. That's what lets the automatic adjoint differentiate through mass balance, and it removes the operator-splitting error a periodic jump introduces.
 
-Evaluating a model inside the right hand side is not free. It runs orders of magnitude more often than a monthly callback did, it may not read the climate rasters (`Rasters` is not differentiable and not cheap), and it has to be differentiable with respect to `H`. The climate is therefore precomputed per mass balance window when the cache is built, and the model reads that.
+Evaluating a model inside the right hand side isn't free: it runs far more often than a monthly callback did, can't read the climate rasters (`Rasters` isn't differentiable and isn't cheap), and must be differentiable in `H`. So climate is precomputed per mass balance window when the cache is built, and the model reads that.
 
 ```
 Every RHS call:

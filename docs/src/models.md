@@ -34,7 +34,7 @@ Muninn.TImodel1
 Muninn.TImodel1(params::Sleipnir.Parameters)
 ```
 
-Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps` field in [`Sleipnir.SimulationParameters`](@ref).
+Surface mass balance is evaluated as a source term of the ice flow right hand side, `∂H/∂t = -∇·(D∇S) + ṁ(H, t)`, at every step of the solve rather than through a callback — see [Add a new mass balance model](@ref) for the model interface this requires.
 
 ### Calibrating a temperature-index model
 
