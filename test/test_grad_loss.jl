@@ -82,6 +82,11 @@ function test_grad_finite_diff(
         abstol = 1e-6,
         solver = nothing,
         A_range = nothing,
+        # `PhysicalParameters` defaults `maxC` to a value that only makes sense for a Weertman
+        # law; against the Budd law the glaciers are built with it is some fifteen orders too
+        # small, sliding contributes nothing, and a C gradient sits at round off. Any target
+        # `:C` test has to set this to something the configuration actually activates.
+        maxC = Sleipnir.PhysicalParameters().maxC,
         adaptive = true,
         dt = 1.0/120.0,
         fd_delta = nothing,
@@ -171,7 +176,8 @@ function test_grad_finite_diff(
         ),
         physical = PhysicalParameters(
             minA = minA,
-            maxA = maxA
+            maxA = maxA,
+            maxC = maxC
         ),
         UDE = UDEparameters(
             sensealg = sensealg,
@@ -366,7 +372,22 @@ function test_grad_finite_diff(
         # `adaptive = false`, where the trajectory depends smoothly on θ.
         @assert !adaptive "A fixed step finite difference is only meaningful with adaptive = false."
         θ0 = deepcopy(θ)
-        for i in 1:min(n_fd_components, length(θ0))
+
+        # A gradient with no signal passes every relative comparison below, because the finite
+        # difference is zero there too — that is exactly how a dead gradient hides. Require it
+        # to be resolvable against the loss scale rather than merely nonzero: a parameter the
+        # configuration barely activates lands at round off, which is indistinguishable from a
+        # broken adjoint and equally useless as a test. A gridded C with the default `maxC`
+        # against a Budd law is one such case, off by some fifteen orders.
+        l0 = f(θ0, simulation)
+        @test maximum(abs, collect(dθ)) > sqrt(eps(Float64)) * max(one(Float64), abs(l0))
+
+        # Rank by magnitude rather than taking the first components. For a scalar parameter the
+        # two are the same, but for a gridded one the leading components are ice-free corner
+        # cells where both sides are exactly zero and the comparison asserts nothing.
+        fd_idx = sortperm(abs.(vec(collect(dθ))); rev = true)[1:min(
+            n_fd_components, length(θ0))]
+        for i in fd_idx
             θp = deepcopy(θ0)
             θp[i] = θ0[i] + fd_delta
             simulation.model.trainable_components.θ = θp

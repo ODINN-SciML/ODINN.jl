@@ -341,14 +341,25 @@ end
 Compute the gradient with respect to θ for a particular glacier and return the computed gradient.
 This function defines the iceflow problem and then calls Zygote to differentiate `batch_loss_iceflow_transient` with respect to θ.
 It uses the SciMLSensitivity implementation under the hood to compute the adjoint of the ODE.
+
+The iceflow problem is built *inside* the differentiated region, from the θ being
+differentiated, which is what makes the initial condition trainable. Building it outside
+freezes `u0` at the θ the problem happened to be defined with, and `θ.IC` then picks up no
+derivative through the solution at all. This mirrors what the forward path
+`parallel_loss_iceflow_transient` already does.
+
+Note that `u0` has to come from the θ Zygote is differentiating, not from `container.θ`:
+deriving it by reading the field back out of the binder, while that same binder is also handed
+to the solver as `p`, makes Zygote accumulate into one mutable struct from two directions and
+silently collapses the whole `θ.C` gradient to zero. The route does not matter — `remake` and
+the `solve` keyword form fail identically — only where θ comes from.
 """
 function grad_parallel_loss_iceflow!(θ, simulation::Inversion, glacier_idx::Integer)
-    iceflow_prob = define_iceflow_prob(θ, simulation, glacier_idx)
     ret, = Zygote.gradient(
         _θ -> batch_loss_iceflow_transient(
             InversionBinder(simulation, _θ),
             glacier_idx,
-            iceflow_prob
+            define_iceflow_prob(_θ, simulation, glacier_idx)
         )[1], θ)
     return ret
 end
@@ -556,14 +567,9 @@ function simulate_iceflow_UDE!(
     # `dt` only when stepping is fixed: in adaptive mode supplying one overrides the solver's
     # own initial step, and supplying zero aborts the solve.
     step_kw = params.solver.adaptive ? NamedTuple() : (; dt = params.solver.dt)
-    # NOTE: `iceflow_prob` is built outside `Zygote.gradient`, so its `u0` is frozen at the θ
-    # the problem was defined with and `θ.IC` picks up no derivative through the solution;
-    # measured `‖g.IC‖ = 1.7e-11` against `‖g.C‖ = 2.5e4`, i.e. H₀ cannot be trained.
-    # Rebuilding `u0` here from `container.θ` does make `θ.IC` correct (9.4e-5 against finite
-    # differences) but collapses the whole `θ.C` gradient to exactly zero, with or without the
-    # glacier index passed in explicitly. Deriving `u0` from the same object handed to `p`
-    # appears to be what the adjoint cannot resolve. Left as is until that is understood:
-    # a dead `θ.C` is far worse than a frozen `θ.IC`.
+    # `u0` already carries a derivative: the problem is built from the differentiated θ by the
+    # caller, so only `p` is swapped here. Do not rebuild `u0` from `container.θ` — see
+    # `grad_parallel_loss_iceflow!`.
     iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
@@ -594,7 +600,11 @@ end
 
 Given a `simulation` struct and a `glacier_idx`, build the iceflow problem that has to be solved in the ODE solver.
 In practice, the returned iceflow problem is used inside `simulate_iceflow_UDE!` through `remake`.
-The definition of the iceflow problem has to be done outside of the gradient computation, otherwise Zygote fails at differentiating it.
+
+This is called from inside the differentiated region, so that `u0 = evaluate_H₀(θ, …)` carries
+a derivative and the initial condition can be trained. An earlier version of this docstring
+said the problem had to be defined outside the gradient; that is not the case, and doing so is
+what left `θ.IC` with no derivative through the solution.
 """
 function define_iceflow_prob(
         θ,

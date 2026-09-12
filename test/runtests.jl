@@ -357,10 +357,34 @@ ENV["GKSwstype"] = "nul"
         # θ.C rather than fail; only the automatic adjoint is meaningful for this target.
         fixed = (use_MB = true, A_range = (2e-18, 8e-18),
             adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
+        # `maxC` has to be set: the default only makes sense for a Weertman law, and against
+        # the Budd law the glaciers are built with it is some fifteen orders too small. With it
+        # the C gradient sits at round off (~1e-16) and the comparison below asserts nothing.
+        # `LawC` starts at `C = maxC/2`, so 0.1 puts sliding on par with deformation at the
+        # thicknesses involved, which is the regime the sliding inversions care about.
         @testset "Gridded C with the automatic adjoint" begin
             @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
                 SciMLSensitivityAdjoint();
-                target = :C, functional_inv = false, scalar = false, fixed...)
+                target = :C, functional_inv = false, scalar = false, maxC = 0.1, fixed...)
+        end
+
+        # Issue #409. `#366` added initial condition inversion and landed the manual adjoint
+        # half; the SciMLSensitivity half was split out and never implemented. The problem was
+        # being built outside the differentiated region, so `u0` stayed frozen at whatever θ it
+        # was defined with and `θ.IC` carried no derivative through the solution at all —
+        # measured `‖g.IC‖ = 1.7e-11` against `‖g.C‖ = 2.5e4`.
+        #
+        # Both blocks are checked. Checking only the one being fixed is how this was previously
+        # got wrong: rebuilding `u0` from `container.θ` makes `θ.IC` correct and silently zeroes
+        # `θ.C`, which a test of `θ.IC` alone would have passed.
+        @testset "Initial condition with the automatic adjoint" begin
+            @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
+                SciMLSensitivityAdjoint();
+                functional_inv = false, scalar = false, train_initial_conditions = true,
+                loss = MultiLoss(
+                    losses = (LossH(), InitialThicknessRegularization(2010.0)),
+                    λs = (1.0, 1.0)),
+                fixed...)
         end
     end
 
