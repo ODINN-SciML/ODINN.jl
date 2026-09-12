@@ -342,6 +342,28 @@ ENV["GKSwstype"] = "nul"
         end
     end
 
+    if GROUP == "All" || GROUP == "Core13"
+        # Gridded C against the automatic adjoint. This cell of the matrix was empty: the
+        # gridded classical inversion was only ever run with `ContinuousAdjoint`, and every
+        # `SciMLSensitivityAdjoint` case used a scalar law, so nothing covered the combination
+        # the sliding inversions actually use.
+        #
+        # What the gap cost: a campaign ran `RDPK3Sp35` with `SciMLSensitivityAdjoint` for
+        # weeks. `InterpolatingAdjoint` is not stable with this ODE in backward mode, so the
+        # gradient came back with the wrong sign — and with a perfectly healthy norm and no
+        # NaNs, so nothing looked wrong. The harness picks ROCK4 here, which is the point.
+        #
+        # `LawC` defines no `p_VJP!`, so the manual adjoints would return a zero gradient for
+        # θ.C rather than fail; only the automatic adjoint is meaningful for this target.
+        fixed = (use_MB = true, A_range = (2e-18, 8e-18),
+            adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
+        @testset "Gridded C with the automatic adjoint" begin
+            @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
+                SciMLSensitivityAdjoint();
+                target = :C, functional_inv = false, scalar = false, fixed...)
+        end
+    end
+
     if GROUP == "GradTolGrid"
         # The scalar case cannot show direction bias: θ feeds a network with a single scalar
         # output, so every gradient is parallel to ∂A/∂θ whatever the solver does. A gridded

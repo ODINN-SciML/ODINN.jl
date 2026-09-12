@@ -96,7 +96,7 @@ function test_grad_finite_diff(
         aggregated_loss = nothing
 ) where {ADJ <: AbstractAdjointMethod}
     if !functional_inv
-        @assert target == :A "When testing classical inversion, only target A is supported"
+        @assert target in (:A, :C) "When testing classical inversion, only targets A and C are supported"
     end
 
     print("> Testing target $(target) with $(adjointFlavor) and $(Base.typename(typeof(loss)).name)")
@@ -179,7 +179,12 @@ function test_grad_finite_diff(
             grad = adjointFlavor,
             optimization_method = "AD+AD",
             empirical_loss_function = loss,
-            target = target,
+            # `UDE.target` is consumed only by the manual adjoints, to dispatch their
+            # target-specific VJPs; the automatic adjoint ignores it entirely. A C inversion is
+            # defined by its regressor and law, and its trainable components still carry
+            # `SIA2D_A_target`, so this has to stay `:A` to satisfy the `Inversion` constructor
+            # assertion. Setting it to `:C` is wrong.
+            target = target == :C ? :A : target,
             initial_condition_filter = :softplus
         ),
         solver = Huginn.SolverParameters(
@@ -260,6 +265,8 @@ function test_grad_finite_diff(
     regressors = @match (target, train_initial_conditions) begin
         (:A, false) => (; A = trainable_model)
         (:A, true) => (; A = trainable_model, IC = ic)
+        (:C, false) => (; C = trainable_model)
+        (:C, true) => (; C = trainable_model, IC = ic)
         (:D_hybrid, false) => (; Y = trainable_model)
         (:D_hybrid, true) => (; Y = trainable_model, IC = ic)
         (:D, false) => (; U = trainable_model)
@@ -269,6 +276,9 @@ function test_grad_finite_diff(
     law = @match (target, functional_inv) begin
         (:A, true) => LawA(trainable_model, params; scalar = scalar)
         (:A, false) => LawA(params; scalar = scalar)
+        # Classical only: `LawC` defines no `p_VJP!`, so the manual adjoints would silently
+        # return a zero gradient for θ.C and there is nothing to test there.
+        (:C, false) => LawC(params; scalar = scalar)
         (:D_hybrid, true) => LawY(trainable_model, params)
         (:D, true) => LawU(trainable_model, params)
     end
@@ -282,6 +292,11 @@ function test_grad_finite_diff(
     model = @match target begin
         :A => Model(
             iceflow = SIA2Dmodel(params; A = law),
+            mass_balance = mass_balance,
+            regressors = regressors
+        )
+        :C => Model(
+            iceflow = SIA2Dmodel(params; C = law),
             mass_balance = mass_balance,
             regressors = regressors
         )
