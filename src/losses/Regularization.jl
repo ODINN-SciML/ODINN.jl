@@ -463,6 +463,24 @@ function VJP_λ_∂∇²a_∂a(
     return ∂a∂x + ∂a∂y
 end
 
+# `∇²` writes into the interior of a zero matrix, so Zygote refuses it and every Tikhonov
+# based regularization fails under SciMLSensitivityAdjoint. The analytical reverse already
+# exists and is the one `TikhonovRegularization` pairs with `∇²`, so we hand it to
+# ChainRules rather than rewriting the forward.
+function ChainRules.rrule(
+        ::typeof(∇²),
+        a::Matrix{F},
+        Δx::F,
+        Δy::F
+) where {F <: AbstractFloat}
+    ∇²a = ∇²(a, Δx, Δy)
+    function ∇²_pullback(Δ)
+        ∂a = VJP_λ_∂∇²a_∂a(ChainRules.unthunk(Δ), a, Δx, Δy)
+        return (ChainRules.NoTangent(), ∂a, ChainRules.NoTangent(), ChainRules.NoTangent())
+    end
+    return ∇²a, ∇²_pullback
+end
+
 loss_uses_velocity(lossType::VelocityRegularization) = true
 function loss_uses_velocity(lossType::Union{
         AbstractRegularization, AbstractSimpleRegularization})

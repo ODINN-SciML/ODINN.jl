@@ -31,12 +31,31 @@ function SIA2D_grad!(dθ, θ, simulation::Inversion)
 end
 
 """
-    safe_slice(obj, ind::Integer)
+    quadrature_weights(t)
 
-Return a sliced object `obj` if `ind > 0`, otherwise return 0.0.
+Trapezoidal quadrature weights for a time integrated loss sampled at the observation times `t`.
+
+The loss terms approximate `∫ℓ(t)dt` as `Σᵢ ℓ(tᵢ) * wᵢ`. Taking the backward difference
+`tᵢ - tᵢ₋₁` as `wᵢ` is a right Riemann sum, which never weights the first observation and so
+drops it entirely; with two campaigns that discards half the data, and the one discarded is
+the closest to the initial condition. The trapezoidal rule splits each interval between the
+two observations bounding it, which keeps every observation and leaves the total weight
+`t[end] - t[begin]` unchanged.
 """
-@inline function safe_slice(obj, ind::Integer)
-    return ind>0 ? obj[ind] : 0.0
+function quadrature_weights(t::AbstractVector{F}) where {F <: AbstractFloat}
+    n = length(t)
+    n == 0 && return F[]
+    # A single observation spans no interval, so the integral reading gives it zero weight
+    # and the loss silently vanishes. Weight it as a plain sum instead.
+    n == 1 && return ones(F, 1)
+    Δt = diff(t)
+    # Half of the interval on each side, padded with a zero at the ends. Written as a
+    # broadcast rather than a loop or a comprehension because this runs inside
+    # `batch_loss_iceflow_transient`, which Zygote differentiates, and both of those lower to
+    # `setindex!` on a fresh buffer, which it refuses.
+    before = vcat(zero(F), Δt)
+    after = vcat(Δt, zero(F))
+    return (before .+ after) ./ 2
 end
 
 """
@@ -77,13 +96,13 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
         # Discretization for the ice thickness loss term
         tH_ref = tdata(glacier.thicknessData) # If thicknessData is nothing, then tH_ref is an empty vector
-        ΔtH = diff(tH_ref)
+        ΔtH = quadrature_weights(tH_ref)
         useThickness = length(tH_ref)>0
         H_ref = useThickness ? glacier.thicknessData.H : nothing
 
         # Discretization for the surface velocity loss term
         tV_ref = tdata(glacier.velocityData, params.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
-        ΔtV = diff(tV_ref)
+        ΔtV = quadrature_weights(tV_ref)
         useVelocity = length(tV_ref)>0
         Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
         Vx_ref = useVelocity ? glacier.velocityData.vx : nothing
@@ -136,8 +155,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 indThickness = findfirst(==(tj), tH_ref)
                 indVelocity = findfirst(==(tj), tV_ref)
                 Δtj = (;
-                    H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
-                    V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
+                    H = isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness],
+                    V = isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity]
                 )
                 backward_loss(
                     loss_function,
@@ -186,8 +205,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 indThickness = findfirst(==(tj), tH_ref)
                 indVelocity = findfirst(==(tj), tV_ref)
                 Δtj = (;
-                    H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
-                    V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
+                    H = isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness],
+                    V = isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity]
                 )
 
                 # Mass balance is a source term of the RHS, so it is already inside the SIA
@@ -329,10 +348,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     indThickness = findfirst(==(t), tH_ref)
                     indVelocity = findfirst(==(t), tV_ref)
                     Δtj = (;
-                        H = isnothing(indThickness) ? 0.0 :
-                            safe_slice(Δt_HV.H, indThickness - 1),
-                        V = isnothing(indVelocity) ? 0.0 :
-                            safe_slice(Δt_HV.V, indVelocity - 1)
+                        H = isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness],
+                        V = isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity]
                     )
                     ∂ℓ∂H,
                     ∂ℓ∂θ = backward_loss(

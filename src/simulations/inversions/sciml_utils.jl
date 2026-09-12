@@ -54,8 +54,11 @@ end
 function SS.replace(::SS.Tunable, p::InversionBinder, newbuffer)
     N = length(p.θ)
     @assert length(newbuffer) == N
+    # The repacked binder must own its simulation *and* keep its values. Sharing
+    # `p.simulation` lets Enzyme write derivatives into the primal, which comes back with
+    # Δx, B and ρ set to NaN and the gradient at zero. Zeroing a copy instead leaves the
+    # adjoint replaying the right hand side on an empty glacier. Copy, and keep the values.
     sim = deepcopy(p.simulation)
-    Enzyme.make_zero!(sim)
     θ = Vector2ComponentVector(newbuffer, p.θ)
     return InversionBinder{typeof(sim), typeof(θ)}(sim, θ)
 end
@@ -78,7 +81,10 @@ It is used in SciMLSensitivity to differentiate the callbacks.
 function Base.zero(
         p::InversionBinder{FI, CA},
 ) where {FI <: Inversion, CA <: ComponentArray}
-    return InversionBinder(p.simulation, zero(p.θ))
+    # An Enzyme shadow must not alias the primal. The laws write their value into the
+    # simulation cache, and that write is where θ enters the right hand side, so sharing
+    # `p.simulation` here silently collapses the parameter gradient to zero.
+    return InversionBinder(Enzyme.make_zero(p.simulation), zero(p.θ))
 end
 
 """

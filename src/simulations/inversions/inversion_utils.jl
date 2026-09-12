@@ -404,13 +404,13 @@ function batch_loss_iceflow_transient(
 
     # Discretization for the ice thickness loss term
     tH_ref = tdata(glacier.thicknessData) # If thicknessData is nothing, then tH_ref is an empty vector
-    ΔtH = diff(tH_ref)
+    ΔtH = quadrature_weights(tH_ref)
     useThickness = length(tH_ref)>0
     H_ref = useThickness ? glacier.thicknessData.H : nothing
 
     # Discretization for the surface velocity loss term
     tV_ref = tdata(glacier.velocityData, container.simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
-    ΔtV = diff(tV_ref)
+    ΔtV = quadrature_weights(tV_ref)
     useVelocity = length(tV_ref)>0
     Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
     Vx_ref = useVelocity ? glacier.velocityData.vx : nothing
@@ -441,8 +441,8 @@ function batch_loss_iceflow_transient(
         Vxr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vx_ref[indVelocity])
         Vyr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vy_ref[indVelocity])
         Δtj = @ignore_derivatives((;
-            H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
-            V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
+            H = isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness],
+            V = isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity]
         ))
 
         loss(
@@ -499,6 +499,11 @@ function _batch_iceflow_UDE(
         params.UDE.empirical_loss_function, container.simulation, glacier_idx))
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
         tstopsDiscreteLoss, tstopsAggregatedLoss)))
+    # Observation times can fall outside the simulated window, and the solver never reaches
+    # them. `create_results` looks every tstop up in `solution.t` and indexes with the
+    # result, so keeping an unreachable one makes it index with `nothing`.
+    tstops = filter(
+        t -> params.simulation.tspan[1] <= t <= params.simulation.tspan[2], tstops)
 
     # Create iceflow law callback
     cb_iceflow = Huginn.build_callback(
@@ -551,6 +556,14 @@ function simulate_iceflow_UDE!(
     # `dt` only when stepping is fixed: in adaptive mode supplying one overrides the solver's
     # own initial step, and supplying zero aborts the solve.
     step_kw = params.solver.adaptive ? NamedTuple() : (; dt = params.solver.dt)
+    # NOTE: `iceflow_prob` is built outside `Zygote.gradient`, so its `u0` is frozen at the θ
+    # the problem was defined with and `θ.IC` picks up no derivative through the solution;
+    # measured `‖g.IC‖ = 1.7e-11` against `‖g.C‖ = 2.5e4`, i.e. H₀ cannot be trained.
+    # Rebuilding `u0` here from `container.θ` does make `θ.IC` correct (9.4e-5 against finite
+    # differences) but collapses the whole `θ.C` gradient to exactly zero, with or without the
+    # glacier index passed in explicitly. Deriving `u0` from the same object handed to `p`
+    # appears to be what the adjoint cannot resolve. Left as is until that is understood:
+    # a dead `θ.C` is far worse than a frozen `θ.IC`.
     iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,

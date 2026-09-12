@@ -40,9 +40,11 @@ function evaluate_H₀(
         :softplus => log.(1 .+ exp.(H₀))
         :Zang1980 => σ_zang.(H₀)
     end
-    # Apply mask
-    H₀[glacier.mask] .= 0.0
-    return H₀
+    # Apply mask. Written as a product rather than a masked write because
+    # `InitialThicknessRegularization` calls this inside the loss, so it has to be
+    # differentiable, and Zygote refuses the `copyto!` that indexing with the mask creates.
+    # `mask` is true on the no-ice cells, so the complement is what survives.
+    return H₀ .* .!glacier.mask
 end
 
 """
