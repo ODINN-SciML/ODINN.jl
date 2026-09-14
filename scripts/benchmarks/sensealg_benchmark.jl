@@ -83,7 +83,7 @@ adtypes = [ODINN.NoAD()]
             rgi_ids = ["RGI60-11.03638"] #, "RGI60-11.01450"]#, "RGI60-08.00213", "RGI60-04.04351"]
 
             model = Model(iceflow = SIA2Dmodel(params),
-                mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+                mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2),
                 trainable_components = NeuralNetwork(params))
 
             # We retrieve some glaciers for the simulation
