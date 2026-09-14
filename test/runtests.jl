@@ -199,6 +199,25 @@ ENV["GKSwstype"] = "nul"
                 loss = LossV(loss = LogSum(), component = :abs))
             # @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
             # @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3], loss=LossV())
+
+            # The automatic adjoint had no velocity-loss coverage at all, and that is exactly
+            # what let `batch_loss_iceflow_transient` read θ off the `InversionBinder` while
+            # `solve` held the same binder as `p`: Zygote then drops the half of the gradient
+            # that flows through the ODE, and the loss value stays exact so nothing errors.
+            # `LossH` cannot catch it (it never uses θ), so the guard has to be a velocity
+            # loss. Both cells below are 14.8x and 1.05x wrong respectively without the fix.
+            # Fixed stepping and a pinned solver: with `solver = nothing` the harness picks a
+            # different integrator per adjoint flavour, which confounds any comparison, and an
+            # adaptive integrator makes the loss discontinuous in θ so the finite difference
+            # measures step acceptance instead of a derivative.
+            sciml_v = (; adaptive = false, dt = 1.0/240.0, solver = Huginn.ROCK2(),
+                functional_inv = false, scalar = true)
+            @testset "SciMLSensitivity adjoint with velocity loss vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); loss = LossV(),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            @testset "SciMLSensitivity adjoint with time-aggregated velocity loss vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); loss = LossAvgV(),
+                aggregated_loss = :avgV, thres = [1e-4, 1e-10, 1e-4], sciml_v...)
         end
     end
 

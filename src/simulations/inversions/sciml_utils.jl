@@ -17,6 +17,21 @@ It is defined as a SciMLStructure and it contains the inversion structure and th
 
   - `simulation::FI`: Inversion instance.
   - `θ::CA`: ComponentArray that contains the parameters used to differentiate the iceflow.
+
+!!! warning "This binder is solver-facing only"
+
+    The binder is handed to `solve` as `p`. Inside the RHS, reading `container.θ` is correct
+    and necessary — that is how the laws see the parameters. **Anywhere downstream of the
+    solve, take θ as an explicit argument instead.**
+
+    Reading `container.θ` in code that Zygote differentiates makes it accumulate into one
+    mutable object from two directions, and the contribution that flows through the ODE is
+    silently dropped. The forward value is unchanged, so nothing errors and no loss
+    comparison catches it — only a gradient check does. `batch_loss_iceflow_transient` was
+    14.8x wrong on `LossV` for this reason, and `define_iceflow_prob`/`u0` before it.
+
+    `LossH` hides the bug: it never uses θ, so there is nothing to drop. Any test for this
+    has to use a loss that depends on θ directly, which in practice means a velocity loss.
 """
 mutable struct InversionBinder{FI <: Inversion, CA <: ComponentArray} <: Container
     simulation::FI

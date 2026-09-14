@@ -47,6 +47,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
     # Run forward simulation to build the results
     container = InversionBinder(simulation, θ)
     loss_results = [batch_loss_iceflow_transient(
+                        θ,
                         container,
                         glacier_idx,
                         define_iceflow_prob(θ, simulation, glacier_idx)

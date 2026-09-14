@@ -357,6 +357,7 @@ the `solve` keyword form fail identically — only where θ comes from.
 function grad_parallel_loss_iceflow!(θ, simulation::Inversion, glacier_idx::Integer)
     ret, = Zygote.gradient(
         _θ -> batch_loss_iceflow_transient(
+            _θ,
             InversionBinder(simulation, _θ),
             glacier_idx,
             define_iceflow_prob(_θ, simulation, glacier_idx)
@@ -373,6 +374,7 @@ This function calls `batch_loss_iceflow_transient` which returns both the loss a
 """
 function parallel_loss_iceflow_transient(θ, simulation::Inversion)
     return [batch_loss_iceflow_transient(
+                θ,
                 InversionBinder(simulation, θ),
                 glacier_idx,
                 define_iceflow_prob(θ, simulation, glacier_idx)
@@ -382,6 +384,7 @@ end
 
 """
     batch_loss_iceflow_transient(
+        θ,
         container::InversionBinder,
         glacier_idx::Integer,
         iceflow_prob::ODEProblem,
@@ -389,13 +392,25 @@ end
 
 Solve the ODE, retrieve the results and compute the loss.
 
+`θ` must be the parameter vector that is being differentiated, and it is what the loss terms
+receive. Reading it back out of `container` instead silently drops the part of the gradient
+that flows through the ODE: the binder is also handed to the solver as `p`, so Zygote sees a
+single mutable object accumulating from two directions and keeps only the loss's *direct*
+dependence on θ. The forward value is identical either way, which is what makes this failure
+invisible. Measured on `LossV`: 14.8x too large reading `container.θ`, exact from `θ`.
+`LossH` is unaffected only because it does not use θ at all.
+
+This is the same rule `grad_parallel_loss_iceflow!` documents for `u0`.
+
 Arguments:
 
-  - `container::InversionBinder`: SciMLStruct that contains the simulation structure and the vector of parameters to optimize.
+  - `θ`: Parameter vector being differentiated. This is what the loss terms must receive.
+  - `container::InversionBinder`: SciMLStruct that contains the simulation structure and the vector of parameters to optimize. Solver-facing: never read `θ` back out of it.
   - `glacier_idx::Integer`: Index of the glacier.
   - `iceflow_prob::ODEProblem`: Iceflow problem defined as an ODE with respect to time.
 """
 function batch_loss_iceflow_transient(
+        θ,
         container::InversionBinder,
         glacier_idx::Integer,
         iceflow_prob::ODEProblem
@@ -463,7 +478,7 @@ function batch_loss_iceflow_transient(
             Vr, Vxr, Vyr,
             t[τ],
             glacier_idx,
-            container.θ,
+            θ,
             container.simulation,
             prod(size(H[τ]))*normalization,
             Δtj
@@ -471,7 +486,7 @@ function batch_loss_iceflow_transient(
     end
     time_aggregated_losses = time_aggregated_loss(
         loss_function, H, nothing, nothing, nothing, nothing, t,
-        glacier_idx, container.θ, container.simulation, prod(size(H[begin]))*1.0, (;))
+        glacier_idx, θ, container.simulation, prod(size(H[begin]))*1.0, (;))
     return sum(losses) + time_aggregated_losses, result
 end
 

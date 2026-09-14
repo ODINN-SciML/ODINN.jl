@@ -93,6 +93,16 @@ function test_grad_finite_diff(
         thres_fd = 5e-2,
         n_fd_components = 4,
         return_grad = false,
+        # Return the built `(simulation, θ)` instead of running the gradient, so that a
+        # component of the adjoint can be checked in isolation against the very configuration
+        # under test rather than a hand-copied replica of this setup, which drifts.
+        return_setup = false,
+        # Override the sensealg the automatic adjoint uses, to compare VJP backends for the ODE
+        # adjoint. Velocity losses are 14.8x wrong through the automatic path while thickness
+        # losses are exact in the same configuration, and the one structural difference is that
+        # velocity seeds come from an rrule whose pullback runs Enzyme inside the Zygote
+        # pullback SciMLSensitivity is orchestrating.
+        sensealg = nothing,
         functional_inv = true,
         scalar = true,
         custom_NN = false,
@@ -137,12 +147,16 @@ function test_grad_finite_diff(
     end
 
     useSciMLSenseAlg = isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+    sensealg_override = sensealg
     if useSciMLSenseAlg
         optim_autoAD = Optimization.AutoEnzyme()
-        sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
+        sensealg = isnothing(sensealg_override) ?
+                   InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()) :
+                   sensealg_override
     else
         optim_autoAD = ODINN.NoAD()
-        sensealg = SciMLSensitivity.ZygoteAdjoint()
+        sensealg = isnothing(sensealg_override) ? SciMLSensitivity.ZygoteAdjoint() :
+                   sensealg_override
     end
 
     minA, maxA = if !isnothing(A_range)
@@ -335,6 +349,8 @@ function test_grad_finite_diff(
             end
         end
     end
+
+    return_setup && return (simulation, θ)
 
     loss_iceflow_grad!(dθ, _θ, _simulation) =
         if useSciMLSenseAlg
