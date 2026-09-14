@@ -417,9 +417,19 @@ function batch_loss_iceflow_transient(
 )
     result = _batch_iceflow_UDE(container, glacier_idx, iceflow_prob)
 
-    loss_function = container.simulation.parameters.UDE.empirical_loss_function
+    # Take the simulation off the binder once, untracked, and use it for the rest of the
+    # function. Reaching it through `container` inside the differentiated region puts a
+    # tracked path to `solve`'s own `p` on the tape, and the loss terms then mutate the object
+    # they were handed (`averageV` writes θ back into it), so Zygote accumulates into the
+    # binder from a second direction. Neither the read nor the write is a problem alone, which
+    # is why this reproduced as a clean constant: `LossAvgV` came out 1.051726x with
+    # `container.simulation` and exact with the simulation taken this way, same value, same
+    # everything else. See the `InversionBinder` docstring.
+    simulation = @ignore_derivatives container.simulation
 
-    glacier = container.simulation.glaciers[glacier_idx]
+    loss_function = simulation.parameters.UDE.empirical_loss_function
+
+    glacier = simulation.glaciers[glacier_idx]
     t = result.t
     H = result.H
 
@@ -435,7 +445,7 @@ function batch_loss_iceflow_transient(
     H_ref = useThickness ? glacier.thicknessData.H : nothing
 
     # Discretization for the surface velocity loss term
-    tV_ref = tdata(glacier.velocityData, container.simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
+    tV_ref = tdata(glacier.velocityData, simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
     ΔtV = diff(tV_ref)
     useVelocity = length(tV_ref)>0
     Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
@@ -479,14 +489,14 @@ function batch_loss_iceflow_transient(
             t[τ],
             glacier_idx,
             θ,
-            container.simulation,
+            simulation,
             prod(size(H[τ]))*normalization,
             Δtj
         )
     end
     time_aggregated_losses = time_aggregated_loss(
         loss_function, H, nothing, nothing, nothing, nothing, t,
-        glacier_idx, θ, container.simulation, prod(size(H[begin]))*1.0, (;))
+        glacier_idx, θ, simulation, prod(size(H[begin]))*1.0, (;))
     return sum(losses) + time_aggregated_losses, result
 end
 
