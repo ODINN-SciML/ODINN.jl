@@ -646,6 +646,17 @@ function define_iceflow_prob(
             glacier_idx
         )
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
+        # `u0` must have a concrete float eltype. An abstract one (typically `Matrix{Real}`,
+        # from a filter whose branches do not agree on a type under Zygote's Dual broadcast)
+        # fails far from here and in two different ways: a stabilized solver derives its cache
+        # types from the state's bottom eltype and `one(Real)` is `1::Int64`, so ROCK2 builds
+        # its float tableau as `Int64[...]` and throws `InexactError` hundreds of frames deep;
+        # without one, Zygote just drops the θ.IC gradient and the initial condition silently
+        # stops training. Checking here, at the single place every inversion's `u0` is built,
+        # turns both into one clear failure.
+        Zygote.@ignore_derivatives @assert isconcretetype(eltype(H₀))&&
+        eltype(H₀)<:AbstractFloat "evaluate_H₀ returned eltype $(eltype(H₀)) for glacier $(glacier_idx); u0 must be a concrete float array. Check `initial_condition_filter = $(simulation.parameters.UDE.initial_condition_filter)` for branches that disagree on their return type."
+
     else
         H₀ = simulation.glaciers[glacier_idx].H₀
     end

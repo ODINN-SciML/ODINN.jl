@@ -105,12 +105,31 @@ values following I. Zang, "A smoothing-out technique for min—max optimization"
   - `β::Real`: (optional) Parameter controlling the transition zone width. Default is 2.0.
 """
 function σ_zang(x; β = 2.0)
-    if x < - β / 2
-        return 0.0
-    elseif x < β / 2
-        return (x + β/2)^2 / (2β)
+    # Every branch must return the same type. The original returned the literal `0.0` below
+    # the threshold and `x` unchanged above it, which agree only when `x` is already a
+    # Float64. Under Zygote's broadcast the elements are `ForwardDiff.Dual`, so the two
+    # branches give `Float64` and `Dual`, `promote_typejoin` widens the result to
+    # `Matrix{Real}`, and that abstract state reaches the solver through `evaluate_H₀` and
+    # `define_iceflow_prob`.
+    #
+    # It needs elements on *both* sides of the threshold at once, so it stays hidden until
+    # the optimizer moves some θ.IC across `-β/2` mid-training. The consequences are bad in
+    # two different ways: with a stabilized solver, OrdinaryDiffEq derives its cache types
+    # from the state's bottom eltype, `one(Real)` is `1::Int64`, and ROCK2 builds its float
+    # tableau as `Int64[...]` -- `InexactError: Int64(0.410...)` hundreds of frames away;
+    # without one, Zygote simply returns *no gradient* for θ.IC and the initial condition
+    # silently stops training.
+    #
+    # `float(x)` up front commits every branch to one float type and keeps the function
+    # usable with Dual and tracked numbers.
+    fx = float(x)
+    βf = oftype(fx, β)
+    if fx < -βf / 2
+        return zero(fx)
+    elseif fx < βf / 2
+        return (fx + βf / 2)^2 / (2βf)
     else
-        return x
+        return fx
     end
 end
 

@@ -448,6 +448,50 @@ function test_grad_finite_diff(
 end
 
 """
+    test_initial_condition_filter_type_stability()
+
+Solver-free guard: every `initial_condition_filter` must return a concrete float array,
+including under Zygote.
+
+`σ_zang` returned the literal `0.0` below its threshold and `x` unchanged above it. Those
+agree for a plain `Float64` input, so a direct broadcast looks fine, but inside Zygote the
+elements are `ForwardDiff.Dual` and the two branches disagree: `promote_typejoin` widens the
+result to `Matrix{Real}`. It only triggers when values sit on *both* sides of the threshold
+at once, so it stayed hidden until an optimizer moved some θ.IC across `-β/2` mid-training.
+
+The abstract array then reaches the solver as `u0` via `evaluate_H₀`/`define_iceflow_prob`
+and breaks in two unrelated ways: with a stabilized solver OrdinaryDiffEq takes its cache
+types from the state's bottom eltype, `one(Real)` is `1::Int64`, and ROCK2 builds a float
+tableau as `Int64[...]` (`InexactError`, hundreds of frames away); without one, Zygote
+returns no θ.IC gradient at all and the initial condition silently stops training.
+
+No test covered `:Zang1980` on a gradient path -- every gradient test uses `:softplus` -- so
+this is checked here directly, with no solver involved.
+"""
+function test_initial_condition_filter_type_stability()
+    # Straddle the threshold: both branches have to be exercised in one broadcast.
+    x = [-5.0 0.0; 3.0 -2.0]
+
+    for f in (ODINN.σ_zang, v -> log(1 + exp(v)))
+        @test typeof(f.(x)) == Matrix{Float64}
+
+        seen = Ref{Any}(nothing)
+        g, = ODINN.Zygote.gradient(x) do t
+            y = f.(t)
+            ODINN.Zygote.ignore() do
+                seen[] = typeof(y)
+            end
+            sum(y)
+        end
+        @test isconcretetype(eltype(seen[]))
+        @test eltype(seen[]) <: AbstractFloat
+        # A widened eltype also costs the gradient outright, so assert it survives.
+        @test g isa AbstractMatrix
+        @test all(isfinite, g)
+    end
+end
+
+"""
     test_grad_V_from_Vxy()
 
 Solver-free finite-difference check for the `:abs` component of the velocity losses

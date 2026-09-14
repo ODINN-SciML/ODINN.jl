@@ -115,6 +115,7 @@ ENV["GKSwstype"] = "nul"
             @testset "L2Sum" test_grad_L2Sum()
             @testset "TikhonovRegularization" test_grad_TikhonovRegularization()
             @testset "V magnitude chain rule (:abs)" test_grad_V_from_Vxy()
+            @testset "Initial condition filters are type stable" test_initial_condition_filter_type_stability()
         end
     end
 
