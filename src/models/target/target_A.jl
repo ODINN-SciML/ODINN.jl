@@ -99,9 +99,12 @@ function Velocityꜛ(
     iceflow_cache = simulation.cache.iceflow
     (; A, n, p, q) = iceflow_cache
     Γꜛ_no_A = Γꜛ(iceflow_model, iceflow_cache, params; include_A = false)
+    # Sliding is plug flow, so its surface contribution is the depth average: the flux term of
+    # `SIA2D!` divided by H̄, giving `S H̄^(p-q) ∇S^(p-1)`. Deformation is not plug flow and
+    # keeps its own surface-to-average ratio, carried by `Γꜛ`.
     return (
-        S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) *
-        H̄ .^ (p.value .- q.value .+ 1) .* ∇S .^ (n.value .- 1)
+        S(iceflow_model, iceflow_cache, params) .*
+        H̄ .^ (p.value .- q.value) .* ∇S .^ (p.value .- 1)
         +
         A.value .* Γꜛ_no_A .* H̄ .^ (n.value .+ 1) .* ∇S .^ (n.value .- 1)
     )
@@ -114,9 +117,10 @@ function ∂Velocityꜛ∂H(
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     (; A, n, p, q) = iceflow_cache
+    # d/dH̄ of `Velocityꜛ`
     return (
-        S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) *
-        H̄ .^ (p.value .- q.value) .* ∇S .^ (n.value .- 1)
+        S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value) .*
+        H̄ .^ (p.value .- q.value .- 1) .* ∇S .^ (p.value .- 1)
         +
         A.value .* Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .*
         (n.value .+ 1) .* H̄ .^ n.value .* ∇S .^ (n.value .- 1)
@@ -130,9 +134,11 @@ function ∂Velocityꜛ∂∇H(
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
     (; A, n, p, q) = iceflow_cache
+    # (1/∇S) d/d∇S of `Velocityꜛ`; the caller multiplies this by `∇Sx`/`∇Sy`, hence the extra
+    # factor of `1/∇S` folded into the exponents.
     return (
-        S(iceflow_model, iceflow_cache, params) .* (p.value .- q.value .+ 2) .*
-        (p.value .- 1) * H̄ .^ (p.value .- q.value .+ 1) .* ∇S .^ (n.value .- 3)
+        S(iceflow_model, iceflow_cache, params) .* (p.value .- 1) .*
+        H̄ .^ (p.value .- q.value) .* ∇S .^ (p.value .- 3)
         +
         A.value .* Γꜛ(iceflow_model, iceflow_cache, params; include_A = false) .*
         (n.value .- 1) .* H̄ .^ (n.value .+ 1) .* ∇S .^ (n.value .- 3)
