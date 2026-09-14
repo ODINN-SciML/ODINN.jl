@@ -34,10 +34,24 @@ Given a loss function $L(\theta)$ (see the [Optimization](./optimization.md) sec
     - \nabla \cdot \left( D \nabla \lambda \right)
     + \frac{\partial D}{\partial H} \nabla S \cdot \nabla \lambda
     - \nabla \cdot \left( \frac{\partial D}{\partial (\nabla H)} \nabla S \cdot \nabla \lambda \right)
+    - \frac{\partial \dot m}{\partial H} \lambda
     - \frac{\partial \ell}{\partial H}
 ```
 
 with final condition $\lambda(x,y,t_1) = 0$ and $\lambda |_{\partial \Omega} \equiv 0$.
+
+The mass balance term $\dot m$ is a source term of the forward equation, so its sensitivity
+enters the adjoint the same way any other term of the right hand side does. It is *local*:
+the rate at a cell depends on the surface only through that cell, so
+$\partial \dot m / \partial H$ is diagonal and the contribution is an elementwise product
+rather than an operator. Note it is not zero even when no mass balance parameter is trained,
+since $\dot m$ depends on $H$ through the surface $S = B + H$, and that dependence reaches
+the gradient with respect to ice flow parameters such as $A$.
+
+Applying mass balance as a periodic jump instead would put a discontinuity in the trajectory,
+which the adjoint would have to be told about explicitly and which
+`SciMLSensitivity` could not differentiate through at all. Evaluating it in the right hand
+side is what removes that special case.
 The gradient of the loss function $L(\theta)$ with respect to the parameter $\theta$ then can be computed using the following expression:
 
 ```math
