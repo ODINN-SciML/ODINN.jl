@@ -60,13 +60,28 @@ mutable struct GriddedInv{
             # Inverse: x = atanh(C*2/maxC - 1), valid for C ∈ (0, maxC).
             # For C=0 (no sliding), seed x=-5 → C ≈ 5e-5 * maxC.
             maxv = Sleipnir.Float(isnothing(maxval) ? params.physical.maxC : maxval)
+            seeds = [let c = Sleipnir.Float(getfield(glaciers[i], var))
+                         c <= 0 || c >= maxv ? Sleipnir.Float(-5) :
+                         atanh(c * 2 / maxv - 1)
+                     end
+                     for i in 1:length(glaciers)]
+
+            # Warn when a glacier starts in the flat tail of the tanh map. C = 0 is the
+            # default, and it is also the worst possible starting point for the optimizer:
+            # the seed is x = -5, where dC/dx = maxC*sech²(5)/2 is ~7e-5 of its maximum, so
+            # the loss is nearly flat in x and the inversion barely moves. That looks like a
+            # converged run rather than a failed one -- the loss decreases by a fraction of a
+            # percent, LBFGS's line search gives up after a few iterations, and the reported C
+            # field is still the seed. Set `glacier.C` to a representative value inside
+            # (0, maxC) before inverting; 0.1 * maxC is a reasonable default.
+            flat = findall(s -> abs(s) > 4, seeds)
+            if !isempty(flat)
+                ids = [glaciers[i].rgi_id for i in flat]
+                @warn "GriddedInv(:C): $(length(flat))/$(length(seeds)) glaciers have no usable initial C and are seeded in the flat part of the tanh map, where dC/dθ is ~$(round(sech(maximum(abs, seeds[flat]))^2; sigdigits = 2)) of its maximum. The inversion will barely move. Set `glacier.C` inside (0, maxC = $(maxv)), e.g. 0.1 * maxC." rgi_ids=ids
+            end
+
             inv_param = NamedTuple{inv_param_type}(
-                Tuple(
-                let c = Sleipnir.Float(getfield(glaciers[i], var))
-                    seed = c <= 0 || c >= maxv ? Sleipnir.Float(-5) :
-                           atanh(c * 2 / maxv - 1)
-                    fill(seed, size(glaciers[i].H₀) .- 1)
-                end
+                Tuple(fill(seeds[i], size(glaciers[i].H₀) .- 1)
             for i in 1:length(glaciers))
             )
             θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
