@@ -1,4 +1,4 @@
-# ODINN
+# ODINN.jl
 
 [![Build Status](https://github.com/ODINN-SciML/ODINN.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/ODINN-SciML/ODINN.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/ODINN-SciML/ODINN.jl/branch/main/graph/badge.svg)](https://app.codecov.io/gh/ODINN-SciML/ODINN.jl)
@@ -9,17 +9,35 @@
 
 <img src="https://github.com/ODINN-SciML/ODINN.jl/blob/main/plots/ODINN_sticker_original.png?raw=true" width="250">
 
-For a detailed description of the model and the application of Universal Differential Equations to glacier ice flow modelling, take a look at [our recent publication at Geoscientific Model Development](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html).
-
 ## About ODINN.jl
 
-Global glacier evolution model using Universal Differential Equations to model and discover processes of climate-glacier interactions.
+`ODINN.jl` is a glacier model leveraging scientific machine learning (SciML) to perform forward and inverse simulations of glacier evolution at regional to large scales. It couples ice flow dynamics and surface mass balance in a modular, fully differentiable Julia framework, so that any model component (an initial state, a physical parameter, or a whole empirical law) can be optimized against observations.
 
-`ODINN.jl` uses neural networks and differential equations in order to combine mechanistic models describing glacier physical processes (e.g. ice creep, basal sliding, surface mass balance) with machine learning. Neural networks are used to learn parts of the equations. ODINN uses the Open Global Glacier Model ([OGGM](oggm.org/), Maussion et al., 2019) through [Gungnir](https://github.com/ODINN-SciML/Gungnir) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. Then, all the simulations and processing are performed in Julia, benefitting from its high performance and the SciML ecosystem.
+Its core approach is Universal Differential Equations (UDEs): partial differential equations describing glacier physics, where unknown or subgrid processes are replaced by data-driven regressors such as neural networks. This makes it possible to learn new parametrizations of processes like ice creep, basal sliding or surface mass balance directly from remote sensing data, while preserving the physical structure of the model. For the method, see [our paper in Geoscientific Model Development](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html).
 
-<center><img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/overview_figure.png" width="700"></center>
+<center><img src="docs/src/assets/odinn_ecosystem_v4.png" alt="ODINN ecosystem overview" width="700"></center>
 
-> **Overview of `ODINN.jl`’s workflow to perform functional inversions of glacier physical processes using Universal Differential Equations**. The parameters ($θ$) of a function determining a given physical process ($D_θ$), expressed by a neural network $NN_θ$, are optimized in order to minimize a loss function. In this example, the physical to be inferred law was constrained only by climate data, but any other proxies of interest can be used to design it. The climate data, and therefore the glacier mass balance, are downscaled (i.e. it depends on $S$), with $S$ being updated by the solver, thus dynamically updating the state of the simulation for a given timestep.
+> **Overview of the ODINN ecosystem**. `Gungnir` preprocesses the glacier and climate data (topography, ice thickness and velocity observations, climate) and `Sleipnir.jl` provides the core infrastructure and data management. `Muninn.jl` (surface mass balance) and `Huginn.jl` (ice flow dynamics) model the two main components of glacier evolution, and `ODINN.jl` couples them in a differentiable SciML model, where components such as a neural network can be optimized against observations.
+
+With `ODINN.jl` you can:
+
+  - Run **forward simulations** of glaciers anywhere on Earth, in parallel, with interchangeable ice flow and mass balance models.
+  - Model surface mass balance with **temperature-index models**, automatically calibrated against geodetic observations, or with **machine learning models** trained with [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) and ported to Julia with [MassBalanceMachine.jl](https://github.com/ODINN-SciML/MassBalanceMachine.jl).
+  - Perform **classical inversions** of the initial state and of model parameters (e.g. the Glen coefficient `A`), scalar or gridded.
+  - Perform **functional inversions** with UDEs, training neural networks embedded in the model, using manual or automatic (SciMLSensitivity.jl) adjoints.
+
+## The ODINN ecosystem
+
+`ODINN.jl` is the top layer of an ecosystem of packages, each one with a narrow role. Each can be used independently, or together through `ODINN.jl`.
+
+| Package | Role |
+|---|---|
+| [Gungnir](https://github.com/ODINN-SciML/Gungnir) (Python) | Preprocesses glacier and climate data with [OGGM](https://github.com/OGGM/oggm) |
+| [Sleipnir.jl](https://github.com/ODINN-SciML/Sleipnir.jl) | Core data structures: glaciers, climate, parameters, laws, results |
+| [Muninn.jl](https://github.com/ODINN-SciML/Muninn.jl) | Temperature-index mass balance models and their calibration |
+| [MassBalanceMachine.jl](https://github.com/ODINN-SciML/MassBalanceMachine.jl) | Machine learning mass balance models trained in Python and ported to Lux.jl |
+| [Huginn.jl](https://github.com/ODINN-SciML/Huginn.jl) | Ice flow models and PDE solvers |
+| **ODINN.jl** | Differentiable pipeline for inversions and UDE training |
 
 ## Installing ODINN
 
@@ -32,57 +50,60 @@ julia> ] # enter Pkg mode
 (MyEnvironment) pkg> add ODINN
 ```
 
-### Using OGGM for the initial conditions of the training/simulations
-
-OGGM works as a front-end of ODINN, utilizing all its tools to retrieve RGI data, topographical data, climate data and other datasets from the OGGM shop. We use these data to specify the initial state of the simulations, and to retrieve the climate data to force the model. Everything related to the mass balance and ice flow dynamics models is written 100% in Julia. This allows us to run tests with this toy model for any glacier on Earth. In order to choose a glacier, you just need to specify the RGI ID, which you can find [here](https://www.glims.org/maps/glims).
+The preprocessed glacier and climate data (generated with Gungnir) are downloaded automatically the first time the ecosystem is precompiled. You only need to run Gungnir yourself for glaciers that are not in the preprocessed dataset, or for custom climate sources, see the [documentation](https://odinn-sciml.github.io/ODINN.jl/dev/glaciers/).
 
 ## How to use ODINN
 
-ODINN's architecture makes it really straightforward to retrieve all the necessary glacier and climate data for both the initial conditions and the loss function of a problem. Here's a quick example based on a forward simulation for 4 different glaciers between 2010 and 2015. For more examples, including functional inversions, you can check the [tutorials in the documentation](https://odinn-sciml.github.io/ODINN.jl/dev/forward_simulation/).
+The following example runs a forward simulation for one glacier between 2000 and 2020. The temperature-index mass balance model is calibrated automatically against the geodetic mass balance of [Hugonnet et al. (2021)](https://doi.org/10.1038/s41586-021-03436-z), so no parameter needs to be set by hand.
 
 ```julia
 using ODINN
 
 # Define the working directory
 working_dir = joinpath(ODINN.root_dir, "demos")
-
-# Ensure the working directory exists
 mkpath(working_dir)
 
-# Define which glacier RGI IDs we want to work with
-rgi_ids = ["RGI60-11.03638", "RGI60-11.01450", "RGI60-11.02346", "RGI60-08.00203"]
-rgi_paths = get_rgi_paths()
+# Glaciers to simulate, identified by their RGI ID (here, Argentière)
+rgi_ids = ["RGI60-11.03638"]
 
 # Create the necessary parameters
 params = Parameters(
     simulation = SimulationParameters(
         working_dir = working_dir,
-        tspan = (2010.0, 2015.0),
-        multiprocessing = true,
-        workers = 5,
-        rgi_paths = rgi_paths
+        tspan = (2000.0, 2020.0),
+        multiprocessing = false,
+        rgi_paths = get_rgi_paths()
     )
 )
 
-# Specify a model based on an iceflow model and a mass balance model
+# Ice flow model (2D Shallow Ice Approximation) and mass balance model (temperature-index)
 model = Model(
     iceflow = SIA2Dmodel(params),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2),
+    mass_balance = TImodel1(params)
 )
 
-# We initialize the glaciers with all the necessary data
+# Initialize the glaciers with all the necessary data
 glaciers = initialize_glaciers(rgi_ids, params)
 
-# We specify the type of simulation we want to perform
+# Create the simulation, calibrating the mass balance model, and run it
 prediction = Prediction(model, glaciers, params)
-
-# And finally, we just run the simulation
 run!(prediction)
+
+# Visualize the change in ice thickness
+plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"])
 ```
 
-## How to cite 📖
+To use a machine learning mass balance model instead, replace the `mass_balance` model with one from MassBalanceMachine.jl, see the [MassBalanceMachine page](https://odinn-sciml.github.io/ODINN.jl/dev/Packages/massbalancemachine/) of the documentation.
 
-If you want to cite this work, please use this BibTex citation from [our latest paper](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html):
+To go further, the [documentation](https://odinn-sciml.github.io/ODINN.jl/) includes a [quick start](https://odinn-sciml.github.io/ODINN.jl/dev/quick_start/), tutorials for [forward simulations](https://odinn-sciml.github.io/ODINN.jl/dev/forward_simulation/), [classical inversions](https://odinn-sciml.github.io/ODINN.jl/dev/classical_inversion/) and [functional inversions](https://odinn-sciml.github.io/ODINN.jl/dev/functional_inversion/), a page for each package of the ecosystem, and guides to [extend ODINN](https://odinn-sciml.github.io/ODINN.jl/dev/extending/) with new ice flow models, mass balance models or laws.
+
+## Contributing and community
+
+Contributions are welcome. You can report bugs and request features in the [issues](https://github.com/ODINN-SciML/ODINN.jl/issues) tab, or open a pull request against `dev` from a fork. See [How to contribute](https://odinn-sciml.github.io/ODINN.jl/dev/contribute/) and the [Code of conduct](https://odinn-sciml.github.io/ODINN.jl/dev/code_of_conduct/).
+
+## How to cite
+
+If you use `ODINN.jl`, please cite our paper in [Geoscientific Model Development](https://gmd.copernicus.org/articles/16/6671/2023/gmd-16-6671-2023.html):
 ```
 @article{bolibar_sapienza_universal_2023,
 	title = {Universal differential equations for glacier ice flow modelling},
@@ -96,3 +117,7 @@ If you want to cite this work, please use this BibTex citation from [our latest 
 	doi = {10.5194/gmd-16-6671-2023}
 }
 ```
+
+## Funding
+
+The ODINN project has been funded by the Nederlandse Organisatie voor Wetenschappelijk Onderzoek, Stichting voor de Technische Wetenschappen (Vidi grant 016.Vidi.171.063), a TU Delft Climate Action grant, a PEPR TRACCS grant from the Agence Nationale de la Recherche as part of France 2030 (reference ANR-25-EXTR-0006), the National Science Foundation (grant OPP-2441132 and the EarthCube programme under awards 1928406 and 1928374), the Alfred P. Sloan Foundation (grant FG-2024-21649), and the MIAI cluster and the Agence Nationale de la Recherche in the context of France 2030 (grant ANR-23-IACL-0006).
