@@ -7,10 +7,10 @@ In this section we present a short summary of the main concepts used in this doc
 A glacier is described by its **ice thickness** ``H(x, y, t)`` on a grid. Together with the **bedrock** elevation ``B``, it gives the **surface elevation** ``S = B + H``. The evolution of the ice thickness follows from mass conservation:
 
 ```math
-\frac{\partial H}{\partial t} = \dot{b} - \nabla \cdot \mathbf{q}
+\frac{\partial H}{\partial t} = \dot{b} - \nabla \cdot \mathbf{F}
 ```
 
-where ``\dot{b}`` is the **surface mass balance** and ``\mathbf{q}`` is the **ice flux**, the ice moving downhill under its own weight. Each term is handled by a different package: [`Muninn`](Packages/muninn.md) computes ``\dot{b}`` and [`Huginn`](Packages/huginn.md) computes ``\mathbf{q}``.
+where ``\dot{b}`` is the **surface mass balance** and ``\mathbf{F}`` is the **ice flux**, the ice moving downhill under its own weight. Each term is handled by a different package: [`Muninn`](Packages/muninn.md) computes ``\dot{b}`` and [`Huginn`](Packages/huginn.md) computes ``\mathbf{F}``.
 
 ### Surface mass balance
 
@@ -18,7 +18,7 @@ The surface mass balance ``\dot{b}`` is the snow accumulation minus the melt at 
 
 ### Ice flow
 
-The **ice flow model** computes the ice flux ``\mathbf{q}`` from ``H`` and ``S``. Ice moves because of two processes: the internal deformation of the ice and its sliding over the bedrock. We describe the deformation with Glen's flow law [cuffey_physics_2010](@cite):
+The **ice flow model** computes the ice flux ``\mathbf{F}`` from ``H`` and ``S``. Ice moves because of two processes: the internal deformation of the ice and its sliding over the bedrock. We describe the deformation with Glen's flow law [cuffey_physics_2010](@cite):
 
 ```math
 \dot{\varepsilon} = A \tau^{n}
@@ -32,7 +32,7 @@ u_b = C \tau_b^{p} N^{-q}
 
 where ``C`` is the sliding coefficient, and ``p`` and ``q`` are exponents (``q = 0`` corresponds to a Weertman-type sliding law).
 
-Ice flow models differ in the physical approximations they make to compute ``\mathbf{q}`` from these two processes. `ODINN.jl` currently implements the Shallow Ice Approximation (SIA), but the equation above does not depend on this choice, and other models (e.g. SSA or DIVA) can be used in the same way, see [Extending ODINN](extending.md).
+Ice flow models differ in the physical approximations they make to compute ``\mathbf{F}`` from these two processes. `ODINN.jl` currently implements the Shallow Ice Approximation (SIA), but the equation above does not depend on this choice, and other models (e.g. SSA or DIVA) can be used in the same way, see [Extending ODINN](extending.md).
 
 ## Forward and inverse modelling
 
