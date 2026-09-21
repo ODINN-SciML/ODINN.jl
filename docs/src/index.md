@@ -21,6 +21,7 @@ julia> Pkg.add("ODINN")
 
 The documentation, which you can navigate through the left-hand-side panel, is structured in the following way:
 
+  - *Glaciology basics*: A short summary of the main glaciology concepts used in this documentation, for readers without a glaciology background.
   - *Quick start*: Provides a straight-to-the-point example of a simple use-case of `ODINN.jl` to get an idea of the basic interface and API.
   - *Ecosystem Packages*: Per-package landing pages for each component of the ODINN ecosystem, including scientific role, standalone usage guidance, minimal examples, and developer extension guides.
   - *Tutorials*: They provide clear examples of the main types of simulations and workflows that you can work with in `ODINN.jl`.

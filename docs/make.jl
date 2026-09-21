@@ -82,6 +82,7 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
+        "Glaciology basics" => "glaciology_basics.md",
         "Quick start" => "quick_start.md",
         "Ecosystem packages" => [
             "Sleipnir.jl" => "Packages/sleipnir.md",
