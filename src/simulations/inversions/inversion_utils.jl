@@ -326,10 +326,6 @@ Compute the gradient with respect to θ for all the glaciers and return the resu
 See the in-place implementation for more information.
 """
 function grad_loss_iceflow!(θ, simulation::Inversion, mappingFct)
-    if simulation.parameters.simulation.use_MB
-        @assert simulation.parameters.UDE.optim_autoAD isa NoAD "Differentiation of callbacks with SciMLStruct is not supported by SciMLSensitivity yet. You get this error because you are using MB + gradient computation with SciMLSensitivity."
-    end
-
     simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     grads = mappingFct(simulations) do simulation
@@ -504,29 +500,6 @@ function _batch_iceflow_UDE(
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
         tstopsDiscreteLoss, tstopsAggregatedLoss)))
 
-    # Create mass balance callback
-    cb_MB = if params.simulation.use_MB
-        # For the moment there is a bug when we use callbacks with SciMLSensitivity for the gradient computation
-        mb_action! = let model = container.simulation.model,
-            cache = container.simulation.cache, glacier = glacier, step_MB = step_MB,
-            glacier_idx = glacier_idx
-
-            function (integrator)
-                # Compute mass balance
-                glacier.S .= glacier.B .+ integrator.u
-                MB_timestep!(cache, model, glacier, step_MB, integrator.t, glacier_idx)
-                apply_MB_mask!(integrator.u, cache.iceflow)
-                push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))
-                push!(cache.iceflow.MB_times, integrator.t)
-            end
-        end
-        # A simulation period is sliced in time windows that are separated by `step_MB`
-        # The mass balance is applied at the end of each of the windows
-        PeriodicCallback(mb_action!, step_MB; initial_affect = false, final_affect = true)
-    else
-        CallbackSet()
-    end
-
     # Create iceflow law callback
     cb_iceflow = Huginn.build_callback(
         container.simulation.model.iceflow,
@@ -536,17 +509,23 @@ function _batch_iceflow_UDE(
         params.simulation.tspan
     )
 
-    cb = CallbackSet(cb_MB, cb_iceflow)
+    # Mass balance is a source term of the ice flow RHS, so there is no callback for it
+    cb = CallbackSet(cb_iceflow)
 
     # Run iceflow UDE for this glacier
     iceflow_sol = simulate_iceflow_UDE!(container, cb, iceflow_prob, tstops)
 
     # Compute simulation results
     # No need to generate the velocities since this is automatically computed directly inside the loss function when needed
+    # Diagnostics only, and it writes into the mass balance cache, so keep it out of the
+    # differentiated region
+    MB,
+    t_MB = Zygote.@ignore_derivatives Huginn.MB_diagnostics(
+        container.simulation, iceflow_sol)
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, tstops;
-        MB = container.simulation.cache.iceflow.MB_history,
-        t_MB = container.simulation.cache.iceflow.MB_times,
+        MB = MB,
+        t_MB = t_MB,
         processVelocity = processVelocity
     )
 end
@@ -568,16 +547,26 @@ function simulate_iceflow_UDE!(
         tstops
 )
     params = container.simulation.parameters
+    solver_tstops, saveat = Huginn.MB_solver_stops(container.simulation, tstops)
+    # `dt` only when stepping is fixed: in adaptive mode supplying one overrides the solver's
+    # own initial step, and supplying zero aborts the solve.
+    step_kw = params.solver.adaptive ? NamedTuple() : (; dt = params.solver.dt)
     iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
-        params.solver.solver,
+        Huginn.with_eigen_est(params.solver.solver, container.simulation);
         callback = cb,
         sensealg = params.UDE.sensealg,
         reltol = params.solver.reltol,
+        abstol = params.solver.scale_abstol ?
+                 Huginn.effective_abstol(params.solver.abstol, params.simulation.tspan;
+            verbose = false) : params.solver.abstol,
+        adaptive = params.solver.adaptive,
+        saveat = saveat,
         progress = false,
         maxiters = params.solver.maxiters,
-        tstops = tstops
+        tstops = solver_tstops,
+        step_kw...
     )
     @assert iceflow_sol.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
 
