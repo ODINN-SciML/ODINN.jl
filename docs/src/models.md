@@ -27,7 +27,7 @@ Huginn.SIA2D!
 
 ## Mass balance models
 
-(Surface) Mass balance models are used to simulate the simplified thermodynamics of the forcing of the atmosphere on glaciers. As per ice flow models, all specific mass balance models needs to be a subtype of the abstract type `MBmodel`. Mass balance models are managed by [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl). For now, we have simple temperature-index models, with either one or two degree-day factors (DDFs) *(Hock, 2003)*:
+(Surface) Mass balance models are used to simulate the simplified thermodynamics of the forcing of the atmosphere on glaciers. As per ice flow models, all specific mass balance models needs to be a subtype of the abstract type `MBmodel`. Mass balance models are managed by [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl). For now, we have simple temperature-index models, with either one or two degree-day factors (DDFs), Hock (2003) [hock_temperature_2003](@cite):
 
 ```@docs
 Muninn.TImodel1
@@ -35,6 +35,40 @@ Muninn.TImodel1(params::Sleipnir.Parameters)
 ```
 
 Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps` field in [`Sleipnir.SimulationParameters`](@ref).
+
+### Calibrating a temperature-index model
+
+Temperature-index models can be calibrated per glacier against geodetic mass balance observations, by default the 2000–2020 estimates of Hugonnet et al. (2021) [hugonnet_accelerated_2021](@cite), which `initialize_glaciers` stores in `glacier.dhdtData`. The high-level entry point is:
+
+```@docs
+Muninn.calibrate_MB_model
+```
+
+!!! warning "Use the returned model"
+
+    Calibration cannot happen in place: for `TImodel1` it replaces a single model by one model per glacier, which changes the type of the `mass_balance` field. Discarding the return value silently keeps the uncalibrated model.
+
+For each glacier the calibration follows a three-step cascade analogous to OGGM v1.6 [maussion_open_2019](@cite), using Brent's method at each step. It first fits `DDF`; if `DDF` alone cannot bracket the observed mass balance it falls back to `prcp_fac`, and finally to a uniform `temp_bias`. By default `prcp_fac` is derived per glacier from mean winter precipitation rather than fixed globally.
+
+```@docs
+Muninn.calibrate_ti_model
+Sleipnir.get_winter_prcp_factor
+```
+
+Because calibration produces one mass balance model per glacier, use `get_mb_model` to retrieve the one belonging to a given glacier index:
+
+```@docs
+Muninn.get_mb_model
+```
+
+To evaluate a calibrated model, `compute_mean_annual_MB` returns the glacier-wide scalar that the calibration targets, and `compute_cumulative_MB` the underlying gridded field:
+
+```@docs
+Muninn.compute_mean_annual_MB
+Muninn.compute_cumulative_MB
+```
+
+See the [SMB calibration tutorial](smb_calibration.md) for a full worked example.
 
 Neural network-based surface mass balance models trained with [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) are also supported.
 They can be loaded via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) package and used directly as drop-in `MBmodel`s.
@@ -87,7 +121,7 @@ nn_model = NeuralNetwork(params)
 A_law = LawA(nn_model, params)
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2),
     regressors = (; A = nn_model)
 )
 ```

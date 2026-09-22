@@ -5,6 +5,18 @@ Sensitivity analysis is important in order to differentiate the different ice fl
 
 ODINN currently supports two main strategies regarding the computation of model sensitivity of hybrid models combining differential equations (e.g. SIA2D) and regressors: manual adjoints and [SciMLSensitivity.jl](https://docs.sciml.ai/SciMLSensitivity/).
 
+## Why do we need gradients?
+
+To calibrate a model against observations (see [Optimization](./optimization.md)), we need to know how the loss function changes when a parameter changes. For example, whether increasing the creep coefficient $A$ brings the simulated ice thickness closer to the observed one or not. This is given by the **gradient** of the loss function with respect to the parameters, which the optimizer uses to update them at each iteration.
+
+Computing this gradient is not trivial, because the loss depends on the parameters through a whole simulation, i.e. through the solution of a differential equation in time. Testing each parameter one by one would require a forward simulation per parameter, which is unaffordable when a neural network has thousands of them.
+
+The **adjoint method** solves this problem. It computes the gradient with respect to all the parameters at once, at a cost that does not depend on their number, by solving a second differential equation backwards in time, from the end of the simulation to the beginning (see [sapienza_differentiable_2024](@cite) for a complete overview). At each step of this backward computation we need a **vector-Jacobian product** (VJP), an operation that propagates the sensitivity of the loss backwards from the output of a function to its inputs. VJPs can be implemented by hand, or computed with **automatic differentiation** (AD), which differentiates the code of the model automatically.
+
+!!! note "New to ODINN?"
+
+    The rest of this page describes advanced options to control how gradients are computed, and you do not need to go through all of it to run your first inversions. To get started, we recommend using the automatic adjoints from SciMLSensitivity.jl, which work for any configuration of the model, see the [quick-reference configuration](#Quick-reference-configuration-examples). ODINN's manual adjoints only support inverting `A` and `D`. The section on which parameters can be inverted in [Inversion types](./inversions.md) compares both options and gives an overview of the different kinds of inversions.
+
 ## Manual adjoints
 
 ODINN includes an implementation of both discrete and continuous adjoint methods (see [sapienza_differentiable_2024](@cite) for a complete overview of these different methods).
@@ -74,6 +86,8 @@ The VJP methods in ODINN are implemented as concrete types of `AbstractVJPMethod
 ## SciMLSensitivity
 
 Gradients can also be computed using [SciMLSensitivity.jl](https://docs.sciml.ai/SciMLSensitivity/). It enables to automate the computation of the adjoint method and the VJPs (Vector-Jacobian Products), done using automatic differentiation via `Enzyme.jl`.
+
+Because this path differentiates through the entire ODE solve automatically, it can invert **any parameter that is wired as a `Law` in `TrainableComponents`** — including the basal sliding coefficient `C` — without requiring a manually implemented inversion target (`AbstractSIA2DTarget`). By contrast, ODINN's manual adjoints (`ContinuousAdjoint`, `DiscreteAdjoint`) require a dedicated target type for each invertible quantity; currently only `A` and `D` have one. This makes `SciMLSensitivityAdjoint` the practical choice when inverting parameters beyond `A` and `D`.
 
 In order to ensure end-to-end differentiability of the whole model using `Enzyme.jl`, special attention needs to be taken in terms of code style and type stability. For this, we leverage the adjoint capabilities of `SciMLSensitivity.jl` from the SciML ecosystem.
 

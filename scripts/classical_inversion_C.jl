@@ -51,7 +51,7 @@ tstops = collect(TSPAN[1]:δt:TSPAN[2])
 C_law_gt = SyntheticC(params)
 model_gt = Model(
     iceflow = SIA2Dmodel(params; C = C_law_gt),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2)
 )
 prediction = generate_ground_truth_prediction(glaciers, params, model_gt, tstops)
 glaciers = prediction.glaciers
@@ -76,7 +76,7 @@ trainable_model = GriddedInv(params, glaciers, :C)
 C_law = LawC(params; scalar = false)
 model = Model(
     iceflow = SIA2Dmodel(params; C = C_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2),
     regressors = (; C = trainable_model)
 )
 
