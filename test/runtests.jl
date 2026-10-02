@@ -256,12 +256,17 @@ ENV["GKSwstype"] = "nul"
             @testset "Rheology regularization" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-8, 1e-8, 1e-8],
                 functional_inv = false, scalar = false, loss = RheologyRegularization())
-            @testset "Dhdt loss with discrete adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
-                DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
-                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
-            @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff( # Checking the dhdt loss makes sense only with MB
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
-                functional_inv = false, scalar = true, loss = LossDhdt(), use_MB = true, aggregated_loss = :dhdt)
+            # Checking the dhdt loss makes sense only with MB. With MB, FD needs fixed steps
+            # like the other MB cases: with adaptive steps it measures step jitter.
+            dhdt_fd = (functional_inv = false, scalar = true, loss = LossDhdt(),
+                use_MB = true, aggregated_loss = :dhdt,
+                adaptive = false, dt = 1.0/240.0, fd_delta = 1e-5)
+            # DiscreteAdjoint steps back with explicit Euler, which is ~3% off on the MB
+            # feedback ∂ṁ/∂H now that MB is continuous in the RHS
+            @testset "Dhdt loss with discrete adjoint" test_grad_finite_diff(
+                DiscreteAdjoint(VJP_method = DiscreteVJP()); thres_fd = 5e-2, dhdt_fd...)
+            @testset "Dhdt loss with continuous adjoint" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres_fd = 5e-3, dhdt_fd...)
             if (!CI || !Sys.isapple())
                 # The gradient computed with macOS within the CI is wrong
                 # Despite a lot of effort we couldn't track the root cause, so we just deactivate that test
@@ -291,8 +296,9 @@ ENV["GKSwstype"] = "nul"
         end
         @testset "Functional inversions" begin
             @testset "Functional inversion w/o MB" inversion_test(use_MB = false, multiprocessing = false)
+            # With MB in the RHS, abstol = 1e-3 leaves a loss floor of ~1e-4 where BFGS stops
             @testset "Functional inversion w/ MB" inversion_test(use_MB = true,
-                multiprocessing = false,
+                multiprocessing = false, abstol = 1e-5,
                 grad = ContinuousAdjoint(VJP_method = DiscreteVJP(regressorADBackend = DI.AutoZygote())))
             @testset "Functional inversion w/o MB w/ multiprocessing" inversion_test(
                 use_MB = false, multiprocessing = true)
