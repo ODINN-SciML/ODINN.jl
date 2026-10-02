@@ -554,7 +554,9 @@ function simulate_iceflow_UDE!(
     iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
-        Huginn.with_eigen_est(params.solver.solver, container.simulation);
+        params.solver.supply_eigen_est ?
+        Huginn.with_eigen_est(params.solver.solver, container.simulation) :
+        params.solver.solver;
         callback = cb,
         sensealg = params.UDE.sensealg,
         reltol = params.solver.reltol,

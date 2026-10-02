@@ -188,6 +188,8 @@ function test_grad_finite_diff(
             adaptive = adaptive,
             dt = dt,
             progress = true,
+            # ROCK's own estimate shifts the scheme between neighbouring θ, breaking FD
+            supply_eigen_est = true,
             solver = if !isnothing(solver)
                 solver
             else
@@ -748,7 +750,8 @@ function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
             empirical_loss_function = LossH(),
             target = :A
         ),
-        solver = Huginn.SolverParameters(step = δt, solver = ROCK4())
+        solver = Huginn.SolverParameters(
+            step = δt, solver = ROCK4(), supply_eigen_est = true)
     )
 
     # Identical params except for the adjoint method
