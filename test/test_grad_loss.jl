@@ -32,6 +32,15 @@ end
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
+        abstol = 1e-6,
+        solver = nothing,
+        A_range = nothing,
+        adaptive = true,
+        dt = 1.0/120.0,
+        fd_delta = nothing,
+        thres_fd = 5e-2,
+        n_fd_components = 4,
+        return_grad = false,
         functional_inv = true,
         custom_NN = false,
         max_params = 60,
@@ -62,6 +71,15 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `calibrate_MB::Bool`: Whether to calibrate the mass balance model against the geodetic
     observations. Off by default so the `TImodel1` built below is the one actually tested;
     turn it on to check the adjoint against a per-glacier calibrated vector of MB models.
+  - `abstol`: Absolute tolerance of the ODE solver, in metres of ice. It only matters with `adaptive = true`, and it is tightened for runs longer than 5 years (see `Huginn.effective_abstol`).
+  - `solver`: ODE solver. By default `ROCK4()` with `SciMLSensitivityAdjoint`, because the backward solve of `InterpolatingAdjoint` is not stable with `RDPK3Sp35` on our ODE, and `RDPK3Sp35()` otherwise. The spectral radius is supplied to `ROCK2` and `ROCK4` (`supply_eigen_est = true`), since their own estimate breaks finite differences.
+  - `A_range`: `(minA, maxA)`, the range of the rheology `A`. If `nothing`, it depends on the case: `(2e-18, 8e-18)` by default and for the `:dhdt` and `:avgV` losses, and `(1e-21, 2e-21)` with `use_MB`, so that the gradient is dominated by the mass balance.
+  - `adaptive::Bool`: Whether the solver picks its own steps. Fixed-step finite differences (`fd_delta`) need `false`, because with adaptive steps the loss is discontinuous in `θ`.
+  - `dt`: Fixed step in years, used when `adaptive = false`.
+  - `fd_delta`: If not `nothing`, the adjoint is compared with a central finite difference at this fixed step, instead of using `FiniteDifferences.jl` with its step-size search. It is computed for the first `n_fd_components` components of `θ`, and it requires `adaptive = false`. `thres` is not used in this case.
+  - `thres_fd`: Threshold on the relative error `|fd - adjoint| / |fd|` of each component in the fixed-step comparison.
+  - `n_fd_components`: Number of components of `θ` checked in the fixed-step comparison.
+  - `return_grad::Bool`: Return the gradient computed by the adjoint and skip the finite-difference comparison.
   - `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
   - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network. If the custom neural network is used, the glacier grid and the number of points in the VJP interpolation are reduced to spare computation time and memory.
   - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
