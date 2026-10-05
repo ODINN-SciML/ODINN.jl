@@ -42,9 +42,11 @@ end
         n_fd_components = 4,
         return_grad = false,
         functional_inv = true,
+        scalar = true,
         custom_NN = false,
         max_params = 60,
         mask_parameter_vector = false,
+        aggregated_loss = nothing,
     ) where {ADJ<:AbstractAdjointMethod}
 
 Test and validate gradient consistency between adjoint-based automatic differentiation
@@ -60,7 +62,6 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `thres::Vector{<:Real}`: Three-element vector of numerical thresholds for
     `(ratio, angle, relative error)` comparison between adjoint-based and finite-difference gradients.
   - `target::Symbol`: Model target for training/testing (`:A`, `:D`, or `:D_hybrid`), determining which physical law is parameterized by the neural network.
-    either `:FiniteDifferences` (default, using `FiniteDifferences.jl`) or `:Manual`.
   - `finite_difference_order::Int`: Order of accuracy for central finite differences.
   - `loss`: Loss function to evaluate, such as `LossH()` (height-based) or `LossV()` (velocity-based).
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
@@ -81,10 +82,12 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `n_fd_components`: Number of components of `θ` checked in the fixed-step comparison.
   - `return_grad::Bool`: Return the gradient computed by the adjoint and skip the finite-difference comparison.
   - `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
+  - `scalar::Bool`: Whether the rheology `A` is a single scalar per glacier (`true`) or a gridded field (`false`).
   - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network. If the custom neural network is used, the glacier grid and the number of points in the VJP interpolation are reduced to spare computation time and memory.
   - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
   - `mask_parameter_vector::Bool`: Whether to apply a mask to the parameter vector `θ` before evaluating finite-difference gradients. If `false`, the
     mask based on `max_params` is just applied to the initial conditions, not to parameters of the regressor.
+  - `aggregated_loss`: `nothing` (default), `:dhdt` or `:avgV`. With `:dhdt` or `:avgV` the loss compares the elevation change or the average velocity over the whole period, instead of the state at each time step. It needs `LossDhdt()` or `LossAvgV()` respectively. The `:dhdt` case also uses the period 2010–2015 instead of the 1980–2019 of `use_MB`, because over the longer one the melt empties the mask and the gradient vanishes, and a stronger melt, so that `dhdt` is negative without melting the glacier out.
 """
 function test_grad_finite_diff(
         adjointFlavor::ADJ;
