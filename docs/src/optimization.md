@@ -39,7 +39,7 @@ In the following sections, we introduce how to define empirical and regularizati
 ### Empirical loss functions
 
 The empirical error can be as simple as the sum of squares of the error between model and observations, but it can also involve more complex cost functions.
-The complete description of the different losses are available in their corresponding docstrings (see the [API](./api.md)) but we provide here a brief summary for each of them.
+The complete description of the different losses are available in their corresponding docstrings (see the [ODINN.jl API](API/api_odinn.md)) but we provide here a brief summary for each of them.
 
 #### Simple loss functions
 

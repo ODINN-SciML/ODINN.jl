@@ -97,6 +97,30 @@ This will print a localhost URL that you can open in your browser. Then, click o
 
     If the building of the documentation freezes, there can be several reasons that cause this. First try to run `include("testdocs.jl")` which will run the tutorial examples. If there is an error during the execution, this will be easier to spot it as [Literate.jl](https://github.com/fredrikekre/Literate.jl) does not always report the error. If after making sure that the code runs smoothly this still freezes, inspect the generated `.md` files (see the list of files at the beginning of `make.jl`) and check that the markdown file was generated properly (code in `@example` sections).
 
+## Releases and compat bounds
+
+The packages of the ODINN ecosystem depend on each other, so their releases need to happen in a specific order: `Sleipnir` → `Muninn` → `Huginn` and `MassBalanceMachine` → `ODINN`. Each package depends on the ones before it (`Gungnir` is a Python package and is released independently).
+
+### Releasing a package
+
+To release a package, make sure that the `version` in its `Project.toml` has been bumped, and comment `@JuliaRegistrator register` on the commit to release in the `main` branch (`ODINN.jl` is released from `main`, which is updated from `dev` when enough changes are available). Once the package is registered, [TagBot](https://github.com/JuliaRegistries/TagBot) automatically creates the corresponding tag and GitHub release.
+
+!!! note
+
+    In Julia, a minor version bump of a `0.x` package (e.g. from `0.16` to `0.17`) is a breaking change.
+
+### Keeping compat bounds up to date
+
+The `[compat]` section of each `Project.toml` defines which versions of the other ecosystem packages are supported. If the compat bounds are not updated after a breaking release, users will keep getting the old version of that package, and they will not be able to install the new one together with the packages that still depend on the old one. After releasing a package:
+
+  - Update the compat bounds of the packages that depend on it, following the order above. `CompatHelper` opens a PR for this every day, but it can also be done manually.
+  - In `ODINN.jl`, compat updates are merged into `dev`, and they reach the registered version with the next release of `ODINN.jl` from `main`.
+  - Breaking releases can require changes in the dependent packages before the new compat bound can be used. These should be done as soon as possible, so that `ODINN.jl` always follows the latest versions of the ecosystem.
+
+!!! note "The `CI needs new release` label"
+
+    If a PR in `ODINN.jl` needs changes from another package that have not been released yet, add the `CI needs new release` label to it. The tests are not run (the `Fast tests` check fails on purpose) and the documentation is not built until the release is registered. Then, remove the label and close and reopen the PR to trigger the CI again.
+
 ## Debugging with `Revise.jl`
 
 Because [Revise.jl](https://timholy.github.io/Revise.jl/) is not in the main ODINN environment, its support for multiprocessing should be handled carefully.

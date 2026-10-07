@@ -270,7 +270,7 @@ model = Model(
     iceflow = SIA2Dmodel(params; U = law),
     mass_balance = TImodel1(
         params; DDF = 6.0/1000.0,
-        acc_factor = 1.2/1000.0
+        prcp_fac = 1.2
     ),
     regressors = (; U = nn_model),
     target = SIA2D_D_target(

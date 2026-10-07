@@ -3,7 +3,8 @@ name: Documentation
 on:
   push:
     branches:
-      - main # update to match your development branch (master, main, dev, trunk, ...)
+      - dev
+      - main
     tags: '*'
     paths-ignore:
       - 'test/**'
@@ -38,6 +39,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The deploy pushes the whole gh-pages branch and every preview is ~10 MB, so the
+      # previews of closed pull requests end up making the push fail. Skipped for forks,
+      # which have no write access, and never fatal: the next run tries again.
+      - name: Remove the previews of closed pull requests
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          CURRENT_PR: ${{ github.event.number }}
+        run: bash docs/prune_previews.sh
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.11'

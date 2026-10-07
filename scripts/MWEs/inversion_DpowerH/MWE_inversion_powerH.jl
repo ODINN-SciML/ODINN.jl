@@ -105,7 +105,7 @@ min_H, max_H = 0.0, H_max
 # We define the prescale and postscale of quantities.
 model = Model(
     iceflow = SIA2Dmodel(params; A = CuffeyPaterson(scalar = true)),
-    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2)
 )
 
 # Time snapshots for transient inversion
@@ -136,7 +136,7 @@ nn_model = NeuralNetwork(
 Y_law = LawY(nn_model, params; max_NN = max_NN)
 model = Model(
     iceflow = SIA2Dmodel(params; Y = Y_law, n_H = 1.0),
-    mass_balance = TImodel1(params; DDF = 6.0/1000.0, acc_factor = 1.2/1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0/1000.0, prcp_fac = 1.2),
     regressors = (; Y = nn_model),
     target = SIA2D_D_hybrid_target()
 )
