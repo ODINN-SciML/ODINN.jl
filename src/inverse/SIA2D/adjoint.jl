@@ -327,10 +327,11 @@ function VJP_λ_∂surface_V∂H_discrete(
         glacier = glacier, params = params
     )
 
-    inn1∂Vx = inn1(∂Vx)
-    inn1∂Vy = inn1(∂Vy)
+    # Transpose of the H-grid placement of `V_from_H`, inn(avg(·))
+    stag∂Vx = avg_adjoint(Huginn.inn(∂Vx))
+    stag∂Vy = avg_adjoint(Huginn.inn(∂Vy))
 
-    ∇S∂V = (∇Sx .* inn1∂Vx .+ ∇Sy .* inn1∂Vy)
+    ∇S∂V = (∇Sx .* stag∂Vx .+ ∇Sy .* stag∂Vy)
 
     βx = β .* ∇Sx
     βy = β .* ∇Sy
@@ -343,8 +344,8 @@ function VJP_λ_∂surface_V∂H_discrete(
         simulation = simulation, glacier_idx = glacier_idx, t = t,
         glacier = glacier, params = params
     )
-    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* inn1∂Vx), Δx) .+
-            diff_y_adjoint(avg_x_adjoint(Dꜛ .* inn1∂Vy), Δy)
+    ∂∇S∂H = diff_x_adjoint(avg_y_adjoint(Dꜛ .* stag∂Vx), Δx) .+
+            diff_y_adjoint(avg_x_adjoint(Dꜛ .* stag∂Vy), Δy)
     ∂H = ∂D∂H .+ ∂∇S∂H
 
     return -∂H
@@ -396,7 +397,8 @@ function VJP_λ_∂surface_V∂θ_discrete(
     Huginn.apply_all_non_callback_laws!(
         SIA2D_model, SIA2D_cache, simulation, glacier_idx, t, θ)
 
-    ∇S∂V = (∇Sx .* inn1(∂Vx) .+ ∇Sy .* inn1(∂Vy))
+    # Transpose of the H-grid placement of `V_from_H`, inn(avg(·))
+    ∇S∂V = (∇Sx .* avg_adjoint(Huginn.inn(∂Vx)) .+ ∇Sy .* avg_adjoint(Huginn.inn(∂Vy)))
 
     # Gradient wrt θ
     ∂D∂θ = ∂Velocityꜛ∂θ(

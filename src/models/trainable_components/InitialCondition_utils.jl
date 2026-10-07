@@ -1,5 +1,17 @@
 
 """
+    H₀_scale(glacier) -> Float64
+
+Per-glacier scale for θ.IC, in metres: θ.IC is stored as `H₀ / H₀_scale(glacier)`, not raw
+metres, so it sits at O(1) like θ.C rather than O(10-1500) -- otherwise a shared optimiser
+learning rate moves C freely but barely moves IC (Adam's step is scale-free). Per glacier,
+not a fixed constant, so a thin and a thick glacier both get steps proportional to their own
+thickness. Uses `glacier.H₀` since it's already available everywhere `evaluate_H₀`/
+`evaluate_∂H₀` are called; filters (`σ_zang`, `softplus`) still act on physical metres.
+"""
+H₀_scale(glacier) = max(maximum(glacier.H₀), 1.0)
+
+"""
     evaluate_H₀(
         θ::ComponentArray,
         glacier::Glacier2D,
@@ -34,7 +46,7 @@ function evaluate_H₀(
         glacier_id::Integer
 )
     glacier_id_symbol = Symbol("$(glacier_id)")
-    H₀ = deepcopy(θ.IC[glacier_id_symbol])
+    H₀ = deepcopy(θ.IC[glacier_id_symbol]) .* H₀_scale(glacier)
     H₀ = @match filter begin
         :identity => H₀
         :softplus => log.(1 .+ exp.(H₀))
@@ -82,12 +94,16 @@ function evaluate_∂H₀(
         glacier_id::Integer
 )
     glacier_id_symbol = Symbol("$(glacier_id)")
-    ∂H₀ = deepcopy(θ.IC[glacier_id_symbol])
+    scale = H₀_scale(glacier)
+    ∂H₀ = deepcopy(θ.IC[glacier_id_symbol]) .* scale
     ∂H₀ = @match filter begin
-        :identity => 1.0
+        # An array, not the scalar 1.0: the mask below indexes into it
+        :identity => one.(∂H₀)
         :softplus => 1 ./ (1 .+ exp.(-∂H₀))
         :Zang1980 => ∂σ_zang.(∂H₀)
     end
+    # d(filter(θ.IC * scale))/dθ.IC needs the extra `scale` factor from the chain rule.
+    ∂H₀ = ∂H₀ .* scale
     # Apply mask
     ∂H₀[glacier.mask] .= 0.0
     return ∂H₀

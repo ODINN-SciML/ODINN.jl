@@ -74,6 +74,9 @@ function Inversion(
         parameters,
         emptyResults)
 
+    # Fail early with a clear message instead of deep inside the first gradient call
+    check_loss_time_window(parameters.UDE.empirical_loss_function, inversion)
+
     return inversion
 end
 

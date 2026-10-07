@@ -116,6 +116,9 @@ ENV["GKSwstype"] = "nul"
             @testset "TikhonovRegularization" test_grad_TikhonovRegularization()
             @testset "V magnitude chain rule (:abs)" test_grad_V_from_Vxy()
             @testset "Initial condition filters are type stable" test_initial_condition_filter_type_stability()
+            @testset "LossAvgV time window guard" test_loss_time_window_guard()
+            @testset "Observation weights" test_observation_weights()
+            @testset "The first observation counts" test_first_observation_counts()
         end
     end
 
@@ -194,9 +197,9 @@ ENV["GKSwstype"] = "nul"
             # @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
             @testset "Continuous adjoint with discrete VJP vs finite differences (L2)" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-2, 1e-5, 1e-2], loss = LossV())
+                thres = [1e-4, 1e-5, 1e-4], loss = LossV())
             @testset "Continuous adjoint with discrete VJP vs finite differences (Log)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-5, 1e-4],
                 loss = LossV(loss = LogSum(), component = :abs))
             # @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
             # @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3], loss=LossV())
@@ -219,6 +222,26 @@ ENV["GKSwstype"] = "nul"
             @testset "SciMLSensitivity adjoint with time-aggregated velocity loss vs finite differences" test_grad_finite_diff(
                 ODINN.SciMLSensitivityAdjoint(); loss = LossAvgV(),
                 aggregated_loss = :avgV, thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            # H and V together: the second binder bug only showed up when two parts of the
+            # loss were combined, so H and V passing on their own is not enough.
+            @testset "SciMLSensitivity adjoint with H and V losses vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint();
+                loss = MultiLoss(losses = (LossH(), LossV()), λs = (1.0, 1.0)),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            # With the default `:uniform` all the weights are one, so a wrong index into the
+            # weights would not show
+            @testset "SciMLSensitivity adjoint with time_span weights vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint();
+                loss = MultiLoss(
+                    losses = (LossH(weighting = :time_span), LossV(weighting = :time_span)),
+                    λs = (1.0, 1.0)),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            @testset "SciMLSensitivity adjoint with LossHV vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); loss = LossHV(),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            @testset "Continuous adjoint with LossHV vs finite differences" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); loss = LossHV(),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
         end
     end
 
@@ -304,6 +327,7 @@ ENV["GKSwstype"] = "nul"
                     losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (
                         1.0, 1.0)),
                 train_initial_conditions = true)
+            @testset "IC regularization backward vs Zygote and FD" test_initial_thickness_regularization_backward()
         end
     end
 

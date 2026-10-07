@@ -223,7 +223,9 @@ function test_adjoint_surface_V(
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow,
             simulation, glacier_idx, t, θ)
         Vx, Vy = Huginn.surface_V(H, simulation, t, θ)
-        return sum(Vx .* inn1(vecBackwardSIA2D[1])+Vy .* inn1(vecBackwardSIA2D[2]))
+        # Same H-grid placement as `V_from_H`, inn(V) = avg(V_stag)
+        return sum(Huginn.avg(Vx) .* Huginn.inn(vecBackwardSIA2D[1]) +
+                   Huginn.avg(Vy) .* Huginn.inn(vecBackwardSIA2D[2]))
     end
 
     rgi_ids = ["RGI60-11.03638"]

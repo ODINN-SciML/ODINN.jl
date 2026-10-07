@@ -207,7 +207,11 @@ function backward_loss(
         ∂L∂H = zero(H₀)
         ∂L∂θ = zero(θ)
         key = Symbol("$(glacier_idx)")
-        ∂L∂θ.IC[key] = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
+        # Chain rule through the filter and the θ.IC scale: ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
+        ∂L∂H₀ = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
+        ∂H₀∂θ = evaluate_∂H₀(
+            θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
+        ∂L∂θ.IC[key] = ∂L∂H₀ .* ∂H₀∂θ
         return ∂L∂H, ∂L∂θ
     else
         return zero(glacier.H₀), zero(θ)

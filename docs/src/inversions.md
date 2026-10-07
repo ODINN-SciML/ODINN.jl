@@ -56,6 +56,8 @@ From an optimization perspective, the computation of the gradients of the loss f
 
 Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `θ` using the `evaluate_H₀` function on a specific glacier.
 
+Inside `θ`, the initial condition is not stored in metres. It is divided by a scale for each glacier (`H₀_scale`, the maximum initial ice thickness), so that its values are of order one, like the other parameters. Always use `evaluate_H₀` to get the ice thickness in metres, and don't read `θ.IC` directly. Note that the learning rate of the optimizer acts on these scaled values.
+
 ## Functional inversions
 
 We refer to functional inversions as the inverse problems where the objective is to invert the parameter $\theta$ of a regressor (e.g. a neural network), in order to learn a function that parametrizes a subpart of a mechanistic model (e.g. the SIA) with respect to one or more input variables (e.g. surface melt, basal slope) [bolibar_universal_2023](@cite). The methods behind functional inversions are known as **Universal Differential Equations** [rackauckas_universal_2020](@cite).

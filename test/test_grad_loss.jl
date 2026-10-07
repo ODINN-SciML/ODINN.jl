@@ -515,6 +515,127 @@ function test_initial_condition_filter_type_stability()
 end
 
 """
+    test_observation_weights()
+
+Weights of the observations in the loss. Every observation must count: the first one and a
+single one used to get weight zero, so a first thickness survey or a single velocity map was
+silently ignored.
+"""
+function test_observation_weights()
+    tspan = (2010.0, 2020.0)
+    t_obs = [2010.0, 2012.0, 2016.0]
+
+    @test ODINN.observation_weights(:uniform, t_obs, tspan) == [1.0, 1.0, 1.0]
+    @test ODINN.observation_weights(:uniform, [2015.0], tspan) == [1.0]
+
+    w = ODINN.observation_weights(:time_span, t_obs, tspan)
+    @test w ≈ [1.0, 3.0, 6.0]
+    @test sum(w) ≈ tspan[2] - tspan[1]
+    @test ODINN.observation_weights(:time_span, [2015.0], tspan) ≈ [10.0]
+    # An observation outside tspan is never simulated, so it gets no weight
+    @test ODINN.observation_weights(:time_span, [2005.0, 2015.0], tspan) ≈ [0.0, 10.0]
+    @test isempty(ODINN.observation_weights(:time_span, Float64[], tspan))
+    @test_throws ArgumentError ODINN.observation_weights(:unknown, t_obs, tspan)
+
+    # The choice is read from the loss, also inside MultiLoss and LossHV
+    loss = MultiLoss(losses = (LossH(weighting = :time_span), LossV()), λs = (1.0, 1.0))
+    @test ODINN.observation_weighting(loss, :H) == :time_span
+    @test ODINN.observation_weighting(loss, :V) == :uniform
+    @test ODINN.observation_weighting(LossHV(), :H) == :uniform
+    @test isnothing(ODINN.observation_weighting(LossH(), :V))
+end
+
+"""
+    test_first_observation_counts()
+
+Changing the first ice thickness observation must change the loss. With the old weights,
+the time since the previous observation, the first one had weight zero and was ignored.
+"""
+function test_first_observation_counts()
+    simulation,
+    θ = test_grad_finite_diff(
+        ContinuousAdjoint(VJP_method = DiscreteVJP());
+        functional_inv = false, scalar = true, loss = LossH(), return_setup = true)
+    H_obs = simulation.glaciers[1].thicknessData.H
+    L₀ = ODINN.loss_iceflow_transient(θ, simulation, map)
+    H_obs[1] .+= 10.0
+    L₁ = ODINN.loss_iceflow_transient(θ, simulation, map)
+    H_obs[1] .-= 10.0
+    @test L₁ > L₀
+end
+
+"""
+    test_loss_time_window_guard()
+
+`LossAvgV` must fail at `Inversion` construction, with a clear message, when the velocity
+observation period is not inside `tspan`. Before, it failed deep inside the first gradient
+call with `invalid index: nothing`. Only `tspan`, `rgi_id` and the velocity dates are read,
+so a small stand-in for the simulation is enough.
+"""
+function test_loss_time_window_guard()
+    vd = (; date1 = [ODINN.Sleipnir.Dates.DateTime(2017, 1, 1)],
+        date2 = [ODINN.Sleipnir.Dates.DateTime(2018, 1, 1)])
+    sim(tspan) = (; parameters = (; simulation = (; tspan = tspan)),
+        glaciers = [(; rgi_id = "RGI60-11.01450", velocityData = vd)])
+    loss = MultiLoss(losses = (LossH(), LossAvgV()), λs = (1.0, 1.0))
+
+    @test isnothing(ODINN.check_loss_time_window(loss, sim((2016.0, 2019.0))))
+    @test_throws ArgumentError ODINN.check_loss_time_window(loss, sim((2010.0, 2017.5)))
+    @test_throws ArgumentError ODINN.check_loss_time_window(loss, sim((2017.5, 2019.0)))
+    # Losses that need no time window are not affected
+    @test isnothing(ODINN.check_loss_time_window(LossH(), sim((2010.0, 2012.0))))
+end
+
+"""
+    test_initial_thickness_regularization_backward()
+
+Check the manual `backward_loss` of `InitialThicknessRegularization` against Zygote and a
+central finite difference of its own forward `loss`, with no solver in the comparison.
+
+`θ.IC` is stored scaled by `H₀_scale`, so `∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC`. The manual
+backward used to return `∂L/∂H₀` directly. That was only right where the filter derivative
+is 1 (thick ice) and, with the scaling, it is `H₀_scale` times too small everywhere. The joint
+A + IC test in Core8 cannot see it: the regularization is a small part of that gradient and
+the finite difference only samples 60 of its components, so it passes with the bug.
+"""
+function test_initial_thickness_regularization_backward()
+    simulation,
+    θ = test_grad_finite_diff(
+        ContinuousAdjoint(VJP_method = DiscreteVJP());
+        functional_inv = false, scalar = false, train_initial_conditions = true,
+        loss = MultiLoss(
+            losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (1.0, 1.0)),
+        return_setup = true)
+    glacier = simulation.glaciers[1]
+    # With a scale near 1 a missing chain-rule factor would go unnoticed
+    @test ODINN.H₀_scale(glacier) > 10
+
+    reg = InitialThicknessRegularization(2010.0)
+    nrm = Float64(prod(size(glacier.H₀)))
+    Δtj = (; H = 0.0, V = 0.0)
+    fwd(p) = ODINN.loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, p, simulation, nrm, Δtj)
+    manual = ODINN.backward_loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, θ, simulation, nrm, Δtj)[2]
+    zygote, = ODINN.Zygote.gradient(fwd, θ)
+
+    # getproperty returns a view, θ.IC[sym] would return a copy
+    icview(p) = vec(getproperty(p.IC, Symbol("1")))
+    m, z = icview(manual), icview(zygote)
+    @test norm(m .- z) / norm(z) < 1e-10
+
+    for k in sortperm(abs.(z); rev = true)[1:5]
+        h = 1e-6 * max(abs(icview(θ)[k]), 1.0)
+        pp = copy(θ)
+        icview(pp)[k] += h
+        pm = copy(θ)
+        icview(pm)[k] -= h
+        fd = (fwd(pp) - fwd(pm)) / (2h)
+        @test abs(m[k] - fd) / abs(fd) < 1e-6
+    end
+end
+
+"""
     test_grad_V_from_Vxy()
 
 Solver-free finite-difference check for the `:abs` component of the velocity losses

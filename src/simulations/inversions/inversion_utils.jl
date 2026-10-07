@@ -440,20 +440,19 @@ function batch_loss_iceflow_transient(
 
     # Discretization for the ice thickness loss term
     tH_ref = tdata(glacier.thicknessData) # If thicknessData is nothing, then tH_ref is an empty vector
-    ΔtH = diff(tH_ref)
     useThickness = length(tH_ref)>0
     H_ref = useThickness ? glacier.thicknessData.H : nothing
 
     # Discretization for the surface velocity loss term
     tV_ref = tdata(glacier.velocityData, simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
-    ΔtV = diff(tV_ref)
     useVelocity = length(tV_ref)>0
     Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
     Vx_ref = useVelocity ? glacier.velocityData.vx : nothing
     Vy_ref = useVelocity ? glacier.velocityData.vy : nothing
 
-    # Discretization provided to the loss as a named tuple with the discretization for each term
-    Δt_HV = (; H = ΔtH, V = ΔtV)
+    # Weight of each observation, provided to the loss as a named tuple with one vector per term
+    Δt_HV = observation_weights(
+        loss_function, tH_ref, tV_ref, simulation.parameters.simulation.tspan)
 
     if useThickness
         @assert size(H[begin]) == size(H_ref[begin]) "Size of reference and prediction datasets do not match."
@@ -477,8 +476,8 @@ function batch_loss_iceflow_transient(
         Vxr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vx_ref[indVelocity])
         Vyr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vy_ref[indVelocity])
         Δtj = @ignore_derivatives((;
-            H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
-            V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
+            H = isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness],
+            V = isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity]
         ))
 
         loss(

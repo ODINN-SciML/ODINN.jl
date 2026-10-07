@@ -48,9 +48,12 @@ Struct that defines the ice thickness loss.
 # Fields
 
   - `loss::L`: Type of loss to use for the ice thickness. Default is `L2Sum()`.
+  - `weighting::Symbol`: How each ice thickness observation is weighted in the loss, see
+    [`observation_weights`](@ref). Default is `:uniform`.
 """
 @kwdef struct LossH{L <: AbstractSimpleLoss} <: AbstractLoss
     loss::L = L2Sum()
+    weighting::Symbol = :uniform
 end
 
 """
@@ -65,11 +68,14 @@ Struct that defines the ice velocity loss.
     Options include :xy for both x and y component, and :abs for the norm/magnitude of the velocity.
   - `scale_loss::Bool`: Whether to scale the loss function with the reference ice
     velocity magnitude.
+  - `weighting::Symbol`: How each ice velocity observation is weighted in the loss, see
+    [`observation_weights`](@ref). Default is `:uniform`.
 """
 @kwdef struct LossV{L <: AbstractSimpleLoss} <: AbstractLoss
     loss::L = L2Sum()
     component::Symbol = :xy
     scale_loss::Bool = true
+    weighting::Symbol = :uniform
 end
 
 """
@@ -399,7 +405,8 @@ function loss(
         t, glacier_idx, θ, simulation, normalization, Δt)
     lV = loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref,
         t, glacier_idx, θ, simulation, normalization, Δt)
-    return lH * Δt.H + lossType.scaling * lV * Δt.V
+    # The observation weights are already applied by each loss
+    return lH + lossType.scaling * lV
 end
 function backward_loss(
         lossType::LossHV,
@@ -419,13 +426,14 @@ function backward_loss(
     ∂lV∂H,
     ∂lV∂θ = backward_loss(lossType.vLoss, H_pred, H_ref, V_ref, Vx_ref, Vy_ref,
         t, glacier_idx, θ, simulation, normalization, Δt)
-    ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H * Δt.H + lossType.scaling * ∂lV∂H * Δt.V
+    # The observation weights are already applied by each loss
+    ∂L∂H = isnothing(∂lV∂H) ? ∂lH∂H : ∂lH∂H + lossType.scaling * ∂lV∂H
     ∂L∂θ = if isnothing(∂lV∂θ)
-        ∂lH∂θ * Δt.H
+        ∂lH∂θ
     elseif isnothing(∂lH∂θ)
-        lossType.scaling * ∂lV∂θ * Δt.V
+        lossType.scaling * ∂lV∂θ
     else
-        ∂lH∂θ * Δt.H + lossType.scaling * ∂lV∂θ * Δt.V
+        ∂lH∂θ + lossType.scaling * ∂lV∂θ
     end
     return ∂L∂H, ∂L∂θ
 end
@@ -433,3 +441,60 @@ end
 loss_uses_velocity(lossType::LossH) = false
 loss_uses_velocity(lossType::Union{LossV, LossHV}) = true
 discreteLossSteps(lossType::AbstractLoss, tspan) = Vector{Float64}()
+
+"""
+    observation_weighting(lossType, var::Symbol)
+
+Weighting of the observations of `var` (`:H` or `:V`) chosen in the loss, or `nothing` if
+the loss doesn't use these observations.
+"""
+observation_weighting(lossType::AbstractLoss, var::Symbol) = nothing
+function observation_weighting(lossType::LossH, var::Symbol)
+    var == :H ? lossType.weighting : nothing
+end
+function observation_weighting(lossType::LossV, var::Symbol)
+    var == :V ? lossType.weighting : nothing
+end
+function observation_weighting(lossType::LossHV, var::Symbol)
+    w = observation_weighting(lossType.hLoss, var)
+    return isnothing(w) ? observation_weighting(lossType.vLoss, var) : w
+end
+
+"""
+    observation_weights(weighting::Symbol, t_obs, tspan)
+
+Weight of each observation in the loss, for observations at times `t_obs`.
+
+  - `:uniform`: every observation counts once, wherever it is in time. This is the right
+    choice for sparse observations, such as a few thickness surveys or one velocity map.
+  - `:time_span`: each observation is weighted by the part of `tspan` it stands for: the
+    time closer to it than to any other observation. The first and the last observations
+    also cover the time to the start and to the end of the simulation. The loss then
+    approximates an integral over time, and a burst of close observations doesn't dominate.
+    This is meant for dense time series.
+"""
+function observation_weights(weighting::Symbol, t_obs, tspan)
+    if weighting == :uniform
+        return ones(Float64, length(t_obs))
+    elseif weighting == :time_span
+        isempty(t_obs) && return Float64[]
+        midpoints = (t_obs[begin:(end - 1)] .+ t_obs[(begin + 1):end]) ./ 2
+        return diff(clamp.(vcat(tspan[1], midpoints, tspan[2]), tspan[1], tspan[2]))
+    else
+        throw(ArgumentError("Unknown weighting $(weighting). Use :uniform or :time_span."))
+    end
+end
+
+"""
+    observation_weights(lossType, tH_ref, tV_ref, tspan)
+
+Weights of the ice thickness and ice velocity observations, as the named tuple `(; H, V)`
+that the losses receive as `Δt`.
+"""
+function observation_weights(lossType::AbstractLoss, tH_ref, tV_ref, tspan)
+    wH = something(observation_weighting(lossType, :H), :uniform)
+    wV = something(observation_weighting(lossType, :V), :uniform)
+    return (;
+        H = observation_weights(wH, tH_ref, tspan),
+        V = observation_weights(wV, tV_ref, tspan))
+end

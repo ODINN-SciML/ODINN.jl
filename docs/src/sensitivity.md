@@ -126,6 +126,7 @@ Here, we compile the main considerations and things that need to be taken into a
   - **No closures are used to provide the `Simulation` object to the iceflow equation**. The [SciMLStructures.jl](https://github.com/SciML/SciMLStructures.jl) package has been especially implemented for this use case where one wants to provide both a vector of parameters to optimize, and a complex struct. This struct is designed to store some intermediate results through a cache and simulation parameters that are used to store physical quantities. The documentation provides [an example of how to implement the interface](https://sciml.github.io/SciMLStructures.jl/stable/example/). Special attention should be given to the definition of the `replace` function which should deepcopy the whole struct and zero the fields that are not used to differentiate parameters.
   - **At the loss function level, all the operations need to be out-of-place** as [`Zygote.jl`](https://fluxml.ai/Zygote.jl/stable/) is used to differentiate this part of the computational graph. This means for example that one cannot affect the `results` in `simulation` and this has to be done outside of the functions that are called by `Zygote.gradient`. The error raised in case an in-place affectation is done is rather explicit.
   - Parts of the computational graph are not needed to compute the true gradient and they can be bypassed thanks to the `@ignore_derivatives` macro. This is the case for example of the reference ice thickness.
+  - **The loss must not read `θ` or the simulation from the `InversionBinder`**. The binder is what the solver receives as parameters `p`. If the loss also reads `θ` or the simulation from it, Zygote adds gradient into the binder from two sides and the gradient through the ODE is lost, without any error. Give `θ` and the simulation to the loss as separate arguments.
 
 ## Configuring gradient computation via `UDEparameters`
 
@@ -170,6 +171,10 @@ sensealg = QuadratureAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
 # numerically unstable for the SIA; not recommended in practice.
 sensealg = BacksolveAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
 ```
+
+!!! warning "Use a stabilized solver"
+
+    With `InterpolatingAdjoint`, the backward solve is not stable with `RDPK3Sp35` for the SIA. The gradient can then have the wrong sign, while its norm looks normal and there are no NaNs. Use `ROCK2()` or `ROCK4()` as `solver` in `SolverParameters`.
 
 ### Layer 3 — `optim_autoAD`: outer AD signal
 
@@ -221,3 +226,5 @@ ratio, angle, relerr, (dθ, dθ_FD) = grad_finite_diff(simulation)
 ```
 
 which returns respectively the ratio (normalized to zero), angle (normalized to zero) and relative error between the gradient obtained through the adjoint `dθ` and the one obtained with finite differences `dθ_FD`.
+
+With `ROCK2` or `ROCK4`, set `supply_eigen_est = true` and a fixed time step (`adaptive = false`) in `SolverParameters` before such a check. Otherwise the solver can change its number of stages between two close values of `θ`, which adds noise to the loss and makes the finite differences wrong (see `Huginn.with_eigen_est`).
