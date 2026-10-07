@@ -128,14 +128,24 @@ end
 
 ## Add a new mass balance model
 
-New mass balance models subtype `MBmodel` (defined in `Muninn`). The MB callback fires every `step_MB` and runs three steps in sequence — only `compute_MB` is model-specific:
+New mass balance models subtype `MBmodel` (defined in `Muninn`). Mass balance is a source term of the ice flow right hand side,
+
+```math
+\frac{\partial H}{\partial t} = -\nabla\cdot(D\nabla S) + \dot m(H, t)
+```
+
+so a model supplies a **rate**, evaluated at every step of the solve — not an increment applied by a callback. That's what lets the automatic adjoint differentiate through mass balance, and it removes the operator-splitting error a periodic jump introduces.
+
+Evaluating a model inside the right hand side isn't free: it runs far more often than a monthly callback did, can't read the climate rasters (`Rasters` isn't differentiable and isn't cheap), and must be differentiable in `H`. So climate is precomputed per mass balance window when the cache is built, and the model reads that.
 
 ```
-MB callback (every step_MB):
-  ├── MB_timestep!(cache, model, glacier, step, t, glacier_idx)  # writes the MB into cache.iceflow.MB
-  │     └── compute_MB(mb_model, climate_2D_step, step)     ← implement this for your model
-  ├── apply_MB_mask!(H, cache.iceflow)                      # applies the MB to the ice thickness H, clipping to avoid negative thickness
-  └── push!(cache.iceflow.MB_history, copy(cache.iceflow.MB))   # records the MB snapshot
+Every RHS call:
+  └── add_MB!(dH, H, simulation, t)
+        └── MB_rate!(ṁ, H, mb_cache, mb_model, glacier, t)   ← implement this for your model
+              (mb_cache carries the precomputed climate for the window containing t)
+
+Once per simulation, per glacier:
+  └── init_mb_cache(mb_model, simulation, glacier_idx, θ)    ← and this
 ```
 
 **Minimum to implement:**
@@ -147,7 +157,31 @@ struct MyMBmodel <: MBmodel
     # your fields
 end
 
-# Required: compute the distributed MB for one time step
+# How the rate depends on the ice surface S, which decides how it can be evaluated.
+# :elevation_only means it depends on S only through the scalar offset ΔS = S - ref_hgt,
+# which is what makes a lookup table possible. Anything else is :general, the default.
+Muninn.mb_S_dependence(::MyMBmodel) = :general
+
+# Precompute whatever the RHS needs so that the solve never touches the climate rasters.
+function Sleipnir.init_mb_cache(model::MyMBmodel, simulation, glacier_idx::Integer, θ)
+    # return your cache type, or an empty one when use_MB is false
+end
+
+# The rate, in m of ice per year, written in place. Called at every step of the solve.
+function Muninn.MB_rate!(ṁ, H, cache, model::MyMBmodel, glacier, t::Real)
+    # ṁ[i, j] = ...
+end
+
+# Required to take gradients through the model with the manual adjoints. Free under
+# SciMLSensitivityAdjoint, which differentiates MB_rate! itself.
+function Muninn.MB_rate_∂H!(∂ṁ, H, cache, model::MyMBmodel, glacier, t::Real)
+    # ∂ṁ[i, j] = ∂ṁ[i, j] / ∂H[i, j]   (diagonal: a cell depends only on its own H)
+end
+```
+
+`compute_MB` is still required, and is unchanged:
+
+```julia
 function Muninn.compute_MB(model::MyMBmodel, climate_step::Climate2Dstep,
         step::AbstractFloat)
     # climate_step — gridded climate fields (temp, prcp, PDD, etc.)
@@ -155,6 +189,16 @@ function Muninn.compute_MB(model::MyMBmodel, climate_step::Climate2Dstep,
     # return a (nx, ny) matrix in m w.e.
 end
 ```
+
+It is what `calibrate_MB_model` fits parameters against, and what the test suite checks `MB_rate!` agrees with. If the two ever drift apart, the model being calibrated stops being the model being integrated, which nothing else guards against.
+
+!!! note "Positivity is the model's responsibility"
+
+    `ṁ` must vanish as `H` approaches zero, or a cell melts through the bed. `TImodel1` does this with a cubic `smoothstep` ramp on the rate, which is C¹ with a bounded derivative — a hard mask would be a step discontinuity in the state that no adaptive error controller can resolve and no adjoint can differentiate. See `mass_balance_rhs.jl` in Muninn.
+
+!!! warning "Only `TImodel1` has a right hand side form today"
+
+    `mb_S_dependence` defaults to `:general`, and the `:general` branch of `MB_rate!` is not implemented yet, so a model that does not opt into `:elevation_only` currently throws when the cache is built. Implementing it is tracked as its own piece of work.
 
 **Optional dispatch hooks** (all have sensible defaults in Muninn — override only what differs):
 
@@ -170,7 +214,7 @@ Pass your model to `Model(; iceflow = iceflow_model, mass_balance = MyMBmodel(..
 
 !!! warning "TImodel2 is not yet fully implemented"
 
-    `TImodel2` (separate snow/ice DDFs) is declared and exported in Muninn but has no `compute_MB` dispatch. A simulation built with `TImodel2` will fail at the first MB callback. Full implementation is tracked in a separate Muninn issue.
+    `TImodel2` (separate snow/ice DDFs) is declared and exported in Muninn but has no `compute_MB` dispatch, and no right hand side form either. A simulation built with `TImodel2` fails when the mass balance cache is built. Full implementation is tracked in a separate Muninn issue.
 
 * * *
 

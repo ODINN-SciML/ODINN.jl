@@ -34,7 +34,7 @@ Muninn.TImodel1
 Muninn.TImodel1(params::Sleipnir.Parameters)
 ```
 
-Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps` field in [`Sleipnir.SimulationParameters`](@ref).
+Surface mass balance is evaluated as a source term of the ice flow right hand side, `∂H/∂t = -∇·(D∇S) + ṁ(H, t)`, at every step of the solve rather than through a callback — see [Add a new mass balance model](@ref) for the model interface this requires.
 
 ### Calibrating a temperature-index model
 
@@ -86,6 +86,10 @@ model = Model(
 ```
 
 `CustomMLP` is a subtype of `MBmodel` and wraps a `Lux.jl` feedforward network whose architecture, input feature normalisation bounds, and pre-trained weights are all read directly from the JSON export. The network takes monthly ERA5 climate features as inputs (e.g. `t2m`, `tp`, `ssrd`, …) and outputs a surface mass balance rate in m w.e. per time step. For now, only monthly time steps are supported. It is the *de facto* data-driven surface mass balance model in the ODINN ecosystem.
+
+!!! warning "Not yet usable in a simulation"
+
+    Mass balance is evaluated as a source term of the ice flow right hand side, and only models that declare `mb_S_dependence` as `:elevation_only` have that form today — in practice `TImodel1`. `CustomMLP` reads several fields, so it falls to the `:general` branch, which is not implemented: building a simulation with it and `use_MB = true` raises an error naming the functions to implement. See [Add a new mass balance model](@ref) for the interface.
 
 Once loaded, models can be saved to a local registry to avoid re-parsing JSON on subsequent runs:
 

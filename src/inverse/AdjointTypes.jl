@@ -47,8 +47,11 @@ scheme.
     the computation of the adjoint. Currently only `:Linear` is supported.
   - `n_quadrature::I`: Number of nodes used in the Gauss quadrature for the numerical
     integration of the loss function.
-  - `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
-    calculation.
+  - `MB_VJP::MBVJP`: Type of AbstractVJPMethod for the elevation feedback of the mass balance,
+    `∂ṁ/∂H`, in the adjoint. Every method except `NoVJP` uses the same analytic derivative from
+    Muninn, while `NoVJP` drops the feedback, which is only useful as a negative control for the
+    gradient tests. It is not used with `VJP_method = EnzymeVJP()`, which already differentiates
+    the mass balance with the rest of the right hand side.
 """
 @kwdef struct ContinuousAdjoint{
     F <: AbstractFloat,
@@ -89,8 +92,11 @@ scheme.
 
   - `VJP_method`: Type of AbstractVJPMethod used to compute VJPs inside adjoint
     calculation.
-  - `MB_VJP::MBVJP`: Type of AbstractVJPMethod used to compute the MB VJP inside adjoint
-    calculation.
+  - `MB_VJP::MBVJP`: Type of AbstractVJPMethod for the elevation feedback of the mass balance,
+    `∂ṁ/∂H`, in the adjoint. Every method except `NoVJP` uses the same analytic derivative from
+    Muninn, while `NoVJP` drops the feedback, which is only useful as a negative control for the
+    gradient tests. It is not used with `VJP_method = EnzymeVJP()`, which already differentiates
+    the mass balance with the rest of the right hand side.
 """
 @kwdef struct DiscreteAdjoint{
     VJP <: AbstractVJPMethod,
