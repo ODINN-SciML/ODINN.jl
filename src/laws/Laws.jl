@@ -407,11 +407,10 @@ value of `scalar`.
 function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
     min_A = params.physical.minA
     max_A = params.physical.maxA
-    # SciMLSensitivity's InterpolatingAdjoint computes VJPs by replaying the RHS at each
-    # adjoint step, so the law must be evaluated at every RHS call for the gradient to flow
-    # through θ → A → D. callback_freq=nothing ensures this. For manual adjoints (e.g.
-    # ContinuousAdjoint), callback_freq=0 applies A once via a callback and the gradient
-    # is handled analytically via p_VJP!.
+    # SciMLSensitivity's InterpolatingAdjoint replays the RHS at each adjoint step, so the
+    # law must run at every RHS call for the gradient to flow through θ → A → D —
+    # callback_freq = nothing ensures that. Manual adjoints (e.g. ContinuousAdjoint) apply A
+    # once via a callback (callback_freq = 0) and handle the gradient analytically via p_VJP!.
     callback_freq = if isa(params.UDE.grad, DummyAdjoint) ||
                        isa(params.UDE.grad, SciMLSensitivityAdjoint)
         nothing

@@ -109,7 +109,8 @@ function inversion_test(;
         multiprocessing = false,
         grad = ContinuousAdjoint(),
         functional_inv = true,
-        scalar = true
+        scalar = true,
+        abstol = 1e-3
 )
     rgi_paths = get_rgi_paths()
     # The value of this does not really matter, it is hardcoded in Sleipnir right now.
@@ -175,6 +176,7 @@ function inversion_test(;
         ),
         solver = Huginn.SolverParameters(
             step = δt,
+            abstol = abstol,
             progress = true
         )
     )

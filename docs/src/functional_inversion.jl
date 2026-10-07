@@ -276,7 +276,7 @@ plot_law(prediction.model.iceflow.A, prediction,
 # periodic callback that applied it was unsupported, so mass balance and the automatic
 # adjoint were mutually exclusive.
 
-# Note that the mass balance rate depends on the ice thickness through the surface `S = B + H`, so
+# The mass balance rate depends on the ice thickness through the surface `S = B + H`, so
 # `∂ṁ/∂H` is nonzero and reaches the gradient with respect to `A` even though no mass
 # balance parameter is being trained. That elevation feedback is what the gradient tests in
 # `test/runtests.jl` (group `Core12`) check against finite differences, for both adjoints.

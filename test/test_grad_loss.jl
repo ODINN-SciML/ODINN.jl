@@ -32,10 +32,21 @@ end
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
+        abstol = 1e-6,
+        solver = nothing,
+        A_range = nothing,
+        adaptive = true,
+        dt = 1.0/120.0,
+        fd_delta = nothing,
+        thres_fd = 5e-2,
+        n_fd_components = 4,
+        return_grad = false,
         functional_inv = true,
+        scalar = true,
         custom_NN = false,
         max_params = 60,
         mask_parameter_vector = false,
+        aggregated_loss = nothing,
     ) where {ADJ<:AbstractAdjointMethod}
 
 Test and validate gradient consistency between adjoint-based automatic differentiation
@@ -51,7 +62,6 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `thres::Vector{<:Real}`: Three-element vector of numerical thresholds for
     `(ratio, angle, relative error)` comparison between adjoint-based and finite-difference gradients.
   - `target::Symbol`: Model target for training/testing (`:A`, `:D`, or `:D_hybrid`), determining which physical law is parameterized by the neural network.
-    either `:FiniteDifferences` (default, using `FiniteDifferences.jl`) or `:Manual`.
   - `finite_difference_order::Int`: Order of accuracy for central finite differences.
   - `loss`: Loss function to evaluate, such as `LossH()` (height-based) or `LossV()` (velocity-based).
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
@@ -62,11 +72,22 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `calibrate_MB::Bool`: Whether to calibrate the mass balance model against the geodetic
     observations. Off by default so the `TImodel1` built below is the one actually tested;
     turn it on to check the adjoint against a per-glacier calibrated vector of MB models.
+  - `abstol`: Absolute tolerance of the ODE solver, in metres of ice. It only matters with `adaptive = true`, and it is tightened for runs longer than 5 years (see `Huginn.effective_abstol`).
+  - `solver`: ODE solver. By default `ROCK4()` with `SciMLSensitivityAdjoint`, because the backward solve of `InterpolatingAdjoint` is not stable with `RDPK3Sp35` on our ODE, and `RDPK3Sp35()` otherwise. The spectral radius is supplied to `ROCK2` and `ROCK4` (`supply_eigen_est = true`), since their own estimate breaks finite differences.
+  - `A_range`: `(minA, maxA)`, the range of the rheology `A`. If `nothing`, it depends on the case: `(2e-18, 8e-18)` by default and for the `:dhdt` and `:avgV` losses, and `(1e-21, 2e-21)` with `use_MB`, so that the gradient is dominated by the mass balance.
+  - `adaptive::Bool`: Whether the solver picks its own steps. Fixed-step finite differences (`fd_delta`) need `false`, because with adaptive steps the loss is discontinuous in `θ`.
+  - `dt`: Fixed step in years, used when `adaptive = false`.
+  - `fd_delta`: If not `nothing`, the adjoint is compared with a central finite difference at this fixed step, instead of using `FiniteDifferences.jl` with its step-size search. It is computed for the first `n_fd_components` components of `θ`, and it requires `adaptive = false`. `thres` is not used in this case.
+  - `thres_fd`: Threshold on the relative error `|fd - adjoint| / |fd|` of each component in the fixed-step comparison.
+  - `n_fd_components`: Number of components of `θ` checked in the fixed-step comparison.
+  - `return_grad::Bool`: Return the gradient computed by the adjoint and skip the finite-difference comparison.
   - `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
+  - `scalar::Bool`: Whether the rheology `A` is a single scalar per glacier (`true`) or a gridded field (`false`).
   - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network. If the custom neural network is used, the glacier grid and the number of points in the VJP interpolation are reduced to spare computation time and memory.
   - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
   - `mask_parameter_vector::Bool`: Whether to apply a mask to the parameter vector `θ` before evaluating finite-difference gradients. If `false`, the
     mask based on `max_params` is just applied to the initial conditions, not to parameters of the regressor.
+  - `aggregated_loss`: `nothing` (default), `:dhdt` or `:avgV`. With `:dhdt` or `:avgV` the loss compares the elevation change or the average velocity over the whole period, instead of the state at each time step. It needs `LossDhdt()` or `LossAvgV()` respectively. The `:dhdt` case also uses the period 2010–2015 instead of the 1980–2019 of `use_MB`, because over the longer one the melt empties the mask and the gradient vanishes, and a stronger melt, so that `dhdt` is negative without melting the glacier out.
 """
 function test_grad_finite_diff(
         adjointFlavor::ADJ;
@@ -213,6 +234,8 @@ function test_grad_finite_diff(
             adaptive = adaptive,
             dt = dt,
             progress = true,
+            # ROCK's own estimate shifts the scheme between neighbouring θ, breaking FD
+            supply_eigen_est = true,
             solver = if !isnothing(solver)
                 solver
             else
@@ -844,7 +867,8 @@ function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
             empirical_loss_function = LossH(),
             target = :A
         ),
-        solver = Huginn.SolverParameters(step = δt, solver = ROCK4())
+        solver = Huginn.SolverParameters(
+            step = δt, solver = ROCK4(), supply_eigen_est = true)
     )
 
     # Identical params except for the adjoint method

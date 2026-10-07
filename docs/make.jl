@@ -82,6 +82,7 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
+        "Glaciology basics" => "glaciology_basics.md",
         "Quick start" => "quick_start.md",
         "Ecosystem packages" => [
             "Sleipnir.jl" => "Packages/sleipnir.md",
@@ -134,10 +135,14 @@ makedocs(
 )
 
 if get(ENV, "CI", nothing)=="true"
+    # `dev` and `main` are deployed by independent CI triggers, each into its own folder
+    deployed_branch = get(ENV, "GITHUB_REF_NAME", "") == "main" ? "main" : "dev"
     deploydocs(
         repo = "github.com/ODINN-SciML/ODINN.jl",
         branch = "gh-pages",
-        devbranch = "main",
+        devbranch = deployed_branch,
+        devurl = deployed_branch,
+        versions = ["dev" => "dev", "main" => "main"],
         push_preview = true,
         forcepush = true
     )
