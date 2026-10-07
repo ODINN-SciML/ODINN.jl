@@ -91,13 +91,13 @@ fi
 # previews/ without the closed ones, then the root with that previews/, then a commit
 new_previews="$(git ls-tree "${tip}:previews" \
     | awk -F'\t' 'NR == FNR { drop[$0] = 1; next } !($2 in drop)' "$remove_list" - \
-    | git mktree)"
+    | git mktree --missing)"
 new_root="$(git ls-tree "$tip" \
     | awk -F'\t' -v p="$new_previews" '{
         split($1, a, " ")
         if ($2 == "previews") { print a[1] " " a[2] " " p "\t" $2 } else { print }
     }' \
-    | git mktree)"
+    | git mktree --missing)"
 new_commit="$(git commit-tree "$new_root" -p "$tip" \
     -m "Remove the previews of closed pull requests" \
     -m "Removed ${n_remove} folders of previews/, by docs/prune_previews.sh.")"
@@ -117,9 +117,13 @@ if [ "$n_site" -ne 3 ]; then
     exit 1
 fi
 
-# What a push would send: only the new trees, as it should be
-pack_bytes="$(printf '%s\n^%s\n' "$new_commit" "$tip" | git pack-objects --revs --thin --stdout | wc -c | tr -d ' ')"
-echo "The push would send ${pack_bytes} bytes."
+# What a push would send: only the new trees, as it should be (informative, never fatal)
+if pack_bytes="$(printf '%s\n^%s\n' "$new_commit" "$tip" \
+    | git pack-objects --revs --thin --stdout 2> /dev/null | wc -c | tr -d ' ')"; then
+    echo "The push would send ${pack_bytes} bytes."
+else
+    echo "Could not measure the size of the push."
+fi
 
 if [ "$DRY_RUN" = "1" ]; then
     echo "[dry run] ${n_remove} previews would be removed, ${BACKUP_BRANCH} would be created if missing."
