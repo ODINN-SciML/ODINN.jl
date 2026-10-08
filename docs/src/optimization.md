@@ -140,6 +140,33 @@ The following simple losses are implemented, and the regularizations described a
 
   - `TikhonovRegularization`: Very common in geophysical inversion. Given an linear operator $A$, this is given by the value of $\| A(S) \|_2^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the Laplacian operator $\nabla^2$.
 
+## Optimizers
+
+The optimizer is set in `Hyperparameters`. It can be one optimizer, or a vector of optimizers used one after the other, with one number of epochs for each of them.
+By default, ODINN uses Adam and then LBFGS, for 25 epochs each:
+
+```julia
+hyper = Hyperparameters(
+    optimizer = [
+        ODINN.Adam(0.01),
+        ODINN.LBFGS(
+            alphaguess = ODINN.LineSearches.InitialStatic(alpha = 1.0, scaled = true),
+            linesearch = ODINN.LineSearches.BackTracking(iterations = 5))
+    ],
+    epochs = [25, 25])
+```
+
+Adam is robust far from the minimum, since its step does not depend on the size of the gradient.
+LBFGS then converges faster near the minimum.
+LBFGS only keeps the last steps in memory, while BFGS stores a matrix of size `n × n` for `n` parameters, which is too large for gridded parameters.
+For small problems, like a neural network, `BFGS(initial_stepnorm = 0.001)` can need fewer iterations.
+
+!!! warning "First step of LBFGS"
+
+    At its first iteration, LBFGS has no information about the curvature of the loss, so it tries the step $\theta - \nabla_\theta \mathcal{L}$.
+    When the loss is large, this step is large too, and the forward simulation can blow up.
+    `InitialStatic(scaled = true)` limits the norm of this trial step to one.
+
 ## Logging
 
 `ODINN.jl` provides useful statistics, such as the training loss history or the parameters history in the inversion objects.

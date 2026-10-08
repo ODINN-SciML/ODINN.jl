@@ -27,13 +27,38 @@ mutable struct Hyperparameters{F <: AbstractFloat, I <: Integer} <: AbstractPara
 end
 
 """
+    default_optimizer()
+
+Default optimizers of an inversion: Adam, then LBFGS.
+
+Adam is robust far from the minimum, since its step does not depend on the size of the
+gradient. LBFGS then converges faster near the minimum. Its memory grows linearly with the
+number of parameters, while BFGS stores an `n × n` matrix, which is too large for gridded
+parameters. For small problems, like a neural network, `BFGS(initial_stepnorm = 0.001)` can
+need fewer iterations.
+
+At its first iteration, LBFGS has no curvature information yet and tries the step `θ - g`.
+When the loss is large, this step is large too and the forward solve can blow up.
+`InitialStatic(scaled = true)` caps the norm of the first trial step of each line search to
+one. On Aletsch with a large loss, the default LBFGS crashed at its first iteration, while this
+one converged, and it was as fast as the default with a normal loss.
+"""
+function default_optimizer()
+    [
+        Adam(0.01),
+        LBFGS(alphaguess = LineSearches.InitialStatic(alpha = 1.0, scaled = true),
+            linesearch = LineSearches.BackTracking(iterations = 5))
+    ]
+end
+
+"""
     Hyperparameters(;
         current_epoch::Int64 = 1,
         current_minibatch::Int64 = 1,
         loss_history::Vector{Float64} = Vector{Float64}(),
-        optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = BFGS(initial_stepnorm = 0.001),
+        optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = default_optimizer(),
         loss_epoch::Float64 = 0.0,
-        epochs::Union{Int64, Vector{Int64}} = 50,
+        epochs::Union{Int64, Vector{Int64}} = [25, 25],
         batch_size::Int64 = 15
 
 )
@@ -45,9 +70,9 @@ Constructs a `Hyperparameters` object with the specified parameters.
   - `current_epoch::Int64`: The current epoch number. Defaults to 1.
   - `current_minibatch::Int64`: The current minibatch number. Defaults to 1.
   - `loss_history::Vector{Float64}`: A vector to store the history of loss values. Defaults to an empty vector.
-  - `optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}}`: The optimizer to be used. Defaults to `BFGS(initial_stepnorm=0.001)`.
+  - `optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}}`: The optimizer to be used, or a vector of optimizers used one after the other. Defaults to `default_optimizer()`: Adam, then LBFGS.
   - `loss_epoch::Float64`: The loss value for the current epoch. Defaults to 0.0.
-  - `epochs::Int64`: The total number of epochs. Defaults to 50.
+  - `epochs::Union{Int64, Vector{Int64}}`: The number of epochs, or one number per optimizer when `optimizer` is a vector. Defaults to `[25, 25]`.
   - `batch_size::Int64`: The size of each minibatch. Defaults to 15.
 
 # Returns
@@ -59,9 +84,9 @@ function Hyperparameters(;
         current_minibatch::Int64 = 1,
         loss_history::Vector{Float64} = Vector{Float64}(),
         optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule,
-            Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = BFGS(initial_stepnorm = 0.001),
+            Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = default_optimizer(),
         loss_epoch::Float64 = 0.0,
-        epochs::Union{Int64, Vector{Int64}} = 50,
+        epochs::Union{Int64, Vector{Int64}} = [25, 25],
         batch_size::Int64 = 15
 )
     # Build Hyperparameters based on input values
