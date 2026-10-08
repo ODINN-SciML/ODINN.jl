@@ -565,6 +565,34 @@ function test_first_observation_counts()
 end
 
 """
+    test_loss_or_inf()
+
+When the forward simulation fails, the loss is infinite and the line search of LBFGS takes a
+shorter step. Other errors must not be hidden. The loss below fails far from the minimum, like
+the forward simulation does when the first step of LBFGS is too large.
+"""
+function test_loss_or_inf()
+    solver_error = AssertionError("There was an error in the iceflow solver. Returned code is \"Unstable\"")
+    @test isinf(ODINN.loss_or_inf(θ -> throw(DomainError(θ, "out of range")), 1.0))
+    @test isinf(ODINN.loss_or_inf(θ -> throw(solver_error), 1.0))
+    # `pmap` wraps the error in a `CapturedException`, also when it runs in the main process
+    @test isinf(ODINN.loss_or_inf(θ -> ODINN.pmap(x -> throw(DomainError(x, "diverged")), [θ]), 1.0))
+    @test_throws CapturedException ODINN.loss_or_inf(
+        θ -> ODINN.pmap(x -> x + nothing, [θ]), 1.0)
+    @test_throws MethodError ODINN.loss_or_inf(θ -> θ + nothing, 1.0)
+    @test_throws AssertionError ODINN.loss_or_inf(θ -> @assert(false, "other"), 1.0)
+
+    f(x) = any(abs.(x) .> 5) ? throw(DomainError(x, "diverged")) : 1e3 * sum(abs2, x .- 1)
+    g!(G, x) = (G .= 2e3 .* (x .- 1))
+    optimizer = Optim.LBFGS(linesearch = ODINN.LineSearches.BackTracking())
+    # The first step, x - g, is at 2000, so without the `Inf` the optimization fails
+    @test_throws DomainError Optim.optimize(f, g!, zeros(2), optimizer)
+    res = Optim.optimize(x -> ODINN.loss_or_inf(f, x), g!, zeros(2), optimizer)
+    @test Optim.minimum(res) < 1e-8
+    @test Optim.minimizer(res) ≈ ones(2) atol = 1e-4
+end
+
+"""
     test_loss_time_window_guard()
 
 `LossAvgV` must fail at `Inversion` construction, with a clear message, when the velocity

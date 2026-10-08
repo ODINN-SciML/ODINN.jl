@@ -119,6 +119,7 @@ ENV["GKSwstype"] = "nul"
             @testset "LossAvgV time window guard" test_loss_time_window_guard()
             @testset "Observation weights" test_observation_weights()
             @testset "The first observation counts" test_first_observation_counts()
+            @testset "Infinite loss when the forward simulation fails" test_loss_or_inf()
         end
     end
 

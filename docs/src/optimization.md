@@ -167,6 +167,9 @@ For small problems, like a neural network, `BFGS(initial_stepnorm = 0.001)` can 
     When the loss is large, this step is large too, and the forward simulation can blow up.
     `InitialStatic(scaled = true)` limits the norm of this trial step to one.
 
+If the forward simulation fails at a point tried by the line search of BFGS or LBFGS, for example because the step was too large, the loss at this point is infinite and the line search takes a shorter step.
+Adam has no line search, so in this case it stops with the error of the simulation.
+
 ## Logging
 
 `ODINN.jl` provides useful statistics, such as the training loss history or the parameters history in the inversion objects.

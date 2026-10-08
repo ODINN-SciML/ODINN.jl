@@ -136,7 +136,9 @@ function train_UDE!(
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
+    # The line search of BFGS and LBFGS can try a point where the forward simulation fails
+    loss_function(_θ, _simulation) = loss_or_inf(
+        loss_iceflow_transient, _θ, only(_simulation.data), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function but params.UDE.optim_autoAD = $(simulation.parameters.UDE.optim_autoAD)."
@@ -301,6 +303,33 @@ function loss_iceflow_transient(θ, simulation::Inversion, mappingFct)
         ), simulations)
     losses = merge_batches(losses)
     return sum(losses)
+end
+
+# `pmap` wraps the error of a task or of a worker
+root_exception(e) = e
+root_exception(e::RemoteException) = root_exception(e.captured)
+root_exception(e::CapturedException) = root_exception(e.ex)
+
+"""
+    loss_or_inf(loss, args...)
+
+Call `loss(args...)` and return `Inf` if the forward simulation fails.
+
+A trial point that is too far can make the solver fail: `DomainError` from the mass balance
+lookup, or the return code of the solver. With an infinite loss, the line search of BFGS and
+LBFGS takes a shorter step instead of stopping the inversion. Other errors are not caught.
+"""
+function loss_or_inf(loss, args...)
+    try
+        return loss(args...)
+    catch err
+        ex = root_exception(err)
+        failed = ex isa DomainError ||
+                 (ex isa AssertionError && occursin("iceflow solver", ex.msg))
+        failed || rethrow()
+        @warn "The forward simulation failed, using an infinite loss: $(sprint(showerror, ex))" maxlog=5
+        return Inf
+    end
 end
 
 """
