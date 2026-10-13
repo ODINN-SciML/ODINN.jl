@@ -56,9 +56,8 @@ mutable struct GlacierWideInv{
             maxv = isnothing(maxval) ? params.physical.maxA : maxval
             v -> atanh(2 * (v - minv) / (maxv - minv) - 1)
         elseif var == :C
-            maxv = isnothing(maxval) ? params.physical.maxC : maxval
-            # C = 0 (no sliding) would give atanh(-1) = -Inf, so seed it just inside the bound
-            v -> 0 < v < maxv ? atanh(2 * v / maxv - 1) : Sleipnir.Float(-5)
+            maxv = Sleipnir.Float(isnothing(maxval) ? params.physical.maxC : maxval)
+            v -> C_seed(v, maxv)
         else
             error("GlacierWideInv: only :A and :C are supported for var (got $(var))")
         end
@@ -66,6 +65,7 @@ mutable struct GlacierWideInv{
         glacier_keys = Tuple(Symbol("$(i)") for i in 1:length(glaciers))
         θ₀ = Tuple(
             fill(unparameterize(Sleipnir.Float(getfield(g, var)))) for g in glaciers)
+        var == :C && warn_flat_C_seeds([x[] for x in θ₀], glaciers, maxv, "GlacierWideInv")
         θ = ComponentVector{Sleipnir.Float}(θ = NamedTuple{glacier_keys}(θ₀))
 
         new{typeof(θ)}(θ)

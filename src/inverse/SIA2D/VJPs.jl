@@ -204,23 +204,12 @@ function VJP_λ_∂MB∂H(VJPMode::NoVJP, λ, H, simulation::Simulation, glacier
     return zero(λ)
 end
 
-# ============================================================================
-# Automatic (SciMLSensitivityAdjoint) differentiation of the H→V map.
-# The post-solve velocity computation `V_from_H`/`surface_V` mutates the law
-# cache, so Zygote cannot differentiate it. We give `V_from_H` an rrule whose
-# pullback computes the VJP with Enzyme (which handles the in-place cache and
-# laws), mirroring `VJP_λ_∂SIA∂H(::EnzymeVJP, …)`. This unblocks LossV/LossHV/
-# VelocityRegularization and time-aggregated velocity losses for any iceflow
-# model and regressor, without hand-written per-loss adjoints.
-# ============================================================================
+# Automatic (SciMLSensitivityAdjoint) differentiation of H → V. `V_from_H` mutates the law
+# cache, so Zygote cannot differentiate it: its rrule computes the VJP with Enzyme, as
+# `VJP_λ_∂SIA∂H(::EnzymeVJP, …)` does. This is used by all the velocity losses.
 
-# Enzyme VJP of the H→(Vx,Vy) map: returns (∂H, ∂θ) for seeds (dVx,dVy).
-# dVx and dVy must already include any ΔV folded analytically by the caller (the
-# V=‖(Vx,Vy)‖ magnitude is handled there, so Enzyme never sees the sqrt at V=0).
-# Differentiates `Huginn.surface_V_inplace!` directly: it writes Vx,Vy into the
-# passed H-sized buffers and returns nothing, mirroring the proven `SIA2D!` Enzyme
-# target (the tuple-returning `surface_V!` trips Enzyme's verifier). V_from_H also
-# returns H-sized Vx,Vy, so the cotangents dVx,dVy match the H-sized primal buffers.
+# Enzyme VJP of H → (Vx, Vy) through `Huginn.surface_V_inplace!`: returns (∂H, ∂θ) for the
+# seeds (dVx, dVy), which already include the part of V = ‖(Vx, Vy)‖.
 function ∂V_from_H_vjp!(dVx, dVy, H, θ, simulation, t)
     _Vx = zero(H)
     _Vy = zero(H)
@@ -251,8 +240,8 @@ function ChainRules.rrule(::typeof(Huginn.V_from_H), simulation::Inversion, H, t
         # Fold all three output cotangents into (dVx, dVy) seeds for Enzyme.
         # ΔV through V=‖(Vx,Vy)‖ is handled analytically here to avoid 0/0 NaN
         # at ice-free cells where Vx=Vy=V=0.
-        dVx = Δ[1] isa ChainRules.AbstractZero ? zero(Vx) : copy(ChainRules.unthunk(Δ[1]))
-        dVy = Δ[2] isa ChainRules.AbstractZero ? zero(Vy) : copy(ChainRules.unthunk(Δ[2]))
+        dVx = Δ[1] isa ChainRules.AbstractZero ? zero(Vx) : Array(ChainRules.unthunk(Δ[1]))
+        dVy = Δ[2] isa ChainRules.AbstractZero ? zero(Vy) : Array(ChainRules.unthunk(Δ[2]))
         if !(Δ[3] isa ChainRules.AbstractZero)
             dV = ChainRules.unthunk(Δ[3])
             # ∂V/∂Vx = Vx/V; zero where V=0 (Vx=0 there, so cotangent is 0)

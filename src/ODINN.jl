@@ -40,8 +40,7 @@ using Optimization, Optim, Optimisers, OptimizationOptimisers, OptimizationOptim
       LineSearches
 using Optimisers: Adam # Import manually because this conflicts with Optim.Adam
 using ComponentArrays
-using ChainRules: @ignore_derivatives
-import ChainRules
+using ChainRules: ChainRules, @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet
 using DiffEqCallbacks: PeriodicCallback
 using MLUtils: DataLoader

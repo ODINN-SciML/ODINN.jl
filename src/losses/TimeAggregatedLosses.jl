@@ -70,7 +70,7 @@ function time_aggregated_loss(
 ) where {F <: AbstractFloat}
     tLoss = simulation.glaciers[glacier_idx].dhdtData.t
     dhdt_ref = simulation.glaciers[glacier_idx].dhdtData.dhdt
-    tspan = simulation.parameters.simulation.tspan
+    tspan = glacier_tspan(simulation, glacier_idx)
 
     ind = Sleipnir.indFromT(tspan, tLoss, t)
     H0 = H_pred[ind[1]]
@@ -98,7 +98,7 @@ function backward_time_aggregated_loss(
 ) where {F <: AbstractFloat}
     tLoss = simulation.glaciers[glacier_idx].dhdtData.t
     dhdt_ref = simulation.glaciers[glacier_idx].dhdtData.dhdt
-    tspan = simulation.parameters.simulation.tspan
+    tspan = glacier_tspan(simulation, glacier_idx)
     mask = simulation.glaciers[glacier_idx].mask
 
     ind = Sleipnir.indFromT(tspan, tLoss, t)
@@ -212,7 +212,7 @@ function backward_time_aggregated_loss(
     tLoss = collect(t1:lossType.step:t2)
     dt = diff(tLoss)
     tLoss = tLoss[begin:(end - 1)] # Discard last point t=t2
-    ind_pred = Sleipnir.indFromT(simulation.parameters.simulation.tspan, tLoss, t)
+    ind_pred = Sleipnir.indFromT(glacier_tspan(simulation, glacier_idx), tLoss, t)
     T = sum(dt)
 
     # 2. Get the reference velocity
@@ -388,19 +388,43 @@ function discretePostIntegralLossSteps(lossType::AbstractLoss, simulation, glaci
 end
 
 """
-    check_loss_time_window(lossType, simulation)
+    check_loss(lossType, simulation)
 
-Check, before any simulation runs, that the times a loss needs are inside `tspan`. Times
-outside `tspan` are never reached by the solver, and the loss would later fail with an
-unclear `invalid index: nothing`.
+Check, before any simulation runs, that a loss can be used with this inversion. The times a
+loss needs must be inside the time window of each glacier: times outside it are never reached
+by the solver, and the loss would later fail with an unclear `invalid index: nothing`, or be
+ignored.
 """
-check_loss_time_window(lossType::AbstractLoss, simulation) = nothing
-function check_loss_time_window(lossType::MultiLoss, simulation)
-    foreach(l -> check_loss_time_window(l, simulation), lossType.losses)
+check_loss(lossType::AbstractLoss, simulation) = nothing
+function check_loss(lossType::MultiLoss, simulation)
+    foreach(l -> check_loss(l, simulation), lossType.losses)
 end
-function check_loss_time_window(lossType::LossAvgV, simulation)
-    tspan = simulation.parameters.simulation.tspan
+function check_loss(lossType::Union{LossH, LossV}, simulation)
+    # The options are checked now, and not in the first call of the loss
+    observation_weights(lossType.weighting, [0.0], (0.0, 1.0))
+    hasproperty(lossType.loss, :normalize) &&
+        loss_normalization(lossType.loss, trues(1), 1.0)
+    return nothing
+end
+function check_loss(lossType::LossHV, simulation)
+    check_loss(lossType.hLoss, simulation)
+    check_loss(lossType.vLoss, simulation)
+    return nothing
+end
+# The regularizations of a gridded parameter need it to be trained
+function check_loss(lossType::SlidingRegularization, simulation)
+    haskey(simulation.model.trainable_components.θ, :C) || throw(ArgumentError(
+        "SlidingRegularization needs `C` to be trained."))
+    return nothing
+end
+function check_loss(lossType::RheologyRegularization, simulation)
+    haskey(simulation.model.trainable_components.θ, :A) || throw(ArgumentError(
+        "RheologyRegularization needs `A` to be trained."))
+    return nothing
+end
+function check_loss(lossType::LossAvgV, simulation)
     for (i, glacier) in enumerate(simulation.glaciers)
+        tspan = glacier_tspan(simulation, i)
         if isnothing(glacier.velocityData)
             throw(ArgumentError("LossAvgV needs velocity data, but glacier \
                 $(glacier.rgi_id) has none."))
@@ -414,6 +438,46 @@ function check_loss_time_window(lossType::LossAvgV, simulation)
                 for glacier $(glacier.rgi_id), but the simulation only covers \
                 tspan = $(tspan). This period must be inside tspan: extend tspan, or use \
                 LossV, which compares the velocity at the observation dates only."))
+        end
+    end
+end
+function check_loss(lossType::LossDhdt, simulation)
+    for (i, glacier) in enumerate(simulation.glaciers)
+        tspan = glacier_tspan(simulation, i)
+        if isnothing(glacier.dhdtData)
+            throw(ArgumentError("LossDhdt needs elevation change data, but glacier \
+                $(glacier.rgi_id) has none."))
+        end
+        t1, t2 = glacier.dhdtData.t
+        if !(tspan[1] <= t1 && t2 <= tspan[2])
+            throw(ArgumentError("LossDhdt compares the elevation change from $(t1) to \
+                $(t2) for glacier $(glacier.rgi_id), but the simulation only covers \
+                tspan = $(tspan). This period must be inside tspan."))
+        end
+    end
+end
+function check_loss(lossType::InitialThicknessRegularization, simulation)
+    for (i, glacier) in enumerate(simulation.glaciers)
+        tspan = glacier_tspan(simulation, i)
+        if !isnothing(lossType.t₀) && !(tspan[1] <= lossType.t₀ <= tspan[2])
+            throw(ArgumentError("InitialThicknessRegularization is applied at \
+                t₀ = $(lossType.t₀), outside the time window $(tspan) of glacier \
+                $(glacier.rgi_id), so it would be ignored. Use \
+                InitialThicknessRegularization() to apply it at the start of each glacier."))
+        end
+        # The correction is measured from glacier.H₀, so θ.IC should start there
+        if lossType.correction
+            θ = simulation.model.trainable_components.θ
+            haskey(θ, :IC) || throw(ArgumentError(
+                "InitialThicknessRegularization needs the initial condition to be trained."))
+            H₀ = evaluate_H₀(θ, glacier,
+                simulation.parameters.UDE.initial_condition_filter, i)
+            if norm(H₀ .- glacier.H₀) > 0.05 * norm(glacier.H₀)
+                @warn "InitialThicknessRegularization(correction = true) penalizes the change \
+                    from glacier.H₀, but the initial condition of glacier $(glacier.rgi_id) \
+                    starts more than 5% away from it. Use the same product for \
+                    `ice_thickness_source` and for `InitialCondition`."
+            end
         end
     end
 end

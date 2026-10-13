@@ -58,6 +58,19 @@ Once the model has been trained, the value of the initialization can be computed
 
 Inside `θ`, the initial condition is not stored in metres. It is divided by a scale for each glacier (`H₀_scale`, the maximum initial ice thickness), so that its values are of order one, like the other parameters. Always use `evaluate_H₀` to get the ice thickness in metres, and don't read `θ.IC` directly. Note that the learning rate of the optimizer acts on these scaled values.
 
+#### Observations and time windows
+
+The best starting point of an inversion of the initial condition is the date of a thickness survey: the survey then constrains $H_0$ directly, and not through the dynamics of the first time steps. Use `observations` to list everything that is available for a glacier (thickness surveys, velocity maps and the geodetic elevation change), and `plot_observations` or `plot_observation_timeline` to see it:
+
+```julia
+observations(glacier)          # one row per observation, sorted in time
+plot_observations(glacier)     # 3D: space and time, thickness and velocity in different colours
+```
+
+With `use_glathida_data = true`, the dated GlaThiDa surveys are attached to the glacier as thickness observations. When `H₀` is trained and the first survey is at most one mass balance step after the start of the simulation, the glacier starts on the survey and an `@info` message says so. If `H₀` is not trained, there is only a warning. To choose the start by hand, use `align_start!(params, glaciers)`, or give a glacier its own time window in the parameters, by RGI ID: `SimulationParameters(tspan = (2000.0, 2020.0), glacier_tspans = Dict("RGI60-11.01450" => (2009.24, 2018.0)))`. The `tspan` of the parameters is used for the glaciers that do not have an entry, and the windows must be inside it (see `glacier_tspan`).
+
+The simulation does not need to be a whole number of mass balance steps: the last window of the climate ends after the end of the simulation, and the simulation stops inside it.
+
 ## Functional inversions
 
 We refer to functional inversions as the inverse problems where the objective is to invert the parameter $\theta$ of a regressor (e.g. a neural network), in order to learn a function that parametrizes a subpart of a mechanistic model (e.g. the SIA) with respect to one or more input variables (e.g. surface melt, basal slope) [bolibar_universal_2023](@cite). The methods behind functional inversions are known as **Universal Differential Equations** [rackauckas_universal_2020](@cite).

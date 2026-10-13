@@ -20,18 +20,12 @@ It is defined as a SciMLStructure and it contains the inversion structure and th
 
 !!! warning "This binder is solver-facing only"
 
-    The binder is handed to `solve` as `p`. Inside the RHS, reading `container.θ` is correct
-    and necessary — that is how the laws see the parameters. **Anywhere downstream of the
-    solve, take θ as an explicit argument instead.**
+    The binder is given to `solve` as `p`, and the laws read `container.θ` inside the RHS.
+    Anywhere after the solve, take θ (and the simulation) as explicit arguments instead.
 
-    Reading `container.θ` in code that Zygote differentiates makes it accumulate into one
-    mutable object from two directions, and the contribution that flows through the ODE is
-    silently dropped. The forward value is unchanged, so nothing errors and no loss
-    comparison catches it — only a gradient check does. `batch_loss_iceflow_transient` was
-    14.8x wrong on `LossV` for this reason, and `define_iceflow_prob`/`u0` before it.
-
-    `LossH` hides the bug: it never uses θ, so there is nothing to drop. Any test for this
-    has to use a loss that depends on θ directly, which in practice means a velocity loss.
+    If code that Zygote differentiates reads `container.θ`, the part of the gradient that
+    goes through the ODE is lost, with no error and the same loss value. Only a gradient
+    check with a loss that uses θ (for example a velocity loss) finds it: `LossH` does not.
 """
 mutable struct InversionBinder{FI <: Inversion, CA <: ComponentArray} <: Container
     simulation::FI
@@ -69,10 +63,8 @@ end
 function SS.replace(::SS.Tunable, p::InversionBinder, newbuffer)
     N = length(p.θ)
     @assert length(newbuffer) == N
-    # The repacked binder must own its simulation *and* keep its values. Sharing
-    # `p.simulation` lets Enzyme write derivatives into the primal, which comes back with
-    # Δx, B and ρ set to NaN and the gradient at zero. Zeroing a copy instead leaves the
-    # adjoint replaying the right hand side on an empty glacier. Copy, and keep the values.
+    # Copy the simulation and keep its values: with a shared one Enzyme writes derivatives
+    # into it, and with a zeroed one the adjoint runs on an empty glacier
     sim = deepcopy(p.simulation)
     θ = Vector2ComponentVector(newbuffer, p.θ)
     return InversionBinder{typeof(sim), typeof(θ)}(sim, θ)
@@ -96,9 +88,8 @@ It is used in SciMLSensitivity to differentiate the callbacks.
 function Base.zero(
         p::InversionBinder{FI, CA},
 ) where {FI <: Inversion, CA <: ComponentArray}
-    # An Enzyme shadow must not alias the primal. The laws write their value into the
-    # simulation cache, and that write is where θ enters the right hand side, so sharing
-    # `p.simulation` here silently collapses the parameter gradient to zero.
+    # The Enzyme shadow must not share the simulation of the primal, otherwise the gradient
+    # of the laws (written in the simulation cache) is zero
     return InversionBinder(Enzyme.make_zero(p.simulation), zero(p.θ))
 end
 

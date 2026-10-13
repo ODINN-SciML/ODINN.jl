@@ -45,24 +45,32 @@ struct TikhonovRegularization{I <: Integer} <: AbstractSimpleRegularization
 end
 
 """
-    InitialThicknessRegularization(t₀::AbstractFloat; reg::AbstractSimpleRegularization = TikhonovRegularization())
+    InitialThicknessRegularization(t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization(), correction::Bool = false)
 
 A composite regularization type designed for initial ice thickness.
 It combines a simple spatial regularization (e.g., `TikhonovRegularization`) with a reference initial time.
 
+# Arguments
+
+  - `t₀`: Time at which the regularization applies. With `nothing` (default), it is the start of the time window of each glacier, see `glacier_tspan`.
+
 # Keyword Arguments
 
   - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
-  - `t₀::AbstractFloat = 1994.0`: The reference initial time (e.g., year) at which the regularization applies.
+  - `correction::Bool = false`: If `true`, the regularization is applied to the correction of the initial thickness, `H₀ - glacier.H₀`, and not to `H₀` itself. The initial thickness of the glacier keeps its own shape, and only the changes made by the inversion are kept smooth. With the Laplacian, a constant or a linear change is not penalized. The reference is `glacier.H₀`, which is the starting point of `θ.IC` only if `InitialCondition` uses the same product; otherwise the `Inversion` shows a warning.
 """
 struct InitialThicknessRegularization{
-    R <: AbstractSimpleRegularization, F <: AbstractFloat} <: AbstractRegularization
+    R <: AbstractSimpleRegularization, T <: Union{Nothing, AbstractFloat}} <:
+       AbstractRegularization
     reg::R
-    t₀::F
+    t₀::T
+    correction::Bool
 
     function InitialThicknessRegularization(
-            t₀::AbstractFloat; reg::AbstractSimpleRegularization = TikhonovRegularization())
-        return new{typeof(reg), typeof(t₀)}(reg, t₀)
+            t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization(),
+            correction::Bool = false)
+        t₀ = isnothing(t₀) ? nothing : float(t₀)
+        return new{typeof(reg), typeof(t₀)}(reg, t₀, correction)
     end
 end
 
@@ -107,7 +115,7 @@ inversions. It is the counterpart of [`RheologyRegularization`](@ref) for `C` an
 include a spatial smoothing operator through the field `reg`.
 
 The penalty is evaluated on `C` in physical units, that is after mapping `θ.C` through the
-same tanh parameterisation used by [`LawC`](@ref), so the weight `λ` is expressed relative
+same tanh parameterization used by [`LawC`](@ref), so the weight `λ` is expressed relative
 to the physical magnitude of `C`.
 
 # Keyword Arguments
@@ -162,6 +170,20 @@ function backward_loss(
     return ∂L∂a
 end
 
+# Whether `t` is the start of the time window of the glacier, or `t₀` if it is given
+function at_start(t, simulation, glacier_idx, t₀ = nothing)
+    t == something(
+        t₀, glacier_tspan(simulation, glacier_idx)[1])
+end
+
+"""
+Field that `InitialThicknessRegularization` is applied to: `H₀`, or its correction `H₀ - glacier.H₀`.
+The shift is constant in θ, so the derivative with respect to `H₀` has the same form in both cases.
+"""
+function regularized_field(lossType::InitialThicknessRegularization, H₀, glacier)
+    lossType.correction ? H₀ .- glacier.H₀ : H₀
+end
+
 function loss(
         lossType::InitialThicknessRegularization,
         H_pred::Matrix{F},
@@ -175,12 +197,13 @@ function loss(
         Δt
 ) where {F <: AbstractFloat}
     @assert haskey(θ, :IC) """Regularization with respect to initial condition requires to set initial condition as a trainable parameter. If you want to calibrate the initial condition of the glacier, set the initial condition as parameter in the definition of the regressor."""
-    if t == lossType.t₀
+    if at_start(t, simulation, glacier_idx, lossType.t₀)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
         H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
         mask = trues(size(H₀))
-        regH = loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
+        regH = loss(lossType.reg, regularized_field(lossType, H₀, glacier),
+            Δx, Δy, mask, normalization)
         return regH
     else
         return 0.0
@@ -200,7 +223,7 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     # Regularization is only evaluated for the first time step of the simulation.
     glacier = simulation.glaciers[glacier_idx]
-    if t == lossType.t₀
+    if at_start(t, simulation, glacier_idx, lossType.t₀)
         Δx, Δy = glacier.Δx, glacier.Δy
         H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
         mask = trues(size(H₀))
@@ -208,7 +231,8 @@ function backward_loss(
         ∂L∂θ = zero(θ)
         key = Symbol("$(glacier_idx)")
         # Chain rule through the filter and the θ.IC scale: ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
-        ∂L∂H₀ = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
+        ∂L∂H₀ = backward_loss(lossType.reg, regularized_field(lossType, H₀, glacier),
+            Δx, Δy, mask, normalization)
         ∂H₀∂θ = evaluate_∂H₀(
             θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
         ∂L∂θ.IC[key] = ∂L∂H₀ .* ∂H₀∂θ
@@ -294,7 +318,7 @@ function loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    if t == simulation.parameters.simulation.tspan[1]
+    if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
         min_A = simulation.parameters.physical.minA
@@ -321,7 +345,7 @@ function backward_loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    if t == simulation.parameters.simulation.tspan[1]
+    if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
         min_A = simulation.parameters.physical.minA
@@ -352,7 +376,7 @@ function loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    if t == simulation.parameters.simulation.tspan[1]
+    if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
         max_C = simulation.parameters.physical.maxC
@@ -379,7 +403,7 @@ function backward_loss(
         normalization::F,
         Δt
 ) where {F <: AbstractFloat}
-    if t == simulation.parameters.simulation.tspan[1]
+    if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
         max_C = simulation.parameters.physical.maxC
@@ -479,6 +503,8 @@ function ChainRules.rrule(
 ) where {F <: AbstractFloat}
     ∇²a = ∇²(a, Δx, Δy)
     function ∇²_pullback(Δ)
+        Δ isa ChainRules.AbstractZero && return (ChainRules.NoTangent(),
+            ChainRules.ZeroTangent(), ChainRules.NoTangent(), ChainRules.NoTangent())
         ∂a = VJP_λ_∂∇²a_∂a(ChainRules.unthunk(Δ), a, Δx, Δy)
         return (ChainRules.NoTangent(), ∂a, ChainRules.NoTangent(), ChainRules.NoTangent())
     end
@@ -490,6 +516,9 @@ function loss_uses_velocity(lossType::Union{
         AbstractRegularization, AbstractSimpleRegularization})
     false
 end
-discreteLossSteps(lossType::InitialThicknessRegularization, tspan) = [lossType.t₀]
+function discreteLossSteps(lossType::InitialThicknessRegularization, tspan)
+    [something(
+        lossType.t₀, tspan[1])]
+end
 discreteLossSteps(lossType::RheologyRegularization, tspan) = [tspan[1]]
 discreteLossSteps(lossType::SlidingRegularization, tspan) = [tspan[1]]

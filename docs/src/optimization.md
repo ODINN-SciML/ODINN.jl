@@ -93,6 +93,9 @@ With `LossH(weighting = :time_span)` (same for `LossV`), each observation time i
 This gives less weight to observations that are close in time, for example several velocity maps in the same year.
 See `observation_weights` for the details.
 
+At each observation time, `L2Sum` (and `LogSum`) divide the sum by the number of cells of the grid (`normalize = :cells`, default), so the weight of each observation depends on the resolution.
+With `L2Sum(normalize = :observations)` the sum is divided by the number of observed pixels, so the loss is a mean over the observations, whatever the resolution.
+
 #### Time aggregated loss functions
 
 There are cost functions which cannot be written as $\int_{t\in\Tau}\int_{x\in\Omega} \ell(...)$ but which are rather of the form $\ell(\int_{t\in\Tau} ...)$.
@@ -132,8 +135,11 @@ From a mathematical and computational perspective, regularization losses are jus
 ODINN currently supports the following type of regularization, although the development of new regularization should be straightforward from the source code API:
 
   - `InitialThicknessRegularization`: Penalizes large second order derivatives in the initial condition of the glacier when this is treated as an optimization variable. This builds on top of `TikhonovRegularization`.
+    With `correction = true` the penalty is applied to the change of the initial condition (`H₀ - glacier.H₀`) instead of to `H₀` itself, so the shape of `glacier.H₀` is kept and only the changes made by the inversion are smooth. Use the same product for `glacier.H₀` and for the initialization of `InitialCondition`, so that the penalty is zero at the start. Small scale changes decay in a few weeks once the simulation starts and create a shock in the first time steps, while smooth changes do not.
   - `VelocityRegularization`: Penalizes large second order derivatives in the simulated surface velocity of the glacier. This builds on top of `TikhonovRegularization`.
-    Regularization and empirical losses can be combined together to construct new form of regularizations.
+  - `RheologyRegularization` and `SlidingRegularization`: Penalize large second order derivatives in a gridded `A` or `C` (with the same `tanh` map as the law), at the start of the simulation. The value of `λ` depends on the units of `A` or `C`.
+
+Regularization and empirical losses can be combined together to construct new form of regularizations.
 
 Regularizations rely on simple losses which are agnostic to the nature of the variable that it takes as input.
 The following simple losses are implemented, and the regularizations described above are built on top of them:
@@ -167,7 +173,7 @@ For small problems, like a neural network, `BFGS(initial_stepnorm = 0.001)` can 
     When the loss is large, this step is large too, and the forward simulation can blow up.
     `InitialStatic(scaled = true)` limits the norm of this trial step to one.
 
-If the forward simulation fails at a point tried by the line search of BFGS or LBFGS, for example because the step was too large, the loss at this point is infinite and the line search takes a shorter step.
+If the forward simulation fails at a point tried by the line search of BFGS or LBFGS, for example because the step was too large, the loss at this point is infinite and the line search takes a shorter step. This works with a line search that only uses the loss, such as `BackTracking` in `default_optimizer()`. A line search that also uses the gradient at the trial point, such as `HagerZhang` (the default of `Optim.BFGS` and `Optim.LBFGS`), still stops with the error.
 Adam has no line search, so in this case it stops with the error of the simulation.
 
 ## Logging

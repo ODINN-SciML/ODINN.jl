@@ -86,6 +86,13 @@ function params_constructor_specified(save_refs::Bool = false)
         jldsave(joinpath(Sleipnir.root_dir, "test/data/params/params.jld2"); params)
     end
 
+    # The default number of epochs follows the optimizer, and a mismatch is refused
+    @test Hyperparameters().epochs == [25, 25]
+    @test Hyperparameters(optimizer = ODINN.Adam(0.01)).epochs == 50
+    @test_throws ArgumentError Hyperparameters(epochs = 100)
+    @test_throws ArgumentError Hyperparameters(optimizer = ODINN.Adam(0.01), epochs = [
+        10, 10])
+
     @test true
 end
 
