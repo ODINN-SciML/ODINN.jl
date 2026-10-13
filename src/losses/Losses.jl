@@ -17,9 +17,15 @@ The mask defining the glacier borders are computed using the ground truth ice th
 # Fields
 
   - `distance::I`: Distance to border.
+  - `normalize::Symbol`: What the sum is divided by. With `:cells` (default) it is divided by
+    `normalization`, which is the number of cells of the grid, so the weight of each
+    observation depends on the resolution. With `:observations` it is divided by the number of
+    pixels in the mask, so the loss is a mean over the observations and does not depend on the
+    resolution.
 """
 @kwdef struct L2Sum{I <: Integer} <: AbstractSimpleLoss
     distance::I = 3
+    normalize::Symbol = :cells
 end
 
 """
@@ -34,10 +40,25 @@ Struct that defines a Logarithmic sum loss.
   - `distance::I`: Distance to border.
   - `ϵ::F`: Epsilon used inside the loss function to handle division by zero and log(0).
     It somehow represents the minimum value the loss function should be sensible to.
+  - `normalize::Symbol`: What the sum is divided by, `:cells` (default) or `:observations`.
+    See [`L2Sum`](@ref).
 """
 @kwdef struct LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
     distance::I = 3
     ϵ::F = 0.1
+    normalize::Symbol = :cells
+end
+
+"""
+    loss_normalization(lossType, mask, normalization)
+
+Number that the sum of a simple loss is divided by: `normalization` for `normalize = :cells`,
+and the number of pixels in `mask` for `normalize = :observations`.
+"""
+function loss_normalization(lossType, mask, normalization)
+    lossType.normalize == :cells && return normalization
+    lossType.normalize == :observations && return oftype(normalization, max(count(mask), 1))
+    throw(ArgumentError("normalize must be :cells or :observations, got :$(lossType.normalize)."))
 end
 
 """
@@ -139,7 +160,7 @@ function loss(
         mask::BitMatrix,
         normalization::F
 ) where {F <: AbstractFloat}
-    return sum(((a .- b)[mask]) .^ 2)/normalization
+    return sum(((a .- b)[mask]) .^ 2)/loss_normalization(lossType, mask, normalization)
 end
 function backward_loss(
         lossType::L2Sum,
@@ -150,7 +171,7 @@ function backward_loss(
 ) where {F <: AbstractFloat}
     d = zero(a)
     d[mask] = a[mask] .- b[mask]
-    return 2.0 .* d ./ normalization
+    return 2.0 .* d ./ loss_normalization(lossType, mask, normalization)
 end
 
 function loss(
@@ -215,7 +236,7 @@ function loss(
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
     return sum((log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)) .^ 2)) ./
-           normalization
+           loss_normalization(lossType, mask, normalization)
 end
 function backward_loss(
         lossType::LogSum,
@@ -227,7 +248,7 @@ function backward_loss(
     d = zero(a)
     d[mask] = log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)) ./
               (a[mask] .+ lossType.ϵ)
-    return 2.0 .* d ./ normalization
+    return 2.0 .* d ./ loss_normalization(lossType, mask, normalization)
 end
 
 function loss(
@@ -237,7 +258,8 @@ function loss(
         normalization::F
 ) where {F <: AbstractFloat}
     @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
-    return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) .^ 2) ./ normalization
+    return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) .^ 2) ./
+           loss_normalization(lossType, trues(size(a)), normalization)
 end
 function backward_loss(
         lossType::LogSum,
@@ -246,7 +268,7 @@ function backward_loss(
         normalization::F
 ) where {F <: AbstractFloat}
     return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (a .+ lossType.ϵ) ./
-           normalization
+           loss_normalization(lossType, trues(size(a)), normalization)
 end
 
 function loss(

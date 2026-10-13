@@ -305,6 +305,19 @@ function loss_iceflow_transient(θ, simulation::Inversion, mappingFct)
     return sum(losses)
 end
 
+"""
+    ForwardSolveFailure(retcode)
+
+Error thrown when the solver of the forward ice flow simulation does not succeed.
+"""
+struct ForwardSolveFailure <: Exception
+    retcode::ReturnCode.T
+end
+function Base.showerror(io::IO, e::ForwardSolveFailure)
+    print(io,
+        "ForwardSolveFailure: there was an error in the iceflow solver. Returned code is \"$(e.retcode)\"")
+end
+
 # `pmap` wraps the error of a task or of a worker
 root_exception(e) = e
 root_exception(e::RemoteException) = root_exception(e.captured)
@@ -315,18 +328,17 @@ root_exception(e::CapturedException) = root_exception(e.ex)
 
 Call `loss(args...)` and return `Inf` if the forward simulation fails.
 
-A trial point that is too far can make the solver fail: `DomainError` from the mass balance
-lookup, or the return code of the solver. With an infinite loss, the line search of BFGS and
-LBFGS takes a shorter step instead of stopping the inversion. Other errors are not caught.
+A trial point that is too far can make the forward fail: the surface leaves the range of the
+mass balance (`Muninn.ElevationOutOfRange`), or the solver fails (`ForwardSolveFailure`).
+With an infinite loss, the line search of BFGS and LBFGS takes a shorter step instead of
+stopping the inversion. Other errors are not caught.
 """
 function loss_or_inf(loss, args...)
     try
         return loss(args...)
     catch err
         ex = root_exception(err)
-        failed = ex isa DomainError ||
-                 (ex isa AssertionError && occursin("iceflow solver", ex.msg))
-        failed || rethrow()
+        ex isa Union{ForwardSolveFailure, Muninn.ElevationOutOfRange} || rethrow()
         @warn "The forward simulation failed, using an infinite loss: $(sprint(showerror, ex))" maxlog=5
         return Inf
     end
@@ -460,8 +472,8 @@ function batch_loss_iceflow_transient(
     Vy_ref = useVelocity ? glacier.velocityData.vy : nothing
 
     # Weight of each observation, provided to the loss as a named tuple with one vector per term
-    Δt_HV = observation_weights(
-        loss_function, tH_ref, tV_ref, simulation.parameters.simulation.tspan)
+    Δt_HV = @ignore_derivatives observation_weights(
+        loss_function, tH_ref, tV_ref, glacier_tspan(simulation, glacier_idx))
 
     if useThickness
         @assert size(H[begin]) == size(H_ref[begin]) "Size of reference and prediction datasets do not match."
@@ -533,12 +545,14 @@ function _batch_iceflow_UDE(
         container.simulation.model, container.simulation, glacier_idx, container.θ)
     container.simulation.model.trainable_components.θ = container.θ
 
+    tspan = glacier_tspan(params, glacier)
+
     # Define tstops
-    tstops = Huginn.define_callback_steps(params.simulation.tspan, step)
+    tstops = Huginn.define_callback_steps(tspan, step)
     tstops = unique(vcat(tstops, params.solver.tstops)) # Merge time steps controlled by `step` with the user provided time steps
     tstopsIceThickness = tdata(glacier.thicknessData)
     tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
-    tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, params.simulation.tspan))
+    tstopsDiscreteLoss = unique(discreteLossSteps(params.UDE.empirical_loss_function, tspan))
     tstopsAggregatedLoss = unique(discretePostIntegralLossSteps(
         params.UDE.empirical_loss_function, container.simulation, glacier_idx))
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
@@ -546,8 +560,7 @@ function _batch_iceflow_UDE(
     # Observation times can fall outside the simulated window, and the solver never reaches
     # them. `create_results` looks every tstop up in `solution.t` and indexes with the
     # result, so keeping an unreachable one makes it index with `nothing`.
-    tstops = filter(
-        t -> params.simulation.tspan[1] <= t <= params.simulation.tspan[2], tstops)
+    tstops = filter(t -> tspan[1] <= t <= tspan[2], tstops)
 
     # Create iceflow law callback
     cb_iceflow = Huginn.build_callback(
@@ -555,7 +568,7 @@ function _batch_iceflow_UDE(
         container.simulation.cache.iceflow,
         container.simulation.cache.iceflow.glacier_idx,
         container.θ,
-        params.simulation.tspan
+        tspan
     )
 
     # Mass balance is a source term of the ice flow RHS, so there is no callback for it
@@ -613,7 +626,7 @@ function simulate_iceflow_UDE!(
         sensealg = params.UDE.sensealg,
         reltol = params.solver.reltol,
         abstol = params.solver.scale_abstol ?
-                 Huginn.effective_abstol(params.solver.abstol, params.simulation.tspan;
+                 Huginn.effective_abstol(params.solver.abstol, iceflow_prob.tspan;
             verbose = false) : params.solver.abstol,
         adaptive = params.solver.adaptive,
         saveat = saveat,
@@ -622,7 +635,8 @@ function simulate_iceflow_UDE!(
         tstops = solver_tstops,
         step_kw...
     )
-    @assert iceflow_sol.retcode==ReturnCode.Success "There was an error in the iceflow solver. Returned code is \"$(iceflow_sol.retcode)\""
+    iceflow_sol.retcode == ReturnCode.Success ||
+        throw(ForwardSolveFailure(iceflow_sol.retcode))
 
     return iceflow_sol
 end
@@ -656,8 +670,9 @@ function define_iceflow_prob(
         )
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
         # An abstract eltype of `u0` fails far from here (see `σ_zang`), so check it once
-        Zygote.@ignore_derivatives @assert isconcretetype(eltype(H₀))&&
-        eltype(H₀)<:AbstractFloat "evaluate_H₀ returned eltype $(eltype(H₀)) for glacier $(glacier_idx); u0 must be a concrete float array. Check `initial_condition_filter = $(simulation.parameters.UDE.initial_condition_filter)` for branches that disagree on their return type."
+        u0_ok = Zygote.@ignore_derivatives isconcretetype(eltype(H₀)) &&
+                                           eltype(H₀) <: AbstractFloat
+        Zygote.@ignore_derivatives @assert u0_ok "evaluate_H₀ returned eltype $(eltype(H₀)) for glacier $(glacier_idx); u0 must be a concrete float array. Check `initial_condition_filter = $(simulation.parameters.UDE.initial_condition_filter)` for branches that disagree on their return type."
 
     else
         H₀ = simulation.glaciers[glacier_idx].H₀
@@ -665,7 +680,7 @@ function define_iceflow_prob(
     iceflow_prob = ODEProblem(
         SIA2D_UDE!,
         H₀,
-        params.simulation.tspan,
+        glacier_tspan(simulation, glacier_idx),
         simulation;
         tstops = params.solver.tstops
     )

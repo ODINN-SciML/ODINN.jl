@@ -29,6 +29,8 @@ end
         loss = LossH(),
         train_initial_conditions = false,
         multiglacier = false,
+        glacier_window = false,
+        single_survey = false,
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
@@ -66,6 +68,8 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `loss`: Loss function to evaluate, such as `LossH()` (height-based) or `LossV()` (velocity-based).
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
   - `multiglacier::Bool`: Whether to run the test on multiple glaciers.
+  - `glacier_window::Bool`: If `true`, the last glacier has its own time window, which starts on its third observation. The observations before are outside its window.
+  - `single_survey::Bool`: If `true`, the first glacier keeps only one thickness observation, in the middle of the time window.
   - `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
   - `temp_bias`: Temperature bias of the tested `TImodel1`, in °C. A nonzero value shifts
     where the PDD and snow clamps activate, so it exercises that dependency in the MB VJP.
@@ -97,6 +101,8 @@ function test_grad_finite_diff(
         loss = LossH(),
         train_initial_conditions = false,
         multiglacier = false,
+        glacier_window = false,
+        single_survey = false,
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
@@ -265,6 +271,16 @@ function test_grad_finite_diff(
         ODINN.loss_uses_velocity(loss) ? (:H, :V) : (:H,)
     end
     glaciers = generate_ground_truth(glaciers, params, model, tstops; store = store)
+    if glacier_window
+        params.simulation.glacier_tspans[glaciers[end].rgi_id] = (tstops[3], tspan[2])
+    end
+    if single_survey
+        # Keep only one thickness survey, in the middle of the time window
+        td = glaciers[1].thicknessData
+        k = cld(length(td.t), 2)
+        glaciers[1] = Sleipnir.Glacier2D(glaciers[1];
+            thicknessData = Sleipnir.ThicknessData(t = [td.t[k]], H = [td.H[k]]))
+    end
 
     # Neural network model
     if functional_inv
@@ -514,6 +530,43 @@ function test_observation_weights()
     @test ODINN.observation_weighting(loss, :V) == :uniform
     @test ODINN.observation_weighting(LossHV(), :H) == :uniform
     @test isnothing(ODINN.observation_weighting(LossH(), :V))
+    # Two terms with different weightings of the same observations are refused
+    @test_throws ArgumentError ODINN.observation_weighting(
+        MultiLoss(losses = (LossH(), LossH(weighting = :time_span)), λs = (1.0, 1.0)), :H)
+end
+
+"""
+    test_align_start_in_inversion()
+
+When the initial condition is trained, the `Inversion` moves the start of a glacier to its
+first ice thickness survey, if the survey is at most one mass balance step after the start.
+Otherwise the window is not changed.
+"""
+function test_align_start_in_inversion()
+    for train_initial_conditions in (true, false)
+        simulation,
+        θ = test_grad_finite_diff(
+            ContinuousAdjoint(VJP_method = DiscreteVJP());
+            train_initial_conditions = train_initial_conditions, return_setup = true)
+        params = simulation.parameters
+        glacier = simulation.glaciers[1]
+        t_surveys = Sleipnir.tdata(glacier.thicknessData)
+        t₁ = params.simulation.tspan[2]
+        # The window starts shortly after the first survey, and the second one is a step later
+        start = (t_surveys[1] + 0.02, t₁)
+        params.simulation.glacier_tspans[glacier.rgi_id] = start
+        Inversion(simulation.model, simulation.glaciers, params)
+        @test params.simulation.glacier_tspans[glacier.rgi_id] ==
+              (train_initial_conditions ? (t_surveys[2], t₁) : start)
+    end
+
+    # The regularizations of C and A need these parameters to be trained
+    simulation,
+    θ = test_grad_finite_diff(
+        ContinuousAdjoint(VJP_method = DiscreteVJP());
+        functional_inv = false, scalar = false, return_setup = true)
+    @test_throws ArgumentError ODINN.check_loss(SlidingRegularization(), simulation)
+    @test isnothing(ODINN.check_loss(RheologyRegularization(), simulation))
 end
 
 """
@@ -529,9 +582,12 @@ function test_first_observation_counts()
         functional_inv = false, scalar = true, loss = LossH(), return_setup = true)
     H_obs = simulation.glaciers[1].thicknessData.H
     L₀ = ODINN.loss_iceflow_transient(θ, simulation, map)
-    H_obs[1] .+= 10.0
+    # Only the observed cells change, so that the mask of the loss stays the same
+    observed = H_obs[1] .> 0
+    H_obs[1][observed] .+= 10.0
     L₁ = ODINN.loss_iceflow_transient(θ, simulation, map)
-    H_obs[1] .-= 10.0
+    H_obs[1][observed] .-= 10.0
+    # The prediction is close to the observations (ground truth), so +10 m makes the loss larger
     @test L₁ > L₀
 end
 
@@ -543,24 +599,51 @@ shorter step. Other errors must not be hidden. The loss below fails far from the
 the forward simulation does when the first step of LBFGS is too large.
 """
 function test_loss_or_inf()
-    solver_error = AssertionError("There was an error in the iceflow solver. Returned code is \"Unstable\"")
-    @test isinf(ODINN.loss_or_inf(θ -> throw(DomainError(θ, "out of range")), 1.0))
-    @test isinf(ODINN.loss_or_inf(θ -> throw(solver_error), 1.0))
+    out_of_range = ODINN.Muninn.ElevationOutOfRange("diverged")
+    @test isinf(ODINN.loss_or_inf(θ -> throw(out_of_range), 1.0))
+    @test isinf(ODINN.loss_or_inf(
+        θ -> throw(ODINN.ForwardSolveFailure(ODINN.ReturnCode.Unstable)), 1.0))
     # `pmap` wraps the error in a `CapturedException`, also when it runs in the main process
-    @test isinf(ODINN.loss_or_inf(θ -> ODINN.pmap(x -> throw(DomainError(x, "diverged")), [θ]), 1.0))
+    @test isinf(ODINN.loss_or_inf(θ -> ODINN.pmap(x -> throw(out_of_range), [θ]), 1.0))
     @test_throws CapturedException ODINN.loss_or_inf(
         θ -> ODINN.pmap(x -> x + nothing, [θ]), 1.0)
     @test_throws MethodError ODINN.loss_or_inf(θ -> θ + nothing, 1.0)
-    @test_throws AssertionError ODINN.loss_or_inf(θ -> @assert(false, "other"), 1.0)
+    @test_throws DomainError ODINN.loss_or_inf(θ -> sqrt(-θ), 1.0)
 
-    f(x) = any(abs.(x) .> 5) ? throw(DomainError(x, "diverged")) : 1e3 * sum(abs2, x .- 1)
+    f(x) = any(abs.(x) .> 5) ? throw(out_of_range) : 1e3 * sum(abs2, x .- 1)
     g!(G, x) = (G .= 2e3 .* (x .- 1))
     optimizer = Optim.LBFGS(linesearch = ODINN.LineSearches.BackTracking())
     # The first step, x - g, is at 2000, so without the `Inf` the optimization fails
-    @test_throws DomainError Optim.optimize(f, g!, zeros(2), optimizer)
+    @test_throws ODINN.Muninn.ElevationOutOfRange Optim.optimize(f, g!, zeros(2), optimizer)
     res = Optim.optimize(x -> ODINN.loss_or_inf(f, x), g!, zeros(2), optimizer)
     @test Optim.minimum(res) < 1e-8
     @test Optim.minimizer(res) ≈ ones(2) atol = 1e-4
+end
+
+"""
+    test_loss_normalize()
+
+With `normalize = :observations` the simple losses are divided by the number of pixels in the
+mask, not by `normalization`: the value is a mean over the observations. The manual backward is
+checked against Zygote, which is what the automatic adjoint differentiates.
+"""
+function test_loss_normalize()
+    nx, ny = 8, 7
+    a = [2.0 + 0.3i + 0.1j for i in 1:nx, j in 1:ny]
+    b = [1.5 + 0.2i - 0.05j for i in 1:nx, j in 1:ny]
+    mask = falses(nx, ny)
+    mask[2:5, 3:6] .= true # 16 observed pixels
+    normalization = Float64(nx * ny)
+    for (cells, obs_norm) in ((L2Sum(), L2Sum(normalize = :observations)),
+        (LogSum(), LogSum(normalize = :observations)))
+        @test loss(obs_norm, a, b, mask, normalization) ≈
+              loss(cells, a, b, mask, normalization) * normalization / count(mask)
+        # The value does not depend on `normalization`
+        @test loss(obs_norm, a, b, mask, 1.0) == loss(obs_norm, a, b, mask, 1e6)
+        ∂a_zygote, = Zygote.gradient(x -> loss(obs_norm, x, b, mask, normalization), a)
+        @test backward_loss(obs_norm, a, b, mask, normalization) ≈ ∂a_zygote
+    end
+    @test_throws ArgumentError loss(L2Sum(normalize = :other), a, b, mask, normalization)
 end
 
 """
@@ -568,21 +651,43 @@ end
 
 `LossAvgV` must fail at `Inversion` construction, with a clear message, when the velocity
 observation period is not inside `tspan`. Before, it failed deep inside the first gradient
-call with `invalid index: nothing`. Only `tspan`, `rgi_id` and the velocity dates are read,
-so a small stand-in for the simulation is enough.
+call with `invalid index: nothing`. The same for the period of `LossDhdt` and an explicit `t₀`
+of `InitialThicknessRegularization`. Only `tspan`, `rgi_id` and the observation dates are
+read, so a small stand-in for the simulation is enough.
 """
 function test_loss_time_window_guard()
     vd = (; date1 = [ODINN.Sleipnir.Dates.DateTime(2017, 1, 1)],
         date2 = [ODINN.Sleipnir.Dates.DateTime(2018, 1, 1)])
-    sim(tspan) = (; parameters = (; simulation = (; tspan = tspan)),
+    sim(tspan) = (;
+        parameters = (;
+            simulation = (; tspan = tspan,
+            glacier_tspans = Dict{String, Tuple{Float64, Float64}}())),
         glaciers = [(; rgi_id = "RGI60-11.01450", velocityData = vd)])
     loss = MultiLoss(losses = (LossH(), LossAvgV()), λs = (1.0, 1.0))
 
-    @test isnothing(ODINN.check_loss_time_window(loss, sim((2016.0, 2019.0))))
-    @test_throws ArgumentError ODINN.check_loss_time_window(loss, sim((2010.0, 2017.5)))
-    @test_throws ArgumentError ODINN.check_loss_time_window(loss, sim((2017.5, 2019.0)))
+    @test isnothing(ODINN.check_loss(loss, sim((2016.0, 2019.0))))
+    @test_throws ArgumentError ODINN.check_loss(loss, sim((2010.0, 2017.5)))
+    @test_throws ArgumentError ODINN.check_loss(loss, sim((2017.5, 2019.0)))
     # Losses that need no time window are not affected
-    @test isnothing(ODINN.check_loss_time_window(LossH(), sim((2010.0, 2012.0))))
+    @test isnothing(ODINN.check_loss(LossH(), sim((2010.0, 2012.0))))
+    # A wrong option is refused when the inversion is built, not in the first loss call
+    @test_throws ArgumentError ODINN.check_loss(
+        LossH(weighting = :timespan), sim((2010.0, 2012.0)))
+    @test_throws ArgumentError ODINN.check_loss(
+        LossHV(hLoss = LossH(loss = L2Sum(normalize = :obs))), sim((2010.0, 2012.0)))
+
+    # The elevation change period and an explicit t₀ of the H₀ regularization too
+    sim_dhdt(tspan) = (; parameters = sim(tspan).parameters,
+        glaciers = [(; rgi_id = "RGI60-11.01450", dhdtData = (; t = (2010.0, 2015.0)))])
+    @test isnothing(ODINN.check_loss(LossDhdt(), sim_dhdt((2010.0, 2015.0))))
+    @test_throws ArgumentError ODINN.check_loss(
+        LossDhdt(), sim_dhdt((2011.0, 2015.0)))
+    @test isnothing(ODINN.check_loss(
+        InitialThicknessRegularization(), sim((2016.0, 2019.0))))
+    @test isnothing(ODINN.check_loss(
+        InitialThicknessRegularization(2016.0), sim((2016.0, 2019.0))))
+    @test_throws ArgumentError ODINN.check_loss(
+        InitialThicknessRegularization(2010.0), sim((2016.0, 2019.0)))
 end
 
 """
@@ -627,6 +732,74 @@ function test_initial_thickness_regularization_backward()
         icview(pp)[k] += h
         pm = copy(θ)
         icview(pm)[k] -= h
+        fd = (fwd(pp) - fwd(pm)) / (2h)
+        @test abs(m[k] - fd) / abs(fd) < 1e-6
+    end
+
+    # Same checks with the penalty on the correction `H₀ - glacier.H₀`, at a θ that differs from the start
+    regc = InitialThicknessRegularization(2010.0; correction = true)
+    # A warning when θ.IC does not start from glacier.H₀, the reference of the correction
+    @test_logs ODINN.check_loss(regc, simulation)
+    icview(θ) .*= 1.2
+    @test_logs (:warn,) ODINN.check_loss(regc, simulation)
+    icview(θ) ./= 1.2
+    θc = copy(θ)
+    icview(θc) .+= 0.05 .* randn(MersenneTwister(1), length(icview(θc)))
+    fwdc(p) = ODINN.loss(regc, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, p, simulation, nrm, Δtj)
+    manualc = ODINN.backward_loss(regc, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, θc, simulation, nrm, Δtj)[2]
+    zygotec, = ODINN.Zygote.gradient(fwdc, θc)
+    mc, zc = icview(manualc), icview(zygotec)
+    @test norm(mc .- zc) / norm(zc) < 1e-10
+    # The correction is penalized, not H₀: the value is not the one of the plain regularization
+    @test fwdc(θc) != fwd(θc)
+    for k in sortperm(abs.(zc); rev = true)[1:5]
+        h = 1e-6 * max(abs(icview(θc)[k]), 1.0)
+        pp = copy(θc)
+        icview(pp)[k] += h
+        pm = copy(θc)
+        icview(pm)[k] -= h
+        fd = (fwdc(pp) - fwdc(pm)) / (2h)
+        @test abs(mc[k] - fd) / abs(fd) < 1e-6
+    end
+end
+
+"""
+    test_sliding_regularization_backward()
+
+Check the manual `backward_loss` of `SlidingRegularization` (through the tanh map of `LawC`)
+against Zygote and a central finite difference of its own forward `loss`, with no solver.
+"""
+function test_sliding_regularization_backward()
+    simulation,
+    θ = test_grad_finite_diff(
+        ContinuousAdjoint(VJP_method = DiscreteVJP());
+        target = :C, functional_inv = false, scalar = false, maxC = 0.1,
+        return_setup = true)
+    glacier = simulation.glaciers[1]
+    Cview(p) = vec(getproperty(p.C, Symbol("1")))
+    # A constant C has no Laplacian, so move θ.C away from its seed
+    Cview(θ) .+= 0.5 .* randn(MersenneTwister(1), length(Cview(θ)))
+
+    reg = SlidingRegularization()
+    t₀ = simulation.parameters.simulation.tspan[1]
+    nrm = Float64(prod(size(glacier.H₀)))
+    Δtj = (; H = 0.0, V = 0.0)
+    fwd(p) = ODINN.loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
+        t₀, 1, p, simulation, nrm, Δtj)
+    manual = ODINN.backward_loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
+        t₀, 1, θ, simulation, nrm, Δtj)[2]
+    zygote, = ODINN.Zygote.gradient(fwd, θ)
+    m, z = Cview(manual), Cview(zygote)
+    @test norm(m .- z) / norm(z) < 1e-10
+
+    for k in sortperm(abs.(z); rev = true)[1:5]
+        h = 1e-6 * max(abs(Cview(θ)[k]), 1.0)
+        pp = copy(θ)
+        Cview(pp)[k] += h
+        pm = copy(θ)
+        Cview(pm)[k] -= h
         fd = (fwd(pp) - fwd(pm)) / (2h)
         @test abs(m[k] - fd) / abs(fd) < 1e-6
     end

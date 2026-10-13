@@ -66,6 +66,10 @@ Note that `init_cache` returns the **full model cache**, while `build_callback` 
 
 There are two distinct RHS functions: **`SIA2D!`** is the PDE kernel (signature `(dH, H, simulation, t, θ)`, keeps `θ` for AD); **`SIA2D_PDE!`** is a thin adapter that drops `θ` to match OrdinaryDiffEq's `f(du, u, p, t)` convention. `SIA2D!` lives in `SIA2D_utils.jl` and `SIA2D_PDE!` in `prediction_utils.jl`.
 
+## Sliding diagnostics
+
+`sliding_scale(A, H)` gives the value of `C` where sliding and deformation have the same flux, which is useful to choose the bound and the regularization of a `C` inversion. `velocity_split` and `sliding_fraction` give the sliding and deformation parts of the velocity of a simulation, to see how much of the flow is sliding.
+
 ## Extending Huginn
 
 To add a new iceflow model (e.g. SSA, DIVA) or a new iceflow law, see the [Extending ODINN](../extending.md) guide. It uses the execution chain above as a reference and walks through the required interface layer by layer (forward simulation → inversion → velocity diagnostics), with a complete SSA2Dmodel skeleton.

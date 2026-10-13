@@ -42,7 +42,8 @@ When the loss is large, this step is large too and the forward solve can blow up
 `InitialStatic(scaled = true)` caps the norm of the first trial step of each line search to
 one, and the backtracking can only make it shorter. So no step of LBFGS is longer than one in
 the norm of `θ`, in all the iterations. With a large loss, the default LBFGS can crash at its
-first iteration, while this one converges.
+first iteration, while this one converges. On a gridded `C` and `H₀` inversion of Aletsch
+(a few thousand parameters), it was as fast as the default with a normal loss.
 """
 function default_optimizer()
     [
@@ -54,13 +55,13 @@ end
 
 """
     Hyperparameters(;
-        current_epoch::Sleipnir.Int = 1,
-        current_minibatch::Sleipnir.Int = 1,
-        loss_history::Vector{Sleipnir.Float} = Vector{Sleipnir.Float}(),
+        current_epoch::Int64 = 1,
+        current_minibatch::Int64 = 1,
+        loss_history::Vector{Float64} = Vector{Float64}(),
         optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = default_optimizer(),
-        loss_epoch::Sleipnir.Float = zero(Sleipnir.Float),
-        epochs::Union{Sleipnir.Int, Vector{Sleipnir.Int}} = [25, 25],
-        batch_size::Sleipnir.Int = 15
+        loss_epoch::Float64 = 0.0,
+        epochs::Union{Nothing, Int64, Vector{Int64}} = nothing,
+        batch_size::Int64 = 15
 
 )
 
@@ -68,28 +69,33 @@ Constructs a `Hyperparameters` object with the specified parameters.
 
 # Arguments
 
-  - `current_epoch::Sleipnir.Int`: The current epoch number. Defaults to 1.
-  - `current_minibatch::Sleipnir.Int`: The current minibatch number. Defaults to 1.
-  - `loss_history::Vector{Sleipnir.Float}`: A vector to store the history of loss values. Defaults to an empty vector.
+  - `current_epoch::Int64`: The current epoch number. Defaults to 1.
+  - `current_minibatch::Int64`: The current minibatch number. Defaults to 1.
+  - `loss_history::Vector{Float64}`: A vector to store the history of loss values. Defaults to an empty vector.
   - `optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}}`: The optimizer to be used, or a vector of optimizers used one after the other. Defaults to `default_optimizer()`: Adam, then LBFGS.
-  - `loss_epoch::Sleipnir.Float`: The loss value for the current epoch. Defaults to 0.0.
-  - `epochs::Union{Sleipnir.Int, Vector{Sleipnir.Int}}`: The number of epochs, or one number per optimizer when `optimizer` is a vector. Defaults to `[25, 25]`.
-  - `batch_size::Sleipnir.Int`: The size of each minibatch. Defaults to 15.
+  - `loss_epoch::Float64`: The loss value for the current epoch. Defaults to 0.0.
+  - `epochs::Union{Nothing, Int64, Vector{Int64}}`: The number of epochs, or one number per optimizer when `optimizer` is a vector. Defaults to 25 per optimizer (`[25, 25]` for the default optimizer), or 50 with a single optimizer.
+  - `batch_size::Int64`: The size of each minibatch. Defaults to 15.
 
 # Returns
 
   - A `Hyperparameters` object initialized with the provided values.
 """
 function Hyperparameters(;
-        current_epoch::Sleipnir.Int = Sleipnir.Int(1),
-        current_minibatch::Sleipnir.Int = Sleipnir.Int(1),
-        loss_history::Vector{Sleipnir.Float} = Vector{Sleipnir.Float}(),
+        current_epoch::Int64 = 1,
+        current_minibatch::Int64 = 1,
+        loss_history::Vector{Float64} = Vector{Float64}(),
         optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule,
             Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = default_optimizer(),
-        loss_epoch::Sleipnir.Float = zero(Sleipnir.Float),
-        epochs::Union{Sleipnir.Int, Vector{Sleipnir.Int}} = Sleipnir.Int[25, 25],
-        batch_size::Sleipnir.Int = Sleipnir.Int(15)
+        loss_epoch::Float64 = 0.0,
+        epochs::Union{Nothing, Int64, Vector{Int64}} = nothing,
+        batch_size::Int64 = 15
 )
+    epochs = something(epochs, optimizer isa Vector ? fill(25, length(optimizer)) : 50)
+    if !(optimizer isa Vector ? length(epochs) == length(optimizer) : epochs isa Integer)
+        throw(ArgumentError("Give one number of epochs per optimizer, got \
+            $(optimizer isa Vector ? length(optimizer) : 1) optimizer(s) and epochs = $(epochs)."))
+    end
     # Build Hyperparameters based on input values
     hyperparameters = Hyperparameters{typeof(loss_epoch), typeof(current_epoch)}(
         current_epoch, current_minibatch,
