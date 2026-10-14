@@ -10,6 +10,9 @@ In this page we will attempt to document the main ongoing changes in terms of mo
       + The surface velocity includes the sliding term of the flux (plug flow) and is placed on the grid of `H`, so the velocity losses change when `C > 0`.
       + `InitialThicknessRegularization()` applies at the start of each glacier. A `t₀` outside the time window of a glacier is an error.
       + With an ice thickness survey at most one mass balance step after the start, an inversion of the initial condition starts on the survey (`align_start!`).
+      + With `use_glathida_data = true`, the dated Glathida campaigns are attached as `thicknessData`, so `LossH` uses them. These surveys are sparse: use a loss with `distance = 0`, for example `L2Sum(distance = 0)`, or the mask removes them.
+      + The sign of the Millan22 `vy` is now that of the model `Vy`, so velocity losses with `component = :xy` change.
+      + Huginn: `surface_V!` is removed, use `surface_V` or `surface_V_inplace!`. Muninn: the mass balance throws `Muninn.ElevationOutOfRange` and not a `DomainError` when the surface leaves the range of the table.
 
   - End-to-end differentiability of the whole ODINN ecosystem with `SciMLSensitivity.jl` and `Enzyme.jl` is now available through `SciMLSensitivityAdjoint`, alongside ODINN's own manual adjoints. We are continuing to broaden the set of targets and losses covered by the automatic path, and to consolidate it across the ecosystem.
 

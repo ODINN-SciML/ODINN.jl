@@ -418,6 +418,16 @@ ENV["GKSwstype"] = "nul"
                     λs = (1.0, 1.0)),
                 fixed...)
         end
+
+        # The setup of a transient inversion: gridded C inside (0, maxC) and H₀, H and V, and a
+        # glacier on its own window that is not a whole number of mass balance steps (as when it
+        # starts on a survey). Measured: ratio 3e-5, angle 3e-9 to 1e-8, relerr 9e-5 to 2e-4.
+        @testset "Gridded C, initial condition, LossHV and own window with the automatic adjoint" test_grad_finite_diff(
+            SciMLSensitivityAdjoint();
+            target = :C, functional_inv = false, scalar = false, maxC = 0.1, C₀ = 0.05,
+            train_initial_conditions = true, loss = LossHV(), glacier_window = true,
+            window_offset = 1.0/36.0, adaptive = false, dt = 1.0/240.0, max_params = 25,
+            thres = [1e-3, 1e-6, 1e-3])
     end
 
     # Manual, non-CI groups (GradTolGrid, GradTol, Core12NegativeControl, Core3MB,

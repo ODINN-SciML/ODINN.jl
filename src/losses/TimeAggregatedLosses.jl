@@ -404,7 +404,20 @@ function check_loss(lossType::Union{LossH, LossV}, simulation)
     observation_weights(lossType.weighting, [0.0], (0.0, 1.0))
     hasproperty(lossType.loss, :normalize) &&
         loss_normalization(lossType.loss, trues(1), 1.0)
+    lossType isa LossH && warn_empty_thickness_mask(lossType, simulation)
     return nothing
+end
+# The mask of `LossH` erodes a sparse survey (for example Glathida) to nothing
+function warn_empty_thickness_mask(lossType::LossH, simulation)
+    for glacier in simulation.glaciers
+        H_obs = isnothing(glacier.thicknessData) ? [] :
+                something(glacier.thicknessData.H, [])
+        if any(H -> any(H .> 0) && !any(is_in_glacier(H, lossType.loss.distance)), H_obs)
+            @warn "LossH: a thickness observation of glacier $(glacier.rgi_id) has an empty \
+                mask with distance = $(lossType.loss.distance), so it is ignored. For sparse \
+                surveys, use a loss with distance = 0, for example L2Sum(distance = 0)."
+        end
+    end
 end
 function check_loss(lossType::LossHV, simulation)
     check_loss(lossType.hLoss, simulation)

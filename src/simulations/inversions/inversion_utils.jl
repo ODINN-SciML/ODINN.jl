@@ -547,8 +547,9 @@ function _batch_iceflow_UDE(
 
     tspan = glacier_tspan(params, glacier)
 
-    # Define tstops
-    tstops = Huginn.define_callback_steps(tspan, step)
+    # Define tstops. `define_callback_steps` mutates an array when the window is not a whole
+    # number of steps, and the stops do not depend on `θ`
+    tstops = @ignore_derivatives Huginn.define_callback_steps(tspan, step)
     tstops = unique(vcat(tstops, params.solver.tstops)) # Merge time steps controlled by `step` with the user provided time steps
     tstopsIceThickness = tdata(glacier.thicknessData)
     tstopsVelocity = tdata(glacier.velocityData, params.simulation.mapping)
@@ -609,7 +610,11 @@ function simulate_iceflow_UDE!(
         tstops
 )
     params = container.simulation.parameters
-    solver_tstops, saveat = Huginn.MB_solver_stops(container.simulation, tstops)
+    # The stops do not depend on `θ`, and a window that is not a whole number of `step_MB`
+    # makes them mutate an array
+    solver_tstops,
+    saveat = @ignore_derivatives Huginn.MB_solver_stops(
+        container.simulation, tstops)
     # `dt` only when stepping is fixed: in adaptive mode supplying one overrides the solver's
     # own initial step, and supplying zero aborts the solve.
     step_kw = params.solver.adaptive ? NamedTuple() : (; dt = params.solver.dt)
