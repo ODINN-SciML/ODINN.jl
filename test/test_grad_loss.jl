@@ -69,7 +69,9 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
   - `multiglacier::Bool`: Whether to run the test on multiple glaciers.
   - `glacier_window::Bool`: If `true`, the last glacier has its own time window, which starts on its third observation. The observations before are outside its window.
+  - `window_offset`: With `glacier_window`, the window starts this many years after the third observation. A value that is not a multiple of the mass balance step makes the window a non-whole number of steps, as when a run starts on a survey: the last mass balance window ends after the end of the run.
   - `single_survey::Bool`: If `true`, the first glacier keeps only one thickness observation, in the middle of the time window.
+  - `C₀`: Initial `glacier.C` of all the glaciers, set after the ground truth is generated. With `nothing`, `C = 0`, and a gridded `C` starts in the flat part of its `tanh` map, where its gradient is tiny. Use a value inside `(0, maxC)` to test `C`.
   - `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
   - `temp_bias`: Temperature bias of the tested `TImodel1`, in °C. A nonzero value shifts
     where the PDD and snow clamps activate, so it exercises that dependency in the MB VJP.
@@ -102,7 +104,9 @@ function test_grad_finite_diff(
         train_initial_conditions = false,
         multiglacier = false,
         glacier_window = false,
+        window_offset = 0.0,
         single_survey = false,
+        C₀ = nothing,
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
@@ -282,7 +286,8 @@ function test_grad_finite_diff(
     end
     glaciers = generate_ground_truth(glaciers, params, model, tstops; store = store)
     if glacier_window
-        params.simulation.glacier_tspans[glaciers[end].rgi_id] = (tstops[3], tspan[2])
+        params.simulation.glacier_tspans[glaciers[end].rgi_id] = (
+            tstops[3] + window_offset, tspan[2])
     end
     if single_survey
         # Keep only one thickness survey, in the middle of the time window
@@ -291,6 +296,8 @@ function test_grad_finite_diff(
         glaciers[1] = Sleipnir.Glacier2D(glaciers[1];
             thicknessData = Sleipnir.ThicknessData(t = [td.t[k]], H = [td.H[k]]))
     end
+
+    isnothing(C₀) || foreach(g -> g.C = C₀, glaciers)
 
     # Neural network model
     if functional_inv
@@ -691,7 +698,8 @@ function test_loss_time_window_guard()
         parameters = (;
             simulation = (; tspan = tspan,
             glacier_tspans = Dict{String, Tuple{Float64, Float64}}())),
-        glaciers = [(; rgi_id = "RGI60-11.01450", velocityData = vd)])
+        glaciers = [(;
+            rgi_id = "RGI60-11.01450", velocityData = vd, thicknessData = nothing)])
     loss = MultiLoss(losses = (LossH(), LossAvgV()), λs = (1.0, 1.0))
 
     @test isnothing(ODINN.check_loss(loss, sim((2016.0, 2019.0))))
@@ -704,6 +712,13 @@ function test_loss_time_window_guard()
         LossH(weighting = :timespan), sim((2010.0, 2012.0)))
     @test_throws ArgumentError ODINN.check_loss(
         LossHV(hLoss = LossH(loss = L2Sum(normalize = :obs))), sim((2010.0, 2012.0)))
+    # A sparse survey is eroded to nothing by the default mask of LossH
+    H = zeros(10, 10)
+    H[5, 5] = 100.0
+    sim_H = (; parameters = sim((2010.0, 2012.0)).parameters,
+        glaciers = [(; rgi_id = "RGI60-11.01450", thicknessData = (; H = [H]))])
+    @test_logs (:warn,) ODINN.check_loss(LossH(), sim_H)
+    @test_logs ODINN.check_loss(LossH(loss = L2Sum(distance = 0)), sim_H)
 
     # The elevation change period and an explicit t₀ of the H₀ regularization too
     sim_dhdt(tspan) = (; parameters = sim(tspan).parameters,
