@@ -1,7 +1,7 @@
 export MultiLoss
 
 """
-    MultiLoss(; losses = (L2Sum(),), λs = (1.0,))
+    MultiLoss(; losses = (L2Sum(),), λs = nothing)
 
 Combines multiple loss functions into a single weighted objective.
 
@@ -9,10 +9,15 @@ Combines multiple loss functions into a single weighted objective.
 a different physical constraint, data fidelity term, or regularization penalty—into
 a single differentiable loss function.
 
+Each data term is a mean of `(misfit / σ)²` and each prior a mean of `(|D a| / σ)²`, so all
+the terms are about 1 when the model is as far from the data or the prior as their
+uncertainty. The weights are then only a relative importance, and are 1 by default. Use
+[`loss_terms`](@ref) to see the value of each term.
+
 # Keyword Arguments (Constructor)
 
   - `losses::Tuple = (L2Sum(),)`: A tuple of loss objects (each subtype of `AbstractLoss`) to be combined.
-  - `λs::Tuple = (1.0,)`:  A tuple of scalar weights or hyperparameters corresponding to each loss term.
+  - `λs = nothing`: A tuple with the weight of each loss term. With `nothing`, every weight is 1.
 
 # Fields (Struct)
 
@@ -24,8 +29,9 @@ struct MultiLoss{TL <: Tuple, TS <: Tuple} <: AbstractLoss
     λs::TS
     function MultiLoss(;
             losses = (L2Sum(),),
-            λs = (1.0,)
+            λs = nothing
     )
+        λs = something(λs, ntuple(_ -> 1.0, length(losses)))
         @assert length(losses) == length(λs) "You need to provide an hyperparameter for each loss term defined."
         return new{typeof(losses), typeof(λs)}(losses, λs)
     end
@@ -177,6 +183,10 @@ function backward_loss(
     ∂L∂θ = sum(lossType.λs .* ∂L∂θs)
     return ∂L∂H, ∂L∂θ
 end
+
+# Whether the loss has a term of type `T`
+uses_loss(lossType::AbstractLoss, T) = lossType isa T
+uses_loss(lossType::MultiLoss, T) = any(l -> uses_loss(l, T), lossType.losses)
 
 function loss_uses_velocity(lossType::MultiLoss)
     return any(

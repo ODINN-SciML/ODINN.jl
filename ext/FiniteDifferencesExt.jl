@@ -118,14 +118,15 @@ function grad_finite_diff(
                 if key == :IC
                     # Initial condition
                     for i in 1:length(glaciers)
-                        glacier = glaciers[i]
-                        M = ODINN.evaluate_H₀(θ, glacier, params.UDE.initial_condition_filter, i)
+                        M = ODINN.initial_thickness(θ, simulation, i)
                         non_zero = M .> 1.0
-                        idxs = rand(findall(non_zero), max_params)
-                        mask = falses(size(M)...)
-                        mask[idxs] .= 1
-                        key_glacier = Symbol("$(i)")
-                        θ_mask.IC[key_glacier] .= mask
+                        mask_IC = ODINN.ic_params(θ_mask, i)
+                        # The thickness, and the surface when the bed is free, on cells with ice
+                        for field in keys(mask_IC)
+                            mask = falses(size(M)...)
+                            mask[rand(findall(non_zero), max_params)] .= 1
+                            getproperty(mask_IC, field) .= mask
+                        end
                     end
                 elseif (key == :A) && (Symbol("1") in keys(θ.A)) &&
                        length(θ.A) != length(glaciers)
