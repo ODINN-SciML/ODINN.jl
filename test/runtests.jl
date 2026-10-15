@@ -83,7 +83,6 @@ ENV["GKSwstype"] = "nul"
             @testset "Adjoint of diff" test_adjoint_diff()
             @testset "Adjoint of clamp_borders" test_adjoint_clamp_borders()
             @testset "Adjoint of avg" test_adjoint_avg()
-            @testset "5-point Laplacian and its adjoint" test_laplacian()
         end
     end
 
@@ -121,7 +120,7 @@ ENV["GKSwstype"] = "nul"
             @testset "Observation weights" test_observation_weights()
             @testset "The first observation counts" test_first_observation_counts()
             @testset "Infinite loss when the forward simulation fails" test_loss_or_inf()
-            @testset "Normalization by the number of observations" test_loss_normalize()
+            @testset "Mean of (misfit / σ)²" test_loss_sigma()
         end
     end
 
@@ -215,13 +214,16 @@ ENV["GKSwstype"] = "nul"
             # @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
             # @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3], loss=LossV())
 
-            # Velocity losses with the automatic adjoint. `batch_loss_iceflow_transient` used
-            # to read θ off the `InversionBinder`, so Zygote dropped the part of the gradient
-            # that flows through the ODE, and the loss value stayed exact. `LossH` cannot catch
-            # this (it never uses θ), so the guard must be a velocity loss: without the fix, the
-            # first two cells below are 14.8x and 1.05x wrong.
-            # Fixed step and a pinned solver: the harness picks a different integrator per
-            # adjoint otherwise, and an adaptive step makes the finite difference measure noise.
+            # The automatic adjoint had no velocity-loss coverage at all, and that is exactly
+            # what let `batch_loss_iceflow_transient` read θ off the `InversionBinder` while
+            # `solve` held the same binder as `p`: Zygote then drops the half of the gradient
+            # that flows through the ODE, and the loss value stays exact so nothing errors.
+            # `LossH` cannot catch it (it never uses θ), so the guard has to be a velocity
+            # loss. Both cells below are 14.8x and 1.05x wrong respectively without the fix.
+            # Fixed stepping and a pinned solver: with `solver = nothing` the harness picks a
+            # different integrator per adjoint flavour, which confounds any comparison, and an
+            # adaptive integrator makes the loss discontinuous in θ so the finite difference
+            # measures step acceptance instead of a derivative.
             sciml_v = (; adaptive = false, dt = 1.0/240.0, solver = Huginn.ROCK2(),
                 functional_inv = false, scalar = true)
             @testset "SciMLSensitivity adjoint with velocity loss vs finite differences" test_grad_finite_diff(
@@ -230,10 +232,20 @@ ENV["GKSwstype"] = "nul"
             @testset "SciMLSensitivity adjoint with time-aggregated velocity loss vs finite differences" test_grad_finite_diff(
                 ODINN.SciMLSensitivityAdjoint(); loss = LossAvgV(),
                 aggregated_loss = :avgV, thres = [1e-4, 1e-10, 1e-4], sciml_v...)
-            # H and V together: a binder bug only showed up with two loss terms combined.
-            # `:time_span` and not the default `:uniform`: with `:uniform` all the weights are
-            # one, so a wrong index into the weights would not show
-            @testset "SciMLSensitivity adjoint with H and V losses and time_span weights vs finite differences" test_grad_finite_diff(
+            # The `:abs` component takes the norm of the averaged velocity, which is zero in the
+            # cells without ice, where the derivative of a square root is infinite (0 × Inf = NaN)
+            @testset "SciMLSensitivity adjoint with time-aggregated speed loss vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); loss = LossAvgV(component = :abs),
+                aggregated_loss = :avgV, thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            # H and V together: the second binder bug only showed up when two parts of the
+            # loss were combined, so H and V passing on their own is not enough.
+            @testset "SciMLSensitivity adjoint with H and V losses vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint();
+                loss = MultiLoss(losses = (LossH(), LossV()), λs = (1.0, 1.0)),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            # With the default `:uniform` all the weights are one, so a wrong index into the
+            # weights would not show
+            @testset "SciMLSensitivity adjoint with time_span weights vs finite differences" test_grad_finite_diff(
                 ODINN.SciMLSensitivityAdjoint();
                 loss = MultiLoss(
                     losses = (LossH(weighting = :time_span), LossV(weighting = :time_span)),
@@ -358,8 +370,9 @@ ENV["GKSwstype"] = "nul"
             @testset "Continuous adjoint with discrete VJP vs finite differences" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
                 thres = [2e-4, 1e-8, 2e-4], multiglacier = true)
-            # Two glaciers, one with the time window of the simulation and one with its own. The
-            # gradient of the regularization is 3% of the one of the data, so it does not hide an error of the data term.
+            @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition)" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
+                multiglacier = true, train_initial_conditions = true)
             @testset "Continuous adjoint with discrete VJP vs finite differences (initial condition, one glacier with its own time window)" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-3, 1e-8, 1e-3],
                 multiglacier = true, train_initial_conditions = true, glacier_window = true,
@@ -369,6 +382,18 @@ ENV["GKSwstype"] = "nul"
                 DiscreteAdjoint(VJP_method = DiscreteVJP()); thres = [5e-3, 1e-8, 5e-3],
                 multiglacier = true, glacier_window = true)
             @testset "The start moves to the first survey when the initial condition is trained" test_align_start_in_inversion()
+            @testset "The scale of the initial condition follows the glacier of each batch" test_ic_scale_in_batches()
+            # With the automatic adjoint, the gradient of each glacier goes to its own place in θ
+            # (`aggregate∇θ`), and it is not added to the one of the first glacier
+            @testset "SciMLSensitivity adjoint, two glaciers, gridded C and initial condition" test_grad_finite_diff(
+                SciMLSensitivityAdjoint();
+                target = :C, functional_inv = false, scalar = false, maxC = 0.1, C₀ = 0.05,
+                train_initial_conditions = true, multiglacier = true,
+                loss = MultiLoss(
+                    losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (
+                        1.0, 1.0)),
+                A_range = (2e-18, 8e-18), adaptive = false, dt = 1.0/240.0, max_params = 25,
+                thres = [1e-3, 1e-6, 2e-3])
         end
     end
 
@@ -396,22 +421,40 @@ ENV["GKSwstype"] = "nul"
     end
 
     if GROUP == "All" || GROUP == "Core13"
-        # Gridded C, as in the sliding inversions. Only the automatic adjoint is tested: `LawC`
-        # has no `p_VJP!`, so the manual adjoints give a zero gradient for θ.C. The test uses
-        # ROCK4: with `RDPK3Sp35` the automatic adjoint gives a gradient with the wrong sign.
+        # Gridded C against the automatic adjoint. This cell of the matrix was empty: the
+        # gridded classical inversion was only ever run with `ContinuousAdjoint`, and every
+        # `SciMLSensitivityAdjoint` case used a scalar law, so nothing covered the combination
+        # the sliding inversions actually use.
+        #
+        # What the gap cost: a campaign ran `RDPK3Sp35` with `SciMLSensitivityAdjoint` for
+        # weeks. `InterpolatingAdjoint` is not stable with this ODE in backward mode, so the
+        # gradient came back with the wrong sign — and with a perfectly healthy norm and no
+        # NaNs, so nothing looked wrong. The harness picks ROCK4 here, which is the point.
+        #
+        # `LawC` defines no `p_VJP!`, so the manual adjoints would return a zero gradient for
+        # θ.C rather than fail; only the automatic adjoint is meaningful for this target.
         fixed = (use_MB = true, A_range = (2e-18, 8e-18),
             adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
-        # `maxC` must be set: the default is for a Weertman law, about 15 orders of magnitude
-        # too small for the Budd law used here, and the C gradient would be round off.
-        # `LawC` starts at `C = maxC/2`, so `maxC = 0.1` gives as much sliding as deformation.
+        # `maxC` has to be set: the default only makes sense for a Weertman law, and against
+        # the Budd law the glaciers are built with it is some fifteen orders too small. With it
+        # the C gradient sits at round off (~1e-16) and the comparison below asserts nothing.
+        # `LawC` starts at `C = maxC/2`, so 0.1 puts sliding on par with deformation at the
+        # thicknesses involved, which is the regime the sliding inversions care about.
         @testset "Gridded C with the automatic adjoint" begin
             @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
                 SciMLSensitivityAdjoint();
                 target = :C, functional_inv = false, scalar = false, maxC = 0.1, fixed...)
         end
 
-        # Issue #409: initial condition with the automatic adjoint. Both θ.IC and θ.C are
-        # checked, because a wrong fix can give the right θ.IC and a zero θ.C.
+        # Issue #409. `#366` added initial condition inversion and landed the manual adjoint
+        # half; the SciMLSensitivity half was split out and never implemented. The problem was
+        # being built outside the differentiated region, so `u0` stayed frozen at whatever θ it
+        # was defined with and `θ.IC` carried no derivative through the solution at all —
+        # measured `‖g.IC‖ = 1.7e-11` against `‖g.C‖ = 2.5e4`.
+        #
+        # Both blocks are checked. Checking only the one being fixed is how this was previously
+        # got wrong: rebuilding `u0` from `container.θ` makes `θ.IC` correct and silently zeroes
+        # `θ.C`, which a test of `θ.IC` alone would have passed.
         @testset "Initial condition with the automatic adjoint" begin
             @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
                 SciMLSensitivityAdjoint();
@@ -431,6 +474,34 @@ ENV["GKSwstype"] = "nul"
             train_initial_conditions = true, loss = LossHV(), glacier_window = true,
             window_offset = 1.0/36.0, adaptive = false, dt = 1.0/240.0, max_params = 25,
             thres = [1e-3, 1e-6, 1e-3])
+
+        @testset "Free bed" test_free_bed()
+        @testset "Value of each loss term, and the uncertainties" test_loss_terms()
+        # Same setup with the bed free (unknowns H₀ and S₀, bed S₀ - H₀ inside the ice flow
+        # and the velocity), and the surface constrained by two DEMs: one at the start of the
+        # window and one inside it. Measured with the bed correction it replaces: ratio 1e-4,
+        # angle 8e-8, relerr 4e-4; with S₀ - H₀: ratio 2.3e-4, angle 1.5e-7, relerr 6e-4 to
+        # 8.5e-4. The threshold of the relative error is 2e-3: it is set by the finite
+        # difference of a fixed-step solve, and the bugs that this test is for give an O(1) error.
+        @testset "Free bed, gridded C, LossHV and LossS with the automatic adjoint" test_grad_finite_diff(
+            SciMLSensitivityAdjoint();
+            target = :C, functional_inv = false, scalar = false, maxC = 0.1, C₀ = 0.05,
+            train_initial_conditions = true, train_bed = true,
+            loss = MultiLoss(losses = (LossHV(), LossS(), BedRegularization()),
+                λs = (1.0, 1.0, 1.0)),
+            glacier_window = true, window_offset = 1.0/36.0, adaptive = false,
+            dt = 1.0/240.0, max_params = 25, thres = [1e-3, 1e-6, 2e-3])
+        # The loss and the filter of the Vendr inversions: the velocity averaged over its
+        # window (`LossAvgV`, differentiated through the velocity rrule that runs Enzyme) and the
+        # `Zang1980` filter inside the bed `S₀ - H₀` that the ice flow differentiates
+        @testset "Free bed, LossAvgV and the Zang1980 filter with the automatic adjoint" test_grad_finite_diff(
+            SciMLSensitivityAdjoint();
+            target = :C, functional_inv = false, scalar = false, maxC = 0.1, C₀ = 0.05,
+            train_initial_conditions = true, train_bed = true,
+            initial_condition_filter = :Zang1980, aggregated_loss = :avgV,
+            loss = MultiLoss(losses = (LossH(), LossAvgV(), LossS(), BedRegularization())),
+            adaptive = false, dt = 1.0/240.0, max_params = 25,
+            thres = [1e-3, 1e-6, 2e-3])
     end
 
     # Manual, non-CI groups (GradTolGrid, GradTol, Core12NegativeControl, Core3MB,

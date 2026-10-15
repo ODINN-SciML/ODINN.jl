@@ -72,6 +72,8 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `window_offset`: With `glacier_window`, the window starts this many years after the third observation. A value that is not a multiple of the mass balance step makes the window a non-whole number of steps, as when a run starts on a survey: the last mass balance window ends after the end of the run.
   - `single_survey::Bool`: If `true`, the first glacier keeps only one thickness observation, in the middle of the time window.
   - `C₀`: Initial `glacier.C` of all the glaciers, set after the ground truth is generated. With `nothing`, `C = 0`, and a gridded `C` starts in the flat part of its `tanh` map, where its gradient is tiny. Use a value inside `(0, maxC)` to test `C`.
+  - `train_bed::Bool`: If `true`, the bed is free (`InitialCondition` with `bed = :free`, which needs `train_initial_conditions`), and each glacier gets two DEMs for `LossS`: one at the start of its time window, and one in the middle of `tspan`, 2 m higher, with one ice cell without value. Otherwise the initial condition uses `bed = :fixed`.
+  - `initial_condition_filter::Symbol`: Filter that keeps the initial thickness non-negative (`:softplus`, `:Zang1980` or `:identity`), see `evaluate_H₀`.
   - `use_MB::Bool`: Whether to include a mass balance model (MB) during training/testing.
   - `temp_bias`: Temperature bias of the tested `TImodel1`, in °C. A nonzero value shifts
     where the PDD and snow clamps activate, so it exercises that dependency in the MB VJP.
@@ -107,6 +109,8 @@ function test_grad_finite_diff(
         window_offset = 0.0,
         single_survey = false,
         C₀ = nothing,
+        train_bed = false,
+        initial_condition_filter = :softplus,
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
@@ -228,7 +232,7 @@ function test_grad_finite_diff(
             # Only the manual adjoints use `UDE.target`. A C inversion still carries
             # `SIA2D_A_target`, so it stays `:A` to pass the `Inversion` constructor check.
             target = target == :C ? :A : target,
-            initial_condition_filter = :softplus
+            initial_condition_filter = initial_condition_filter
         ),
         solver = Huginn.SolverParameters(
             step = δt,
@@ -286,10 +290,24 @@ function test_grad_finite_diff(
         td = glaciers[1].thicknessData
         k = cld(length(td.t), 2)
         glaciers[1] = Sleipnir.Glacier2D(glaciers[1];
-            thicknessData = Sleipnir.ThicknessData(t = [td.t[k]], H = [td.H[k]]))
+            thicknessData = Sleipnir.ThicknessData(t = [td.t[k]], H = [td.H[k]],
+                σ = isnothing(td.σ) ? nothing : [td.σ[k]]))
     end
 
     isnothing(C₀) || foreach(g -> g.C = C₀, glaciers)
+
+    if train_bed
+        glaciers = map(glaciers) do glacier
+            S₂ = glacier.S .+ 2.0
+            σ₂ = ones(size(S₂))
+            k = findfirst(>(0), glacier.H₀)
+            S₂[k] = σ₂[k] = NaN
+            surfaceData = Sleipnir.SurfaceData(
+                t = [glacier_tspan(params, glacier)[1], tstops[cld(end, 2)]],
+                S = [copy(glacier.S), S₂], σ = [zero(glacier.S), σ₂])
+            Sleipnir.Glacier2D(glacier; surfaceData = surfaceData)
+        end
+    end
 
     # Neural network model
     if functional_inv
@@ -309,7 +327,10 @@ function test_grad_finite_diff(
         end
     end
 
-    ic = train_initial_conditions ? InitialCondition(params, glaciers, :Farinotti19) :
+    @assert !train_bed || train_initial_conditions "The bed is free only with the initial condition"
+    ic = train_initial_conditions ?
+         InitialCondition(params, glaciers, :Farinotti19; bed = train_bed ? :free :
+                                                                :fixed) :
          nothing
     trainable_model = if functional_inv
         nn_model
@@ -590,6 +611,206 @@ function test_align_start_in_inversion()
         functional_inv = false, scalar = false, return_setup = true)
     @test_throws ArgumentError ODINN.check_loss(SlidingRegularization(), simulation)
     @test isnothing(ODINN.check_loss(RheologyRegularization(), simulation))
+    # The bed regularization needs a free bed, and the surface loss and a free bed need the
+    # automatic adjoint
+    @test_throws ArgumentError ODINN.check_loss(BedRegularization(), simulation)
+    @test_throws ArgumentError ODINN.check_loss(LossS(), simulation)
+    @test_throws ArgumentError test_grad_finite_diff(
+        ContinuousAdjoint(VJP_method = DiscreteVJP());
+        functional_inv = false, scalar = false, train_initial_conditions = true,
+        train_bed = true, return_setup = true)
+end
+
+"""
+    test_free_bed()
+
+With `InitialCondition(...; bed = :free)` the unknowns are `H₀` and `S₀`, and the bed of the
+ice flow model is `S₀ - H₀`. `S₀` starts at the DEM of the glacier, and its change is zero
+where the ice is forced to zero. Without θ the bed is `glacier.B`. The surface loss is zero
+when the surface is the DEM. A free bed needs a `LossS`.
+"""
+function test_free_bed()
+    loss = MultiLoss(losses = (LossH(), LossS()))
+    simulation,
+    θ = test_grad_finite_diff(SciMLSensitivityAdjoint();
+        functional_inv = false, scalar = false, train_initial_conditions = true,
+        train_bed = true, loss = loss, return_setup = true)
+    glacier = simulation.glaciers[1]
+    H₀ = ODINN.initial_thickness(θ, simulation, 1)
+    @test Huginn.bed(simulation, 1, θ) ≈ glacier.S .- H₀
+    @test Huginn.bed(simulation, 1, nothing) == glacier.B
+    # The outline of the glacier is a hard constraint: no ice outside it, also in the zone
+    # where the glacier may advance, and at least `min_thickness` inside it
+    outline = glacier.H₀ .> 0
+    IC = simulation.model.trainable_components.IC
+    @test IC.min_thickness == 1.0
+    @test count(.!glacier.mask .& .!outline) > 0
+    @test all(H₀[.!outline] .== 0)
+    @test all(H₀[outline] .>= IC.min_thickness)
+    @test keys(ODINN.ic_params(θ, 1)) == (:H, :S)
+    # The bed is computed inside the functions that Enzyme differentiates, which crashed when
+    # a call there was dispatched at run time, so it must be type stable
+    @test (@inferred ODINN.ic_params(θ, 1)) isa AbstractVector
+    # The laws of the gridded A and C read their parameters the same way
+    @test (@inferred ODINN.glacier_params(θ.A, 1)) isa AbstractArray
+    @test @inferred(ODINN.bed_is_free(θ, 1))
+    @test (@inferred Huginn.bed(simulation, 1, θ)) isa Matrix{Float64}
+    # `scale_H = 0` (the default) is the maximum thickness of each glacier. With a number, θ.IC
+    # is the same thickness divided by that number
+    @test (IC.scale_H, IC.scale_S) == (0.0, 5.0)
+    ic50 = InitialCondition(simulation.parameters, simulation.glaciers, :Farinotti19;
+        bed = :free, scale_H = 50.0, scale_S = 2.0, min_thickness = 3.0)
+    @test (ic50.scale_H, ic50.scale_S, ic50.min_thickness) == (50.0, 2.0, 3.0)
+    @test typeof(ic50.scale_H) == Sleipnir.Float
+    @test_throws ArgumentError InitialCondition(simulation.parameters,
+        simulation.glaciers, :Farinotti19; min_thickness = -1.0)
+    @test getproperty(ic50.θ.θ, Symbol("1")).H .* 50.0 ≈
+          ODINN.ic_params(θ, 1).H .* ODINN.H₀_scale(glacier)
+    @test_throws ArgumentError InitialCondition(simulation.parameters,
+        simulation.glaciers, :Farinotti19; scale_H = -1.0)
+    θ₁ = copy(θ)
+    ODINN.ic_params(θ₁, 1).S .= 0.1
+    @test Huginn.bed(simulation, 1, θ₁) ≈ glacier.S .- H₀ .+ 0.5 .* .!glacier.mask
+    # With each filter, the bed is `S₀ - H₀`: `glacier.S + S × scale_S - H₀` where ice is allowed
+    # and `glacier.S` elsewhere
+    for filter in (:identity, :softplus, :Zang1980)
+        sim = (; glaciers = simulation.glaciers, model = simulation.model,
+            parameters = (; UDE = (; initial_condition_filter = filter)))
+        scales = ODINN.ic_scales(sim, 1)
+        H₀_filter = ODINN.evaluate_H₀(θ₁, glacier, filter, 1;
+            scale = scales.H, H_min = scales.Hmin)
+        S₀ = glacier.S .+ ODINN.ic_params(θ₁, 1).S .* scales.S .* .!glacier.mask
+        @test ODINN.evaluate_B(θ₁, sim, 1) ≈ S₀ .- H₀_filter
+        @test all(H₀_filter[.!outline] .== 0)
+    end
+
+    # The derivative of the thickness with the minimum, used by the manual adjoints, against
+    # finite differences of the thickness. It is zero outside the outline.
+    for filter in (:softplus, :Zang1980)
+        sim = (; glaciers = simulation.glaciers, model = simulation.model,
+            parameters = (; UDE = (; initial_condition_filter = filter)))
+        scales = ODINN.ic_scales(sim, 1)
+        kw = (; scale = scales.H, H_min = scales.Hmin)
+        ε = 1e-6
+        θp, θm = copy(θ₁), copy(θ₁)
+        ODINN.ic_params(θp, 1).H .+= ε
+        ODINN.ic_params(θm, 1).H .-= ε
+        fd = (ODINN.evaluate_H₀(θp, glacier, filter, 1; kw...) .-
+              ODINN.evaluate_H₀(θm, glacier, filter, 1; kw...)) ./ (2ε)
+        ∂H = ODINN.evaluate_∂H₀(θ₁, glacier, filter, 1; kw...)
+        @test ∂H≈fd rtol=1e-4 atol=1e-3
+        @test all(∂H[.!outline] .== 0)
+    end
+
+    # The DEMs are the surface at the start and 2 m higher later, so a state that matches
+    # them adds nothing to the loss, also with a cell without value
+    t = glacier.surfaceData.t
+    @test ODINN.time_aggregated_loss(LossS(), [H₀, H₀ .+ 2.0], nothing, nothing, nothing,
+        nothing, t, 1, θ, simulation, 1.0, (;)) ≈ 0.0 atol = 1e-12
+    @test ODINN.time_aggregated_loss(LossS(), [H₀, H₀], nothing, nothing, nothing,
+        nothing, t, 1, θ, simulation, 1.0, (;)) > 0.0
+
+    # The convexity term rewards thicker ice
+    reg, reg_convex = BedRegularization(), BedRegularization(convexity = 1.0)
+    t₀ = glacier_tspan(simulation, 1)[1]
+    R(r) = ODINN.loss(r, H₀, nothing, nothing, nothing, nothing, t₀, 1, θ, simulation, 1.0,
+        (; H = 0.0, V = 0.0))
+    @test R(reg) > 0
+    @test R(reg_convex) < R(reg)
+
+    # The free bed needs the surface loss
+    @test_throws ArgumentError test_grad_finite_diff(SciMLSensitivityAdjoint();
+        functional_inv = false, scalar = false, train_initial_conditions = true,
+        train_bed = true, loss = LossH(), return_setup = true)
+
+    # It also needs a DEM inside the time window. A window after the last DEM has none
+    @test isnothing(ODINN.check_loss(LossS(), simulation))
+    t₁ = glacier_tspan(simulation, 1)[2]
+    simulation.parameters.simulation.glacier_tspans[glacier.rgi_id] = (
+        last(glacier.surfaceData.t) + 0.5, t₁)
+    @test_throws ArgumentError ODINN.check_loss(LossS(), simulation)
+    # Without a free bed, the DEMs are only a loss, so a missing one is a warning
+    @test_logs (:warn, r"no DEM inside its time window") ODINN.check_loss(
+        LossS(), (; glaciers = simulation.glaciers, parameters = simulation.parameters,
+            model = (; trainable_components = (; θ = nothing))))
+end
+
+"""
+    test_ic_scale_in_batches()
+
+Each batch has one glacier, with index 1, and shares the `InitialCondition` of the model. The
+scale of `H₀` must follow the glacier of the batch and not the index: the initial thickness of
+a batch is the one of the same glacier in the full simulation.
+"""
+function test_ic_scale_in_batches()
+    simulation,
+    θ = test_grad_finite_diff(ContinuousAdjoint(VJP_method = DiscreteVJP());
+        multiglacier = true, train_initial_conditions = true, return_setup = true)
+    scales = [ODINN.ic_scales(simulation, i).H for i in eachindex(simulation.glaciers)]
+    # The test needs glaciers with different thickness
+    @test scales[1] != scales[2]
+    for i in eachindex(simulation.glaciers)
+        batch = ODINN.build_simulation_batch(simulation, i)
+        θ_batch = batch.model.trainable_components.θ
+        @test ODINN.ic_scales(batch, 1).H == scales[i]
+        @test ODINN.initial_thickness(θ_batch, batch, 1) ≈
+              ODINN.initial_thickness(θ, simulation, i)
+    end
+end
+
+"""
+    test_loss_terms()
+
+`loss_terms` returns the value of each term of the `MultiLoss`: the weighted terms add up to
+the loss of the inversion and the shares add up to 1. The uncertainty of a data term is the one
+of the loss, else the one of the data, else the default of the loss.
+"""
+function test_loss_terms()
+    loss = MultiLoss(losses = (LossH(), LossS(), BedRegularization()), λs = (1.0, 0.5, 2.0))
+    simulation,
+    θ = test_grad_finite_diff(SciMLSensitivityAdjoint();
+        functional_inv = false, scalar = false, train_initial_conditions = true,
+        train_bed = true, loss = loss, return_setup = true)
+    terms = ODINN.loss_terms(θ, simulation)
+    @test [typeof(t.term) for t in terms] == [typeof(l) for l in loss.losses]
+    @test [t.λ for t in terms] == [1.0, 0.5, 2.0]
+    @test sum(t.λ * t.value for t in terms) ≈
+          ODINN.loss_iceflow_transient(θ, simulation, map)
+    @test sum(t.share for t in terms) ≈ 1.0
+    @test all(t -> t.value >= 0, terms)
+    # The default weights are 1
+    @test MultiLoss(losses = (LossH(), LossS())).λs == (1.0, 1.0)
+
+    # Uncertainty of the thickness: a number of the loss, the data, or the default
+    glacier = simulation.glaciers[1]
+    t₁ = first(glacier.thicknessData.t)
+    @test ODINN.thickness_σ(LossH(), glacier, t₁) == 18.0
+    @test ODINN.thickness_σ(LossH(σ = 30.0), glacier, t₁) == 30.0
+    σ_map = fill(12.0, size(glacier.H₀))
+    σ_map[1, 1] = NaN
+    with_σ = Sleipnir.Glacier2D(glacier;
+        thicknessData = Sleipnir.ThicknessData(
+            t = glacier.thicknessData.t, H = glacier.thicknessData.H,
+            σ = [copy(σ_map) for _ in glacier.thicknessData.t]))
+    σ = ODINN.thickness_σ(LossH(), with_σ, t₁)
+    @test σ[2, 2] == 12.0
+    @test σ[1, 1] == 1.0 # not valid, and the cell is not used
+    @test ODINN.thickness_σ(LossH(σ = 30.0), with_σ, t₁) == 30.0
+    # Uncertainty of the velocity: a number, the error of the map, or the default
+    @test ODINN.velocity_σ(LossV(), glacier, 1) == 10.0
+    @test ODINN.velocity_σ(LossV(σ = 3.0), glacier, 1) == 3.0
+    @test ODINN.velocity_σ(LossAvgV(), glacier, 1) == 10.0
+    @test ODINN.default_σ(LossDhdt()) == 0.2
+    # With the error of the map (the size of the error vector): 1/√2 of it for the speed and
+    # for each component
+    n = size(glacier.H₀)
+    with_error = Sleipnir.Glacier2D(glacier;
+        velocityData = Sleipnir.SurfaceVelocityData(; vx = [zeros(n)], vy = [zeros(n)],
+            vabs = [zeros(n)], vabs_error = [6.0], isGridGlacierAligned = true))
+    @test ODINN.velocity_σ(LossV(component = :abs), with_error, 1) ≈ 6.0 / sqrt(2)
+    @test ODINN.velocity_σ(LossV(component = :xy), with_error, 1) ≈ 6.0 / sqrt(2)
+    @test ODINN.velocity_σ(LossAvgV(), with_error, 1) ≈ 6.0 / sqrt(2)
+    @test ODINN.velocity_σ(LossV(σ = 3.0), with_error, 1) == 3.0
 end
 
 """
@@ -644,29 +865,31 @@ function test_loss_or_inf()
 end
 
 """
-    test_loss_normalize()
+    test_loss_sigma()
 
-With `normalize = :observations` the simple losses are divided by the number of pixels in the
-mask, not by `normalization`: the value is a mean over the observations. The manual backward is
-checked against Zygote, which is what the automatic adjoint differentiates.
+The simple losses are the mean over the mask of `(misfit / σ)²`: a misfit equal to σ gives 1,
+whatever the number of pixels and `normalization`. σ is a number or a matrix. The manual
+backward is checked against Zygote, which is what the automatic adjoint differentiates.
 """
-function test_loss_normalize()
+function test_loss_sigma()
     nx, ny = 8, 7
     a = [2.0 + 0.3i + 0.1j for i in 1:nx, j in 1:ny]
     b = [1.5 + 0.2i - 0.05j for i in 1:nx, j in 1:ny]
     mask = falses(nx, ny)
     mask[2:5, 3:6] .= true # 16 observed pixels
     normalization = Float64(nx * ny)
-    for (cells, obs_norm) in ((L2Sum(), L2Sum(normalize = :observations)),
-        (LogSum(), LogSum(normalize = :observations)))
-        @test loss(obs_norm, a, b, mask, normalization) ≈
-              loss(cells, a, b, mask, normalization) * normalization / count(mask)
-        # The value does not depend on `normalization`
-        @test loss(obs_norm, a, b, mask, 1.0) == loss(obs_norm, a, b, mask, 1e6)
-        ∂a_zygote, = Zygote.gradient(x -> loss(obs_norm, x, b, mask, normalization), a)
-        @test backward_loss(obs_norm, a, b, mask, normalization) ≈ ∂a_zygote
+    # A misfit of σ everywhere gives 1, with any mask and normalization
+    @test loss(L2Sum(), b .+ 3.0, b, mask, normalization; σ = 3.0) ≈ 1.0
+    @test loss(L2Sum(), b .+ 3.0, b, trues(nx, ny), 1.0; σ = 3.0) ≈ 1.0
+    @test loss(LogSum(σ = 0.1), (b .+ 0.1) .* exp(0.1) .- 0.1, b, mask, 1.0) ≈ 1.0
+    # An empty mask gives 0
+    @test loss(L2Sum(), a, b, falses(nx, ny), normalization) == 0.0
+    σ_map = [1.0 + 0.1i for i in 1:nx, j in 1:ny]
+    for (simple, σ) in ((L2Sum(), 2.0), (L2Sum(), σ_map), (LogSum(σ = 0.2), 1.0))
+        @test loss(simple, a, b, mask, 1.0; σ = σ) == loss(simple, a, b, mask, 1e6; σ = σ)
+        ∂a_zygote, = Zygote.gradient(x -> loss(simple, x, b, mask, normalization; σ = σ), a)
+        @test backward_loss(simple, a, b, mask, normalization; σ = σ) ≈ ∂a_zygote
     end
-    @test_throws ArgumentError loss(L2Sum(normalize = :other), a, b, mask, normalization)
 end
 
 """
@@ -697,8 +920,6 @@ function test_loss_time_window_guard()
     # A wrong option is refused when the inversion is built, not in the first loss call
     @test_throws ArgumentError ODINN.check_loss(
         LossH(weighting = :timespan), sim((2010.0, 2012.0)))
-    @test_throws ArgumentError ODINN.check_loss(
-        LossHV(hLoss = LossH(loss = L2Sum(normalize = :obs))), sim((2010.0, 2012.0)))
     # A sparse survey is eroded to nothing by the default mask of LossH
     H = zeros(10, 10)
     H[5, 5] = 100.0
@@ -755,7 +976,7 @@ function test_initial_thickness_regularization_backward()
     zygote, = ODINN.Zygote.gradient(fwd, θ)
 
     # getproperty returns a view, θ.IC[sym] would return a copy
-    icview(p) = vec(getproperty(p.IC, Symbol("1")))
+    icview(p) = vec(ODINN.ic_params(p, 1).H)
     m, z = icview(manual), icview(zygote)
     @test norm(m .- z) / norm(z) < 1e-10
 
@@ -913,7 +1134,6 @@ function test_grad_TikhonovRegularization()
         return nothing
     end
 
-    lossType = TikhonovRegularization()
     nx = 9
     ny = 10
     norm = 3.5
@@ -922,39 +1142,52 @@ function test_grad_TikhonovRegularization()
     a[(end - 1):end, :] .= 0;
     a[:, 1:2] .= 0;
     a[:, (end - 1):end] .= 0
-    b = randn(nx, ny)
-    b[1:2, :] .= 0;
-    b[(end - 1):end, :] .= 0;
-    b[:, 1:2] .= 0;
-    b[:, (end - 1):end] .= 0
     Δx = 1.2
     Δy = 1.8
-    mask = randn(nx, ny) .>= 0
-    l = [0.0]
-    _loss!(l, a, Δx, Δy, mask, norm, lossType)
-    dl_enzyme = [1.0]
-    l_enzyme = Enzyme.make_zero(dl_enzyme)
-    da_enzyme = Enzyme.make_zero(a)
-    Enzyme.autodiff(
-        set_runtime_activity(EnzymeCore.Reverse), _loss!, Const,
-        Duplicated(l_enzyme, dl_enzyme),
-        Duplicated(a, da_enzyme),
-        Enzyme.Const(Δx),
-        Enzyme.Const(Δy),
-        Enzyme.Const(mask),
-        Enzyme.Const(norm),
-        Enzyme.Const(lossType)
-    )
-    da = backward_loss(lossType, a, Δx, Δy, mask, norm)
-    ratio, angle, relerr = stats_err_arrays(da, da_enzyme)
-    thres = 1e-14
-    if printDebug | !((abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres))
-        printVecScientific("ratio  = ", [ratio], thres)
-        printVecScientific("angle  = ", [angle], thres)
-        printVecScientific("relerr = ", [relerr], thres)
+    mask = randn(MersenneTwister(1), nx, ny) .>= 0
+    for lossType in (TikhonovRegularization(σ = 0.7),
+        TikhonovRegularization(operator = :laplacian, σ = 1.3))
+        l = [0.0]
+        _loss!(l, a, Δx, Δy, mask, norm, lossType)
+        dl_enzyme = [1.0]
+        l_enzyme = Enzyme.make_zero(dl_enzyme)
+        da_enzyme = Enzyme.make_zero(a)
+        Enzyme.autodiff(
+            set_runtime_activity(EnzymeCore.Reverse), _loss!, Const,
+            Duplicated(l_enzyme, dl_enzyme),
+            Duplicated(a, da_enzyme),
+            Enzyme.Const(Δx),
+            Enzyme.Const(Δy),
+            Enzyme.Const(mask),
+            Enzyme.Const(norm),
+            Enzyme.Const(lossType)
+        )
+        da = backward_loss(lossType, a, Δx, Δy, mask, norm)
+        # Zygote is what the automatic adjoint uses for the losses
+        da_zygote, = Zygote.gradient(x -> loss(lossType, x, Δx, Δy, mask, norm), a)
+        for other in (da_enzyme, da_zygote)
+            ratio, angle, relerr = stats_err_arrays(da, other)
+            thres = 1e-14
+            if printDebug | !((abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres))
+                printVecScientific("ratio  = ", [ratio], thres)
+                printVecScientific("angle  = ", [angle], thres)
+                printVecScientific("relerr = ", [relerr], thres)
+            end
+            @test (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres)
+        end
     end
-    @test (abs(ratio)<thres) & (abs(angle)<thres) & (abs(relerr)<thres)
+
+    # A plane with slopes 0.01 and 0.02 m/m costs (0.01² + 0.02²) / σ² at any resolution and
+    # with any mask
+    reg = TikhonovRegularization(σ = 0.1)
+    plane(n, Δ) = [0.01 * i * Δ + 0.02 * j * Δ for i in 1:n, j in 1:n]
+    expected = (0.01^2 + 0.02^2) / 0.1^2
+    @test loss(reg, plane(10, 100.0), 100.0, 100.0, trues(10, 10), 1.0) ≈ expected
+    @test loss(reg, plane(20, 50.0), 50.0, 50.0, trues(20, 20), 1.0) ≈ expected
+    @test loss(reg, plane(20, 50.0), 50.0, 50.0, mask_corner(20), 1.0) ≈ expected
+    @test_throws ArgumentError TikhonovRegularization(operator = :other)
 end
+mask_corner(n) = BitMatrix([i + j <= n for i in 1:n, j in 1:n])
 
 function _loss_halfar!(l, R₀, h₀, r₀, A, n, tstops, H_ref, params, lossType, glacier, θ)
     normalization = 1.0

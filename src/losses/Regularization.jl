@@ -1,6 +1,6 @@
 export TikhonovRegularization
 export InitialThicknessRegularization, VelocityRegularization, RheologyRegularization,
-       SlidingRegularization, DiffusivityRegularization
+       SlidingRegularization, DiffusivityRegularization, BedRegularization
 
 # Abstract regularization type as subtype of loss
 abstract type AbstractRegularization <: AbstractLoss end
@@ -11,41 +11,47 @@ abstract type AbstractSimpleRegularization <: AbstractLoss end
 # Basic Regularization Types
 
 """
-    TikhonovRegularization(; operator = :laplacian, distance = 3)
+    TikhonovRegularization(; operator = :gradient, σ = 1.0, distance = 3)
 
-A simple regularization type implementing Tikhonov regularization (also known as ridge regularization)
-for inverse problems.
+Tikhonov regularization of a field `a`, a prior on its smoothness. It is the mean over the
+cells of the glacier of
 
-This struct includes both the forward and reverse (adjoint) operators, which are required
-for the computation of the gradients with respect to the model parameters.
+``\\left(\\frac{|D a|}{σ}\\right)^2``
+
+where `D` is the gradient or the Laplacian, computed in physical units. `σ` is the typical size
+of `D a` that the prior allows, so the term is about 1 for a field as rough as `σ`, like a data
+term whose misfit is as large as its uncertainty (see [`L2Sum`](@ref)). A smooth field costs
+the same at any resolution, and noise from one cell to the next costs more at a finer one.
+
+With the gradient, the mean is taken in each direction over the edges between two cells of
+the glacier: ``\\text{mean}((∂_x a / σ)^2) + \\text{mean}((∂_y a / σ)^2)``. This is the
+regularization of IGM, where `σ = 1/√w` for an IGM weight `w`.
 
 # Keyword Arguments (Constructor)
 
-  - `operator::Symbol = :laplacian`: The regularization operator to use. Currently, only `:laplacian` is implemented, which penalizes large gradients by applying the Laplacian operator.
-  - `distance::Integer = 3`: A width parameter to determine how far from the margin evaluate the loss.
-
-# Fields (Struct)
-
-  - `operator_forward::Function`: The forward regularization operator (e.g., `∇²`).
-  - `operator_reverse::Function`: The reverse-mode (VJP) of the operator (e.g., `VJP_λ_∂∇²a_∂a`).
-  - `distance::Integer`: The distance parameter controlling the extent of regularization.
+  - `operator::Symbol = :gradient`: `:gradient` or `:laplacian`.
+  - `σ = 1.0`: Typical size of `D a`, in the units of the field per metre for the gradient (for
+    example m/m for a bed), and per square metre for the Laplacian.
+  - `distance::Integer = 3`: Not used. The mean is over the cells where ice is allowed
+    (`glacier.mask`). It is kept so that old code that sets it still runs.
 """
-struct TikhonovRegularization{I <: Integer} <: AbstractSimpleRegularization
-    operator_forward::Function
-    operator_reverse::Function
+struct TikhonovRegularization{I <: Integer, F <: AbstractFloat} <:
+       AbstractSimpleRegularization
+    operator::Symbol
+    σ::F
     distance::I
 
-    function TikhonovRegularization(; operator = :laplacian, distance = 3)
-        if operator == :laplacian
-            return new{typeof(distance)}(∇², VJP_λ_∂∇²a_∂a, distance)
-        else
-            twrow("Operator named $(operator) not implemented inside Tikhonov regularization")
-        end
+    function TikhonovRegularization(; operator = :gradient, σ = 1.0, distance = 3)
+        operator in (:gradient, :laplacian) || throw(ArgumentError(
+            "The operator of TikhonovRegularization must be :gradient or :laplacian, \
+            got :$(operator)."))
+        σ > 0 || throw(ArgumentError("The σ of TikhonovRegularization must be positive."))
+        return new{typeof(distance), typeof(float(σ))}(operator, float(σ), distance)
     end
 end
 
 """
-    InitialThicknessRegularization(t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization())
+    InitialThicknessRegularization(t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization(), correction::Bool = false)
 
 A composite regularization type designed for initial ice thickness.
 It combines a simple spatial regularization (e.g., `TikhonovRegularization`) with a reference initial time.
@@ -56,18 +62,21 @@ It combines a simple spatial regularization (e.g., `TikhonovRegularization`) wit
 
 # Keyword Arguments
 
-  - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
+  - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov regularization of the gradient is used.
+  - `correction::Bool = false`: If `true`, the regularization is applied to the correction of the initial thickness, `H₀ - glacier.H₀`, and not to `H₀` itself. The initial thickness of the glacier keeps its own shape, and only the changes made by the inversion are kept smooth. A constant change is not penalized, and with the Laplacian a linear change is not either. The reference is `glacier.H₀`, which is the starting point of `θ.IC` only if `InitialCondition` uses the same product; otherwise the `Inversion` shows a warning.
 """
 struct InitialThicknessRegularization{
     R <: AbstractSimpleRegularization, T <: Union{Nothing, AbstractFloat}} <:
        AbstractRegularization
     reg::R
     t₀::T
+    correction::Bool
 
     function InitialThicknessRegularization(
-            t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization())
+            t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization(),
+            correction::Bool = false)
         t₀ = isnothing(t₀) ? nothing : float(t₀)
-        return new{typeof(reg), typeof(t₀)}(reg, t₀)
+        return new{typeof(reg), typeof(t₀)}(reg, t₀, correction)
     end
 end
 
@@ -98,6 +107,8 @@ It can include a spatial smoothing operator through the field `reg`.
 # Keyword Arguments
 
   - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+    Its default `σ = 1` is in the units of `A`, about `1e-17`, so the prior is negligible: set
+    `σ` to the change of `A` that you allow between two cells per metre.
 """
 @kwdef struct RheologyRegularization{R <: AbstractSimpleRegularization} <:
               AbstractRegularization
@@ -118,10 +129,54 @@ to the physical magnitude of `C`.
 # Keyword Arguments
 
   - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: Spatial regularization operator.
+    Its default `σ = 1` is in the units of `C`, so for a small `C` the prior is negligible: set
+    `σ` to the change of `C` that you allow between two cells, per square metre with the Laplacian.
 """
 @kwdef struct SlidingRegularization{R <: AbstractSimpleRegularization} <:
               AbstractRegularization
     reg::R = TikhonovRegularization()
+end
+
+"""
+    BedRegularization(; σ = 0.3, operator = :gradient, convexity = 0.0, convexity_power = 1.3)
+
+Prior on the bed `B`, as in IGM: the whole bed is kept smooth, and the convexity term rewards
+thicker ice, so that the smoothness does not flatten the bed where the data say nothing,
+
+``R = \\text{reg}(B) - γ \\, \\text{mean}(H_0), \\qquad γ = \\text{convexity} \\cdot A^{\\text{convexity\\_power} - 2}``
+
+where `A` is the area in m² of the cells where ice is allowed (`glacier.mask`, the outline plus a
+buffer), and the mean is over those cells. It is evaluated at the start of the time window of
+each glacier. It needs the bed to be trained,
+so only `SciMLSensitivityAdjoint` supports it.
+
+The default `σ = 0.3` m/m of the gradient matches the default regularization of IGM
+(`regularization.thk = 10`, i.e. `σ = 1/√10`). With the weight `λ` of the `MultiLoss`, an IGM
+setup with weight `w` and convexity weight `γ_IGM` maps to `λ/σ² = w/2` and `λγ = w γ_IGM`.
+
+# Keyword Arguments
+
+  - `σ = 0.3`: Typical size of the slope of the bed, in m/m with the gradient.
+  - `operator = :gradient`: `:gradient` or `:laplacian`, see [`TikhonovRegularization`](@ref).
+  - `reg::AbstractSimpleRegularization = TikhonovRegularization(operator = operator, σ = σ)`:
+    Spatial regularization of the bed. For experts, it replaces `σ` and `operator`.
+  - `convexity = 0.0`: Weight of the convexity term, 0 (no term) as in IGM.
+  - `convexity_power = 1.3`: Power of the area in `γ`, from the volume-area scaling.
+"""
+struct BedRegularization{R <: AbstractSimpleRegularization, F <: AbstractFloat} <:
+       AbstractRegularization
+    reg::R
+    convexity::F
+    convexity_power::F
+
+    function BedRegularization(;
+            σ = 0.3, operator = :gradient,
+            reg::AbstractSimpleRegularization = TikhonovRegularization(
+                operator = operator, σ = σ),
+            convexity = 0.0, convexity_power = 1.3)
+        convexity, convexity_power = promote(float(convexity), float(convexity_power))
+        return new{typeof(reg), typeof(convexity)}(reg, convexity, convexity_power)
+    end
 end
 
 """
@@ -140,6 +195,28 @@ end
 
 ### Definition of simple regularization functions
 
+# Edges in x and in y whose two cells are in `mask`
+function edge_masks(mask)
+    (mask[2:end, :] .& mask[1:(end - 1), :],
+        mask[:, 2:end] .& mask[:, 1:(end - 1)])
+end
+
+# Differences between neighbour cells divided by the spacing, with plain slicing so that
+# Zygote and Enzyme differentiate them. The reverse is `diff_x_adjoint` and `diff_y_adjoint`.
+∂x(a, Δx) = (a[2:end, :] .- a[1:(end - 1), :]) ./ Δx
+∂y(a, Δy) = (a[:, 2:end] .- a[:, 1:(end - 1)]) ./ Δy
+
+# Cells of the glacier: where ice is allowed, or all the cells if the glacier has no mask
+function glacier_cells(glacier)
+    size(glacier.mask) == size(glacier.H₀) ? .!glacier.mask : trues(size(glacier.H₀))
+end
+# Cells of the dual grid (fields such as `A` and `C`) with a corner in the glacier
+function glacier_cells_dual(glacier)
+    m = glacier_cells(glacier)
+    return m[1:(end - 1), 1:(end - 1)] .| m[2:end, 1:(end - 1)] .|
+           m[1:(end - 1), 2:end] .| m[2:end, 2:end]
+end
+
 function loss(
         regType::TikhonovRegularization,
         a::Matrix{F},
@@ -148,8 +225,12 @@ function loss(
         mask::BitMatrix,
         normalization::F
 ) where {F <: AbstractFloat}
-    operator_forward = regType.operator_forward
-    return sum(operator_forward(a, Δx, Δy)[mask] .^ 2.0)
+    if regType.operator == :gradient
+        mx, my = edge_masks(mask)
+        return (masked_mean_sq(∂x(a, Δx), mx) + masked_mean_sq(∂y(a, Δy), my)) / regType.σ^2
+    else
+        return masked_mean_sq(∇²(a, Δx, Δy), mask) / regType.σ^2
+    end
 end
 function backward_loss(
         regType::TikhonovRegularization,
@@ -159,18 +240,30 @@ function backward_loss(
         mask::BitMatrix,
         normalization::F
 ) where {F <: AbstractFloat}
-    operator_forward = regType.operator_forward
-    operator_reverse = regType.operator_reverse
-    ∂L∂∇²a = zero(a)
-    ∂L∂∇²a[mask] = 2.0 .* operator_forward(a, Δx, Δy)[mask]
-    ∂L∂a = operator_reverse(∂L∂∇²a, a, Δx, Δy)
-    return ∂L∂a
+    σ² = regType.σ^2
+    if regType.operator == :gradient
+        mx, my = edge_masks(mask)
+        ∂L∂ax = ifelse.(mx, 2 .* ∂x(a, Δx) ./ (σ² * max(count(mx), 1)), zero(F))
+        ∂L∂ay = ifelse.(my, 2 .* ∂y(a, Δy) ./ (σ² * max(count(my), 1)), zero(F))
+        return diff_x_adjoint(∂L∂ax, Δx) .+ diff_y_adjoint(∂L∂ay, Δy)
+    else
+        ∂L∂∇²a = ifelse.(mask, 2 .* ∇²(a, Δx, Δy) ./ (σ² * max(count(mask), 1)), zero(F))
+        return VJP_λ_∂∇²a_∂a(∂L∂∇²a, a, Δx, Δy)
+    end
 end
 
 # Whether `t` is the start of the time window of the glacier, or `t₀` if it is given
 function at_start(t, simulation, glacier_idx, t₀ = nothing)
     t == something(
         t₀, glacier_tspan(simulation, glacier_idx)[1])
+end
+
+"""
+Field that `InitialThicknessRegularization` is applied to: `H₀`, or its correction `H₀ - glacier.H₀`.
+The shift is constant in θ, so the derivative with respect to `H₀` has the same form in both cases.
+"""
+function regularized_field(lossType::InitialThicknessRegularization, H₀, glacier)
+    lossType.correction ? H₀ .- glacier.H₀ : H₀
 end
 
 function loss(
@@ -189,9 +282,10 @@ function loss(
     if at_start(t, simulation, glacier_idx, lossType.t₀)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
-        mask = trues(size(H₀))
-        regH = loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
+        H₀ = initial_thickness(θ, simulation, glacier_idx)
+        mask = @ignore_derivatives glacier_cells(glacier)
+        regH = loss(lossType.reg, regularized_field(lossType, H₀, glacier),
+            Δx, Δy, mask, normalization)
         return regH
     else
         return 0.0
@@ -213,17 +307,18 @@ function backward_loss(
     glacier = simulation.glaciers[glacier_idx]
     if at_start(t, simulation, glacier_idx, lossType.t₀)
         Δx, Δy = glacier.Δx, glacier.Δy
-        H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
-        mask = trues(size(H₀))
+        H₀ = initial_thickness(θ, simulation, glacier_idx)
+        mask = @ignore_derivatives glacier_cells(glacier)
         ∂L∂H = zero(H₀)
         ∂L∂θ = zero(θ)
-        key = Symbol("$(glacier_idx)")
-        # θ.IC is not H₀ itself: H₀ = positive(θ.IC ⋅ scale), with `positive` the
-        # `initial_condition_filter` (softplus or Zang). So ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
-        ∂L∂H₀ = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
+        # Chain rule through the filter and the θ.IC scale: ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
+        ∂L∂H₀ = backward_loss(lossType.reg, regularized_field(lossType, H₀, glacier),
+            Δx, Δy, mask, normalization)
+        scales = ic_scales(simulation, glacier_idx)
         ∂H₀∂θ = evaluate_∂H₀(
-            θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
-        ∂L∂θ.IC[key] = ∂L∂H₀ .* ∂H₀∂θ
+            θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx;
+            scale = scales.H, H_min = scales.Hmin)
+        ic_params(∂L∂θ, glacier_idx).H .= ∂L∂H₀ .* ∂H₀∂θ
         return ∂L∂H, ∂L∂θ
     else
         return zero(glacier.H₀), zero(θ)
@@ -294,21 +389,8 @@ function backward_loss(
     return ∂Reg∂H * Δt.V, ∂Reg∂θ * Δt.V
 end
 
-# Regularizations of a gridded parameter, `A` or `C`, evaluated in physical units
-const GriddedParameterRegularization = Union{RheologyRegularization, SlidingRegularization}
-
-# Part of θ with the gridded parameter, and the bounds of its tanh map (the same as in
-# `LawA` and `LawC`)
-function gridded_parameter(::RheologyRegularization, θ, physical)
-    (θ.A, physical.minA, physical.maxA)
-end
-# The lower bound of LawC is always 0
-function gridded_parameter(::SlidingRegularization, θ, physical)
-    (θ.C, zero(physical.maxC), physical.maxC)
-end
-
 function loss(
-        regType::GriddedParameterRegularization,
+        regType::RheologyRegularization,
         H::Matrix{F},
         H_ref,
         V_ref, Vx_ref, Vy_ref,
@@ -322,19 +404,20 @@ function loss(
     if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        θ_p, lo, hi = gridded_parameter(regType, θ, simulation.parameters.physical)
+        min_A = simulation.parameters.physical.minA
+        max_A = simulation.parameters.physical.maxA
 
         key = Symbol("$(glacier_idx)")
-        field = @. lo+(hi-lo)*(tanh.(θ_p[key])+1)/2
-        mask = trues(size(H) .- 1)
+        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        mask = @ignore_derivatives glacier_cells_dual(glacier)
 
-        return loss(regType.reg, field, Δx, Δy, mask, normalization)
+        return loss(regType.reg, A, Δx, Δy, mask, normalization)
     else
         return 0.0
     end
 end
 function backward_loss(
-        regType::GriddedParameterRegularization,
+        regType::RheologyRegularization,
         H::Matrix{F},
         H_ref,
         V_ref, Vx_ref, Vy_ref,
@@ -348,16 +431,15 @@ function backward_loss(
     if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        θ_p, lo, hi = gridded_parameter(regType, θ, simulation.parameters.physical)
+        min_A = simulation.parameters.physical.minA
+        max_A = simulation.parameters.physical.maxA
 
         key = Symbol("$(glacier_idx)")
-        field = @. lo+(hi-lo)*(tanh.(θ_p[key])+1)/2
-        mask = trues(size(H) .- 1)
+        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        mask = @ignore_derivatives glacier_cells_dual(glacier)
         ∂L∂θ = zero(θ)
-        # `getproperty` gives a view, so this writes into ∂L∂θ
-        ∂L∂θ_p, _, _ = gridded_parameter(regType, ∂L∂θ, simulation.parameters.physical)
-        ∂L∂θ_p[key] = backward_loss(regType.reg, field, Δx, Δy, mask, normalization) .*
-                      (hi-lo) .* (1 .- (tanh.(θ_p[key])) .^ 2) ./ 2
+        ∂L∂θ.A[key] = backward_loss(regType.reg, A, Δx, Δy, mask, normalization) .*
+                      (max_A-min_A) .* (1 .- (tanh.(θ.A[key])) .^ 2) ./ 2
 
         return zero(H), ∂L∂θ
     else
@@ -365,16 +447,97 @@ function backward_loss(
     end
 end
 
+function loss(
+        regType::SlidingRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
+) where {F <: AbstractFloat}
+    if at_start(t, simulation, glacier_idx)
+        glacier = simulation.glaciers[glacier_idx]
+        Δx, Δy = glacier.Δx, glacier.Δy
+        max_C = simulation.parameters.physical.maxC
+
+        key = Symbol("$(glacier_idx)")
+        # Same tanh mapping as LawC, whose lower bound is always 0
+        C = @. max_C*(tanh.(θ.C[key])+1)/2
+        mask = @ignore_derivatives glacier_cells_dual(glacier)
+
+        return loss(regType.reg, C, Δx, Δy, mask, normalization)
+    else
+        return 0.0
+    end
+end
+function backward_loss(
+        regType::SlidingRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
+) where {F <: AbstractFloat}
+    if at_start(t, simulation, glacier_idx)
+        glacier = simulation.glaciers[glacier_idx]
+        Δx, Δy = glacier.Δx, glacier.Δy
+        max_C = simulation.parameters.physical.maxC
+
+        key = Symbol("$(glacier_idx)")
+        C = @. max_C*(tanh.(θ.C[key])+1)/2
+        mask = @ignore_derivatives glacier_cells_dual(glacier)
+        ∂L∂θ = zero(θ)
+        ∂L∂θ.C[key] = backward_loss(regType.reg, C, Δx, Δy, mask, normalization) .*
+                      max_C .* (1 .- (tanh.(θ.C[key])) .^ 2) ./ 2
+
+        return zero(H), ∂L∂θ
+    else
+        return zero(H), zero(θ)
+    end
+end
+
+# Only the automatic adjoint is supported (see `check_loss`), so there is no `backward_loss`
+function loss(
+        regType::BedRegularization,
+        H::Matrix{F},
+        H_ref,
+        V_ref, Vx_ref, Vy_ref,
+        t::F,
+        glacier_idx::Integer,
+        θ,
+        simulation,
+        normalization::F,
+        Δt
+) where {F <: AbstractFloat}
+    if at_start(t, simulation, glacier_idx)
+        glacier = simulation.glaciers[glacier_idx]
+        cells = @ignore_derivatives glacier_cells(glacier)
+        B = Huginn.bed(simulation, glacier_idx, θ)
+        R = loss(regType.reg, B, glacier.Δx, glacier.Δy, cells, normalization)
+        iszero(regType.convexity) && return R
+        H₀ = haskey(θ, :IC) ? initial_thickness(θ, simulation, glacier_idx) : glacier.H₀
+        n_cells = @ignore_derivatives max(count(cells), 1)
+        area = n_cells * glacier.Δx * glacier.Δy
+        γ = regType.convexity * area^(regType.convexity_power - 2)
+        return R - γ * sum(H₀[cells]) / n_cells
+    else
+        return 0.0
+    end
+end
+
 """
     ∇²(a::Matrix{F}, Δx::F, Δy::F) where {F<:AbstractFloat}
 
 Computes the 2D Laplacian operator of a scalar field `a` on a regular grid
-with the standard 5-point finite difference stencil.
-
-The previous version differentiated twice with an average across the other direction in
-between (staggered grid). That operator is exactly zero on a checkerboard `(-1)^(i+j)`, so a
-Laplacian regularization could not see cell-to-cell alternating patterns. The 5-point stencil
-has eigenvalue `-4/Δx² - 4/Δy²` there.
+using finite differences and staggered (dual–primal) averaging.
 
 # Arguments
 
@@ -391,13 +554,21 @@ function ∇²(
         Δx::F,
         Δy::F
 ) where {F <: AbstractFloat}
+    # First derivative
+    ∂a∂x = Huginn.diff_x(a, Δx)
+    ∂a∂y = Huginn.diff_y(a, Δy)
+    # Evaluate in dual grid
+    ∂a∂x_dual = Huginn.avg_y(∂a∂x)
+    ∂a∂y_dual = Huginn.avg_x(∂a∂y)
+    # Second derivative
+    ∂2a∂x2_dual = Huginn.diff_x(∂a∂x_dual, Δx)
+    ∂2a∂y2_dual = Huginn.diff_y(∂a∂y_dual, Δy)
+    # Evaluate in primal grid
+    ∂2a∂x2 = Huginn.avg_y(∂2a∂x2_dual)
+    ∂2a∂y2 = Huginn.avg_x(∂2a∂y2_dual)
+
     ∇²a = zero(a)
-    @views ∇²a[2:(end - 1), 2:(end - 1)] = (a[3:end, 2:(end - 1)] .-
-                                            2 .* a[2:(end - 1), 2:(end - 1)] .+
-                                            a[1:(end - 2), 2:(end - 1)]) ./ Δx^2 .+
-                                           (a[2:(end - 1), 3:end] .-
-                                            2 .* a[2:(end - 1), 2:(end - 1)] .+
-                                            a[2:(end - 1), 1:(end - 2)]) ./ Δy^2
+    ∇²a[2:(end - 1), 2:(end - 1)] = ∂2a∂x2 .+ ∂2a∂y2
     return ∇²a
 end
 
@@ -426,15 +597,10 @@ function VJP_λ_∂∇²a_∂a(
         Δx::R,
         Δy::R
 ) where {R <: Real}
-    # The output of `∇²` is zero on the border, so only the interior of λ counts
-    λ_in = zero(λ)
-    λ_in[2:(end - 1), 2:(end - 1)] = λ[2:(end - 1), 2:(end - 1)]
-    ∂a = -2 * (1 / Δx^2 + 1 / Δy^2) .* λ_in
-    ∂a[2:end, :] .+= λ_in[1:(end - 1), :] ./ Δx^2
-    ∂a[1:(end - 1), :] .+= λ_in[2:end, :] ./ Δx^2
-    ∂a[:, 2:end] .+= λ_in[:, 1:(end - 1)] ./ Δy^2
-    ∂a[:, 1:(end - 1)] .+= λ_in[:, 2:end] ./ Δy^2
-    return ∂a
+    λ_inner = λ[2:(end - 1), 2:(end - 1)]
+    ∂a∂x = diff_x_adjoint(avg_y_adjoint(diff_x_adjoint(avg_y_adjoint(λ_inner), Δx)), Δx)
+    ∂a∂y = diff_y_adjoint(avg_x_adjoint(diff_y_adjoint(avg_x_adjoint(λ_inner), Δy)), Δy)
+    return ∂a∂x + ∂a∂y
 end
 
 # `∇²` writes into the interior of a zero matrix, so Zygote refuses it and every Tikhonov
@@ -466,4 +632,6 @@ function discreteLossSteps(lossType::InitialThicknessRegularization, tspan)
     [something(
         lossType.t₀, tspan[1])]
 end
-discreteLossSteps(lossType::GriddedParameterRegularization, tspan) = [tspan[1]]
+discreteLossSteps(lossType::RheologyRegularization, tspan) = [tspan[1]]
+discreteLossSteps(lossType::SlidingRegularization, tspan) = [tspan[1]]
+discreteLossSteps(lossType::BedRegularization, tspan) = [tspan[1]]

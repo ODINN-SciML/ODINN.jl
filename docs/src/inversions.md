@@ -42,11 +42,12 @@ The [classical inversion tutorial](./classical_inversion.md) provides an example
 
 A specific case of a classical inversion is inverting the initial state of glacier. Ice flow models are very sensitive to the initial state of the glacier. For example, it is very common to observe how bad initializations of the ice thickness can lead to unrealistic physical evolutions of the glacier over time (see [Perego_Price_Stadler_2014](@cite) for a good explanation of this phenomenon in the context of ice sheet simulations). For cases where the initial condition of the glacier is not completely known and/or we want to avoid numerical shocks during the forward simulation, ODINN provides an interface to optimize the initial conditions of the ice thickness $H(t = t_0) = H_0$ as an extra parameter of the inversion (e.g. in conjunction with the coefficients of basal sliding or the parameters of a neural network parametrization).
 
-We provide an object `InitialCondition` that enables the prescription of all the important parameters of the initialization. An initial guess can be provided: `:Farinotti19` for the ice thickness product by Farinotti et al. (2019), or `:Farinotti19Random` for the same product with some added Gaussian noise. In order to guarantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
-Finally, prescribing an inversion with respect to the initial condition can be directly included by defining the initial condition as one extra regressor inside the model:
+We provide an object `InitialCondition` that enables the prescription of all the important parameters of the initialization. An initial guess can be provided: `:Farinotti19` for the ice thickness product by Farinotti et al. (2019), `:Millan22` for the one by Millan et al. (2022), or `:Farinotti19Random` for the Farinotti product with some added Gaussian noise. In order to guarantee that the ice thickness is always non-negative, we introduce a filter function that maps model parameters into a non-negative initial ice thickness matrix (see `evaluate_H₀`).
+
+`InitialCondition` is the initial geometry of the glacier. By default (`bed = :free`) the bed is inverted with it, see [Inversion of the bed](@ref) below. With `bed = :fixed`, only the initial ice thickness is inverted and the bed stays `glacier.B`. Prescribing an inversion with respect to the initial condition can be directly included by defining the initial condition as one extra regressor inside the model:
 
 ```julia
-ic = InitialCondition(params, glaciers, :Farinotti19)
+ic = InitialCondition(params, glaciers, :Farinotti19; bed = :fixed)
 model = Model(
     iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
     mass_balance = nothing,
@@ -56,9 +57,9 @@ model = Model(
 
 From an optimization perspective, the computation of the gradients of the loss function with respect to the initial condition is simply given by the value of the adjoint variable at the initial time, which is part of the standard inversion pipeline of ODINN and it does not add any extra computational overhead.
 
-Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `θ` using the `evaluate_H₀` function on a specific glacier.
+Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `θ` using `ODINN.initial_thickness(θ, simulation, id)` for a specific glacier.
 
-Inside `θ`, the initial condition is not stored in metres. It is divided by a scale for each glacier (`H₀_scale`, the maximum initial ice thickness), so that its values are of order one, like the other parameters. Always use `evaluate_H₀` to get the ice thickness in metres, and don't read `θ.IC` directly. Note that the learning rate of the optimizer acts on these scaled values.
+Inside `θ`, the initial condition is not stored in metres. For each glacier, `θ.IC[id].H` is the initial thickness divided by a scale (`scale_H`, by default the maximum initial ice thickness of the glacier, `H₀_scale`), so that its values are of order one, like the other parameters. Use `ODINN.initial_thickness` to get the ice thickness in metres (it applies the scale of the `InitialCondition`, the filter and the mask), and don't read `θ.IC` directly. The learning rate of the optimizer acts on these scaled values: a step of Adam moves `H₀` by about the learning rate times `scale_H`. A smaller `scale_H` (for example 50 m) gives smaller steps.
 
 #### Observations and time windows
 
@@ -89,6 +90,23 @@ The initial condition is best constrained when the simulation starts on an obser
 `align_start!` and the `Inversion` write the new windows in `params.simulation.glacier_tspans`, so they also apply to other simulations built with the same parameters.
 
 The simulation does not need to be a whole number of mass balance steps: the last window of the climate ends after the end of the simulation, and the simulation stops inside it.
+
+#### Inversion of the bed
+
+With a fixed bed, `B = S - H₀`, with `S` the DEM of the glacier. So when the inversion changes $H_0$, it also changes the surface, which is well observed. A survey along a line of cells then digs or builds a wall in the surface, and the ice flow removes it in a few weeks. It is better to see the surface as an observation and the bed as the unknown: the bed does not change in time, so a thickness survey at any date constrains it through $H(t) = S(t) - B$.
+
+With `InitialCondition(...; bed = :free)` (the default), the initial geometry is inverted as in IGM (the Instructed Glacier Model): the two unknowns of each glacier are the initial thickness $H_0$ and the initial surface $S_0$, and the bed follows, $B = S_0 - H_0$. Only two of $H_0$, $S_0$ and $B$ are free, so the inversion cannot move the bed and the thickness in opposite directions for the same surface. $S_0$ starts at the DEM of the glacier and its step is `scale_S` (5 m by default). The outline of the glacier (where `glacier.H₀` is not zero) is a hard constraint: $H_0$ is zero outside it, also in the zone around the outline where the glacier can advance during the run, and it is at least `min_thickness` (1 m by default) inside it. Only $S_0$ is free in that zone. The DEMs are observations of the surface: `LossS` compares the surface `B + H` with each DEM of the glacier at the date of the DEM, and a DEM at the start is the misfit of $S_0$. The whole bed is regularized with `BedRegularization`, also as in IGM:
+
+```julia
+regressors = (; C = GriddedInv(params, glaciers, :C),
+    IC = InitialCondition(params, glaciers, :Millan22))     # bed = :free
+loss = MultiLoss(losses = (LossH(loss = L2Sum(distance = 0)), LossAvgV(), LossS(),
+    BedRegularization()))
+```
+
+`BedRegularization` keeps the gradient of the bed close to 0.3 m/m (its `σ`, the default of IGM), and its convexity term (`convexity`, 0 by default as in IGM) rewards thicker ice where the data say nothing, so that the smoothness does not flatten the bed. The starting point of the bed (for example `:Millan22`) is not used as a prior.
+
+The DEMs are in `glacier.surfaceData` (see `SurfaceData`), with their date and uncertainty. Gungnir adds them to the glacier directories: the DEM of OGGM (NASADEM, February 2000, for most glaciers) and the Copernicus DEM (TanDEM-X, 2011 to 2015, with the mean date of the acquisitions of the glacier and the error map of the product). `LossS` adds an uncertainty `σ_sys` that the products do not give, such as the penetration of the radar into snow and firn. To use a DEM at its date, the simulation must cover it: for example, start the simulation at the date of the first DEM. The surveys and the velocity maps are then observations inside the simulation. A free bed needs `SciMLSensitivityAdjoint` and a `LossS`, otherwise the `Inversion` stops with an error: use `bed = :fixed` with the manual adjoints. Each glacier also needs at least one DEM inside its time window (an error otherwise), and a DEM at the start of the window pins $S_0$ (a warning otherwise). With the free bed, use a filter that keeps $H_0 \geq 0$ (`initial_condition_filter = :Zang1980` or `:softplus`): the `Inversion` warns with the default `:identity`.
 
 ## Functional inversions
 
