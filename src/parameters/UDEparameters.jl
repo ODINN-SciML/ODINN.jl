@@ -52,6 +52,7 @@ Create a `UDEparameters` object for configuring the sensitivity analysis and opt
   - `optimization_method::String`: The optimization method to use. Must be either `"AD+AD"` or `"AD+Diff"`. Defaults to `"AD+AD"`.
   - `empirical_loss_function::AbstractLoss`: The loss function to use for optimization. Defaults to `LossH()`.
   - `target::Union{Symbol, Nothing}`: The target variable for optimization. Defaults to `:A`.
+  - `initial_condition_filter::Union{Symbol, Nothing}`: Function applied to the trained initial thickness to keep it positive: `:Zang1980` (default), `:softplus` or `:identity`. `:identity` is no filter, so H₀ is exactly `θ × scale`: use it only to debug gradients, since H₀ can be negative and `min_thickness` of `InitialCondition` is not used.
 
 # Returns
 
@@ -73,7 +74,7 @@ function UDEparameters(;
         optimization_method::String = "AD+AD",
         empirical_loss_function::AbstractLoss = MultiLoss(losses = (LossH(),), λs = (1.0,)),
         target::Union{Symbol, Nothing} = :A,
-        initial_condition_filter::Union{Symbol, Nothing} = :identity
+        initial_condition_filter::Union{Symbol, Nothing} = :Zang1980
 ) where {ADJ <: AbstractAdjointMethod}
 
     # Verify that the optimization method is correct
