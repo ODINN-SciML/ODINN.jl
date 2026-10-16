@@ -24,7 +24,8 @@ With `bed = :fixed`, only `H₀` is inverted, the bed is `glacier.B`, and the su
 The outline of the glacier is a hard constraint. It is the set of cells where the starting
 thickness `glacier.H₀` is not zero (the glacier at the date of the DEM). There, the ice thickness
 `H₀` is at least `min_thickness`. Outside the outline `H₀` is zero, also in the zone around the
-outline where the glacier is allowed to advance during the run. Only `S₀` is free there.
+outline where the glacier is allowed to advance during the run. Only `S₀` is free there. A free
+zone around the outline was tested and is not used: see [Inversion of the bed](@ref).
 
 For each glacier `id`, `θ.IC[id].H` holds `H₀` divided by `scale_H`, and `θ.IC[id].S` holds the
 change of the surface `S₀ - glacier.S` divided by `scale_S`. The scales set the size of a step
@@ -61,7 +62,7 @@ of the optimizer in metres (step = learning rate × scale). Use `ODINN.initial_t
   - `scale_H`: Scale of `H₀` in metres. With `nothing` (default), it is the maximum initial
     thickness of each glacier (`H₀_scale`).
   - `scale_S`: Scale of `S₀` in metres. Default is `5.0`.
-  - `min_thickness`: Minimum of `H₀` in metres inside the outline of the glacier. Default is `1.0`.
+  - `min_thickness`: Minimum of `H₀` in metres inside the outline of the glacier. Default is `1.0`. It needs `initial_condition_filter = :Zang1980` (default) or `:softplus` in `UDEparameters`; it is not used with `:identity`.
     It is used with the `:Zang1980` and `:softplus` filters. Use `0.0` for no minimum.
 
 # Example
@@ -104,6 +105,11 @@ mutable struct InitialCondition{
         min_thickness = ft(min_thickness)
         min_thickness >= 0 || throw(ArgumentError(
             "min_thickness must be zero or positive, got $(min_thickness)."))
+        # Warn early: without a filter, H₀ can be negative and `min_thickness` is not used
+        params.UDE.initial_condition_filter == :identity &&
+            @warn "`initial_condition_filter = \
+:identity`: H₀ can become negative, and `min_thickness` is not used. Use \
+`:Zang1980` (default) or `:softplus` in `UDEparameters`."
         # Scaling factor
         gridScalingFactor = params.simulation.gridScalingFactor
         # Component Array type

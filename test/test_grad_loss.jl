@@ -668,6 +668,14 @@ function test_free_bed()
           ODINN.ic_params(θ, 1).H .* ODINN.H₀_scale(glacier)
     @test_throws ArgumentError InitialCondition(simulation.parameters,
         simulation.glaciers, :Farinotti19; scale_H = -1.0)
+    # The default filter keeps H₀ positive, and building the initial condition with `:identity` warns
+    @test UDEparameters().initial_condition_filter == :Zang1980
+    p = simulation.parameters
+    params_identity = ODINN.Parameters(physical = p.physical, simulation = p.simulation,
+        solver = p.solver, hyper = p.hyper,
+        UDE = UDEparameters(initial_condition_filter = :identity))
+    @test_logs (:warn, r"identity") InitialCondition(
+        params_identity, simulation.glaciers, :Farinotti19)
     θ₁ = copy(θ)
     ODINN.ic_params(θ₁, 1).S .= 0.1
     @test Huginn.bed(simulation, 1, θ₁) ≈ glacier.S .- H₀ .+ 0.5 .* .!glacier.mask
@@ -701,6 +709,19 @@ function test_free_bed()
         @test ∂H≈fd rtol=1e-4 atol=1e-3
         @test all(∂H[.!outline] .== 0)
     end
+
+    # The date of the outline is compared with the start of the run
+    @test ODINN.outline_date_status(nothing, 2000.1) == :unknown
+    # RGI 6 (2003.6) with NASADEM (2000.1) is the typical case: 3.5 years, no warning
+    @test ODINN.outline_date_status(2003.6, 2000.1) == :match
+    @test ODINN.outline_date_status(2004.6, 2000.1) == :mismatch
+    @test ODINN.outline_date_status(2004.6, 2000.1, 5) == :match
+    # Unknown date: information. Far date: warning. Close date: nothing.
+    @test_logs (:info, r"not in the data") ODINN.check_outline_date(simulation, [nothing])
+    t₀ = glacier_tspan(simulation, 1)[1]
+    @test_logs (:warn, r"more than") ODINN.check_outline_date(simulation, [t₀ + 5])
+    @test_logs ODINN.check_outline_date(simulation, [t₀ + 1])
+    @test length(ODINN.outline_dates(simulation)) == length(simulation.glaciers)
 
     # The DEMs are the surface at the start and 2 m higher later, so a state that matches
     # them adds nothing to the loss, also with a cell without value

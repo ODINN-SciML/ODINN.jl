@@ -91,8 +91,10 @@ function Inversion(
 
     # Fail early with a clear message instead of deep inside the first gradient call
     check_loss(parameters.UDE.empirical_loss_function, inversion)
-    # A free bed needs the automatic adjoint, which differentiates through the bed, and a DEM
     θ = model.trainable_components.θ
+    # The outline of the glacier constrains H₀: it should be from the date of the start
+    !isnothing(θ) && haskey(θ, :IC) && check_outline_date(inversion)
+    # A free bed needs the automatic adjoint, which differentiates through the bed, and a DEM
     if any(i -> bed_is_free(θ, i), eachindex(glaciers))
         parameters.UDE.grad isa SciMLSensitivityAdjoint || throw(ArgumentError(
             "The bed is free (`InitialCondition` with `bed = :free`, the default), which \
@@ -104,9 +106,9 @@ function Inversion(
             `InitialCondition(...; bed = :fixed)`."))
         # With a negative H₀ the bed S₀ - H₀ is above the surface S₀
         parameters.UDE.initial_condition_filter == :identity &&
-            @warn "The bed is free with \
-`initial_condition_filter = :identity`, so H₀ can become negative and then the \
-bed S₀ - H₀ is above the surface. Use `:Zang1980` or `:softplus`."
+            @warn "The bed is free with `initial_condition_filter = :identity`, so H₀ can \
+                become negative (then the bed S₀ - H₀ is above the surface). Use `:Zang1980` \
+                (default) or `:softplus`."
     end
 
     return inversion
