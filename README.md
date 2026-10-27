@@ -95,7 +95,7 @@ fig = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics 
 save_figure(fig, joinpath(working_dir, "plots", "evolution_difference.png"))
 ```
 
-The results file is saved in `data/results/predictions` inside `working_dir`, and the figure in `plots`. This example is the same as the [forward simulation tutorial](https://odinn-sciml.github.io/ODINN.jl/dev/forward_simulation/), which explains each step in detail.
+The results file is saved in `data/results/predictions` inside `working_dir`, and the figure in `plots`. The [forward simulation tutorial](https://odinn-sciml.github.io/ODINN.jl/dev/forward_simulation/) runs a similar example and explains each step in detail.
 
 To use a machine learning mass balance model instead, replace the `mass_balance` model with one from MassBalanceMachine.jl, see the [MassBalanceMachine page](https://odinn-sciml.github.io/ODINN.jl/dev/Packages/massbalancemachine/) of the documentation.
 

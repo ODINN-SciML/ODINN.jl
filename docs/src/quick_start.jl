@@ -34,7 +34,7 @@ run!(prediction)
 
 # Then, we can easily visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier:
 
-fig = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"])
+fig = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"]);
 
 # To keep the figure, save it to a file with `save_figure` and open the file with any program:
 
