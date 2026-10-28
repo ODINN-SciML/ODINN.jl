@@ -36,10 +36,11 @@ end
 
 Constructor for Inversion struct with glacier model information, glaciers, and parameters.
 
-When the initial condition is trained, a glacier whose first ice thickness survey is at most
-one `step_MB` after its start is moved to start on the survey (see `align_start!`). This
-writes the new window in `parameters.simulation.glacier_tspans`, so it also applies to other
-simulations built with the same `parameters`.
+When the initial condition is trained, a glacier whose first observation (ice thickness survey,
+DEM or surface velocity map) is at most one `step_MB` after its start is moved to start on it
+(see `align_start!`, which by default starts on the first observation however late it is).
+This writes the new window in `parameters.simulation.glacier_tspans`, so it also applies to
+other simulations built with the same `parameters`.
 
 # Arguments
 
@@ -80,9 +81,9 @@ function Inversion(
         parameters,
         emptyResults)
 
-    # When H₀ is trained, a glacier whose first ice thickness survey is at most one mass
-    # balance step from its start starts on it, so the survey constrains H₀ directly.
-    # Otherwise, only warn about a survey close to the start.
+    # When H₀ is trained, a glacier whose first observation is at most one mass balance step
+    # from its start starts on it, so the observation constrains H₀ directly.
+    # Otherwise, only warn about an observation close to the start.
     check_glacier_tspans(parameters, glaciers)
     align_start!(parameters, glaciers; within = parameters.simulation.step_MB,
         apply = haskey(model.trainable_components.θ, :IC))

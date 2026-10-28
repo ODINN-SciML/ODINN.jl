@@ -425,14 +425,11 @@ function check_loss(lossType::LossHV, simulation)
     return nothing
 end
 # The regularizations of a gridded parameter need it to be trained
-function check_loss(lossType::SlidingRegularization, simulation)
-    haskey(simulation.model.trainable_components.θ, :C) || throw(ArgumentError(
-        "SlidingRegularization needs `C` to be trained."))
-    return nothing
-end
-function check_loss(lossType::RheologyRegularization, simulation)
-    haskey(simulation.model.trainable_components.θ, :A) || throw(ArgumentError(
-        "RheologyRegularization needs `A` to be trained."))
+function check_loss(
+        lossType::Union{RheologyRegularization, SlidingRegularization}, simulation)
+    key = lossType isa SlidingRegularization ? :C : :A
+    haskey(simulation.model.trainable_components.θ, key) || throw(ArgumentError(
+        "$(nameof(typeof(lossType))) needs `$(key)` to be trained."))
     return nothing
 end
 function check_loss(lossType::LossAvgV, simulation)
@@ -477,20 +474,6 @@ function check_loss(lossType::InitialThicknessRegularization, simulation)
                 t₀ = $(lossType.t₀), outside the time window $(tspan) of glacier \
                 $(glacier.rgi_id), so it would be ignored. Use \
                 InitialThicknessRegularization() to apply it at the start of each glacier."))
-        end
-        # The correction is measured from glacier.H₀, so θ.IC should start there
-        if lossType.correction
-            θ = simulation.model.trainable_components.θ
-            haskey(θ, :IC) || throw(ArgumentError(
-                "InitialThicknessRegularization needs the initial condition to be trained."))
-            H₀ = evaluate_H₀(θ, glacier,
-                simulation.parameters.UDE.initial_condition_filter, i)
-            if norm(H₀ .- glacier.H₀) > 0.05 * norm(glacier.H₀)
-                @warn "InitialThicknessRegularization(correction = true) penalizes the change \
-                    from glacier.H₀, but the initial condition of glacier $(glacier.rgi_id) \
-                    starts more than 5% away from it. Use the same product for \
-                    `ice_thickness_source` and for `InitialCondition`."
-            end
         end
     end
 end

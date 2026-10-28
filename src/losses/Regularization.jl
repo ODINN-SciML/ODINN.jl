@@ -45,7 +45,7 @@ struct TikhonovRegularization{I <: Integer} <: AbstractSimpleRegularization
 end
 
 """
-    InitialThicknessRegularization(t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization(), correction::Bool = false)
+    InitialThicknessRegularization(t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization())
 
 A composite regularization type designed for initial ice thickness.
 It combines a simple spatial regularization (e.g., `TikhonovRegularization`) with a reference initial time.
@@ -57,20 +57,17 @@ It combines a simple spatial regularization (e.g., `TikhonovRegularization`) wit
 # Keyword Arguments
 
   - `reg::AbstractSimpleRegularization = TikhonovRegularization()`: The spatial regularization operator applied to the initial field. By default, a Tikhonov (Laplacian-based) regularization is used.
-  - `correction::Bool = false`: If `true`, the regularization is applied to the correction of the initial thickness, `H₀ - glacier.H₀`, and not to `H₀` itself. The initial thickness of the glacier keeps its own shape, and only the changes made by the inversion are kept smooth. With the Laplacian, a constant or a linear change is not penalized. The reference is `glacier.H₀`, which is the starting point of `θ.IC` only if `InitialCondition` uses the same product; otherwise the `Inversion` shows a warning.
 """
 struct InitialThicknessRegularization{
     R <: AbstractSimpleRegularization, T <: Union{Nothing, AbstractFloat}} <:
        AbstractRegularization
     reg::R
     t₀::T
-    correction::Bool
 
     function InitialThicknessRegularization(
-            t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization(),
-            correction::Bool = false)
+            t₀ = nothing; reg::AbstractSimpleRegularization = TikhonovRegularization())
         t₀ = isnothing(t₀) ? nothing : float(t₀)
-        return new{typeof(reg), typeof(t₀)}(reg, t₀, correction)
+        return new{typeof(reg), typeof(t₀)}(reg, t₀)
     end
 end
 
@@ -176,14 +173,6 @@ function at_start(t, simulation, glacier_idx, t₀ = nothing)
         t₀, glacier_tspan(simulation, glacier_idx)[1])
 end
 
-"""
-Field that `InitialThicknessRegularization` is applied to: `H₀`, or its correction `H₀ - glacier.H₀`.
-The shift is constant in θ, so the derivative with respect to `H₀` has the same form in both cases.
-"""
-function regularized_field(lossType::InitialThicknessRegularization, H₀, glacier)
-    lossType.correction ? H₀ .- glacier.H₀ : H₀
-end
-
 function loss(
         lossType::InitialThicknessRegularization,
         H_pred::Matrix{F},
@@ -202,8 +191,7 @@ function loss(
         Δx, Δy = glacier.Δx, glacier.Δy
         H₀ = evaluate_H₀(θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
         mask = trues(size(H₀))
-        regH = loss(lossType.reg, regularized_field(lossType, H₀, glacier),
-            Δx, Δy, mask, normalization)
+        regH = loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
         return regH
     else
         return 0.0
@@ -230,9 +218,9 @@ function backward_loss(
         ∂L∂H = zero(H₀)
         ∂L∂θ = zero(θ)
         key = Symbol("$(glacier_idx)")
-        # Chain rule through the filter and the θ.IC scale: ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
-        ∂L∂H₀ = backward_loss(lossType.reg, regularized_field(lossType, H₀, glacier),
-            Δx, Δy, mask, normalization)
+        # θ.IC is not H₀ itself: H₀ = positive(θ.IC ⋅ scale), with `positive` the
+        # `initial_condition_filter` (softplus or Zang). So ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
+        ∂L∂H₀ = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
         ∂H₀∂θ = evaluate_∂H₀(
             θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
         ∂L∂θ.IC[key] = ∂L∂H₀ .* ∂H₀∂θ
@@ -425,7 +413,12 @@ end
     ∇²(a::Matrix{F}, Δx::F, Δy::F) where {F<:AbstractFloat}
 
 Computes the 2D Laplacian operator of a scalar field `a` on a regular grid
-using finite differences and staggered (dual–primal) averaging.
+with the standard 5-point finite difference stencil.
+
+The previous version differentiated twice with an average across the other direction in
+between (staggered grid). That operator is exactly zero on a checkerboard `(-1)^(i+j)`, so a
+Laplacian regularization could not see cell-to-cell alternating patterns. The 5-point stencil
+has eigenvalue `-4/Δx² - 4/Δy²` there.
 
 # Arguments
 
@@ -442,21 +435,13 @@ function ∇²(
         Δx::F,
         Δy::F
 ) where {F <: AbstractFloat}
-    # First derivative
-    ∂a∂x = Huginn.diff_x(a, Δx)
-    ∂a∂y = Huginn.diff_y(a, Δy)
-    # Evaluate in dual grid
-    ∂a∂x_dual = Huginn.avg_y(∂a∂x)
-    ∂a∂y_dual = Huginn.avg_x(∂a∂y)
-    # Second derivative
-    ∂2a∂x2_dual = Huginn.diff_x(∂a∂x_dual, Δx)
-    ∂2a∂y2_dual = Huginn.diff_y(∂a∂y_dual, Δy)
-    # Evaluate in primal grid
-    ∂2a∂x2 = Huginn.avg_y(∂2a∂x2_dual)
-    ∂2a∂y2 = Huginn.avg_x(∂2a∂y2_dual)
-
     ∇²a = zero(a)
-    ∇²a[2:(end - 1), 2:(end - 1)] = ∂2a∂x2 .+ ∂2a∂y2
+    @views ∇²a[2:(end - 1), 2:(end - 1)] = (a[3:end, 2:(end - 1)] .-
+                                            2 .* a[2:(end - 1), 2:(end - 1)] .+
+                                            a[1:(end - 2), 2:(end - 1)]) ./ Δx^2 .+
+                                           (a[2:(end - 1), 3:end] .-
+                                            2 .* a[2:(end - 1), 2:(end - 1)] .+
+                                            a[2:(end - 1), 1:(end - 2)]) ./ Δy^2
     return ∇²a
 end
 
@@ -485,10 +470,15 @@ function VJP_λ_∂∇²a_∂a(
         Δx::R,
         Δy::R
 ) where {R <: Real}
-    λ_inner = λ[2:(end - 1), 2:(end - 1)]
-    ∂a∂x = diff_x_adjoint(avg_y_adjoint(diff_x_adjoint(avg_y_adjoint(λ_inner), Δx)), Δx)
-    ∂a∂y = diff_y_adjoint(avg_x_adjoint(diff_y_adjoint(avg_x_adjoint(λ_inner), Δy)), Δy)
-    return ∂a∂x + ∂a∂y
+    # The output of `∇²` is zero on the border, so only the interior of λ counts
+    λ_in = zero(λ)
+    λ_in[2:(end - 1), 2:(end - 1)] = λ[2:(end - 1), 2:(end - 1)]
+    ∂a = -2 * (1 / Δx^2 + 1 / Δy^2) .* λ_in
+    ∂a[2:end, :] .+= λ_in[1:(end - 1), :] ./ Δx^2
+    ∂a[1:(end - 1), :] .+= λ_in[2:end, :] ./ Δx^2
+    ∂a[:, 2:end] .+= λ_in[:, 1:(end - 1)] ./ Δy^2
+    ∂a[:, 1:(end - 1)] .+= λ_in[:, 2:end] ./ Δy^2
+    return ∂a
 end
 
 # `∇²` writes into the interior of a zero matrix, so Zygote refuses it and every Tikhonov

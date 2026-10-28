@@ -17,11 +17,14 @@ The mask defining the glacier borders are computed using the ground truth ice th
 # Fields
 
   - `distance::I`: Distance to border.
-  - `normalize::Symbol`: What the sum is divided by. With `:cells` (default) it is divided by
-    `normalization`, which is the number of cells of the grid, so the weight of each
-    observation depends on the resolution. With `:observations` it is divided by the number of
-    pixels in the mask, so the loss is a mean over the observations and does not depend on the
-    resolution.
+  - `normalize::Symbol`: What the sum is divided by (`normalization` in the formula).
+    With `:cells` (default) it is the number of cells of the grid. The loss is then the mean
+    misfit times the fraction of the grid that is observed, so a sparse dataset, like a few
+    radar lines, counts little next to a dense one, like a velocity map.
+    With `:observations` it is the number of pixels in the mask. The loss is then the mean
+    misfit per observed pixel, so every dataset counts the same, whatever its coverage and the
+    resolution of the grid. Use it to set the balance between datasets only with the weights
+    `λ` of a `MultiLoss`.
 """
 @kwdef struct L2Sum{I <: Integer} <: AbstractSimpleLoss
     distance::I = 3
