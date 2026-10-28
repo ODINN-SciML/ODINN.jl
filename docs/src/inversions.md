@@ -32,6 +32,8 @@ The answer depends on which adjoint method is used (see [Sensitivity analysis](s
   - **Manual adjoints** (`ContinuousAdjoint`, `DiscreteAdjoint`): Inversion is implemented for `A` (Glen flow rate factor) and `D` (diffusivity). These are selected through the `target` option of `UDEparameters` (`target = :A`, the default, or `target = :D`), which internally picks the hand-coded expressions of how the target quantity enters the PDE Jacobians.
   - **`SciMLSensitivityAdjoint`**: Can invert any parameter that is wired into `TrainableComponents` as a `Law` — including the basal sliding coefficient `C` — because Zygote + SciMLSensitivity differentiate through the entire ODE automatically, without needing a custom target. No `SIA2D_C_target` is needed in this path.
 
+With a velocity loss and a sliding coefficient `C > 0`, the surface velocity includes the sliding term. The manual adjoints take it into account for the targets `A` and `D`, but not for `SIA2D_D_hybrid_target`: use `SciMLSensitivityAdjoint` for that one.
+
 ### Classical inversions tutorial
 
 The [classical inversion tutorial](./classical_inversion.md) provides an example on how to use these methods to invert in a scalar or gridded way a parameter of the Shallow Ice Approximation.

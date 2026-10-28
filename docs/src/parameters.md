@@ -45,6 +45,12 @@ ODINN.Hyperparameters
 ODINN.Hyperparameters()
 ```
 
+By default, the optimizer is Adam and then LBFGS, with 25 epochs each, see [Optimizers](@ref).
+
+```@docs
+ODINN.default_optimizer
+```
+
 ## UDE parameters
 
 Universal Differential Equation (UDE) parameters are used to determine different modelling choices regarding the use of UDEs, such as which sensitivity algorithm or optimization method to use.

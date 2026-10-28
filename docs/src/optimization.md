@@ -88,9 +88,9 @@ For this setting, the empirical error term can be defined as
 
 with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node of the simulation grid $x_j$.
 
-By default all the observation times have the same weight (`weighting = :uniform`), so this is a plain sum over the observations.
-With `LossH(weighting = :time_span)` (same for `LossV`), each observation time is instead weighted by the time it covers: half of the time to the previous observation plus half of the time to the next one, where the first and the last observations extend to the start and the end of the simulation.
-This gives less weight to observations that are close in time, for example several velocity maps in the same year.
+By default every observation time counts once (`weighting = :uniform`), so the loss is a plain sum over the observation times. This suits a few surveys or one velocity map.
+With `LossH(weighting = :time_span)` (same for `LossV`), each observation time counts as much as the time it covers: half of the time to the previous observation plus half of the time to the next one. The first and the last observations also cover the time to the start and to the end of the simulation.
+Use it for dense time series, for example many velocity maps in the same year, so that they do not dominate the loss.
 See `observation_weights` for the details.
 
 #### Time aggregated loss functions
