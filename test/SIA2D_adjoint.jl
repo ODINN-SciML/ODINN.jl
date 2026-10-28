@@ -210,7 +210,8 @@ end
 function test_adjoint_surface_V(
         adjointFlavor::ADJ;
         thres = [2e-4, 2e-4, 2e-2],
-        target = :A
+        target = :A,
+        sliding = false
 ) where {ADJ <: AbstractAdjointMethod}
     Random.seed!(1234)
 
@@ -276,6 +277,11 @@ function test_adjoint_surface_V(
     glaciers = initialize_glaciers(rgi_ids, params)
 
     glacier_idx = 1
+    if sliding
+        # Sliding of the same size as the deformation, so that the sliding term is tested
+        glacier = glaciers[glacier_idx]
+        glacier.C = Huginn.sliding_scale(1e-18, 100.0; p = glacier.p, q = glacier.q)
+    end
 
     H = glaciers[glacier_idx].H₀
     simulation = Inversion(model, glaciers, params)

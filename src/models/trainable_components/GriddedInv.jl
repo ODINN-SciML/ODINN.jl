@@ -1,6 +1,29 @@
 export GriddedInv
 
 """
+    C_seed(c, maxC)
+
+Initial value of `θ.C` for a sliding coefficient `c`: the inverse of the map of `LawC`,
+`C = maxC * (tanh(x) + 1) / 2`, valid for `c` in `(0, maxC)`. `c = 0` (no sliding) is seeded at
+`x = -5` (`C ≈ 5e-5 maxC`), and `c ≥ maxC` at `x = 5`.
+"""
+function C_seed(c, maxC)
+    c <= 0 && return Sleipnir.Float(-5)
+    c >= maxC && return Sleipnir.Float(5)
+    return atanh(c * 2 / maxC - 1)
+end
+
+# Warn when a C inversion starts in the flat tails of the tanh map (C = 0 is the default):
+# dC/dx is ~2e-4 of its maximum there, so the inversion barely moves, which looks like a
+# converged run
+function warn_flat_C_seeds(seeds, glaciers, maxC, model_name)
+    flat = findall(s -> abs(s) > 4, seeds)
+    isempty(flat) && return nothing
+    rgi_ids = [glaciers[i].rgi_id for i in flat]
+    @warn "$(model_name)(:C): $(length(flat))/$(length(seeds)) glaciers have no usable initial C and are seeded in the flat part of the tanh map, where dC/dθ is ~$(round(sech(maximum(abs, seeds[flat]))^2; sigdigits = 2)) of its maximum. The inversion will barely move. Set `glacier.C` inside (0, maxC = $(maxC)), e.g. 0.1 * maxC." rgi_ids
+end
+
+"""
     GriddedInv{
         ComponentVectorType <: ComponentVector
     } <: PerGlacierModel
@@ -56,24 +79,9 @@ mutable struct GriddedInv{
             θ = ComponentVector{Sleipnir.Float}(θ = inv_param)
             θ = atanh.((θ .- minv) .* (2/(maxv-minv)) .- 1.0)
         elseif var == :C
-            # LawC uses C = maxC * (tanh(x)+1)/2, so min is always 0.
-            # Inverse: x = atanh(C*2/maxC - 1), valid for C ∈ (0, maxC).
-            # For C=0 (no sliding), seed x=-5 → C ≈ 5e-5 * maxC.
             maxv = Sleipnir.Float(isnothing(maxval) ? params.physical.maxC : maxval)
-            seeds = [let c = Sleipnir.Float(getfield(glaciers[i], var))
-                         c <= 0 || c >= maxv ? Sleipnir.Float(-5) :
-                         atanh(c * 2 / maxv - 1)
-                     end
-                     for i in 1:length(glaciers)]
-
-            # Warn when a C inversion starts in the flat tails of the tanh map (C = 0 is
-            # the default): dC/dx is ~2e-4 of its maximum there, so the inversion barely
-            # moves, which looks like a converged run
-            flat = findall(s -> abs(s) > 4, seeds)
-            if !isempty(flat)
-                ids = [glaciers[i].rgi_id for i in flat]
-                @warn "GriddedInv(:C): $(length(flat))/$(length(seeds)) glaciers have no usable initial C and are seeded in the flat part of the tanh map, where dC/dθ is ~$(round(sech(maximum(abs, seeds[flat]))^2; sigdigits = 2)) of its maximum. The inversion will barely move. Set `glacier.C` inside (0, maxC = $(maxv)), e.g. 0.1 * maxC." rgi_ids=ids
-            end
+            seeds = [C_seed(Sleipnir.Float(g.C), maxv) for g in glaciers]
+            warn_flat_C_seeds(seeds, glaciers, maxv, "GriddedInv")
 
             inv_param = NamedTuple{inv_param_type}(
                 Tuple(fill(seeds[i], size(glaciers[i].H₀) .- 1)

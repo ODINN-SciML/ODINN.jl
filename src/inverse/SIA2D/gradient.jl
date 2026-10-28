@@ -48,7 +48,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
     results = getindex.(loss_results, 2)
     simulation.results.simulation = results
     params = simulation.parameters
-    tspan = params.simulation.tspan
 
     dLdθs_vector = Vector{typeof(θ)}()
     loss_function = params.UDE.empirical_loss_function
@@ -64,6 +63,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         Δt = diff(t)
         H = result.H
         glacier = simulation.glaciers[i]
+        tspan = glacier_tspan(simulation, i)
 
         ## 2- Reference data
 
@@ -90,6 +90,8 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
         tstops = sort(unique(vcat(
             tstops, params.solver.tstops, tH_ref, tV_ref,
             tstopsDiscreteLoss, tstopsAggregatedLoss)))
+        # Observations outside the time window are not simulated, as in the forward
+        tstops = filter(t -> tspan[1] <= t <= tspan[2], tstops)
 
         @assert length(t) == length(tstops) "The size of tstops does not match with the size of the reference times."
         @assert isapprox(t, tstops, rtol = 1e-7) "Times in tstops and reference times in result do not coincide. Maximum difference is $(maximum(abs.(t-tstops)))"
@@ -120,6 +122,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             # Adjoint setup
             # Define empty object to store adjoint in reverse mode
             λ = [zero(result.B) for _ in 1:k]
+            λ₀ = zero(result.B)
 
             res_backward_loss = map(1:k) do j
                 tj = t[j]
@@ -225,6 +228,9 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
 
                     ### Contribution to the loss
                     dLdθ .+= Δt[j - 1] * λ_∂f∂θ
+                elseif haskey(θ, :IC)
+                    # λ[begin] is the adjoint at the second time step, one more step gives the one at H₀
+                    λ₀ .= λ[j] .+ Δt[j] * λ_∂f∂H .+ something(∂ℓ∂H, 0.0)
                 end
                 # For ∂ℓ∂θ, time discretization is already included in the loss, so no need to multiply by Δt
                 dLdθ .+= something(∂ℓ∂θ, 0.0)
@@ -241,7 +247,6 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 @warn "DiscreteAdjoint initial-condition (H₀) gradients are unreliable \
                     for the stiff SIA at practical time steps and may be unstable; \
                     prefer ContinuousAdjoint for initial-condition inversion." maxlog=1
-                λ₀ = λ[begin]
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
@@ -265,9 +270,11 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
             """
             if simulation.parameters.UDE.grad.interpolation == :Linear
                 H_itp = interpolate((t,), H, Gridded(Linear()))
+                # When there is only one reference data we use a constant interpolator
                 H_ref_itp = useThickness ?
-                            interpolate((tH_ref,), H_ref, Gridded(Linear())) : nothing
-                # When there is only one reference velocity data we use a constant interpolator
+                            (length(tH_ref)>1 ?
+                             interpolate((tH_ref,), H_ref, Gridded(Linear())) :
+                             t -> only(H_ref)) : nothing
                 Vabs_ref_itp = useVelocity ?
                                (length(tV_ref)>1 ?
                                 interpolate((tV_ref,), Vabs_ref, Gridded(Linear())) :
@@ -371,8 +378,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                     tstopsAggregatedLoss=tstopsAggregatedLoss
 
                     function (t, u)
-                        ind = Sleipnir.indFromT(
-                            simulation.parameters.simulation.tspan, [t], tstopsAggregatedLoss)[1]
+                        ind = Sleipnir.indFromT(tspan, [t], tstopsAggregatedLoss)[1]
                         u .+= ∂L∂H_aggregated_loss[ind]
                     end
                 end

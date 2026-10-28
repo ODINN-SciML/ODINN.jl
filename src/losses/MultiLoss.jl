@@ -186,11 +186,11 @@ function loss_uses_velocity(lossType::MultiLoss)
     )
 end
 function observation_weighting(lossType::MultiLoss, var::Symbol)
-    for l in lossType.losses
-        w = observation_weighting(l, var)
-        isnothing(w) || return w
-    end
-    return nothing
+    # The weights of the observations are shared by all the terms of the loss
+    ws = unique(filter(!isnothing, [observation_weighting(l, var) for l in lossType.losses]))
+    length(ws) > 1 && throw(ArgumentError("The terms of the MultiLoss use different \
+        weightings for the observations of $(var): $(ws). Use the same one."))
+    return isempty(ws) ? nothing : only(ws)
 end
 function discreteLossSteps(lossType::MultiLoss, tspan)
     ts = map(lossType.losses) do l

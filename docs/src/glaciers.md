@@ -29,6 +29,15 @@ The main climate data supported include:
   - [HISTALP](https://docs.oggm.org/en/stable/climate-data.html#histalp)
   - Any other climate dataset. It is fairly easy to add climate datasets into OGGM.
 
+## Observations
+
+Besides its climate, a glacier carries the observations that an inversion can use. Each one has its date, and `observations(glacier)` lists them all in time (see [Observations and time windows](@ref)).
+
+  - **Ice thickness** (`glacier.thicknessData`): the dated GlaThiDa campaigns, one grid per campaign, with the uncertainty of each cell. They are attached with `use_glathida_data = true` in `SimulationParameters`.
+  - **Ice surface velocity** (`glacier.velocityData`): the velocity maps of Millan et al. (2022), with `use_velocities = true`. The sign of `vy` is the one of the model velocity `Vy` (the map has a north-up grid, so ODINN flips it), so that velocity losses with `component = :xy` compare the same quantity.
+  - **Surface elevation** (`glacier.surfaceData`): DEMs, each with its date and its uncertainty. Gungnir adds the DEM of OGGM (NASADEM, February 2000, for most glaciers) and the Copernicus DEM (TanDEM-X, 2011 to 2015, with the error map of the product).
+  - **Elevation change** (`glacier.dhdtData`): the glacier-wide elevation change of Hugonnet et al. (2021).
+
 ## Initializing glaciers and their climate
 
 ### Standard workflow

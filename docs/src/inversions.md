@@ -60,6 +60,36 @@ Once the model has been trained, the value of the initialization can be computed
 
 Inside `θ`, the initial condition is not stored in metres. It is divided by a scale for each glacier (`H₀_scale`, the maximum initial ice thickness), so that its values are of order one, like the other parameters. Always use `evaluate_H₀` to get the ice thickness in metres, and don't read `θ.IC` directly. Note that the learning rate of the optimizer acts on these scaled values.
 
+#### Observations and time windows
+
+An inversion compares the model with the observations of each glacier: ice thickness surveys, ice surface velocity maps, DEMs and the glacier-wide elevation change. Use `observations` to list what is available for a glacier, and `plot_observations` or `plot_observation_timeline` to see it:
+
+```julia
+observations(glacier)          # one row per observation, sorted in time
+plot_observations(glacier)     # 3D: space and time, thickness and velocity in different colours
+```
+
+With `use_glathida_data = true`, the dated GlaThiDa surveys are attached to the glacier as thickness observations.
+
+The initial condition is best constrained when the simulation starts on an observation: the observation then constrains $H_0$ directly, and not through the dynamics of the first time steps. These are the ways to choose the start of each glacier:
+
+  - By default, all the glaciers use the time window `tspan` of the parameters.
+
+  - You can give a glacier its own time window, by RGI ID. The windows must be inside `tspan`, because the climate data is loaded for `tspan` (see `glacier_tspan`):
+
+    ```julia
+    SimulationParameters(tspan = (2000.0, 2020.0),
+        glacier_tspans = Dict("RGI60-11.01450" => (2009.24, 2018.0)))
+    ```
+
+  - `align_start!(params, glaciers)` moves the start of each glacier to its first observation, however late it is, so that the trajectory is as long as possible. The first observation is the earliest thickness survey, DEM or velocity map inside the window (the glacier-wide elevation change does not count). The end of the window is kept, and an observation before the window is not used.
+
+  - The `Inversion` does part of it for you. When the initial condition is trained, a glacier whose first observation is at most one mass balance step after its start moves onto it, and an `@info` message says so. If the initial condition is not trained, there is only a warning.
+
+`align_start!` and the `Inversion` write the new windows in `params.simulation.glacier_tspans`, so they also apply to other simulations built with the same parameters.
+
+The simulation does not need to be a whole number of mass balance steps: the last window of the climate ends after the end of the simulation, and the simulation stops inside it.
+
 ## Functional inversions
 
 We refer to functional inversions as the inverse problems where the objective is to invert the parameter $\theta$ of a regressor (e.g. a neural network), in order to learn a function that parametrizes a subpart of a mechanistic model (e.g. the SIA) with respect to one or more input variables (e.g. surface melt, basal slope) [bolibar_universal_2023](@cite). The methods behind functional inversions are known as **Universal Differential Equations** [rackauckas_universal_2020](@cite).

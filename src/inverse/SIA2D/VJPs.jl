@@ -240,8 +240,8 @@ function ChainRules.rrule(::typeof(Huginn.V_from_H), simulation::Inversion, H, t
         # Fold all three output cotangents into (dVx, dVy) seeds for Enzyme.
         # ΔV through V=‖(Vx,Vy)‖ is handled analytically here to avoid 0/0 NaN
         # at ice-free cells where Vx=Vy=V=0.
-        dVx = Δ[1] isa ChainRules.AbstractZero ? zero(Vx) : copy(ChainRules.unthunk(Δ[1]))
-        dVy = Δ[2] isa ChainRules.AbstractZero ? zero(Vy) : copy(ChainRules.unthunk(Δ[2]))
+        dVx = Δ[1] isa ChainRules.AbstractZero ? zero(Vx) : Array(ChainRules.unthunk(Δ[1]))
+        dVy = Δ[2] isa ChainRules.AbstractZero ? zero(Vy) : Array(ChainRules.unthunk(Δ[2]))
         if !(Δ[3] isa ChainRules.AbstractZero)
             dV = ChainRules.unthunk(Δ[3])
             # ∂V/∂Vx = Vx/V; zero where V=0 (Vx=0 there, so cotangent is 0)

@@ -70,7 +70,7 @@ function time_aggregated_loss(
 ) where {F <: AbstractFloat}
     tLoss = simulation.glaciers[glacier_idx].dhdtData.t
     dhdt_ref = simulation.glaciers[glacier_idx].dhdtData.dhdt
-    tspan = simulation.parameters.simulation.tspan
+    tspan = glacier_tspan(simulation, glacier_idx)
 
     ind = Sleipnir.indFromT(tspan, tLoss, t)
     H0 = H_pred[ind[1]]
@@ -98,7 +98,7 @@ function backward_time_aggregated_loss(
 ) where {F <: AbstractFloat}
     tLoss = simulation.glaciers[glacier_idx].dhdtData.t
     dhdt_ref = simulation.glaciers[glacier_idx].dhdtData.dhdt
-    tspan = simulation.parameters.simulation.tspan
+    tspan = glacier_tspan(simulation, glacier_idx)
     mask = simulation.glaciers[glacier_idx].mask
 
     ind = Sleipnir.indFromT(tspan, tLoss, t)
@@ -212,7 +212,7 @@ function backward_time_aggregated_loss(
     tLoss = collect(t1:lossType.step:t2)
     dt = diff(tLoss)
     tLoss = tLoss[begin:(end - 1)] # Discard last point t=t2
-    ind_pred = Sleipnir.indFromT(simulation.parameters.simulation.tspan, tLoss, t)
+    ind_pred = Sleipnir.indFromT(glacier_tspan(simulation, glacier_idx), tLoss, t)
     T = sum(dt)
 
     # 2. Get the reference velocity
@@ -388,19 +388,53 @@ function discretePostIntegralLossSteps(lossType::AbstractLoss, simulation, glaci
 end
 
 """
-    check_loss_time_window(lossType, simulation)
+    check_loss(lossType, simulation)
 
-Check, before any simulation runs, that the times a loss needs are inside `tspan`. Times
-outside `tspan` are never reached by the solver, and the loss would later fail with an
-unclear `invalid index: nothing`.
+Check, before any simulation runs, that a loss can be used with this inversion. The times a
+loss needs must be inside the time window of each glacier: times outside it are never reached
+by the solver, and the loss would later fail with an unclear `invalid index: nothing`, or be
+ignored.
 """
-check_loss_time_window(lossType::AbstractLoss, simulation) = nothing
-function check_loss_time_window(lossType::MultiLoss, simulation)
-    foreach(l -> check_loss_time_window(l, simulation), lossType.losses)
+check_loss(lossType::AbstractLoss, simulation) = nothing
+function check_loss(lossType::MultiLoss, simulation)
+    foreach(l -> check_loss(l, simulation), lossType.losses)
 end
-function check_loss_time_window(lossType::LossAvgV, simulation)
-    tspan = simulation.parameters.simulation.tspan
+function check_loss(lossType::Union{LossH, LossV}, simulation)
+    # The options are checked now, and not in the first call of the loss
+    observation_weights(lossType.weighting, [0.0], (0.0, 1.0))
+    hasproperty(lossType.loss, :normalize) &&
+        loss_normalization(lossType.loss, trues(1), 1.0)
+    lossType isa LossH && warn_empty_thickness_mask(lossType, simulation)
+    return nothing
+end
+# The mask of `LossH` erodes a sparse survey (for example Glathida) to nothing
+function warn_empty_thickness_mask(lossType::LossH, simulation)
+    for glacier in simulation.glaciers
+        H_obs = isnothing(glacier.thicknessData) ? [] :
+                something(glacier.thicknessData.H, [])
+        if any(H -> any(H .> 0) && !any(is_in_glacier(H, lossType.loss.distance)), H_obs)
+            @warn "LossH: a thickness observation of glacier $(glacier.rgi_id) has an empty \
+                mask with distance = $(lossType.loss.distance), so it is ignored. For sparse \
+                surveys, use a loss with distance = 0, for example L2Sum(distance = 0)."
+        end
+    end
+end
+function check_loss(lossType::LossHV, simulation)
+    check_loss(lossType.hLoss, simulation)
+    check_loss(lossType.vLoss, simulation)
+    return nothing
+end
+# The regularizations of a gridded parameter need it to be trained
+function check_loss(
+        lossType::Union{RheologyRegularization, SlidingRegularization}, simulation)
+    key = lossType isa SlidingRegularization ? :C : :A
+    haskey(simulation.model.trainable_components.θ, key) || throw(ArgumentError(
+        "$(nameof(typeof(lossType))) needs `$(key)` to be trained."))
+    return nothing
+end
+function check_loss(lossType::LossAvgV, simulation)
     for (i, glacier) in enumerate(simulation.glaciers)
+        tspan = glacier_tspan(simulation, i)
         if isnothing(glacier.velocityData)
             throw(ArgumentError("LossAvgV needs velocity data, but glacier \
                 $(glacier.rgi_id) has none."))
@@ -414,6 +448,32 @@ function check_loss_time_window(lossType::LossAvgV, simulation)
                 for glacier $(glacier.rgi_id), but the simulation only covers \
                 tspan = $(tspan). This period must be inside tspan: extend tspan, or use \
                 LossV, which compares the velocity at the observation dates only."))
+        end
+    end
+end
+function check_loss(lossType::LossDhdt, simulation)
+    for (i, glacier) in enumerate(simulation.glaciers)
+        tspan = glacier_tspan(simulation, i)
+        if isnothing(glacier.dhdtData)
+            throw(ArgumentError("LossDhdt needs elevation change data, but glacier \
+                $(glacier.rgi_id) has none."))
+        end
+        t1, t2 = glacier.dhdtData.t
+        if !(tspan[1] <= t1 && t2 <= tspan[2])
+            throw(ArgumentError("LossDhdt compares the elevation change from $(t1) to \
+                $(t2) for glacier $(glacier.rgi_id), but the simulation only covers \
+                tspan = $(tspan). This period must be inside tspan."))
+        end
+    end
+end
+function check_loss(lossType::InitialThicknessRegularization, simulation)
+    for (i, glacier) in enumerate(simulation.glaciers)
+        tspan = glacier_tspan(simulation, i)
+        if !isnothing(lossType.t₀) && !(tspan[1] <= lossType.t₀ <= tspan[2])
+            throw(ArgumentError("InitialThicknessRegularization is applied at \
+                t₀ = $(lossType.t₀), outside the time window $(tspan) of glacier \
+                $(glacier.rgi_id), so it would be ignored. Use \
+                InitialThicknessRegularization() to apply it at the start of each glacier."))
         end
     end
 end

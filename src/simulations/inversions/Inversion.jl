@@ -36,6 +36,12 @@ end
 
 Constructor for Inversion struct with glacier model information, glaciers, and parameters.
 
+When the initial condition is trained, a glacier whose first observation (ice thickness survey,
+DEM or surface velocity map) is at most one `step_MB` after its start is moved to start on it
+(see `align_start!`, which by default starts on the first observation however late it is).
+This writes the new window in `parameters.simulation.glacier_tspans`, so it also applies to
+other simulations built with the same `parameters`.
+
 # Arguments
 
   - `model::Sleipnir.Model`: The model used for the simulation.
@@ -59,7 +65,8 @@ function Inversion(
     # Optionally calibrate the mass balance model per glacier (no-op unless the
     # model type defines a calibration routine, e.g. TImodel1). Calibration returns a new
     # Model since one model per glacier changes the type of the mass_balance field, so the
-    # return value has to be used, as Huginn's Prediction does.
+    # return value has to be used, as Huginn's Prediction does. The calibration uses the
+    # geodetic period, not the time window of the glacier, so it can come before `align_start!`.
     if parameters.simulation.use_MB && parameters.simulation.calibrate_MB
         model = calibrate_MB_model(model, glaciers, parameters)
     end
@@ -74,8 +81,15 @@ function Inversion(
         parameters,
         emptyResults)
 
+    # When H₀ is trained, a glacier whose first observation is at most one mass balance step
+    # from its start starts on it, so the observation constrains H₀ directly.
+    # Otherwise, only warn about an observation close to the start.
+    check_glacier_tspans(parameters, glaciers)
+    align_start!(parameters, glaciers; within = parameters.simulation.step_MB,
+        apply = haskey(model.trainable_components.θ, :IC))
+
     # Fail early with a clear message instead of deep inside the first gradient call
-    check_loss_time_window(parameters.UDE.empirical_loss_function, inversion)
+    check_loss(parameters.UDE.empirical_loss_function, inversion)
 
     return inversion
 end
