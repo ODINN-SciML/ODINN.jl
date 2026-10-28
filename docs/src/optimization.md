@@ -22,7 +22,7 @@ The total loss function is given by
 ```
 
 where each $\mathcal{L}_i$ is a different contribution to the loss (either empirical or regularization) weighted by an hyperparameter $\lambda_i$.
-ODINN supports multiobjective loss functions through `MultiLoss`.
+ODINN supports multiobjective loss functions through `MultiLoss` (see [Combining losses](@ref)).
 For example, an objective function consisting of one empirical loss function corresponding to differences in ice thickness and a regularization of the ice surface velocity can be defined as follows
 
 ```julia
@@ -34,7 +34,12 @@ loss = MultiLoss(
 
 This `loss` must then be provided to the `empirical_loss_function` argument of `UDEparameters`.
 
-All the terms follow one convention, so that the weights are easy to choose. A data term is the mean over the observed pixels of $((\text{model} - \text{observation}) / σ)^2$, with $σ$ the uncertainty of the observation, and each observation (a survey, a DEM, a velocity map) counts once. A regularization is the mean over the glacier of $(|D a| / σ)^2$, with $D$ the gradient or the Laplacian in physical units, and $σ$ the typical size of $D a$ that the prior allows. So every term is about 1 when the model is as far from the data or the prior as their uncertainty, at any resolution. This is the convention of IGM. The weights $\lambda_i$ are then only a relative importance, and they are 1 by default (`MultiLoss(losses = ...)`).
+All the terms follow one convention, so that the weights $\lambda_i$ are easy to choose:
+
+  - A data term is the mean over the observed pixels of $((\text{model} - \text{observation}) / σ)^2$, where $σ$ is the uncertainty of the observation. Each observation (a survey, a DEM, a velocity map) counts once.
+  - A regularization is the mean over the glacier of $(|D a| / σ)^2$, where $D$ is the gradient or the Laplacian in physical units and $σ$ is the typical size of $D a$ that the prior allows.
+
+So every term is about 1 when the model is as far from the data or the prior as their uncertainty, at any resolution. This follows the convention of [jouvet_inversion_2023](@cite). The weights $\lambda_i$ are then only a relative importance, and they are 1 by default (`MultiLoss(losses = ...)`).
 The value of each term is printed at the start and the end of `run!`, and `loss_terms(θ, simulation)` returns it.
 
 A wrong σ only changes the balance between the terms. A bias of the data (for example the penetration of the radar into snow for a DEM) needs a parameter of its own.
@@ -51,7 +56,7 @@ The complete description of the different losses are available in their correspo
 There are very simple types which are agnostic to the nature of the variables whose error is being computed (that is $H$ or $V$). These are:
 
   - `L2Sum`: mean of the squared error divided by its uncertainty, $((a - b) / σ)^2$, inside the glacier.
-  - `LogSum`: mean of the squared logarithm of the ratio between ice surface velocities, divided by a relative uncertainty (see [morlighem_inversion_2013](@cite)).
+  - `LogSum`: mean of the squared logarithm of the ratio between ice surface velocities, divided by a relative uncertainty (see [morlighem_spatial_2010](@cite) and [morlighem_inversion_2013](@cite)).
 
 #### Time integrated loss functions
 
@@ -59,7 +64,7 @@ These simple loss functions which define very simple operations are used in more
 
   - `LossH`: Loss function over the ice thickness only.
   - `LossV`: Loss function over the ice surface velocity only.
-  - `LossHV`: Loss function over both the ice thickness and ice surface velocity, which is an alternative to `MultiLoss`.
+  - `LossHV`: Loss function over both the ice thickness and ice surface velocity. It is a shortcut for a `MultiLoss` of `LossH` and `LossV`, see [Combining losses](@ref).
 
 The loss function for the ice thickness $H$ (similar for ice surface velocity $V$) is mathematically defined as:
 
@@ -93,11 +98,24 @@ For this setting, the empirical error term can be defined as
 
 with $\hat H(t,x_j)$ the predicted ice thickness at the observation time $t$ and on the node of the simulation grid $x_j$, $J_t$ the number of observed pixels at time $t$, and $σ$ the uncertainty of the observation.
 
-For the thickness surveys, `LossH` uses the uncertainty of each cell given by the data (`thicknessData.σ`). For GlaThiDa it is the error of the radar (5 m and 3% of the thickness) and the representation error: the model cell is the mean over the whole cell, while a survey line only crosses it, so the uncertainty grows with the size of the cells (see `Sleipnir.glathida_cell_σ`). `LossH(σ = 20.0)` uses a number instead. `LossV` and `LossAvgV` use the error of the velocity map, or 10 m/yr.
+The GlaThiDa surveys are lines of cells, so with the default `L2Sum()` (`distance = 3`) the mask would remove all the pixels, because none is 3 pixels away from the border of the observed area. Use `L2Sum(distance = 0)` with them.
 
-By default all the observation times have the same weight (`weighting = :uniform`), so this is a plain sum over the observations.
-With `LossH(weighting = :time_span)` (same for `LossV`), each observation time is instead weighted by the time it covers: half of the time to the previous observation plus half of the time to the next one, where the first and the last observations extend to the start and the end of the simulation.
-This gives less weight to observations that are close in time, for example several velocity maps in the same year.
+##### Uncertainty of the observations
+
+Each data loss divides the misfit by the uncertainty $σ$ of the observation, in the units of the data. By default:
+
+  - `LossH`: the uncertainty of each cell given by the data (`thicknessData.σ`). For GlaThiDa it is the error of the radar (5 m and 3% of the thickness) plus the representation error: the model cell is the mean over the whole cell, while a survey line only crosses it, so the uncertainty grows with the size of the cells (see `Sleipnir.glathida_cell_σ`). If the thickness data has no uncertainty, `LossH` computes one from the observed thickness $H$, cell by cell, $σ(H) = \sqrt{σ_0^2 + (r H)^2}$ with $σ_0$ = 14 m and $r$ = 9% (see `default_σ`). A thin glacier then gets a smaller uncertainty than a thick one, as the differences between independent surveys of the same glacier do.
+  - `LossV` and `LossAvgV`: the error of the velocity map, or 10 m/yr if the map has none.
+  - `LossDhdt`: the uncertainty of the data, or 0.2 m/yr.
+  - `LossS`: the uncertainty of each DEM, plus a part that the products do not give (`σ_sys`, 5 m by default), see [Inversion of the bed](@ref).
+
+A number replaces it, for example `LossH(σ = 20.0)`.
+
+##### Weight of each observation time
+
+By default every observation time counts once (`weighting = :uniform`), so the loss is a plain sum over the observation times. This suits a few surveys or one velocity map.
+With `LossH(weighting = :time_span)` (same for `LossV`), each observation time counts as much as the time it covers: half of the time to the previous observation plus half of the time to the next one. The first and the last observations also cover the time to the start and to the end of the simulation.
+Use it for dense time series, for example many velocity maps in the same year, so that they do not dominate the loss.
 See `observation_weights` for the details.
 
 #### Time aggregated loss functions
@@ -139,18 +157,41 @@ From a mathematical and computational perspective, regularization losses are jus
 
 ODINN currently supports the following type of regularization, although the development of new regularization should be straightforward from the source code API:
 
-  - `InitialThicknessRegularization`: Penalizes large derivatives in the initial condition of the glacier when this is treated as an optimization variable. This builds on top of `TikhonovRegularization`.
-    With `correction = true` the penalty is applied to the change of the initial condition (`H₀ - glacier.H₀`) instead of to `H₀` itself, so the shape of `glacier.H₀` is kept and only the changes made by the inversion are smooth. Use the same product for `glacier.H₀` and for the initialization of `InitialCondition`, so that the penalty is zero at the start. Small scale changes decay in a few weeks once the simulation starts and create a shock in the first time steps, while smooth changes do not.
+  - `InitialThicknessRegularization`: Penalizes large derivatives in the initial condition of the glacier when this is treated as an optimization variable. This builds on top of `TikhonovRegularization`. It applies at the start of the time window of each glacier, or at the time `t₀` that you give (which must be inside the window).
+    By default it is the Laplacian of the change `H₀ - glacier.H₀` (`correction = true`), with a `σ` of 0.3 times the roughness of `glacier.H₀` (`σ_relative = 0.3`), so that one value fits any glacier and grid. The shape of `glacier.H₀` is then kept and only the changes made by the inversion are smooth.
+    We use it as the default because small scale changes decay in a few weeks once the simulation starts and create a shock in the first time steps, while smooth changes do not, and because in a test on one glacier it gave a lower error against thickness measurements not used in the inversion than a prior on `H₀` itself.
+    With `correction = false` the penalty is applied to `H₀` itself, and with `reg = TikhonovRegularization(...)` you choose the regularization and its own `σ`.
   - `VelocityRegularization`: Penalizes large derivatives in the simulated surface velocity of the glacier. This builds on top of `TikhonovRegularization`.
   - `RheologyRegularization` and `SlidingRegularization`: Penalize large derivatives in a gridded `A` or `C` (with the same `tanh` map as the law), at the start of the simulation. The `σ` of their `TikhonovRegularization` is in the units of `A` or `C`.
-  - `BedRegularization`: Prior on the whole bed when it is free, as in IGM: its gradient (σ = 0.3 m/m by default), and a convexity term that rewards thicker ice.
+  - `BedRegularization`: Prior on the whole bed when it is free, following [jouvet_inversion_2023](@cite): its gradient, with a `σ` equal to the roughness of the starting bed by default (`σ_relative = 1`), and an optional convexity term that rewards thicker ice.
+
+To see the `σ` that `InitialThicknessRegularization` or `BedRegularization` uses for a glacier, call `ODINN.prior_σ(prior, glacier)`. `ODINN.field_roughness(a, glacier; operator)` gives the roughness of any field with the definition of `σ_relative`, for example of the inverted bed.
 
 Regularization and empirical losses can be combined together to construct new form of regularizations.
 
 Regularizations rely on simple losses which are agnostic to the nature of the variable that it takes as input.
 The following simple losses are implemented, and the regularizations described above are built on top of them:
 
-  - `TikhonovRegularization`: Very common in geophysical inversion. Given a linear operator $D$, this is the mean over the glacier of $(|D(S)| / σ)^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the gradient (`operator = :gradient`), as in IGM; the Laplacian $\nabla^2$ is also available (`operator = :laplacian`).
+  - `TikhonovRegularization`: Very common in geophysical inversion. Given a linear operator $D$, this is the mean over the glacier of $(|D(S)| / σ)^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). The default is the gradient (`operator = :gradient`), as in [jouvet_inversion_2023](@cite). The Laplacian $\nabla^2$ is also available (`operator = :laplacian`), and it is what `InitialThicknessRegularization` uses by default.
+
+### Combining losses
+
+An inversion usually has more than one term: several observations, and often a regularization. Two objects put losses together:
+
+  - `MultiLoss(losses = (...), λs = (...))`: the weighted sum $\sum_i \lambda_i \mathcal{L}_i$ of any number of terms. A term can be any empirical loss (`LossH`, `LossV`, `LossAvgV`, `LossDhdt`, `LossS`) or any regularization. The weights `λs` are 1 by default.
+  - `LossHV(hLoss = LossH(), vLoss = LossV(), scaling = 1.0)`: exactly two terms, a thickness loss and a velocity loss, $\mathcal{L}_H + \text{scaling} \cdot \mathcal{L}_V$.
+
+When both can be used they are the same loss, with the same gradient: `LossHV(scaling = s)` is the same as `MultiLoss(losses = (LossH(), LossV()), λs = (1.0, s))`. So `LossHV` is only a shorter way to write this one case. Which one to use depends on what else the inversion needs:
+
+| You want                                                                                                  | Use                                                                          |
+|:--------------------------------------------------------------------------------------------------------- |:---------------------------------------------------------------------------- |
+| Only thickness and velocity, with one factor to balance them                                              | `LossHV` or `MultiLoss`, they are the same                                   |
+| A regularization (initial thickness, bed, `A`, `C`, velocity)                                             | `MultiLoss`                                                                  |
+| A time aggregated loss (`LossS`, `LossAvgV`, `LossDhdt`)                                                  | `MultiLoss`. A `LossHV` cannot hold it: the `Inversion` stops with an error. |
+| A weight for the thickness term too                                                                       | `MultiLoss`                                                                  |
+| To see the thickness and the velocity terms separately in `loss_terms` and in the table printed by `run!` | `MultiLoss`. A `LossHV` is shown as one term.                                |
+
+We recommend `MultiLoss` for an inversion, because gridded unknowns almost always need a regularization. `LossHV` suits a quick test or a tutorial that only fits thickness and velocity. They can be mixed, since a `LossHV` is one term of a `MultiLoss`, for example `MultiLoss(losses = (LossHV(), LossS(), BedRegularization()))`, but then `loss_terms` shows the thickness and the velocity as one term.
 
 ## Optimizers
 

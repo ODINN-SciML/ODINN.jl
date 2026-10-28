@@ -51,9 +51,19 @@ Sleipnir.save_figure
 
 ## Plots of the observations
 
-To see the observations of a glacier in space and time, for example to choose the start of an inversion (see [Observations and time windows](@ref)):
+To see the observations of a glacier in space and time, for example to choose the start of an inversion (see [Observations and time windows](@ref)). The [plotting tutorial](results_plotting_tutorial.md) shows an example of `plot_observations`:
 
 ```@docs
 Sleipnir.plot_observations
 Sleipnir.plot_observation_timeline
 ```
+
+## Results of an inversion
+
+After an inversion, the fields that were inverted (the initial thickness and the bed, a gridded `A` or `C`) can be plotted with:
+
+```@docs
+ODINN.plot_inverted_fields
+```
+
+The `Results` of an inversion with a free bed store the bed of the inversion, and not the one that the glacier started from.

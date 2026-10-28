@@ -262,13 +262,13 @@ For the conceptual overview of how `Law` binds inputs and a regressor to a targe
 
 ## Add a new loss function
 
-A *loss function* measures the mismatch between the model's predicted state (ice thickness, surface velocity, etc.) and observations. For most of the losses, the metric itself is a **simple loss** (`AbstractSimpleLoss`, like the built-in `L2Sum` and `LogSum`); the composites `LossH`, `LossV`, `LossHV` (subtypes of `AbstractLoss`) then apply that metric to ice thickness and/or velocity. To add a new metric (e.g. a mean absolute error), subtype `AbstractSimpleLoss`. It needs a `distance` field — the composite uses it to build the in-glacier mask — and a `loss` method returning a scalar:
+A *loss function* measures the mismatch between the model's predicted state (ice thickness, surface velocity, etc.) and observations. For most of the losses, the metric itself is a **simple loss** (`AbstractSimpleLoss`, like the built-in `L2Sum` and `LogSum`); the composites `LossH`, `LossV`, `LossHV` (subtypes of `AbstractLoss`) then apply that metric to ice thickness and/or velocity. To add a new metric (e.g. a mean absolute error), subtype `AbstractSimpleLoss`. It needs a `distance` field — the composite uses it to build the in-glacier mask — and a `loss` method returning a scalar. The composite gives the uncertainty of the data in the keyword `σ` (a number or a matrix). The value of the loss should be about 1 when the misfit is as large as `σ`, so that the weights of a `MultiLoss` keep their meaning:
 
 !!! note "Where the loss types live"
 
     The abstract types `GeneralAbstractLoss`, `AbstractSimpleLoss` and `AbstractLoss` are defined in `Sleipnir`, so that the velocity product needed by a loss can be determined from its type. The concrete losses (`L2Sum`, `LogSum`, `LossH`, `LossV`, `LossHV`, …) and the `loss`/`backward_loss` functions live in `ODINN`, which re-imports the abstract types. Subtyping `AbstractSimpleLoss` after `using ODINN` therefore works unchanged.
 
-Beyond the per-timestep composites above, `ODINN` also provides **time-aggregated losses** (`LossDhdt`, `LossAvgV`, subtypes of `TimeAggregatedLoss`) which compare quantities integrated over the simulation window rather than pointwise in time, `MultiLoss` to combine several losses with weights, and a family of **regularization** terms (`TikhonovRegularization`, `InitialThicknessRegularization`, `VelocityRegularization`, `RheologyRegularization`, `SlidingRegularization`, `DiffusivityRegularization`). Not all of these decompose into a simple-loss metric — `LossDhdt`, for instance, defines its own aggregation — so use them as templates when your new loss does not fit the `AbstractSimpleLoss` shape.
+Beyond the per-timestep composites above, `ODINN` also provides **time-aggregated losses** (`LossDhdt`, `LossAvgV`, `LossS`, subtypes of `TimeAggregatedLoss`) which compare quantities integrated over the simulation window rather than pointwise in time, `MultiLoss` to combine several losses with weights, and a family of **regularization** terms (`TikhonovRegularization`, `InitialThicknessRegularization`, `VelocityRegularization`, `RheologyRegularization`, `SlidingRegularization`, `BedRegularization`, `DiffusivityRegularization`). Not all of these decompose into a simple-loss metric — `LossDhdt`, for instance, defines its own aggregation — so use them as templates when your new loss does not fit the `AbstractSimpleLoss` shape.
 
 ```julia
 using ODINN
@@ -279,9 +279,12 @@ end
 MyLoss(; distance = 3) = MyLoss(distance)
 
 # a = prediction, b = reference (both (nx, ny)); mask is TRUE for valid in-glacier
-# pixels; normalization is a scalar divisor. Must return a scalar.
-function ODINN.loss(::MyLoss, a::Matrix, b::Matrix, mask::BitMatrix, normalization)
-    return sum(abs.(a[mask] .- b[mask])) / normalization
+# pixels; σ is the uncertainty of the data. The argument `normalization` is not used by the
+# built-in losses, which are a mean over the mask. Must return a scalar.
+function ODINN.loss(::MyLoss, a::Matrix, b::Matrix, mask::BitMatrix, normalization;
+        σ = one(eltype(a)))
+    r = abs.(a .- b) ./ σ
+    return sum(r[mask]) / max(count(mask), 1)
 end
 ```
 
@@ -299,11 +302,14 @@ params = Parameters(
 `backward_loss` returns `∂L/∂a` (same shape as `a`), zero outside the mask. It is only called by ODINN's manual adjoint methods (`DiscreteAdjoint` and `ContinuousAdjoint`). With `SciMLSensitivityAdjoint` (configured via `UDEparameters(grad = SciMLSensitivityAdjoint(), optim_autoAD = Optimization.AutoZygote())`), Zygote differentiates through the loss automatically and `backward_loss` is never called. You only need it for the manual adjoints:
 
 ```julia
-function ODINN.backward_loss(::MyLoss, a::Matrix, b::Matrix, mask::BitMatrix, normalization)
-    # ∂/∂a of sum|a − b|, restricted to valid pixels
+function ODINN.backward_loss(
+        ::MyLoss, a::Matrix, b::Matrix, mask::BitMatrix, normalization;
+        σ = one(eltype(a)))
+    # ∂/∂a of the mean of |a − b| / σ, restricted to valid pixels
     d = zero(a)
-    d[mask] = sign.(a[mask] .- b[mask])
-    return d ./ normalization
+    g = sign.(a .- b) ./ σ ./ max(count(mask), 1)
+    d[mask] = g[mask]
+    return d
 end
 ```
 
