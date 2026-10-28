@@ -18,6 +18,16 @@ Sleipnir.SimulationParameters
 Sleipnir.SimulationParameters()
 ```
 
+### Time windows
+
+By default all the glaciers are simulated for `tspan`. Each glacier can have its own window with `glacier_tspans`, and `align_start!` moves the start of each glacier to its first observation, see [Observations and time windows](@ref).
+
+```@docs
+Sleipnir.glacier_tspan
+Sleipnir.align_start!
+Sleipnir.check_glacier_tspans
+```
+
 ## Physical parameters
 
 Physical parameters are used to store physical constants and variables used in the physical and machine learning models.

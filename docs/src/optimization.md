@@ -88,13 +88,21 @@ For this setting, the empirical error term can be defined as
 
 with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node of the simulation grid $x_j$.
 
+The GlaThiDa surveys are lines of cells, so with the default `L2Sum()` (`distance = 3`) the mask would remove all the pixels, because none is 3 pixels away from the border of the observed area. Use `L2Sum(distance = 0)` with them.
+
+##### Weight of each observation time
+
 By default every observation time counts once (`weighting = :uniform`), so the loss is a plain sum over the observation times. This suits a few surveys or one velocity map.
 With `LossH(weighting = :time_span)` (same for `LossV`), each observation time counts as much as the time it covers: half of the time to the previous observation plus half of the time to the next one. The first and the last observations also cover the time to the start and to the end of the simulation.
 Use it for dense time series, for example many velocity maps in the same year, so that they do not dominate the loss.
 See `observation_weights` for the details.
 
-At each observation time, `L2Sum` (and `LogSum`) divide the sum by the number of cells of the grid (`normalize = :cells`, default), so the weight of each observation depends on the resolution.
-With `L2Sum(normalize = :observations)` the sum is divided by the number of observed pixels, so the loss is a mean over the observations, whatever the resolution.
+##### Normalization of the simple losses
+
+At each observation time, `L2Sum` and `LogSum` add up the misfit of the observed pixels and divide the sum by a number that you choose with `normalize`:
+
+  - `normalize = :cells` (default): the number of cells of the grid. The loss is the mean misfit times the fraction of the grid that is observed. A sparse dataset, like a few radar lines, then counts little next to a dense one, like a velocity map, and its weight changes with the resolution of the grid.
+  - `normalize = :observations`: the number of observed pixels. The loss is the mean misfit per observed pixel, so every dataset counts the same, whatever its coverage and the resolution of the grid. Use it if you want to set the balance between datasets only with the weights `λ` of the `MultiLoss`.
 
 #### Time aggregated loss functions
 
@@ -134,8 +142,8 @@ From a mathematical and computational perspective, regularization losses are jus
 
 ODINN currently supports the following type of regularization, although the development of new regularization should be straightforward from the source code API:
 
-  - `InitialThicknessRegularization`: Penalizes large second order derivatives in the initial condition of the glacier when this is treated as an optimization variable. This builds on top of `TikhonovRegularization`.
-    With `correction = true` the penalty is applied to the change of the initial condition (`H₀ - glacier.H₀`) instead of to `H₀` itself, so the shape of `glacier.H₀` is kept and only the changes made by the inversion are smooth. Use the same product for `glacier.H₀` and for the initialization of `InitialCondition`, so that the penalty is zero at the start. Small scale changes decay in a few weeks once the simulation starts and create a shock in the first time steps, while smooth changes do not.
+  - `InitialThicknessRegularization`: Penalizes large second order derivatives in the initial condition of the glacier when this is treated as an optimization variable. This builds on top of `TikhonovRegularization`. It applies at the start of the time window of each glacier, or at the time `t₀` that you give (which must be inside the window).
+    Small scale changes decay in a few weeks once the simulation starts and create a shock in the first time steps, while smooth changes do not.
   - `VelocityRegularization`: Penalizes large second order derivatives in the simulated surface velocity of the glacier. This builds on top of `TikhonovRegularization`.
   - `RheologyRegularization` and `SlidingRegularization`: Penalize large second order derivatives in a gridded `A` or `C` (with the same `tanh` map as the law), at the start of the simulation. The value of `λ` depends on the units of `A` or `C`.
 
@@ -144,7 +152,7 @@ Regularization and empirical losses can be combined together to construct new fo
 Regularizations rely on simple losses which are agnostic to the nature of the variable that it takes as input.
 The following simple losses are implemented, and the regularizations described above are built on top of them:
 
-  - `TikhonovRegularization`: Very common in geophysical inversion. Given an linear operator $A$, this is given by the value of $\| A(S) \|_2^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the Laplacian operator $\nabla^2$.
+  - `TikhonovRegularization`: Very common in geophysical inversion. Given a linear operator $A$, this is given by the value of $\| A(S) \|_2^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the Laplacian operator $\nabla^2$.
 
 ## Optimizers
 

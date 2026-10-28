@@ -62,14 +62,31 @@ Inside `θ`, the initial condition is not stored in metres. It is divided by a s
 
 #### Observations and time windows
 
-The best starting point of an inversion of the initial condition is the date of a thickness survey: the survey then constrains $H_0$ directly, and not through the dynamics of the first time steps. Use `observations` to list everything that is available for a glacier (thickness surveys, velocity maps and the geodetic elevation change), and `plot_observations` or `plot_observation_timeline` to see it:
+An inversion compares the model with the observations of each glacier: ice thickness surveys, ice surface velocity maps, DEMs and the glacier-wide elevation change. Use `observations` to list what is available for a glacier, and `plot_observations` or `plot_observation_timeline` to see it:
 
 ```julia
 observations(glacier)          # one row per observation, sorted in time
 plot_observations(glacier)     # 3D: space and time, thickness and velocity in different colours
 ```
 
-With `use_glathida_data = true`, the dated GlaThiDa surveys are attached to the glacier as thickness observations. When `H₀` is trained and the first survey is at most one mass balance step after the start of the simulation, the glacier starts on the survey and an `@info` message says so. If `H₀` is not trained, there is only a warning. To choose the start by hand, use `align_start!(params, glaciers)`, or give a glacier its own time window in the parameters, by RGI ID: `SimulationParameters(tspan = (2000.0, 2020.0), glacier_tspans = Dict("RGI60-11.01450" => (2009.24, 2018.0)))`. The `tspan` of the parameters is used for the glaciers that do not have an entry, and the windows must be inside it (see `glacier_tspan`).
+With `use_glathida_data = true`, the dated GlaThiDa surveys are attached to the glacier as thickness observations.
+
+The initial condition is best constrained when the simulation starts on an observation: the observation then constrains $H_0$ directly, and not through the dynamics of the first time steps. These are the ways to choose the start of each glacier:
+
+  - By default, all the glaciers use the time window `tspan` of the parameters.
+
+  - You can give a glacier its own time window, by RGI ID. The windows must be inside `tspan`, because the climate data is loaded for `tspan` (see `glacier_tspan`):
+
+    ```julia
+    SimulationParameters(tspan = (2000.0, 2020.0),
+        glacier_tspans = Dict("RGI60-11.01450" => (2009.24, 2018.0)))
+    ```
+
+  - `align_start!(params, glaciers)` moves the start of each glacier to its first observation, however late it is, so that the trajectory is as long as possible. The first observation is the earliest thickness survey, DEM or velocity map inside the window (the glacier-wide elevation change does not count). The end of the window is kept, and an observation before the window is not used.
+
+  - The `Inversion` does part of it for you. When the initial condition is trained, a glacier whose first observation is at most one mass balance step after its start moves onto it, and an `@info` message says so. If the initial condition is not trained, there is only a warning.
+
+`align_start!` and the `Inversion` write the new windows in `params.simulation.glacier_tspans`, so they also apply to other simulations built with the same parameters.
 
 The simulation does not need to be a whole number of mass balance steps: the last window of the climate ends after the end of the simulation, and the simulation stops inside it.
 

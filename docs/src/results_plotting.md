@@ -48,3 +48,12 @@ And finally, figures can be saved with a unified utility function:
 ```@docs
 Sleipnir.save_figure
 ```
+
+## Plots of the observations
+
+To see the observations of a glacier in space and time, for example to choose the start of an inversion (see [Observations and time windows](@ref)):
+
+```@docs
+Sleipnir.plot_observations
+Sleipnir.plot_observation_timeline
+```

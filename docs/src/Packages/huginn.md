@@ -66,7 +66,9 @@ Note that `init_cache` returns the **full model cache**, while `build_callback` 
 
 There are two distinct RHS functions: **`SIA2D!`** is the PDE kernel (signature `(dH, H, simulation, t, θ)`, keeps `θ` for AD); **`SIA2D_PDE!`** is a thin adapter that drops `θ` to match OrdinaryDiffEq's `f(du, u, p, t)` convention. `SIA2D!` lives in `SIA2D_utils.jl` and `SIA2D_PDE!` in `prediction_utils.jl`.
 
-## Sliding diagnostics
+## Surface velocity and sliding
+
+The surface velocity of the SIA (`surface_V`) includes the sliding term of the flux (plug flow) when `C > 0`, and it is given on the grid of `H`. A velocity loss then depends on `C`.
 
 `sliding_scale(A, H)` gives the value of `C` where sliding and deformation have the same flux, which is useful to choose the bound and the regularization of a `C` inversion. `velocity_split` and `sliding_fraction` give the sliding and deformation parts of the velocity of a simulation, to see how much of the flow is sliding.
 
