@@ -34,9 +34,15 @@ The main climate data supported include:
 Besides its climate, a glacier carries the observations that an inversion can use. Each one has its date, and `observations(glacier)` lists them all in time (see [Observations and time windows](@ref)).
 
   - **Ice thickness** (`glacier.thicknessData`): the dated GlaThiDa campaigns, one grid per campaign, with the uncertainty of each cell. They are attached with `use_glathida_data = true` in `SimulationParameters`.
-  - **Ice surface velocity** (`glacier.velocityData`): the velocity maps of Millan et al. (2022), with `use_velocities = true`. The sign of `vy` is the one of the model velocity `Vy` (the map has a north-up grid, so ODINN flips it), so that velocity losses with `component = :xy` compare the same quantity.
+  - **Ice surface velocity** (`glacier.velocityData`): the velocity maps of Millan et al. (2022), with `use_velocities = true`. The sign of `vy` is the one of the model velocity `Vy` (the map has a north-up grid, so ODINN flips it), so that velocity losses with `component = :xy` compare the same quantity. When the error bands of the map are in the preprocessed data, the velocity losses use them as uncertainty.
   - **Surface elevation** (`glacier.surfaceData`): DEMs, each with its date and its uncertainty. Gungnir adds the DEM of OGGM (NASADEM, February 2000, for most glaciers) and the Copernicus DEM (TanDEM-X, 2011 to 2015, with the error map of the product).
   - **Elevation change** (`glacier.dhdtData`): the glacier-wide elevation change of Hugonnet et al. (2021).
+
+Gungnir also saves the date of the RGI outline of the glacier, which `Sleipnir.outline_date` reads.
+
+### Thickness products
+
+The initial thickness of an inversion comes from a product: the consensus thickness of Farinotti et al. (2019) (`:Farinotti19`, the default) or the one of Millan et al. (2022) (`:Millan22`). Both have gaps inside the RGI outline, and the cells without a value are outside the outline of the inversion (see [Inversion of the bed](@ref)). Millan22 has no thickness where it has no velocity (8% to 21% of the cells in the two Alpine glaciers we checked). The consensus thickness has no value in 2 to 6% of the cells, along the rim, because its raster is shifted by about one cell from the RGI mask.
 
 ## Initializing glaciers and their climate
 

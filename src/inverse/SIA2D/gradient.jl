@@ -247,13 +247,16 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 @warn "DiscreteAdjoint initial-condition (H₀) gradients are unreliable \
                     for the stiff SIA at practical time steps and may be unstable; \
                     prefer ContinuousAdjoint for initial-condition inversion." maxlog=1
+                scales = ic_scales(simulation, i)
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
                     simulation.parameters.UDE.initial_condition_filter,
-                    i
+                    i;
+                    scale = scales.H,
+                    H_min = scales.Hmin
                 )
-                dLdθ.IC[Symbol("$(i)")] .+= λ₀ .* s₀
+                ic_params(dLdθ, i).H .+= λ₀ .* s₀
             end
 
             # Contributions of time aggregated loss function terms
@@ -317,7 +320,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 integrator) = Sleipnir.stop_condition_tstops(λ, t, integrator, t_ref_inv)
 
             # (∂ℓ/∂H, ∂ℓ/∂θ) of the loss terms at time t, with the observation weights
-            loss_terms = let loss_function=loss_function, H_itp=H_itp,
+            backward_terms = let loss_function=loss_function, H_itp=H_itp,
                 useThickness=useThickness, useVelocity=useVelocity, H_ref_itp=H_ref_itp,
                 Vabs_ref_itp=Vabs_ref_itp, Vx_ref_itp=Vx_ref_itp, Vy_ref_itp=Vy_ref_itp,
                 i=i, θ=θ, simulation=simulation, normalization=normalization, N=N,
@@ -347,7 +350,7 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 end
             end
             # The observation weights are already included in ∂ℓ∂H
-            effect_loss! = (t, u) -> (u .+= loss_terms(t)[1])
+            effect_loss! = (t, u) -> (u .+= backward_terms(t)[1])
             cb_adjoint_loss = DiscreteCallback(
                 stop_condition_loss, integrator -> effect_loss!(-integrator.t, integrator.u))
 
@@ -459,20 +462,23 @@ function SIA2D_grad_batch!(θ, simulation::Inversion)
                 if length(tstopsAggregatedLoss) > 0 && tspan[1] ∈ tstopsAggregatedLoss
                     effect_aggregated_loss!(tspan[1], λ₀)
                 end
+                scales = ic_scales(simulation, i)
                 s₀ = evaluate_∂H₀(
                     θ,
                     glacier,
                     simulation.parameters.UDE.initial_condition_filter,
-                    i
+                    i;
+                    scale = scales.H,
+                    H_min = scales.Hmin
                 )
-                dLdθ.IC[Symbol("$(i)")] .+= λ₀ .* s₀
+                ic_params(dLdθ, i).H .+= λ₀ .* s₀
             end
 
             # ∂ℓ/∂θ is a sum over the observation times with the same weights as the forward,
             # not a time integral. tstops also holds the times of discrete loss terms such as
             # the regularization on the initial condition, so each term is counted once.
             for t in tstops
-                dLdθ .+= loss_terms(t)[2]
+                dLdθ .+= backward_terms(t)[2]
             end
 
             # Contributions of time aggregated loss function terms

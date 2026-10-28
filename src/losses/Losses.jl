@@ -6,68 +6,67 @@ import Sleipnir: GeneralAbstractLoss, AbstractSimpleLoss, AbstractLoss, velocity
 """
     L2Sum{I <: Integer} <: AbstractSimpleLoss
 
-Struct that defines an L2 sum loss.
-The sum is defined only on pixels inside the glacier.
-The parameter `distance` controls the pixels that should be used to compute the sum.
+Struct that defines an L2 loss: the mean over the pixels of the mask of the squared misfit,
+divided by the uncertainty `σ` of the data,
+
+``loss(a,b) = \\frac{1}{N} \\sum_{i\\in\\text{mask}} \\left(\\frac{a_i - b_i}{σ_i}\\right)^2``
+
+where `N` is the number of pixels in the mask. The loss is about 1 when the misfit is as large
+as the uncertainty, whatever the resolution and the number of observed pixels. `σ` is a number
+or a matrix, given by the data loss that uses `L2Sum` (for example [`LossH`](@ref)), and is 1
+otherwise.
+The parameter `distance` controls the pixels that should be used.
 In order for a pixel to be used, it should be at least at `distance` from the glacier border.
 The mask defining the glacier borders are computed using the ground truth ice thickness.
-
-``loss(a,b) = sum_{i\\in\\text{mask}} (a[i]-b[i])^2 / normalization``
 
 # Fields
 
   - `distance::I`: Distance to border.
-  - `normalize::Symbol`: What the sum is divided by (`normalization` in the formula).
-    With `:cells` (default) it is the number of cells of the grid. The loss is then the mean
-    misfit times the fraction of the grid that is observed, so a sparse dataset, like a few
-    radar lines, counts little next to a dense one, like a velocity map.
-    With `:observations` it is the number of pixels in the mask. The loss is then the mean
-    misfit per observed pixel, so every dataset counts the same, whatever its coverage and the
-    resolution of the grid. Use it to set the balance between datasets only with the weights
-    `λ` of a `MultiLoss`.
 """
 @kwdef struct L2Sum{I <: Integer} <: AbstractSimpleLoss
     distance::I = 3
-    normalize::Symbol = :cells
 end
 
 """
     LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
 
-Struct that defines a Logarithmic sum loss.
+Struct that defines a logarithmic loss, the mean over the pixels of the mask of
 
-``loss(a,b) = log^2( (a + ϵ) / (b + ϵ) ) / normalization``
+``\\left(\\frac{\\log((a + ϵ) / (b + ϵ))}{σ}\\right)^2``
+
+The misfit is relative, so `σ` is a relative uncertainty, and the `σ` of the data loss (in the
+units of the data) is not used.
 
 # Fields
 
   - `distance::I`: Distance to border.
   - `ϵ::F`: Epsilon used inside the loss function to handle division by zero and log(0).
     It somehow represents the minimum value the loss function should be sensible to.
-  - `normalize::Symbol`: What the sum is divided by, `:cells` (default) or `:observations`.
-    See [`L2Sum`](@ref).
+  - `σ::F`: Relative uncertainty of the data, for example `0.1` for 10%. Default is `1.0`.
 """
 @kwdef struct LogSum{I <: Integer, F <: AbstractFloat} <: AbstractSimpleLoss
     distance::I = 3
     ϵ::F = 0.1
-    normalize::Symbol = :cells
+    σ::F = 1.0
 end
 
-"""
-    loss_normalization(lossType, mask, normalization)
-
-Number that the sum of a simple loss is divided by: `normalization` for `normalize = :cells`,
-and the number of pixels in `mask` for `normalize = :observations`.
-"""
-function loss_normalization(lossType, mask, normalization)
-    lossType.normalize == :cells && return normalization
-    lossType.normalize == :observations && return oftype(normalization, max(count(mask), 1))
-    throw(ArgumentError("normalize must be :cells or :observations, got :$(lossType.normalize)."))
+# Misfit divided by the uncertainty
+residual(lossType::L2Sum, a, b, σ) = (a .- b) ./ σ
+function residual(lossType::LogSum, a, b, σ)
+    log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ lossType.σ
 end
+# Derivative of the residual with respect to `a`
+∂residual∂a(lossType::L2Sum, a, b, σ) = one(eltype(a)) ./ σ
+∂residual∂a(lossType::LogSum, a, b, σ) = 1 ./ ((a .+ lossType.ϵ) .* lossType.σ)
+
+# Mean of the squared residuals over the pixels of `mask`, and 0 for an empty mask
+masked_mean_sq(r, mask) = sum(abs2, r[mask]) / max(count(mask), 1)
 
 """
-    LossH{L <: AbstractSimpleLoss} <: AbstractLoss
+    LossH{L <: AbstractSimpleLoss, S <: Union{Nothing, Real}} <: AbstractLoss
 
-Struct that defines the ice thickness loss.
+Struct that defines the ice thickness loss. Each observation adds the mean over its observed
+pixels of `((H - H_obs) / σ)²`, see [`L2Sum`](@ref).
 
 # Fields
 
@@ -76,34 +75,109 @@ Struct that defines the ice thickness loss.
     [`observation_weights`](@ref). With `:uniform` (default) each observation time counts once,
     which suits a few surveys. With `:time_span` each one counts as much as the time it covers,
     which suits dense time series.
+  - `σ::S`: Uncertainty of the observed ice thickness, in m. With `nothing` (default), it is
+    the uncertainty of each cell given by the data (`thicknessData.σ`). If the data has none,
+    it is a value that grows with the observed thickness, see [`default_σ`](@ref). A number
+    replaces it.
 """
-@kwdef struct LossH{L <: AbstractSimpleLoss} <: AbstractLoss
+@kwdef struct LossH{L <: AbstractSimpleLoss, S <: Union{Nothing, Real}} <: AbstractLoss
     loss::L = L2Sum()
     weighting::Symbol = :uniform
+    σ::S = nothing
 end
 
 """
-    LossV{L <: AbstractSimpleLoss} <: AbstractLoss
+    LossV{L <: AbstractSimpleLoss, S <: Union{Nothing, Real}} <: AbstractLoss
 
-Struct that defines the ice velocity loss.
+Struct that defines the ice velocity loss. Each observation adds the mean over its observed
+pixels of `((V - V_obs) / σ)²`, see [`L2Sum`](@ref).
 
 # Fields
 
   - `loss::L`: Type of loss to use for the ice velocity. Default is `L2Sum()`.
   - `component::Symbol`: Component of the velocity field used in the loss.
     Options include :xy for both x and y component, and :abs for the norm/magnitude of the velocity.
-  - `scale_loss::Bool`: Whether to scale the loss function with the reference ice
-    velocity magnitude.
+    With `:xy` the loss is the sum of the terms of the two components, so a misfit of σ in both
+    gives 2, and with `:abs` it gives 1.
   - `weighting::Symbol`: How the observation times count in the loss, see
     [`observation_weights`](@ref). With `:uniform` (default) each observation time counts once,
     which suits one velocity map or a few. With `:time_span` each one counts as much as the
     time it covers, so many maps close in time do not dominate.
+  - `σ::S`: Uncertainty of the observed velocity, in m/yr. With `nothing` (default), it is the
+    error of the velocity map given by the data (`velocityData.vabs_error`), and 10 m/yr if the
+    data has none. A number replaces it.
 """
-@kwdef struct LossV{L <: AbstractSimpleLoss} <: AbstractLoss
+@kwdef struct LossV{L <: AbstractSimpleLoss, S <: Union{Nothing, Real}} <: AbstractLoss
     loss::L = L2Sum()
     component::Symbol = :xy
-    scale_loss::Bool = true
     weighting::Symbol = :uniform
+    σ::S = nothing
+end
+
+# σ(H)² = floor² + (relative * H)², for the thickness data that has no uncertainty
+const THICKNESS_σ_FLOOR = 14.0
+const THICKNESS_σ_RELATIVE = 0.09
+
+"""
+    default_σ(lossType)
+    default_σ(lossType::LossH, H)
+
+Uncertainty used by a data loss when neither the loss nor the data give one.
+
+  - `LossH`: it depends on the observed thickness `H` (in m), cell by cell,
+    ``σ(H) = \\sqrt{σ_0^2 + (r H)^2}``, with ``σ_0`` = $(THICKNESS_σ_FLOOR) m and ``r`` = $(round(100 * THICKNESS_σ_RELATIVE; digits = 1))%.
+    It is the rms of the difference between independent surveys of the same glacier in the same
+    cell, as a function of the thickness, fitted on GlaThiDa (about 300 glaciers, cells of 68 to
+    548 m; the fitted values change little with the size of the cell). A thin glacier then gets a
+    smaller uncertainty than a thick one. The typical difference is smaller, about 7 m at any
+    thickness, but a minority of cells differ by tens of metres, more where the ice is thick, and
+    they dominate the rms. As the misfit is squared, the rms is the value that makes the term
+    about 1.
+  - `LossV`, `LossAvgV`: 10 m/yr.
+  - `LossDhdt`: 0.2 m/yr.
+"""
+function default_σ end
+
+function default_σ(::LossH, H::AbstractArray{T}) where {T <: AbstractFloat}
+    return sqrt.(T(THICKNESS_σ_FLOOR)^2 .+
+                 (T(THICKNESS_σ_RELATIVE) .* max.(H, zero(T))) .^ 2)
+end
+default_σ(::LossV) = 10.0
+
+"""
+    thickness_σ(lossType::LossH, glacier, t)
+
+Uncertainty of the ice thickness observation of `glacier` at time `t`: `lossType.σ` if it is a
+number, else the uncertainty per cell given by the data, else the one that depends on the
+observed thickness, see [`default_σ`](@ref). Cells without a valid uncertainty (not observed)
+get 1, which has no effect since they are not used.
+"""
+function thickness_σ(lossType::LossH, glacier, t)
+    isnothing(lossType.σ) || return lossType.σ
+    data = glacier.thicknessData
+    isnothing(data) && throw(ArgumentError(
+        "LossH needs the thickness observations `thicknessData` of glacier $(glacier.rgi_id)."))
+    k = findfirst(==(t), data.t)
+    σ = isnothing(data.σ) ? default_σ(lossType, data.H[k]) : data.σ[k]
+    return ifelse.(isfinite.(σ) .& (σ .> 0), σ, one(eltype(σ)))
+end
+
+"""
+    velocity_σ(lossType, glacier, k)
+
+Uncertainty of the `k`-th velocity observation of `glacier`: `lossType.σ` if it is a number,
+else `velocityData.vabs_error[k]` if it is valid, else [`default_σ`](@ref).
+
+`vabs_error` is the mean over the ice of the size of the error vector (x and y) of the velocity
+map. With equal and independent errors in x and y, each component has `1/√2` of it, and so has
+the speed (its error is the one along the flow), so `1/√2` of it is used for `:xy` and `:abs`.
+"""
+function velocity_σ(lossType, glacier, k)
+    isnothing(lossType.σ) || return lossType.σ
+    errors = isnothing(glacier.velocityData) ? nothing : glacier.velocityData.vabs_error
+    (isnothing(errors) || isnothing(k)) && return default_σ(lossType)
+    σ = errors[k]
+    return isfinite(σ) && σ > 0 ? σ / sqrt(2) : default_σ(lossType)
 end
 
 """
@@ -120,6 +194,13 @@ It also has a scaling coefficient that balances the ice velocity term in the los
 ``loss(\\hat H,H) = loss_H(\\hat H,H) + scaling * loss_V(\\hat V,V)``
 
 with ``\\hat V`` computed from ``\\hat H`` for the SIA.
+
+`LossHV(scaling = s)` is the same loss as
+`MultiLoss(losses = (LossH(), LossV()), λs = (1.0, s))`, only shorter. Use
+[`MultiLoss`](@ref) when you need more terms (a regularization, or a time aggregated loss such
+as `LossS`, which a `LossHV` cannot hold: the `Inversion` stops with an error), a weight for the
+thickness, or the value of the thickness and velocity terms separately in
+[`loss_terms`](@ref).
 
 # Fields
 
@@ -139,42 +220,68 @@ end
 
 ### Definition of simple loss functions
 
+# The positional argument `normalization` is not used by the simple losses, which are a mean
+# over the mask. `σ` is the uncertainty of the data, a number or a matrix.
+
+"""
+    loss(lossType::AbstractSimpleLoss, a, b, mask, normalization; σ = 1.0)
+
+Mean over the pixels of `mask` of the squared residual of `a` with respect to the data `b`,
+see [`L2Sum`](@ref) and [`LogSum`](@ref).
+The logarithmic loss follows Morlighem et al. (2010).
+
+# References
+
+  - Morlighem, M., Rignot, E., Seroussi, H., Larour, E., Ben Dhia, H. and Aubry, D. (2010).
+    Spatial patterns of basal drag inferred using control methods from a full-Stokes and
+    simpler models for Pine Island Glacier, West Antarctica. Geophysical Research Letters,
+    37, L14502. doi:10.1029/2010GL043853
+"""
 function loss(
-        lossType::L2Sum,
+        lossType::Union{L2Sum, LogSum},
         a::Matrix{F},
         b::Matrix{F},
-        normalization::F
+        mask::BitMatrix,
+        normalization::F;
+        σ = one(F)
 ) where {F <: AbstractFloat}
-    return loss(lossType, a, b, is_in_glacier(b, lossType.distance), normalization)
+    lossType isa LogSum && @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
+    return masked_mean_sq(residual(lossType, a, b, σ), mask)
 end
 function backward_loss(
-        lossType::L2Sum,
+        lossType::Union{L2Sum, LogSum},
         a::Matrix{F},
         b::Matrix{F},
-        normalization::F
+        mask::BitMatrix,
+        normalization::F;
+        σ = one(F)
 ) where {F <: AbstractFloat}
-    return backward_loss(lossType, a, b, is_in_glacier(b, lossType.distance), normalization)
+    r = residual(lossType, a, b, σ)
+    ∂r∂a = ∂residual∂a(lossType, a, b, σ)
+    return ifelse.(mask, 2 .* r .* ∂r∂a ./ max(count(mask), 1), zero(F))
 end
 
+# Without a mask: the pixels at `distance` from the border of the data for `L2Sum`, and all
+# the pixels for `LogSum`
+default_mask(lossType::L2Sum, b) = is_in_glacier(b, lossType.distance)
+default_mask(lossType::LogSum, b) = trues(size(b))
 function loss(
-        lossType::L2Sum,
+        lossType::Union{L2Sum, LogSum},
         a::Matrix{F},
         b::Matrix{F},
-        mask::BitMatrix,
-        normalization::F
+        normalization::F;
+        σ = one(F)
 ) where {F <: AbstractFloat}
-    return sum(((a .- b)[mask]) .^ 2)/loss_normalization(lossType, mask, normalization)
+    return loss(lossType, a, b, default_mask(lossType, b), normalization; σ = σ)
 end
 function backward_loss(
-        lossType::L2Sum,
+        lossType::Union{L2Sum, LogSum},
         a::Matrix{F},
         b::Matrix{F},
-        mask::BitMatrix,
-        normalization::F
+        normalization::F;
+        σ = one(F)
 ) where {F <: AbstractFloat}
-    d = zero(a)
-    d[mask] = a[mask] .- b[mask]
-    return 2.0 .* d ./ loss_normalization(lossType, mask, normalization)
+    return backward_loss(lossType, a, b, default_mask(lossType, b), normalization; σ = σ)
 end
 
 function loss(
@@ -184,15 +291,7 @@ function loss(
         normalization::F
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
-    return [loss(
-                lossType,
-                ai,
-                bi,
-                is_in_glacier(bi, lossType.distance),
-                normalization
-            )
-            for (ai, bi) in zip(a, b)]
-    # return [sum(( (ai .- bi)[is_in_glacier(bi, lossType.distance)] ).^2)/normalization for (ai,bi) in zip(a,b)]
+    return [loss(lossType, ai, bi, normalization) for (ai, bi) in zip(a, b)]
 end
 function backward_loss(
         lossType::L2Sum,
@@ -201,77 +300,7 @@ function backward_loss(
         normalization::F
 ) where {F <: AbstractFloat}
     @assert length(a) == length(b) "Size of a and b don't match: length(a)=$(length(a)) but length(b)=$(length(b))"
-    return [backward_loss(
-                lossType,
-                ai,
-                bi,
-                normalization
-            )
-            for (ai, bi) in zip(a, b)]
-end
-
-### Definition of more complete loss functions
-
-"""
-    function loss(
-        lossType::LogSum,
-        a::Matrix{F},
-        b::Matrix{F},
-        mask::BitMatrix,
-        normalization::F,
-    ) where {F <: AbstractFloat}
-
-Compute logarithmic loss function for ice velocity fields following Morlighem, M. et al.,
-"Spatial patterns of basal drag inferred using control methods from a full-Stokes and
-simpler models for Pine Island Glacier, West Antarctica". Geophys. Res. Lett. 37, (2010).
-Given a minimum velocity ϵ the absolute velocity given by a and b, it computes the sum of
-
-    log^2( (a + ϵ) / (b + ϵ) )
-
-It has been shown that this loss function enables robust estimation of drag coefficient.
-"""
-function loss(
-        lossType::LogSum,
-        a::Matrix{F},
-        b::Matrix{F},
-        mask::BitMatrix,
-        normalization::F
-) where {F <: AbstractFloat}
-    @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
-    return sum((log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)) .^ 2)) ./
-           loss_normalization(lossType, mask, normalization)
-end
-function backward_loss(
-        lossType::LogSum,
-        a::Matrix{F},
-        b::Matrix{F},
-        mask::BitMatrix,
-        normalization::F
-) where {F <: AbstractFloat}
-    d = zero(a)
-    d[mask] = log.((a[mask] .+ lossType.ϵ) ./ (b[mask] .+ lossType.ϵ)) ./
-              (a[mask] .+ lossType.ϵ)
-    return 2.0 .* d ./ loss_normalization(lossType, mask, normalization)
-end
-
-function loss(
-        lossType::LogSum,
-        a::Matrix{F},
-        b::Matrix{F},
-        normalization::F
-) where {F <: AbstractFloat}
-    @assert (minimum(a) >= 0.0) & (minimum(b) >= 0.0)
-    return sum(log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) .^ 2) ./
-           loss_normalization(lossType, trues(size(a)), normalization)
-end
-function backward_loss(
-        lossType::LogSum,
-        a::Matrix{F},
-        b::Matrix{F},
-        normalization::F
-) where {F <: AbstractFloat}
-    return 2.0 .* log.((a .+ lossType.ϵ) ./ (b .+ lossType.ϵ)) ./ (a .+ lossType.ϵ) ./
-           loss_normalization(lossType, trues(size(a)), normalization)
+    return [backward_loss(lossType, ai, bi, normalization) for (ai, bi) in zip(a, b)]
 end
 
 function loss(
@@ -291,7 +320,8 @@ function loss(
         return 0.0
     else
         mask = is_in_glacier(H_ref, lossType.loss.distance)
-        return loss(lossType.loss, H_pred, H_ref, mask, normalization) * Δt.H
+        σ = @ignore_derivatives thickness_σ(lossType, simulation.glaciers[glacier_idx], t)
+        return loss(lossType.loss, H_pred, H_ref, mask, normalization; σ = σ) * Δt.H
     end
 end
 function backward_loss(
@@ -312,7 +342,8 @@ function backward_loss(
         zero(H_pred)
     else
         mask = is_in_glacier(H_ref, lossType.loss.distance)
-        backward_loss(lossType.loss, H_pred, H_ref, mask, normalization)
+        σ = thickness_σ(lossType, simulation.glaciers[glacier_idx], t)
+        backward_loss(lossType.loss, H_pred, H_ref, mask, normalization; σ = σ)
     end
     return ∂L∂H * Δt.H, ∂L∂θ * Δt.H
 end
@@ -342,24 +373,25 @@ function loss(
     # TODO: in the future we should dispatch wrt the iceflow model
 
     mask = (V_ref .> 0.0)
+    σ = @ignore_derivatives velocity_σ(lossType, simulation.glaciers[glacier_idx],
+        velocity_index(simulation, glacier_idx, t))
 
     ℓ = if lossType.component == :xy
-        loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization) +
-        loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization)
+        loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization; σ = σ) +
+        loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization; σ = σ)
     elseif lossType.component == :abs
-        loss(lossType.loss, V_pred, V_ref, mask, normalization)
+        loss(lossType.loss, V_pred, V_ref, mask, normalization; σ = σ)
     else
         @error "Loss type not implemented."
     end
 
-    # Scale loss function
-    ℓ_scale = if lossType.scale_loss
-        ℓ / mean(Vx_ref[mask] .^ 2 .+ Vy_ref[mask] .^ 2)^0.5
-    else
-        ℓ
-    end
-
-    return ℓ_scale * Δt.V
+    return ℓ * Δt.V
+end
+# Index of the velocity observation at time `t`
+function velocity_index(simulation, glacier_idx, t)
+    findfirst(==(t),
+        tdata(simulation.glaciers[glacier_idx].velocityData,
+            simulation.parameters.simulation.mapping))
 end
 function backward_loss(
         lossType::LossV,
@@ -386,12 +418,14 @@ function backward_loss(
     # TODO: in the future we should dispatch wrt the iceflow model
 
     mask = (V_ref .> 0.0)
+    σ = velocity_σ(lossType, simulation.glaciers[glacier_idx],
+        velocity_index(simulation, glacier_idx, t))
 
     if lossType.component == :xy
-        ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization)
-        ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization)
+        ∂lV∂Vx = backward_loss(lossType.loss, Vx_pred, Vx_ref, mask, normalization; σ = σ)
+        ∂lV∂Vy = backward_loss(lossType.loss, Vy_pred, Vy_ref, mask, normalization; σ = σ)
     elseif lossType.component == :abs
-        ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask, normalization)
+        ∂lV∂V = backward_loss(lossType.loss, V_pred, V_ref, mask, normalization; σ = σ)
         # Chain rule through V = √(Vx² + Vy²): ∂l/∂Vx = ∂l/∂V · Vx/V (and similarly Vy)
         ∂Vx_dir, ∂Vy_dir = VJP_λ_∂V∂Vxy(∂lV∂V, Vx_pred, Vy_pred)
         valid = mask .& (V_pred .> 0.0)
@@ -399,21 +433,10 @@ function backward_loss(
         ∂lV∂Vy = ifelse.(valid, ∂Vy_dir, 0.0)
     end
 
-    ∂lV∂Vx_scale = if lossType.scale_loss
-        ∂lV∂Vx / mean(Vx_ref[mask] .^ 2 .+ Vy_ref[mask] .^ 2)^0.5
-    else
-        ∂lV∂Vx
-    end
-    ∂lV∂Vy_scale = if lossType.scale_loss
-        ∂lV∂Vy / mean(Vx_ref[mask] .^ 2 .+ Vy_ref[mask] .^ 2)^0.5
-    else
-        ∂lV∂Vy
-    end
-
     ∂L∂H = VJP_λ_∂surface_V∂H(simulation.parameters.UDE.grad.VJP_method,
-        ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
+        ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
     ∂L∂θ = VJP_λ_∂surface_V∂θ(simulation.parameters.UDE.grad.VJP_method,
-        ∂lV∂Vx_scale, ∂lV∂Vy_scale, H_pred, θ, simulation, t)[1]
+        ∂lV∂Vx, ∂lV∂Vy, H_pred, θ, simulation, t)[1]
 
     return ∂L∂H * Δt.V, ∂L∂θ * Δt.V
 end

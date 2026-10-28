@@ -31,6 +31,11 @@ function run!(
 )
     # Set expected total number of epochs from beginning for the callback
     simulation.results.stats.niter = sum(simulation.parameters.hyper.epochs)
+    # The table of the loss terms costs one forward simulation per glacier
+    show_terms = !simulation.parameters.simulation.test_mode
+    show_terms && print_loss_terms(stdout,
+        loss_terms(simulation.model.trainable_components.θ, simulation),
+        "Loss terms at the start:")
 
     logger = isnothing(path_tb_logger) || simulation.parameters.simulation.test_mode ?
              nothing : TBLogger(path_tb_logger)
@@ -63,6 +68,8 @@ function run!(
 
     # Setup final results
     simulation.model.trainable_components.θ = sol.u
+    show_terms && print_loss_terms(stdout, loss_terms(sol.u, simulation),
+        "Loss terms at the end:")
 
     simulation.results.stats.niter = length(simulation.results.stats.losses)
     # Final parameters of the optimization
@@ -72,12 +79,8 @@ function run!(
         simulation.results.stats.initial_conditions = Dict()
         for glacier_id in 1:length(simulation.glaciers)
             glacier = simulation.glaciers[glacier_id]
-            simulation.results.stats.initial_conditions[String(glacier.rgi_id)] = evaluate_H₀(
-                simulation.model.trainable_components.θ,
-                glacier,
-                simulation.parameters.UDE.initial_condition_filter,
-                glacier_id
-            )
+            simulation.results.stats.initial_conditions[String(glacier.rgi_id)] = initial_thickness(
+                simulation.model.trainable_components.θ, simulation, glacier_id)
         end
     end
 
@@ -248,7 +251,8 @@ end
     create_results(θ, simulation::Inversion, mappingFct; processVelocity::Union{Nothing, Function} = nothing)
 
 Given the parameters θ, solve the iceflow problem for all the glaciers and aggregate
-the results for all of them.
+the results for all of them. The bed of each `Results` is the bed of the model, which is not
+`glacier.B` when the bed is inverted.
 This function is typically used at the end of a training once θ has been optimized
 and one wants to run one last forward simulation in order to retrieve statistics
 about each of the iceflow problems.
@@ -265,12 +269,19 @@ function create_results(θ, simulation::Inversion, mappingFct;
     simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     results = mappingFct(simulations) do simulation
-        container = InversionBinder(simulation, simulation.model.trainable_components.θ)
-        [_batch_iceflow_UDE(
-             container, glacier_idx,
-             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx);
-             processVelocity = processVelocity
-         ) for glacier_idx in 1:length(container.simulation.glaciers)]
+        θ_batch = simulation.model.trainable_components.θ
+        container = InversionBinder(simulation, θ_batch)
+        [begin
+             result = _batch_iceflow_UDE(
+                 container, glacier_idx,
+                 define_iceflow_prob(θ_batch, simulation, glacier_idx);
+                 processVelocity = processVelocity
+             )
+             # The bed of the results is the one of the model, not `glacier.B`, when it is inverted
+             result.B = Matrix{eltype(result.B)}(Huginn.bed(simulation, glacier_idx, θ_batch))
+             result
+         end
+         for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
     return results
@@ -373,7 +384,9 @@ function grad_loss_iceflow!(θ, simulation::Inversion, mappingFct)
         [grad_parallel_loss_iceflow!(simulation.model.trainable_components.θ, simulation, glacier_idx)
          for glacier_idx in 1:length(simulation.glaciers)]
     end
-    return sum(merge_batches(grads))
+    # One gradient per glacier, with the layout of the `θ` of its batch: the parameters of each
+    # glacier go to the place of the glacier, and the other ones are added
+    return aggregate∇θ(merge_batches(grads), θ, simulation.model.trainable_components)
 end
 
 """
@@ -448,8 +461,18 @@ function batch_loss_iceflow_transient(
     # loss gives a wrong gradient (see the `InversionBinder` docstring)
     simulation = @ignore_derivatives container.simulation
 
-    loss_function = simulation.parameters.UDE.empirical_loss_function
+    ℓ = observation_loss(
+        simulation.parameters.UDE.empirical_loss_function, result, θ, simulation, glacier_idx)
+    return ℓ, result
+end
 
+"""
+    observation_loss(loss_function, result, θ, simulation, glacier_idx)
+
+Value of the loss `loss_function` for the simulated `result` of a glacier: the sum of the loss
+at each time of the simulation and of the time aggregated losses.
+"""
+function observation_loss(loss_function, result, θ, simulation, glacier_idx)
     glacier = simulation.glaciers[glacier_idx]
     t = result.t
     H = result.H
@@ -517,7 +540,44 @@ function batch_loss_iceflow_transient(
     time_aggregated_losses = time_aggregated_loss(
         loss_function, H, nothing, nothing, nothing, nothing, t,
         glacier_idx, θ, simulation, prod(size(H[begin]))*1.0, (;))
-    return sum(losses) + time_aggregated_losses, result
+    return sum(losses) + time_aggregated_losses
+end
+
+"""
+    loss_terms(θ, simulation::Inversion)
+
+Value of each term of the loss for the parameters `θ`, summed over the glaciers. It runs one
+forward simulation per glacier, with no gradient.
+
+Returns a vector with one named tuple `(; term, λ, value, share)` per term of the loss: the
+loss term, its weight, its value without the weight, and its part of the total loss
+(`λ * value / total`).
+"""
+function loss_terms(θ, simulation::Inversion)
+    lossType = simulation.parameters.UDE.empirical_loss_function
+    terms = lossType isa MultiLoss ? lossType.losses : (lossType,)
+    λs = lossType isa MultiLoss ? lossType.λs : (1.0,)
+    values = zeros(length(terms))
+    for glacier_idx in eachindex(simulation.glaciers)
+        result = _batch_iceflow_UDE(InversionBinder(simulation, θ), glacier_idx,
+            define_iceflow_prob(θ, simulation, glacier_idx))
+        for (k, term) in enumerate(terms)
+            values[k] += observation_loss(term, result, θ, simulation, glacier_idx)
+        end
+    end
+    total = sum(λs .* values)
+    return [(; term, λ, value, share = total > 0 ? λ * value / total : 0.0)
+            for (term, λ, value) in zip(terms, λs, values)]
+end
+
+# Table of the terms of the loss
+function print_loss_terms(io::IO, terms, title)
+    println(io, title)
+    @printf(io, "  %-32s %8s %12s %7s\n", "term", "λ", "value", "share")
+    for t in terms
+        @printf(io, "  %-32s %8.3g %12.4g %6.1f%%\n",
+            nameof(typeof(t.term)), t.λ, t.value, 100 * t.share)
+    end
 end
 
 """
@@ -585,11 +645,14 @@ function _batch_iceflow_UDE(
     MB,
     t_MB = Zygote.@ignore_derivatives Huginn.MB_diagnostics(
         container.simulation, iceflow_sol)
+    # The bed is only for the results, it is not used by the loss
+    B = @ignore_derivatives Huginn.bed(container.simulation, glacier_idx, container.θ)
     return Sleipnir.create_results(
         container.simulation, glacier_idx, iceflow_sol, tstops;
         MB = MB,
         t_MB = t_MB,
-        processVelocity = processVelocity
+        processVelocity = processVelocity,
+        B = B
     )
 end
 
@@ -667,12 +730,7 @@ function define_iceflow_prob(
     params = simulation.parameters
     # Define initial condition for the inverse simulation
     if haskey(θ, :IC)
-        H₀ = evaluate_H₀(
-            θ,
-            simulation.glaciers[glacier_idx],
-            simulation.parameters.UDE.initial_condition_filter,
-            glacier_idx
-        )
+        H₀ = initial_thickness(θ, simulation, glacier_idx)
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
         # An abstract eltype of `u0` fails far from here (see `σ_zang`), so check it once
         u0_ok = Zygote.@ignore_derivatives isconcretetype(eltype(H₀)) &&

@@ -25,7 +25,14 @@ In this page we provide the main references used in the ODINN project, grouped b
 
 ### Papers about glacier (ice flow) modelling
 
+  - Spatial patterns of basal drag inferred using control methods from a full-Stokes and simpler models for Pine Island Glacier, West Antarctica, Morlighem et al. (2010), Geophysical Research Letters [morlighem_spatial_2010](@cite).
   - Inversion of basal friction in Antarctica using exact and incomplete adjoints of a higher-order model, Morlighem et al. (2013), JGR Earth Surface [morlighem_inversion_2013](@cite).
+  - Elevation bias due to penetration of spaceborne radar signal on Grosser Aletschgletscher, Switzerland, Bannwart et al. (2024), Journal of Glaciology [bannwart_elevation_2024](@cite).
+  - Biases of SRTM in high-mountain areas: Implications for the monitoring of glacier volume changes, Berthier et al. (2006), Geophysical Research Letters [berthier_biases_2006](@cite).
+  - Impact of resolution and radar penetration on glacier elevation changes computed from DEM differencing, Gardelle et al. (2012), Journal of Glaciology [gardelle_impact_2012](@cite).
+  - Elevation changes inferred from TanDEM-X data over the Mont-Blanc area: Impact of the X-band interferometric bias, Dehecq et al. (2016), IEEE JSTARS [dehecq_elevation_2016](@cite).
+  - Deep learning speeds up ice flow modelling by several orders of magnitude, Jouvet et al. (2022), Journal of Glaciology [jouvet_deep_2022](@cite).
+  - Inversion of a Stokes glacier flow model emulated by deep learning, Jouvet (2023), Journal of Glaciology [jouvet_inversion_2023](@cite).
   - What is glacier sliding?, Law et al. (2025), arXiV [law_what_2025](@cite).
   - Deep learning the flow law of Antarctic ice shelves, Wang et al. (2025), Science [wang_deep_2025](@cite).
   - The Physics of Glaciers, Cuffey and Paterson (2010) [cuffey_physics_2010](@cite).

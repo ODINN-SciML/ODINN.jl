@@ -2,12 +2,51 @@
 """
     H₀_scale(glacier)
 
-Scale of θ.IC for each glacier, in metres (the maximum of `glacier.H₀`). θ.IC is stored as
-`H₀ / H₀_scale(glacier)`, so its values are of order one like the other parameters, and the
+Default scale of `θ.IC[id].H` for each glacier, in metres (the maximum of `glacier.H₀`). It is
+stored as `H₀ / scale`, so its values are of order one like the other parameters, and the
 same learning rate works for all of them. If `glacier.H₀` changes after `InitialCondition`
 is built, θ.IC no longer matches. The filters (`σ_zang`, `softplus`) act on metres.
 """
 H₀_scale(glacier) = max(maximum(glacier.H₀), one(eltype(glacier.H₀)))
+
+"""
+    ic_params(θ, glacier_id)
+
+Parameters of the initial condition of a glacier, `θ.IC[glacier_id]`, with the fields `H` and,
+when the bed is free, `S`. It is a view: writing into it changes `θ`. The key is type stable,
+see [`glacier_key`](@ref).
+"""
+ic_params(θ, glacier_id) = getproperty(θ.IC, glacier_key(θ.IC, glacier_id))
+
+# Whether θ inverts the bed. All glaciers have the same fields, so the first one tells and the
+# answer does not need a lookup by glacier index (it runs inside the differentiated functions)
+function bed_is_free(θ, glacier_id)
+    (isnothing(θ) || !haskey(θ, :IC)) && return false
+    ic = θ.IC
+    first_glacier = ic isa ComponentVector ? getproperty(ic, Val(first(keys(ic)))) :
+                    first(values(ic))
+    return haskey(first_glacier, :S)
+end
+
+"""
+    ic_scales(simulation, glacier_idx)
+
+Scales of `θ.IC[id].H` and `θ.IC[id].S` in metres, and the minimum thickness inside the outline,
+as the named tuple `(; H, S, Hmin)`, from the `InitialCondition` of the model, or the defaults.
+"""
+function ic_scales(simulation, glacier_idx)
+    glacier = simulation.glaciers[glacier_idx]
+    IC = simulation.model.trainable_components.IC
+    F = eltype(glacier.H₀)
+    IC isa InitialCondition || return (H = H₀_scale(glacier), S = F(5), Hmin = F(1))
+    # `scale_H = 0` is the default: the maximum thickness of the glacier of this simulation,
+    # which is the one of the batch when the glaciers are split
+    return (H = IC.scale_H > 0 ? IC.scale_H : H₀_scale(glacier), S = IC.scale_S,
+        Hmin = IC.min_thickness)
+end
+# The scales are numbers read from the model and the glacier: Enzyme, which differentiates the
+# bed inside the ice flow, does not have to compile this function
+EnzymeCore.EnzymeRules.inactive_noinl(::typeof(ic_scales), args...) = nothing
 
 """
     evaluate_H₀(
@@ -27,11 +66,18 @@ Evaluate the initial ice thickness `H₀` for a given glacier, optionally applyi
 
   - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
 
-      + `:identity`: applies the identity function (no change).
+      + `:identity`: applies the identity function (no change). Only for debugging: `H₀` can be negative and `H_min` is not used.
       + `:softplus`: applies the softplus function `log(1 + exp(x))` to ensure positivity.
       + `:Zang1980`: applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
 
   - `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
+
+  - `scale`: Scale of `θ.IC[id].H` in metres, see [`ic_scales`](@ref).
+
+  - `H_min`: Minimum of the thickness in metres inside the outline of the glacier, with the
+    `:softplus` and `:Zang1980` filters (`Hmin + filter(x - Hmin)`). Default is `0.0`.
+
+The outline is the set of cells where `glacier.H₀` is not zero. Outside it the thickness is zero.
 
 # Returns
 
@@ -41,20 +87,22 @@ function evaluate_H₀(
         θ::ComponentArray,
         glacier::Glacier2D,
         filter::Symbol,
-        glacier_id::Integer
+        glacier_id::Integer;
+        scale = H₀_scale(glacier),
+        H_min = zero(eltype(glacier.H₀))
 )
-    glacier_id_symbol = Symbol("$(glacier_id)")
-    H₀ = deepcopy(θ.IC[glacier_id_symbol]) .* H₀_scale(glacier)
+    # The product allocates a new array, so `θ` is never aliased (no `deepcopy`, which the
+    # Enzyme-differentiated bed hook would have to go through)
+    H₀ = ic_params(θ, glacier_id).H .* scale
     H₀ = @match filter begin
         :identity => H₀
-        :softplus => log.(1 .+ exp.(H₀))
-        :Zang1980 => σ_zang.(H₀)
+        :softplus => softplus_min.(H₀, H_min)
+        :Zang1980 => σ_zang_min.(H₀, H_min)
     end
-    # Apply mask. Written as a product rather than a masked write because
+    # Apply the outline. Written as a product rather than a masked write because
     # `InitialThicknessRegularization` calls this inside the loss, so it has to be
     # differentiable, and Zygote refuses the `copyto!` that indexing with the mask creates.
-    # `mask` is true on the no-ice cells, so the complement is what survives.
-    return H₀ .* .!glacier.mask
+    return H₀ .* (glacier.H₀ .> 0)
 end
 
 """
@@ -75,11 +123,13 @@ Evaluate the derivative of the initial ice thickness `H₀` for a given glacier,
 
   - `filter::Symbol`: Specifies the smoothing function to apply to the raw initial condition:
 
-      + `:identity`: applies the identity function (no change).
+      + `:identity`: applies the identity function (no change). Only for debugging: `H₀` can be negative and `H_min` is not used.
       + `:softplus` — applies the softplus function `log(1 + exp(x))` to ensure positivity.
       + `:Zang1980` — applies the `σ_zang` function (Zang 1980) as a smooth positivity threshold.
 
   - `glacier_id::Integer`: Index of the glacier in order to retrieve the parameters of the IC in θ.
+
+  - `scale`, `H_min`: As in [`evaluate_H₀`](@ref).
 
 # Returns
 
@@ -89,22 +139,146 @@ function evaluate_∂H₀(
         θ::ComponentArray,
         glacier::Glacier2D,
         filter::Symbol,
-        glacier_id::Integer
+        glacier_id::Integer;
+        scale = H₀_scale(glacier),
+        H_min = zero(eltype(glacier.H₀))
 )
-    glacier_id_symbol = Symbol("$(glacier_id)")
-    scale = H₀_scale(glacier)
-    ∂H₀ = deepcopy(θ.IC[glacier_id_symbol]) .* scale
+    ∂H₀ = ic_params(θ, glacier_id).H .* scale
     ∂H₀ = @match filter begin
         # An array, not the scalar 1.0: the mask below indexes into it
         :identity => one.(∂H₀)
-        :softplus => 1 ./ (1 .+ exp.(-∂H₀))
-        :Zang1980 => ∂σ_zang.(∂H₀)
+        :softplus => 1 ./ (1 .+ exp.(-(∂H₀ .- H_min)))
+        :Zang1980 => ∂σ_zang.(∂H₀ .- H_min)
     end
     # d(filter(θ.IC * scale))/dθ.IC needs the extra `scale` factor from the chain rule.
     ∂H₀ = ∂H₀ .* scale
-    # Apply mask
-    ∂H₀[glacier.mask] .= 0.0
+    # Outside the outline the thickness is zero
+    ∂H₀[.!(glacier.H₀ .> 0)] .= 0.0
     return ∂H₀
+end
+
+"""
+    softplus_stable(x)
+
+`log(1 + exp(x))` that does not overflow: above 30 m it is `x`.
+"""
+softplus_stable(x) = x > 30 ? x : log1p(exp(min(x, 30)))
+
+"""
+    σ_zang_min(x, Hmin)
+    softplus_min(x, Hmin)
+
+The filter with a minimum value, `Hmin + filter(x - Hmin)`: it is smooth, it is `x` for
+`x` well above `Hmin`, and it never goes below `Hmin`. For `Hmin = 0` it is the filter itself.
+"""
+σ_zang_min(x, Hmin) = Hmin + σ_zang(x - Hmin)
+softplus_min(x, Hmin) = Hmin + softplus_stable(x - Hmin)
+
+"""
+    evaluate_B(θ, simulation, glacier_idx)
+
+Bed of a glacier: `S₀ - H₀` when the bed is free (see [`InitialCondition`](@ref)), and
+`glacier.B` otherwise. It is the same at all times.
+
+The ice flow calls it at every right-hand side, so it is one fused loop that allocates only
+the result. On the cells where ice is allowed it is `glacier.S + S × scale_S - H₀`, with
+`H₀ = filter(H × scale_H)` inside the outline of the glacier (`glacier.H₀ > 0`) and `H₀ = 0`
+outside it, the same operations as `S₀ - initial_thickness` with `S₀ = glacier.S + S × scale_S`.
+It is `glacier.S` on the other cells.
+"""
+function evaluate_B(θ, simulation, glacier_idx)
+    glacier = simulation.glaciers[glacier_idx]
+    bed_is_free(θ, glacier_idx) || return glacier.B
+    scales = @ignore_derivatives ic_scales(simulation, glacier_idx)
+    filter = simulation.parameters.UDE.initial_condition_filter
+    p = ic_params(θ, glacier_idx)
+    S, mask, Hout, sS,
+    sH, Hmin = glacier.S, glacier.mask, glacier.H₀, scales.S, scales.H, scales.Hmin
+    if filter === :Zang1980
+        return @. ifelse(mask, S,
+            S + p.S * sS - ifelse(Hout > 0, σ_zang_min(p.H * sH, Hmin), zero(Hout)))
+    elseif filter === :softplus
+        return @. ifelse(mask, S,
+            S + p.S * sS - ifelse(Hout > 0, softplus_min(p.H * sH, Hmin), zero(Hout)))
+    elseif filter === :identity
+        return @. ifelse(mask, S, S + p.S * sS - ifelse(Hout > 0, p.H * sH, zero(Hout)))
+    end
+    throw(ArgumentError(
+        "initial_condition_filter must be :identity, :softplus or :Zang1980, got :$(filter)."))
+end
+
+"""
+    initial_thickness(θ, simulation, glacier_idx)
+
+Initial ice thickness of a glacier in metres: [`evaluate_H₀`](@ref) with the filter of the
+parameters and the scale of the `InitialCondition`.
+"""
+function initial_thickness(θ, simulation, glacier_idx)
+    scales = @ignore_derivatives ic_scales(simulation, glacier_idx)
+    return evaluate_H₀(θ, simulation.glaciers[glacier_idx],
+        simulation.parameters.UDE.initial_condition_filter, glacier_idx;
+        scale = scales.H, H_min = scales.Hmin)
+end
+
+# The ice flow model and the losses use this bed
+Huginn.bed(simulation::Inversion, glacier_idx, θ) = evaluate_B(θ, simulation, glacier_idx)
+
+# Largest difference in years between the date of the outline and the start of the run for which
+# the outline is taken as the glacier at the start
+const OUTLINE_DATE_TOLERANCE = Sleipnir.Float(4)
+
+"""
+    outline_date_status(date, t₀, tolerance = OUTLINE_DATE_TOLERANCE)
+
+Compare the date of the outline of a glacier with the start `t₀` of its run: `:unknown` if the
+date is `nothing`, `:match` if they are at most `tolerance` years apart, `:mismatch` if not.
+"""
+function outline_date_status(date, t₀, tolerance = OUTLINE_DATE_TOLERANCE)
+    isnothing(date) && return :unknown
+    return abs(date - t₀) <= tolerance ? :match : :mismatch
+end
+
+"""
+    outline_dates(simulation)
+
+Date of the RGI outline of each glacier, see `Sleipnir.outline_date`: `nothing` if it is not
+known (for example with prepro data made before Gungnir wrote it), and `missing` for a glacier
+without prepro data (not in `rgi_paths`, for example a synthetic glacier).
+"""
+function outline_dates(simulation)
+    rgi_paths = simulation.parameters.simulation.rgi_paths
+    return [haskey(rgi_paths, g.rgi_id) ?
+            Sleipnir.outline_date(g.rgi_id, simulation.parameters) :
+            missing for g in simulation.glaciers]
+end
+
+"""
+    check_outline_date(simulation, dates = outline_dates(simulation))
+
+The outline of the glacier is a hard constraint of `H₀`, which is right if it is the glacier at the
+start of the run. This compares the date of the outline of each glacier with its start, and
+informs when the date is unknown and warns when it is too far (see [`outline_date_status`](@ref)).
+Glaciers without prepro data (`missing` date) are skipped.
+"""
+function check_outline_date(simulation, dates = outline_dates(simulation))
+    unknown, apart = String[], String[]
+    for (i, glacier) in enumerate(simulation.glaciers)
+        ismissing(dates[i]) && continue
+        t₀ = glacier_tspan(simulation, i)[1]
+        status = outline_date_status(dates[i], t₀)
+        status == :unknown && push!(unknown, String(glacier.rgi_id))
+        status == :mismatch && push!(apart,
+            "$(glacier.rgi_id) (outline $(round(dates[i]; digits = 2)), \
+            start $(round(t₀; digits = 2)))")
+    end
+    isempty(unknown) ||
+        @info "The date of the outline is not in the data of $(join(unknown, ", ")) \
+            (Gungnir writes it): it is taken as the start of the run."
+    isempty(apart) ||
+        @warn "The outline is more than $(OUTLINE_DATE_TOLERANCE) years from the \
+            start of the run: $(join(apart, ", ")). `H₀` is zero outside the outline and at \
+            least `min_thickness` inside it, which is wrong if the glacier changed much."
+    return nothing
 end
 
 """
@@ -145,11 +319,11 @@ Derivative of the smooth thresholding function `σ_zang`.
 """
 function ∂σ_zang(x; β = 2.0)
     if x < - β / 2
-        return 0.0
+        return zero(x)
     elseif x < β / 2
         return x / β + 0.5
     else
-        return 1.0
+        return one(x)
     end
 end
 

@@ -93,7 +93,8 @@ nn_model = NeuralNetwork(params)
 train_initial_conditions = true
 
 if train_initial_conditions
-    ic = InitialCondition(params, glaciers, :Farinotti19)
+    # The bed is fixed: the free bed needs a DEM loss and the automatic adjoint
+    ic = InitialCondition(params, glaciers, :Farinotti19; bed = :fixed)
     model = Model(
         iceflow = SIA2Dmodel(params; A = LawA(nn_model, params)),
         mass_balance = nothing,

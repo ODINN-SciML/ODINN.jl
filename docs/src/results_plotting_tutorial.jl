@@ -29,6 +29,7 @@ params = Parameters(
         rgi_paths = rgi_paths,
         use_MB = true,
         use_velocities = true,
+        velocity_product = :Millan22, # Also attaches the velocity map to the glacier as an observation
         use_glathida_data = true,
         use_iceflow = true
     ),
@@ -115,6 +116,17 @@ plot_cumulative_mb(results; title = "Cumulative mass balance")
 # object or directly from a `Glacier2D` object.
 
 plot_glacier_dem(results)
+
+# ## Observations in space and time
+
+# Before an inversion, it is useful to see which observations a glacier has and when.
+# `plot_observations` draws them in 3D: x and y are the position and the vertical axis is the time.
+# Each dot is a cell with an observation, at the date of the observation: ice thickness
+# surveys, surface velocity maps and DEMs, each one with its own colour bar. The label of each
+# observation, on the right, gives its exact date, and the two dashed red rectangles mark the
+# time window of the simulation.
+
+plot_observations(glacier; tspan = results.tspan)
 
 # ## Animated thickness evolution
 
