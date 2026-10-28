@@ -386,6 +386,37 @@ end
 function discretePostIntegralLossSteps(lossType::AbstractLoss, simulation, glacier_idx)
     Vector{Float64}()
 end
+
+"""
+    check_loss_time_window(lossType, simulation)
+
+Check, before any simulation runs, that the times a loss needs are inside `tspan`. Times
+outside `tspan` are never reached by the solver, and the loss would later fail with an
+unclear `invalid index: nothing`.
+"""
+check_loss_time_window(lossType::AbstractLoss, simulation) = nothing
+function check_loss_time_window(lossType::MultiLoss, simulation)
+    foreach(l -> check_loss_time_window(l, simulation), lossType.losses)
+end
+function check_loss_time_window(lossType::LossAvgV, simulation)
+    tspan = simulation.parameters.simulation.tspan
+    for (i, glacier) in enumerate(simulation.glaciers)
+        if isnothing(glacier.velocityData)
+            throw(ArgumentError("LossAvgV needs velocity data, but glacier \
+                $(glacier.rgi_id) has none."))
+        end
+        tLoss = discretePostIntegralLossSteps(lossType, simulation, i)
+        if !all(t -> tspan[1] <= t <= tspan[2], tLoss)
+            t1 = Sleipnir.datetime_to_floatyear(only(glacier.velocityData.date1))
+            t2 = Sleipnir.datetime_to_floatyear(only(glacier.velocityData.date2))
+            throw(ArgumentError("LossAvgV averages the velocity over the period of the \
+                velocity observation, $(round(t1; digits = 3)) to $(round(t2; digits = 3)) \
+                for glacier $(glacier.rgi_id), but the simulation only covers \
+                tspan = $(tspan). This period must be inside tspan: extend tspan, or use \
+                LossV, which compares the velocity at the observation dates only."))
+        end
+    end
+end
 function discretePostIntegralLossSteps(lossType::MultiLoss, simulation, glacier_idx)
     ts = map(lossType.losses) do l
         discretePostIntegralLossSteps(l, simulation, glacier_idx)

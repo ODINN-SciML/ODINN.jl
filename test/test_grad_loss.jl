@@ -103,12 +103,20 @@ function test_grad_finite_diff(
         abstol = 1e-6,
         solver = nothing,
         A_range = nothing,
+        # The default only makes sense for a Weertman law: a `:C` test with the Budd law of
+        # these glaciers has to set it, otherwise the C gradient is round off
+        maxC = Sleipnir.PhysicalParameters().maxC,
         adaptive = true,
         dt = 1.0/120.0,
         fd_delta = nothing,
         thres_fd = 5e-2,
         n_fd_components = 4,
         return_grad = false,
+        # Return `(simulation, θ)` instead of the gradient, to test a part of the adjoint
+        # with this same setup
+        return_setup = false,
+        # sensealg of the automatic adjoint, to compare VJP backends
+        sensealg = nothing,
         functional_inv = true,
         scalar = true,
         custom_NN = false,
@@ -117,7 +125,7 @@ function test_grad_finite_diff(
         aggregated_loss = nothing
 ) where {ADJ <: AbstractAdjointMethod}
     if !functional_inv
-        @assert target == :A "When testing classical inversion, only target A is supported"
+        @assert target in (:A, :C) "When testing classical inversion, only targets A and C are supported"
     end
 
     print("> Testing target $(target) with $(adjointFlavor) and $(Base.typename(typeof(loss)).name)")
@@ -153,12 +161,16 @@ function test_grad_finite_diff(
     end
 
     useSciMLSenseAlg = isa(adjointFlavor, ODINN.SciMLSensitivityAdjoint)
+    sensealg_override = sensealg
     if useSciMLSenseAlg
         optim_autoAD = Optimization.AutoEnzyme()
-        sensealg = InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP())
+        sensealg = isnothing(sensealg_override) ?
+                   InterpolatingAdjoint(autojacvec = SciMLSensitivity.EnzymeVJP()) :
+                   sensealg_override
     else
         optim_autoAD = ODINN.NoAD()
-        sensealg = SciMLSensitivity.ZygoteAdjoint()
+        sensealg = isnothing(sensealg_override) ? SciMLSensitivity.ZygoteAdjoint() :
+                   sensealg_override
     end
 
     minA, maxA = if !isnothing(A_range)
@@ -192,7 +204,8 @@ function test_grad_finite_diff(
         ),
         physical = PhysicalParameters(
             minA = minA,
-            maxA = maxA
+            maxA = maxA,
+            maxC = maxC
         ),
         UDE = UDEparameters(
             sensealg = sensealg,
@@ -200,7 +213,9 @@ function test_grad_finite_diff(
             grad = adjointFlavor,
             optimization_method = "AD+AD",
             empirical_loss_function = loss,
-            target = target,
+            # `UDE.target` is only used by the manual adjoints. A C inversion is defined by its
+            # regressor and law, and the `Inversion` constructor needs `:A` here
+            target = target == :C ? :A : target,
             initial_condition_filter = :softplus
         ),
         solver = Huginn.SolverParameters(
@@ -283,6 +298,8 @@ function test_grad_finite_diff(
     regressors = @match (target, train_initial_conditions) begin
         (:A, false) => (; A = trainable_model)
         (:A, true) => (; A = trainable_model, IC = ic)
+        (:C, false) => (; C = trainable_model)
+        (:C, true) => (; C = trainable_model, IC = ic)
         (:D_hybrid, false) => (; Y = trainable_model)
         (:D_hybrid, true) => (; Y = trainable_model, IC = ic)
         (:D, false) => (; U = trainable_model)
@@ -292,6 +309,8 @@ function test_grad_finite_diff(
     law = @match (target, functional_inv) begin
         (:A, true) => LawA(trainable_model, params; scalar = scalar)
         (:A, false) => LawA(params; scalar = scalar)
+        # Classical only: `LawC` has no neural network version yet
+        (:C, false) => LawC(params; scalar = scalar)
         (:D_hybrid, true) => LawY(trainable_model, params)
         (:D, true) => LawU(trainable_model, params)
     end
@@ -305,6 +324,11 @@ function test_grad_finite_diff(
     model = @match target begin
         :A => Model(
             iceflow = SIA2Dmodel(params; A = law),
+            mass_balance = mass_balance,
+            regressors = regressors
+        )
+        :C => Model(
+            iceflow = SIA2Dmodel(params; C = law),
             mass_balance = mass_balance,
             regressors = regressors
         )
@@ -337,6 +361,8 @@ function test_grad_finite_diff(
             end
         end
     end
+
+    return_setup && return (simulation, θ)
 
     loss_iceflow_grad!(dθ, _θ, _simulation) =
         if useSciMLSenseAlg
@@ -374,7 +400,18 @@ function test_grad_finite_diff(
         # `adaptive = false`, where the trajectory depends smoothly on θ.
         @assert !adaptive "A fixed step finite difference is only meaningful with adaptive = false."
         θ0 = deepcopy(θ)
-        for i in 1:min(n_fd_components, length(θ0))
+
+        # A zero gradient passes the relative comparisons below (the finite difference is zero
+        # too), so require a gradient above round off, relative to the loss
+        l0 = f(θ0, simulation)
+        @test maximum(abs, collect(dθ)) >
+              sqrt(eps(Sleipnir.Float)) * max(one(Sleipnir.Float), abs(l0))
+
+        # The largest components: for a gridded parameter the first ones are ice-free cells,
+        # where both sides are zero
+        fd_idx = sortperm(abs.(vec(collect(dθ))); rev = true)[1:min(
+            n_fd_components, length(θ0))]
+        for i in fd_idx
             θp = deepcopy(θ0)
             θp[i] = θ0[i] + fd_delta
             simulation.model.trainable_components.θ = θp
@@ -416,6 +453,183 @@ function test_grad_finite_diff(
     @test abs(ratio_FD) < thres_ratio
     @test abs(angle_FD) < thres_angle
     @test abs(relerr_FD) < thres_relerr
+end
+
+"""
+    test_initial_condition_filter_type_stability()
+
+Every `initial_condition_filter` must return a concrete float array, also under Zygote, with
+values on both sides of the threshold of `σ_zang` (see the comment in `σ_zang`). The gradient
+tests use `:softplus`, so `:Zang1980` is checked here, with no solver.
+"""
+function test_initial_condition_filter_type_stability()
+    # Straddle the threshold: both branches have to be exercised in one broadcast.
+    x = [-5.0 0.0; 3.0 -2.0]
+
+    for f in (ODINN.σ_zang, v -> log(1 + exp(v)))
+        @test typeof(f.(x)) == Matrix{Float64}
+
+        seen = Ref{Any}(nothing)
+        g, = ODINN.Zygote.gradient(x) do t
+            y = f.(t)
+            ODINN.Zygote.ignore() do
+                seen[] = typeof(y)
+            end
+            sum(y)
+        end
+        @test isconcretetype(eltype(seen[]))
+        @test eltype(seen[]) <: AbstractFloat
+        # A widened eltype also costs the gradient outright, so assert it survives.
+        @test g isa AbstractMatrix
+        @test all(isfinite, g)
+    end
+end
+
+"""
+    test_observation_weights()
+
+Weights of the observations in the loss. Every observation must count: the first one and a
+single one used to get weight zero, so a first thickness survey or a single velocity map was
+silently ignored.
+"""
+function test_observation_weights()
+    tspan = (2010.0, 2020.0)
+    t_obs = [2010.0, 2012.0, 2016.0]
+
+    @test ODINN.observation_weights(:uniform, t_obs, tspan) == [1.0, 1.0, 1.0]
+    @test ODINN.observation_weights(:uniform, [2015.0], tspan) == [1.0]
+
+    w = ODINN.observation_weights(:time_span, t_obs, tspan)
+    @test w ≈ [1.0, 3.0, 6.0]
+    @test sum(w) ≈ tspan[2] - tspan[1]
+    @test ODINN.observation_weights(:time_span, [2015.0], tspan) ≈ [10.0]
+    # An observation outside tspan is never simulated, so it gets no weight
+    @test ODINN.observation_weights(:time_span, [2005.0, 2015.0], tspan) ≈ [0.0, 10.0]
+    @test isempty(ODINN.observation_weights(:time_span, Sleipnir.Float[], tspan))
+    @test_throws ArgumentError ODINN.observation_weights(:unknown, t_obs, tspan)
+
+    # The choice is read from the loss, also inside MultiLoss and LossHV
+    loss = MultiLoss(losses = (LossH(weighting = :time_span), LossV()), λs = (1.0, 1.0))
+    @test ODINN.observation_weighting(loss, :H) == :time_span
+    @test ODINN.observation_weighting(loss, :V) == :uniform
+    @test ODINN.observation_weighting(LossHV(), :H) == :uniform
+    @test isnothing(ODINN.observation_weighting(LossH(), :V))
+end
+
+"""
+    test_first_observation_counts()
+
+Changing the first ice thickness observation must change the loss. With the old weights,
+the time since the previous observation, the first one had weight zero and was ignored.
+"""
+function test_first_observation_counts()
+    simulation,
+    θ = test_grad_finite_diff(
+        ContinuousAdjoint(VJP_method = DiscreteVJP());
+        functional_inv = false, scalar = true, loss = LossH(), return_setup = true)
+    H_obs = simulation.glaciers[1].thicknessData.H
+    L₀ = ODINN.loss_iceflow_transient(θ, simulation, map)
+    H_obs[1] .+= 10.0
+    L₁ = ODINN.loss_iceflow_transient(θ, simulation, map)
+    H_obs[1] .-= 10.0
+    @test L₁ > L₀
+end
+
+"""
+    test_loss_or_inf()
+
+When the forward simulation fails, the loss is infinite and the line search of LBFGS takes a
+shorter step. Other errors must not be hidden. The loss below fails far from the minimum, like
+the forward simulation does when the first step of LBFGS is too large.
+"""
+function test_loss_or_inf()
+    solver_error = AssertionError("There was an error in the iceflow solver. Returned code is \"Unstable\"")
+    @test isinf(ODINN.loss_or_inf(θ -> throw(DomainError(θ, "out of range")), 1.0))
+    @test isinf(ODINN.loss_or_inf(θ -> throw(solver_error), 1.0))
+    # `pmap` wraps the error in a `CapturedException`, also when it runs in the main process
+    @test isinf(ODINN.loss_or_inf(θ -> ODINN.pmap(x -> throw(DomainError(x, "diverged")), [θ]), 1.0))
+    @test_throws CapturedException ODINN.loss_or_inf(
+        θ -> ODINN.pmap(x -> x + nothing, [θ]), 1.0)
+    @test_throws MethodError ODINN.loss_or_inf(θ -> θ + nothing, 1.0)
+    @test_throws AssertionError ODINN.loss_or_inf(θ -> @assert(false, "other"), 1.0)
+
+    f(x) = any(abs.(x) .> 5) ? throw(DomainError(x, "diverged")) : 1e3 * sum(abs2, x .- 1)
+    g!(G, x) = (G .= 2e3 .* (x .- 1))
+    optimizer = Optim.LBFGS(linesearch = ODINN.LineSearches.BackTracking())
+    # The first step, x - g, is at 2000, so without the `Inf` the optimization fails
+    @test_throws DomainError Optim.optimize(f, g!, zeros(2), optimizer)
+    res = Optim.optimize(x -> ODINN.loss_or_inf(f, x), g!, zeros(2), optimizer)
+    @test Optim.minimum(res) < 1e-8
+    @test Optim.minimizer(res) ≈ ones(2) atol = 1e-4
+end
+
+"""
+    test_loss_time_window_guard()
+
+`LossAvgV` must fail at `Inversion` construction, with a clear message, when the velocity
+observation period is not inside `tspan`. Before, it failed deep inside the first gradient
+call with `invalid index: nothing`. Only `tspan`, `rgi_id` and the velocity dates are read,
+so a small stand-in for the simulation is enough.
+"""
+function test_loss_time_window_guard()
+    vd = (; date1 = [ODINN.Sleipnir.Dates.DateTime(2017, 1, 1)],
+        date2 = [ODINN.Sleipnir.Dates.DateTime(2018, 1, 1)])
+    sim(tspan) = (; parameters = (; simulation = (; tspan = tspan)),
+        glaciers = [(; rgi_id = "RGI60-11.01450", velocityData = vd)])
+    loss = MultiLoss(losses = (LossH(), LossAvgV()), λs = (1.0, 1.0))
+
+    @test isnothing(ODINN.check_loss_time_window(loss, sim((2016.0, 2019.0))))
+    @test_throws ArgumentError ODINN.check_loss_time_window(loss, sim((2010.0, 2017.5)))
+    @test_throws ArgumentError ODINN.check_loss_time_window(loss, sim((2017.5, 2019.0)))
+    # Losses that need no time window are not affected
+    @test isnothing(ODINN.check_loss_time_window(LossH(), sim((2010.0, 2012.0))))
+end
+
+"""
+    test_initial_thickness_regularization_backward()
+
+Check the manual `backward_loss` of `InitialThicknessRegularization` against Zygote and a
+central finite difference of its own forward `loss`, with no solver in the comparison.
+
+`θ.IC` is stored scaled by `H₀_scale`, so `∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC`, with the
+derivative of the filter. The joint A + IC test in Core8 cannot check this: the
+regularization is a small part of that gradient.
+"""
+function test_initial_thickness_regularization_backward()
+    simulation,
+    θ = test_grad_finite_diff(
+        ContinuousAdjoint(VJP_method = DiscreteVJP());
+        functional_inv = false, scalar = false, train_initial_conditions = true,
+        loss = MultiLoss(
+            losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (1.0, 1.0)),
+        return_setup = true)
+    glacier = simulation.glaciers[1]
+    # With a scale near 1 a missing chain-rule factor would go unnoticed
+    @test ODINN.H₀_scale(glacier) > 10
+
+    reg = InitialThicknessRegularization(2010.0)
+    nrm = Sleipnir.Float(prod(size(glacier.H₀)))
+    Δtj = (; H = 0.0, V = 0.0)
+    fwd(p) = ODINN.loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, p, simulation, nrm, Δtj)
+    manual = ODINN.backward_loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, θ, simulation, nrm, Δtj)[2]
+    zygote, = ODINN.Zygote.gradient(fwd, θ)
+
+    # getproperty returns a view, θ.IC[sym] would return a copy
+    icview(p) = vec(getproperty(p.IC, Symbol("1")))
+    m, z = icview(manual), icview(zygote)
+    @test norm(m .- z) / norm(z) < 1e-10
+
+    for k in sortperm(abs.(z); rev = true)[1:5]
+        h = 1e-6 * max(abs(icview(θ)[k]), 1.0)
+        pp = copy(θ)
+        icview(pp)[k] += h
+        pm = copy(θ)
+        icview(pm)[k] -= h
+        fd = (fwd(pp) - fwd(pm)) / (2h)
+        @test abs(m[k] - fd) / abs(fd) < 1e-6
+    end
 end
 
 """

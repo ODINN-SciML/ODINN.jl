@@ -61,10 +61,10 @@ weight in `lossType.λs`. The final loss is the sum of these weighted contributi
   - `θ`: Model parameters used in the simulation.
   - `simulation`: Simulation object providing necessary context for loss evaluation.
   - `normalization::F`: Normalization factor applied within each individual loss.
-  - `Δt`: Named tuple containing the time step to use for the approximation of continuous in time loss terms.
-    For example if `LossH` is used, there must be a term `Δt.H` containing the time step since the last
-    computation of the ice thickness loss term. If the current time `t` where the loss is evaluated does not
-    correspond to a time step of the `LossH` term, then the value of `Δt.H` has no impact.
+  - `Δt`: Named tuple with the weight of the observation at time `t` for each loss term, see
+    [`observation_weights`](@ref). For example if `LossH` is used, there must be a term `Δt.H`
+    with the weight of the ice thickness observation at `t`. If there is no such observation at
+    `t`, then the value of `Δt.H` has no impact.
 
 # Returns
 
@@ -131,10 +131,10 @@ and summed to form the total gradient.
   - `θ`: Model parameters used in the simulation.
   - `simulation`: Simulation object providing necessary context for gradient computation.
   - `normalization::F`: Normalization factor applied within each individual loss.
-  - `Δt`: Named tuple containing the time step to use for the approximation of continuous in time loss terms.
-    For example if `LossH` is used, there must be a term `Δt.H` containing the time step since the last
-    computation of the ice thickness loss term. If the current time `t` where the loss is evaluated does not
-    correspond to a time step of the `LossH` term, then the value of `Δt.H` has no impact.
+  - `Δt`: Named tuple with the weight of the observation at time `t` for each loss term, see
+    [`observation_weights`](@ref). For example if `LossH` is used, there must be a term `Δt.H`
+    with the weight of the ice thickness observation at `t`. If there is no such observation at
+    `t`, then the value of `Δt.H` has no impact.
 
 # Returns
 
@@ -184,6 +184,13 @@ function loss_uses_velocity(lossType::MultiLoss)
         loss_uses_velocity(l)
     end
     )
+end
+function observation_weighting(lossType::MultiLoss, var::Symbol)
+    for l in lossType.losses
+        w = observation_weighting(l, var)
+        isnothing(w) || return w
+    end
+    return nothing
 end
 function discreteLossSteps(lossType::MultiLoss, tspan)
     ts = map(lossType.losses) do l

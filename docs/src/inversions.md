@@ -32,6 +32,8 @@ The answer depends on which adjoint method is used (see [Sensitivity analysis](s
   - **Manual adjoints** (`ContinuousAdjoint`, `DiscreteAdjoint`): Inversion is implemented for `A` (Glen flow rate factor) and `D` (diffusivity). These are selected through the `target` option of `UDEparameters` (`target = :A`, the default, or `target = :D`), which internally picks the hand-coded expressions of how the target quantity enters the PDE Jacobians.
   - **`SciMLSensitivityAdjoint`**: Can invert any parameter that is wired into `TrainableComponents` as a `Law` — including the basal sliding coefficient `C` — because Zygote + SciMLSensitivity differentiate through the entire ODE automatically, without needing a custom target. No `SIA2D_C_target` is needed in this path.
 
+With a velocity loss and a sliding coefficient `C > 0`, the surface velocity includes the sliding term. The manual adjoints take it into account for the targets `A` and `D`, but not for `SIA2D_D_hybrid_target`: use `SciMLSensitivityAdjoint` for that one.
+
 ### Classical inversions tutorial
 
 The [classical inversion tutorial](./classical_inversion.md) provides an example on how to use these methods to invert in a scalar or gridded way a parameter of the Shallow Ice Approximation.
@@ -55,6 +57,8 @@ model = Model(
 From an optimization perspective, the computation of the gradients of the loss function with respect to the initial condition is simply given by the value of the adjoint variable at the initial time, which is part of the standard inversion pipeline of ODINN and it does not add any extra computational overhead.
 
 Once the model has been trained, the value of the initialization can be computed directly from the optimized parameter `θ` using the `evaluate_H₀` function on a specific glacier.
+
+Inside `θ`, the initial condition is not stored in metres. It is divided by a scale for each glacier (`H₀_scale`, the maximum initial ice thickness), so that its values are of order one, like the other parameters. Always use `evaluate_H₀` to get the ice thickness in metres, and don't read `θ.IC` directly. Note that the learning rate of the optimizer acts on these scaled values.
 
 ## Functional inversions
 

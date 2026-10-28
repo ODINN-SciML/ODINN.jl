@@ -84,6 +84,11 @@ mutable struct InitialCondition{
             @error "Strategy for initialization of ice thicknesses not found."
         end
 
+        # θ.IC is stored in units of each glacier's own H₀_scale, not raw metres -- see its
+        # docstring in InitialCondition_utils.jl for why. evaluate_H₀/evaluate_∂H₀ convert
+        # back using the same H₀_scale(glaciers[i]), so this must match it exactly.
+        initial_condition = NamedTuple{initial_condition_type}(
+            Tuple(H ./ H₀_scale(glaciers[i]) for (i, H) in enumerate(initial_condition)))
         θ = ComponentVector{ft}(θ = initial_condition)
         new{typeof(θ)}(θ)
     end
