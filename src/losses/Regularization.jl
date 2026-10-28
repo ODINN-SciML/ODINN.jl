@@ -294,8 +294,21 @@ function backward_loss(
     return ∂Reg∂H * Δt.V, ∂Reg∂θ * Δt.V
 end
 
+# Regularizations of a gridded parameter, `A` or `C`, evaluated in physical units
+const GriddedParameterRegularization = Union{RheologyRegularization, SlidingRegularization}
+
+# Part of θ with the gridded parameter, and the bounds of its tanh map (the same as in
+# `LawA` and `LawC`)
+function gridded_parameter(::RheologyRegularization, θ, physical)
+    (θ.A, physical.minA, physical.maxA)
+end
+# The lower bound of LawC is always 0
+function gridded_parameter(::SlidingRegularization, θ, physical)
+    (θ.C, zero(physical.maxC), physical.maxC)
+end
+
 function loss(
-        regType::RheologyRegularization,
+        regType::GriddedParameterRegularization,
         H::Matrix{F},
         H_ref,
         V_ref, Vx_ref, Vy_ref,
@@ -309,20 +322,19 @@ function loss(
     if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        min_A = simulation.parameters.physical.minA
-        max_A = simulation.parameters.physical.maxA
+        θ_p, lo, hi = gridded_parameter(regType, θ, simulation.parameters.physical)
 
         key = Symbol("$(glacier_idx)")
-        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        field = @. lo+(hi-lo)*(tanh.(θ_p[key])+1)/2
         mask = trues(size(H) .- 1)
 
-        return loss(regType.reg, A, Δx, Δy, mask, normalization)
+        return loss(regType.reg, field, Δx, Δy, mask, normalization)
     else
         return 0.0
     end
 end
 function backward_loss(
-        regType::RheologyRegularization,
+        regType::GriddedParameterRegularization,
         H::Matrix{F},
         H_ref,
         V_ref, Vx_ref, Vy_ref,
@@ -336,72 +348,16 @@ function backward_loss(
     if at_start(t, simulation, glacier_idx)
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        min_A = simulation.parameters.physical.minA
-        max_A = simulation.parameters.physical.maxA
+        θ_p, lo, hi = gridded_parameter(regType, θ, simulation.parameters.physical)
 
         key = Symbol("$(glacier_idx)")
-        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        field = @. lo+(hi-lo)*(tanh.(θ_p[key])+1)/2
         mask = trues(size(H) .- 1)
         ∂L∂θ = zero(θ)
-        ∂L∂θ.A[key] = backward_loss(regType.reg, A, Δx, Δy, mask, normalization) .*
-                      (max_A-min_A) .* (1 .- (tanh.(θ.A[key])) .^ 2) ./ 2
-
-        return zero(H), ∂L∂θ
-    else
-        return zero(H), zero(θ)
-    end
-end
-
-function loss(
-        regType::SlidingRegularization,
-        H::Matrix{F},
-        H_ref,
-        V_ref, Vx_ref, Vy_ref,
-        t::F,
-        glacier_idx::Integer,
-        θ,
-        simulation,
-        normalization::F,
-        Δt
-) where {F <: AbstractFloat}
-    if at_start(t, simulation, glacier_idx)
-        glacier = simulation.glaciers[glacier_idx]
-        Δx, Δy = glacier.Δx, glacier.Δy
-        max_C = simulation.parameters.physical.maxC
-
-        key = Symbol("$(glacier_idx)")
-        # Same tanh mapping as LawC, whose lower bound is always 0
-        C = @. max_C*(tanh.(θ.C[key])+1)/2
-        mask = trues(size(H) .- 1)
-
-        return loss(regType.reg, C, Δx, Δy, mask, normalization)
-    else
-        return 0.0
-    end
-end
-function backward_loss(
-        regType::SlidingRegularization,
-        H::Matrix{F},
-        H_ref,
-        V_ref, Vx_ref, Vy_ref,
-        t::F,
-        glacier_idx::Integer,
-        θ,
-        simulation,
-        normalization::F,
-        Δt
-) where {F <: AbstractFloat}
-    if at_start(t, simulation, glacier_idx)
-        glacier = simulation.glaciers[glacier_idx]
-        Δx, Δy = glacier.Δx, glacier.Δy
-        max_C = simulation.parameters.physical.maxC
-
-        key = Symbol("$(glacier_idx)")
-        C = @. max_C*(tanh.(θ.C[key])+1)/2
-        mask = trues(size(H) .- 1)
-        ∂L∂θ = zero(θ)
-        ∂L∂θ.C[key] = backward_loss(regType.reg, C, Δx, Δy, mask, normalization) .*
-                      max_C .* (1 .- (tanh.(θ.C[key])) .^ 2) ./ 2
+        # `getproperty` gives a view, so this writes into ∂L∂θ
+        ∂L∂θ_p, _, _ = gridded_parameter(regType, ∂L∂θ, simulation.parameters.physical)
+        ∂L∂θ_p[key] = backward_loss(regType.reg, field, Δx, Δy, mask, normalization) .*
+                      (hi-lo) .* (1 .- (tanh.(θ_p[key])) .^ 2) ./ 2
 
         return zero(H), ∂L∂θ
     else
@@ -510,5 +466,4 @@ function discreteLossSteps(lossType::InitialThicknessRegularization, tspan)
     [something(
         lossType.t₀, tspan[1])]
 end
-discreteLossSteps(lossType::RheologyRegularization, tspan) = [tspan[1]]
-discreteLossSteps(lossType::SlidingRegularization, tspan) = [tspan[1]]
+discreteLossSteps(lossType::GriddedParameterRegularization, tspan) = [tspan[1]]
