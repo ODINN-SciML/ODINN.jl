@@ -251,7 +251,8 @@ end
     create_results(θ, simulation::Inversion, mappingFct; processVelocity::Union{Nothing, Function} = nothing)
 
 Given the parameters θ, solve the iceflow problem for all the glaciers and aggregate
-the results for all of them.
+the results for all of them. The bed of each `Results` is the bed of the model, which is not
+`glacier.B` when the bed is inverted.
 This function is typically used at the end of a training once θ has been optimized
 and one wants to run one last forward simulation in order to retrieve statistics
 about each of the iceflow problems.
@@ -268,12 +269,19 @@ function create_results(θ, simulation::Inversion, mappingFct;
     simulation.model.trainable_components.θ = θ
     simulations = generate_simulation_batches(simulation)
     results = mappingFct(simulations) do simulation
-        container = InversionBinder(simulation, simulation.model.trainable_components.θ)
-        [_batch_iceflow_UDE(
-             container, glacier_idx,
-             define_iceflow_prob(simulation.model.trainable_components.θ, simulation, glacier_idx);
-             processVelocity = processVelocity
-         ) for glacier_idx in 1:length(container.simulation.glaciers)]
+        θ_batch = simulation.model.trainable_components.θ
+        container = InversionBinder(simulation, θ_batch)
+        [begin
+             result = _batch_iceflow_UDE(
+                 container, glacier_idx,
+                 define_iceflow_prob(θ_batch, simulation, glacier_idx);
+                 processVelocity = processVelocity
+             )
+             # The bed of the results is the one of the model, not `glacier.B`, when it is inverted
+             result.B = Matrix{eltype(result.B)}(Huginn.bed(simulation, glacier_idx, θ_batch))
+             result
+         end
+         for glacier_idx in 1:length(container.simulation.glaciers)]
     end
     results = merge_batches(results)
     return results

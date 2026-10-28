@@ -11,8 +11,11 @@ a single differentiable loss function.
 
 Each data term is a mean of `(misfit / σ)²` and each prior a mean of `(|D a| / σ)²`, so all
 the terms are about 1 when the model is as far from the data or the prior as their
-uncertainty. The weights are then only a relative importance, and are 1 by default. Use
+uncertainty. The weights `λs` of the terms are then only a relative importance, and are 1 by default. Use
 [`loss_terms`](@ref) to see the value of each term.
+
+It is the general way to combine losses. For only a thickness and a velocity term,
+[`LossHV`](@ref) is a shorter way to write the same loss.
 
 # Keyword Arguments (Constructor)
 

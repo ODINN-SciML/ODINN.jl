@@ -241,14 +241,15 @@ end
 """
     outline_dates(simulation)
 
-Date of the RGI outline of each glacier (`nothing` if it is not known, for example with prepro
-data made before Gungnir wrote it), see `Sleipnir.outline_date`.
+Date of the RGI outline of each glacier, see `Sleipnir.outline_date`: `nothing` if it is not
+known (for example with prepro data made before Gungnir wrote it), and `missing` for a glacier
+without prepro data (not in `rgi_paths`, for example a synthetic glacier).
 """
 function outline_dates(simulation)
     rgi_paths = simulation.parameters.simulation.rgi_paths
     return [haskey(rgi_paths, g.rgi_id) ?
             Sleipnir.outline_date(g.rgi_id, simulation.parameters) :
-            nothing for g in simulation.glaciers]
+            missing for g in simulation.glaciers]
 end
 
 """
@@ -257,23 +258,26 @@ end
 The outline of the glacier is a hard constraint of `H₀`, which is right if it is the glacier at the
 start of the run. This compares the date of the outline of each glacier with its start, and
 informs when the date is unknown and warns when it is too far (see [`outline_date_status`](@ref)).
+Glaciers without prepro data (`missing` date) are skipped.
 """
 function check_outline_date(simulation, dates = outline_dates(simulation))
     unknown, apart = String[], String[]
     for (i, glacier) in enumerate(simulation.glaciers)
+        ismissing(dates[i]) && continue
         t₀ = glacier_tspan(simulation, i)[1]
         status = outline_date_status(dates[i], t₀)
         status == :unknown && push!(unknown, String(glacier.rgi_id))
         status == :mismatch && push!(apart,
-            "$(glacier.rgi_id) (outline $(round(dates[i]; digits = 2)), start $(round(t₀; digits = 2)))")
+            "$(glacier.rgi_id) (outline $(round(dates[i]; digits = 2)), \
+            start $(round(t₀; digits = 2)))")
     end
     isempty(unknown) ||
         @info "The date of the outline is not in the data of $(join(unknown, ", ")) \
-(Gungnir writes it): it is taken as the start of the run."
+            (Gungnir writes it): it is taken as the start of the run."
     isempty(apart) ||
         @warn "The outline is more than $(OUTLINE_DATE_TOLERANCE) years from the \
-start of the run: $(join(apart, ", ")). `H₀` is zero outside the outline and at least \
-`min_thickness` inside it, which is wrong if the glacier changed much."
+            start of the run: $(join(apart, ", ")). `H₀` is zero outside the outline and at \
+            least `min_thickness` inside it, which is wrong if the glacier changed much."
     return nothing
 end
 

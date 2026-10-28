@@ -619,6 +619,10 @@ function test_align_start_in_inversion()
         ContinuousAdjoint(VJP_method = DiscreteVJP());
         functional_inv = false, scalar = false, train_initial_conditions = true,
         train_bed = true, return_setup = true)
+    # A time aggregated loss is ignored inside a LossHV, so it is refused
+    @test isnothing(ODINN.check_loss(LossHV(), simulation))
+    @test_throws ArgumentError ODINN.check_loss(LossHV(vLoss = LossAvgV()), simulation)
+    @test_throws ArgumentError ODINN.check_loss(LossHV(hLoss = LossS()), simulation)
 end
 
 """
@@ -654,7 +658,7 @@ function test_free_bed()
     # The laws of the gridded A and C read their parameters the same way
     @test (@inferred ODINN.glacier_params(θ.A, 1)) isa AbstractArray
     @test @inferred(ODINN.bed_is_free(θ, 1))
-    @test (@inferred Huginn.bed(simulation, 1, θ)) isa Matrix{Float64}
+    @test (@inferred Huginn.bed(simulation, 1, θ)) isa Matrix{Sleipnir.Float}
     # `scale_H = 0` (the default) is the maximum thickness of each glacier. With a number, θ.IC
     # is the same thickness divided by that number
     @test (IC.scale_H, IC.scale_S) == (0.0, 5.0)
@@ -712,15 +716,21 @@ function test_free_bed()
 
     # The date of the outline is compared with the start of the run
     @test ODINN.outline_date_status(nothing, 2000.1) == :unknown
-    # RGI 6 (2003.6) with NASADEM (2000.1) is the typical case: 3.5 years, no warning
+    # RGI 6 in the Alps (2003.6) with NASADEM (2000.1): 3.5 years, no warning
     @test ODINN.outline_date_status(2003.6, 2000.1) == :match
     @test ODINN.outline_date_status(2004.6, 2000.1) == :mismatch
     @test ODINN.outline_date_status(2004.6, 2000.1, 5) == :match
+    # The tolerance itself is still a match
+    @test ODINN.outline_date_status(2000.0 + ODINN.OUTLINE_DATE_TOLERANCE, 2000.0) == :match
     # Unknown date: information. Far date: warning. Close date: nothing.
-    @test_logs (:info, r"not in the data") ODINN.check_outline_date(simulation, [nothing])
-    t₀ = glacier_tspan(simulation, 1)[1]
-    @test_logs (:warn, r"more than") ODINN.check_outline_date(simulation, [t₀ + 5])
-    @test_logs ODINN.check_outline_date(simulation, [t₀ + 1])
+    n = length(simulation.glaciers)
+    t₀s = [glacier_tspan(simulation, i)[1] for i in 1:n]
+    @test_logs (:info, r"not in the data") ODINN.check_outline_date(
+        simulation, fill(nothing, n))
+    @test_logs (:warn, r"more than") ODINN.check_outline_date(simulation, t₀s .+ 5)
+    @test_logs ODINN.check_outline_date(simulation, t₀s .+ 1)
+    # A glacier without prepro data is skipped, with no message
+    @test_logs ODINN.check_outline_date(simulation, fill(missing, n))
     @test length(ODINN.outline_dates(simulation)) == length(simulation.glaciers)
 
     # The DEMs are the surface at the start and 2 m higher later, so a state that matches
@@ -738,6 +748,23 @@ function test_free_bed()
         (; H = 0.0, V = 0.0))
     @test R(reg) > 0
     @test R(reg_convex) < R(reg)
+
+    # The results of an inversion have the bed of the model, and not the one the glacier started from
+    results = ODINN.create_results(θ₁, simulation, map)
+    @test results[1].B ≈ Huginn.bed(simulation, 1, θ₁)
+    @test results[1].B != glacier.B
+    # The maps of the inverted fields are made from θ (the figures of the results are tested in
+    # Sleipnir): the bed is the one of θ, and the fields are only where there is ice
+    panels = ODINN.inverted_field_panels(simulation)
+    bed_panel = only(filter(p -> p.title == "Bed elevation", panels))
+    free = .!glacier.mask
+    @test bed_panel.data[free] ≈ Huginn.bed(simulation, 1, θ₁)[free]
+    @test all(isnan, bed_panel.data[glacier.mask])
+    H_panel = only(filter(p -> p.title == "Initial ice thickness", panels))
+    @test all(isnan, H_panel.data[.!(H₀ .> 0)])
+    # The figure itself is not drawn here (the first figure of a session takes ~20 s to compile)
+    empty!(simulation.results.simulation)
+    @test_throws ArgumentError plot_inverted_fields(simulation)
 
     # The free bed needs the surface loss
     @test_throws ArgumentError test_grad_finite_diff(SciMLSensitivityAdjoint();
@@ -805,8 +832,21 @@ function test_loss_terms()
     # Uncertainty of the thickness: a number of the loss, the data, or the default
     glacier = simulation.glaciers[1]
     t₁ = first(glacier.thicknessData.t)
-    @test ODINN.thickness_σ(LossH(), glacier, t₁) == 18.0
+    # Without an uncertainty in the data, it grows with the observed thickness
+    H₁ = glacier.thicknessData.H[1]
+    σ_H = ODINN.thickness_σ(LossH(), glacier, t₁)
+    @test σ_H ≈ sqrt.(ODINN.THICKNESS_σ_FLOOR^2 .+ (ODINN.THICKNESS_σ_RELATIVE .* H₁) .^ 2)
+    @test all(σ_H .>= ODINN.THICKNESS_σ_FLOOR)
+    @test maximum(σ_H[H₁ .> 0]) > minimum(σ_H[H₁ .> 0])
+    @test ODINN.default_σ(LossH(), [-5.0, 0.0, 100.0]) ≈
+          [ODINN.THICKNESS_σ_FLOOR, ODINN.THICKNESS_σ_FLOOR,
+        hypot(ODINN.THICKNESS_σ_FLOOR, 100 * ODINN.THICKNESS_σ_RELATIVE)]
+    @test eltype(ODINN.default_σ(LossH(), Float32[10, 20])) == Float32
     @test ODINN.thickness_σ(LossH(σ = 30.0), glacier, t₁) == 30.0
+    # A glacier without thickness observations (`Glacier2D(glacier; thicknessData = nothing)`
+    # keeps the existing data, so a stand-in with the two fields that `thickness_σ` reads is used)
+    no_data = (; thicknessData = nothing, rgi_id = glacier.rgi_id)
+    @test_throws ArgumentError ODINN.thickness_σ(LossH(), no_data, t₁)
     σ_map = fill(12.0, size(glacier.H₀))
     σ_map[1, 1] = NaN
     with_σ = Sleipnir.Glacier2D(glacier;
@@ -963,6 +1003,62 @@ function test_loss_time_window_guard()
         InitialThicknessRegularization(2010.0), sim((2016.0, 2019.0)))
 end
 
+# Prior on `H₀` itself (gradient, σ = 1). Unlike the default prior on the change `H₀ - glacier.H₀`,
+# it is not zero at the start, so the gradient tests check its gradient too
+function plain_ic_prior(t₀ = nothing)
+    InitialThicknessRegularization(t₀;
+        reg = TikhonovRegularization(), correction = false)
+end
+
+"""
+    test_regularization_defaults()
+
+Defaults of `InitialThicknessRegularization` and `BedRegularization`: a relative `σ`, unless you
+give your own `σ` or `reg`.
+"""
+function test_regularization_defaults()
+    ic = InitialThicknessRegularization()
+    @test ic.reg.operator == :laplacian
+    @test ic.correction
+    @test ic.σ_relative == 0.3
+    # Your own regularization keeps its σ, and `σ_relative` has to be asked for
+    own = InitialThicknessRegularization(reg = TikhonovRegularization(σ = 2.0))
+    @test isnothing(own.σ_relative) && own.reg.σ == 2.0
+    @test InitialThicknessRegularization(reg = TikhonovRegularization(), σ_relative = 0.5).σ_relative ==
+          0.5
+    @test !InitialThicknessRegularization(correction = false).correction
+
+    bed = BedRegularization()
+    @test bed.reg.operator == :gradient
+    @test bed.σ_relative == 1.0
+    @test BedRegularization(operator = :laplacian).reg.operator == :laplacian
+    # A `σ` or a `reg` of your own is used as it is
+    fixed = BedRegularization(σ = 0.5)
+    @test isnothing(fixed.σ_relative) && fixed.reg.σ == 0.5
+    own_bed = BedRegularization(reg = TikhonovRegularization(σ = 0.2))
+    @test isnothing(own_bed.σ_relative) && own_bed.reg.σ == 0.2
+    # Without `σ` and without a relative one, σ is 0.3 m/m
+    @test BedRegularization(σ_relative = nothing).reg.σ == 0.3
+    @test_throws ArgumentError BedRegularization(σ_relative = -1.0)
+
+    # The σ that a prior uses is σ_relative times the roughness of the starting field. The
+    # border is not glacier, so the Laplacian is exact on the glacier cells
+    n, Δ, k = 8, 10.0, 0.002
+    mask = falses(n, n)
+    mask[[1, n], :] .= true
+    mask[:, [1, n]] .= true
+    x = Δ .* (1:n)
+    glacier = (; Δx = Δ, Δy = Δ, mask,
+        B = [0.1 * xi for xi in x, _ in 1:n],              # slope of 0.1 m/m
+        H₀ = [0.5 * k * xi^2 for xi in x, _ in 1:n])       # Laplacian of k
+    @test ODINN.field_roughness(glacier.B, glacier) ≈ 0.1
+    @test ODINN.field_roughness(glacier.H₀, glacier; operator = :laplacian) ≈ k
+    @test ODINN.prior_σ(BedRegularization(), glacier) ≈ 0.1
+    @test ODINN.prior_σ(BedRegularization(σ_relative = 2.0), glacier) ≈ 0.2
+    @test ODINN.prior_σ(BedRegularization(σ = 0.5), glacier) == 0.5
+    @test ODINN.prior_σ(InitialThicknessRegularization(), glacier) ≈ 0.3 * k
+end
+
 """
     test_initial_thickness_regularization_backward()
 
@@ -981,13 +1077,13 @@ function test_initial_thickness_regularization_backward()
         ContinuousAdjoint(VJP_method = DiscreteVJP());
         functional_inv = false, scalar = false, train_initial_conditions = true,
         loss = MultiLoss(
-            losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (1.0, 1.0)),
+            losses = (LossH(), plain_ic_prior(2010.0)), λs = (1.0, 1.0)),
         return_setup = true)
     glacier = simulation.glaciers[1]
     # With a scale near 1 a missing chain-rule factor would go unnoticed
     @test ODINN.H₀_scale(glacier) > 10
 
-    reg = InitialThicknessRegularization(2010.0)
+    reg = plain_ic_prior(2010.0)
     nrm = Sleipnir.Float(prod(size(glacier.H₀)))
     Δtj = (; H = 0.0, V = 0.0)
     fwd(p) = ODINN.loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
@@ -1010,6 +1106,42 @@ function test_initial_thickness_regularization_backward()
         fd = (fwd(pp) - fwd(pm)) / (2h)
         @test abs(m[k] - fd) / abs(fd) < 1e-6
     end
+
+    # The same with the penalty on the change `H₀ - glacier.H₀`, at a θ away from the start
+    regc = InitialThicknessRegularization(2010.0; correction = true)
+    θc = copy(θ)
+    icview(θc) .+= 0.05 .* randn(MersenneTwister(1), length(icview(θc)))
+    fwdc(p) = ODINN.loss(regc, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, p, simulation, nrm, Δtj)
+    manualc = ODINN.backward_loss(regc, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, θc, simulation, nrm, Δtj)[2]
+    zygotec, = ODINN.Zygote.gradient(fwdc, θc)
+    @test norm(icview(manualc) .- icview(zygotec)) / norm(icview(zygotec)) < 1e-10
+    @test fwdc(θc) != fwd(θc)
+
+    # σ relative to the roughness of glacier.H₀: σ = σ_relative × roughness, so the penalty scales as 1/σ_relative²
+    regr(s) = InitialThicknessRegularization(2010.0;
+        reg = TikhonovRegularization(operator = :laplacian), correction = true, σ_relative = s)
+    fwdr(p,
+        s) = ODINN.loss(regr(s), glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, p, simulation, nrm, Δtj)
+    @test fwdr(θc, 0.3) ≈ 4 * fwdr(θc, 0.6)
+    manualr = ODINN.backward_loss(
+        regr(0.3), glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, θc, simulation, nrm, Δtj)[2]
+    zygoter, = ODINN.Zygote.gradient(p -> fwdr(p, 0.3), θc)
+    @test norm(icview(manualr) .- icview(zygoter)) / norm(icview(zygoter)) < 1e-10
+    @test_throws ArgumentError InitialThicknessRegularization(; σ_relative = -1.0)
+
+    # The default prior (Laplacian of the change, σ = 0.3 × roughness) at a θ away from the start
+    regd = InitialThicknessRegularization(2010.0)
+    fwdd(p) = ODINN.loss(regd, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, p, simulation, nrm, Δtj)
+    manuald = ODINN.backward_loss(regd, glacier.H₀, nothing, nothing, nothing, nothing,
+        2010.0, 1, θc, simulation, nrm, Δtj)[2]
+    zygoted, = ODINN.Zygote.gradient(fwdd, θc)
+    @test norm(icview(manuald) .- icview(zygoted)) / norm(icview(zygoted)) < 1e-10
+    @test fwdd(θ) < fwdd(θc)
 end
 
 """

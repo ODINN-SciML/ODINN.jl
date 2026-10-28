@@ -71,11 +71,14 @@ pixels of `((H - H_obs) / σ)²`, see [`L2Sum`](@ref).
 # Fields
 
   - `loss::L`: Type of loss to use for the ice thickness. Default is `L2Sum()`.
-  - `weighting::Symbol`: How each ice thickness observation is weighted in the loss, see
-    [`observation_weights`](@ref). Default is `:uniform`.
+  - `weighting::Symbol`: How the observation times count in the loss, see
+    [`observation_weights`](@ref). With `:uniform` (default) each observation time counts once,
+    which suits a few surveys. With `:time_span` each one counts as much as the time it covers,
+    which suits dense time series.
   - `σ::S`: Uncertainty of the observed ice thickness, in m. With `nothing` (default), it is
-    the uncertainty of each cell given by the data (`thicknessData.σ`), and 18 m if the data
-    has none. A number replaces it.
+    the uncertainty of each cell given by the data (`thicknessData.σ`). If the data has none,
+    it is a value that grows with the observed thickness, see [`default_σ`](@ref). A number
+    replaces it.
 """
 @kwdef struct LossH{L <: AbstractSimpleLoss, S <: Union{Nothing, Real}} <: AbstractLoss
     loss::L = L2Sum()
@@ -96,8 +99,10 @@ pixels of `((V - V_obs) / σ)²`, see [`L2Sum`](@ref).
     Options include :xy for both x and y component, and :abs for the norm/magnitude of the velocity.
     With `:xy` the loss is the sum of the terms of the two components, so a misfit of σ in both
     gives 2, and with `:abs` it gives 1.
-  - `weighting::Symbol`: How each ice velocity observation is weighted in the loss, see
-    [`observation_weights`](@ref). Default is `:uniform`.
+  - `weighting::Symbol`: How the observation times count in the loss, see
+    [`observation_weights`](@ref). With `:uniform` (default) each observation time counts once,
+    which suits one velocity map or a few. With `:time_span` each one counts as much as the
+    time it covers, so many maps close in time do not dominate.
   - `σ::S`: Uncertainty of the observed velocity, in m/yr. With `nothing` (default), it is the
     error of the velocity map given by the data (`velocityData.vabs_error`), and 10 m/yr if the
     data has none. A number replaces it.
@@ -109,34 +114,51 @@ pixels of `((V - V_obs) / σ)²`, see [`L2Sum`](@ref).
     σ::S = nothing
 end
 
+# σ(H)² = floor² + (relative * H)², for the thickness data that has no uncertainty
+const THICKNESS_σ_FLOOR = 14.0
+const THICKNESS_σ_RELATIVE = 0.09
+
 """
     default_σ(lossType)
+    default_σ(lossType::LossH, H)
 
 Uncertainty used by a data loss when neither the loss nor the data give one.
 
-  - `LossH`: 18 m. This is the error of a cell of 137 m measured on the Aletsch glacier with two
-    independent survey campaigns. It is larger at a coarser resolution.
+  - `LossH`: it depends on the observed thickness `H` (in m), cell by cell,
+    ``σ(H) = \\sqrt{σ_0^2 + (r H)^2}``, with ``σ_0`` = $(THICKNESS_σ_FLOOR) m and ``r`` = $(round(100 * THICKNESS_σ_RELATIVE; digits = 1))%.
+    It is the rms of the difference between independent surveys of the same glacier in the same
+    cell, as a function of the thickness, fitted on GlaThiDa (about 300 glaciers, cells of 68 to
+    548 m; the fitted values change little with the size of the cell). A thin glacier then gets a
+    smaller uncertainty than a thick one. The typical difference is smaller, about 7 m at any
+    thickness, but a minority of cells differ by tens of metres, more where the ice is thick, and
+    they dominate the rms. As the misfit is squared, the rms is the value that makes the term
+    about 1.
   - `LossV`, `LossAvgV`: 10 m/yr.
   - `LossDhdt`: 0.2 m/yr.
 """
 function default_σ end
 
-default_σ(::LossH) = 18.0
+function default_σ(::LossH, H::AbstractArray{T}) where {T <: AbstractFloat}
+    return sqrt.(T(THICKNESS_σ_FLOOR)^2 .+
+                 (T(THICKNESS_σ_RELATIVE) .* max.(H, zero(T))) .^ 2)
+end
 default_σ(::LossV) = 10.0
 
 """
     thickness_σ(lossType::LossH, glacier, t)
 
 Uncertainty of the ice thickness observation of `glacier` at time `t`: `lossType.σ` if it is a
-number, else the uncertainty per cell given by the data, else [`default_σ`](@ref). Cells
-without a valid uncertainty (not observed) get 1, which has no effect since they are not used.
+number, else the uncertainty per cell given by the data, else the one that depends on the
+observed thickness, see [`default_σ`](@ref). Cells without a valid uncertainty (not observed)
+get 1, which has no effect since they are not used.
 """
 function thickness_σ(lossType::LossH, glacier, t)
     isnothing(lossType.σ) || return lossType.σ
     data = glacier.thicknessData
-    σs = isnothing(data) ? nothing : data.σ
-    isnothing(σs) && return default_σ(lossType)
-    σ = σs[findfirst(==(t), data.t)]
+    isnothing(data) && throw(ArgumentError(
+        "LossH needs the thickness observations `thicknessData` of glacier $(glacier.rgi_id)."))
+    k = findfirst(==(t), data.t)
+    σ = isnothing(data.σ) ? default_σ(lossType, data.H[k]) : data.σ[k]
     return ifelse.(isfinite.(σ) .& (σ .> 0), σ, one(eltype(σ)))
 end
 
@@ -173,6 +195,13 @@ It also has a scaling coefficient that balances the ice velocity term in the los
 
 with ``\\hat V`` computed from ``\\hat H`` for the SIA.
 
+`LossHV(scaling = s)` is the same loss as
+`MultiLoss(losses = (LossH(), LossV()), λs = (1.0, s))`, only shorter. Use
+[`MultiLoss`](@ref) when you need more terms (a regularization, or a time aggregated loss such
+as `LossS`, which a `LossHV` cannot hold: the `Inversion` stops with an error), a weight for the
+thickness, or the value of the thickness and velocity terms separately in
+[`loss_terms`](@ref).
+
 # Fields
 
   - `hLoss::LH`: Type of loss to use for the ice thickness. Default is `LossH()`.
@@ -199,10 +228,14 @@ end
 
 Mean over the pixels of `mask` of the squared residual of `a` with respect to the data `b`,
 see [`L2Sum`](@ref) and [`LogSum`](@ref).
-For the logarithmic loss, see Morlighem, M. et al., "Spatial patterns of basal drag inferred
-using control methods from a full-Stokes and simpler models for Pine Island Glacier, West
-Antarctica". Geophys. Res. Lett. 37, (2010). It has been shown that this loss function
-enables robust estimation of drag coefficient.
+The logarithmic loss follows Morlighem et al. (2010).
+
+# References
+
+  - Morlighem, M., Rignot, E., Seroussi, H., Larour, E., Ben Dhia, H. and Aubry, D. (2010).
+    Spatial patterns of basal drag inferred using control methods from a full-Stokes and
+    simpler models for Pine Island Glacier, West Antarctica. Geophysical Research Letters,
+    37, L14502. doi:10.1029/2010GL043853
 """
 function loss(
         lossType::Union{L2Sum, LogSum},

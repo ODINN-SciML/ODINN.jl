@@ -13,10 +13,11 @@ Per glacier initial condition container: the initial geometry of each glacier th
 inversion finds.
 
 With `bed = :free` (default), the initial geometry is inverted. Its two free fields are the ice
-thickness `H₀` and the surface `S₀` at the start, as in IGM, and the bed follows,
-`B = S₀ - H₀`. The bed is the same at all times. `S₀` starts at the surface of the glacier
-(`glacier.S`, the DEM), so a [`LossS`](@ref) with a DEM at the start of the time window keeps
-it close to the data. The bed is free only with `SciMLSensitivityAdjoint`.
+thickness `H₀` and the surface `S₀` at the start (see Jouvet et al., 2022 and Jouvet, 2023 for
+a similar formulation), and the bed follows, `B = S₀ - H₀`. The bed is the same at all times.
+`S₀` starts at the surface of the glacier (`glacier.S`, the DEM), so a [`LossS`](@ref) with a
+DEM at the start of the time window keeps it close to the data. The bed is free only with
+`SciMLSensitivityAdjoint`.
 
 With `bed = :fixed`, only `H₀` is inverted, the bed is `glacier.B`, and the surface moves with
 `H₀`.
@@ -63,14 +64,22 @@ of the optimizer in metres (step = learning rate × scale). Use `ODINN.initial_t
     thickness of each glacier (`H₀_scale`).
   - `scale_S`: Scale of `S₀` in metres. Default is `5.0`.
   - `min_thickness`: Minimum of `H₀` in metres inside the outline of the glacier. Default is `1.0`. It needs `initial_condition_filter = :Zang1980` (default) or `:softplus` in `UDEparameters`; it is not used with `:identity`.
-    It is used with the `:Zang1980` and `:softplus` filters. Use `0.0` for no minimum.
+    Use `0.0` for no minimum.
 
 # Example
 
 ```julia
-InitialCondition(params, glaciers, :Millan22)                # bed = :free
+InitialCondition(params, glaciers)                           # :Farinotti19, bed = :free
 InitialCondition(params, glaciers, :Farinotti19; bed = :fixed)
 ```
+
+# References
+
+  - Jouvet, G. (2023). Inversion of a Stokes glacier flow model emulated by deep learning.
+    Journal of Glaciology, 69(273), 13-26. doi:10.1017/jog.2022.41
+  - Jouvet, G., Cordonnier, G., Kim, B., Lüthi, M., Vieli, A. and Aschwanden, A. (2022). Deep
+    learning speeds up ice flow modelling by several orders of magnitude. Journal of
+    Glaciology, 68(270), 651-664. doi:10.1017/jog.2021.120
 """
 mutable struct InitialCondition{
     ComponentVectorType <: ComponentVector,
@@ -107,9 +116,9 @@ mutable struct InitialCondition{
             "min_thickness must be zero or positive, got $(min_thickness)."))
         # Warn early: without a filter, H₀ can be negative and `min_thickness` is not used
         params.UDE.initial_condition_filter == :identity &&
-            @warn "`initial_condition_filter = \
-:identity`: H₀ can become negative, and `min_thickness` is not used. Use \
-`:Zang1980` (default) or `:softplus` in `UDEparameters`."
+            @warn "`initial_condition_filter = :identity`: H₀ can become negative, and \
+                `min_thickness` is not used. Use `:Zang1980` (default) or `:softplus` in \
+                `UDEparameters`."
         # Scaling factor
         gridScalingFactor = params.simulation.gridScalingFactor
         # Component Array type

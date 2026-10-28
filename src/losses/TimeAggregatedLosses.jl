@@ -311,15 +311,41 @@ The sum is over the `N` cells of the DEM where ice is allowed (`glacier.mask` is
 that have a value. So each DEM adds about 1 to the loss when the misfit is as large as its
 uncertainty. The DEMs outside the time window of the glacier are not used.
 
-With a free bed ([`InitialCondition`](@ref) with `bed = :free`), the DEMs constrain the
-surface, and the ice thickness observations then constrain the bed. A DEM at the start of the
+With a free bed ([`InitialCondition`](@ref) with `bed = :free`, its default), the DEMs constrain
+the surface, and the ice thickness observations then constrain the bed. An inversion that does
+not train an `InitialCondition` has no free bed. A DEM at the start of the
 time window is the misfit of the initial surface `S₀`. Only `SciMLSensitivityAdjoint`
 supports it.
 
 # Fields
 
-  - `σ_sys::F`: Uncertainty of all the DEMs that their product does not give, in m. For
-    example the penetration of the radar into snow and firn. Default is `5.0`.
+  - `σ_sys::F`: Uncertainty that the DEM products do not give, in m, added to the one of the
+    product (see the formula above). It stands for the penetration of the radar into snow and
+    firn and for the random error of a DEM that has no value per pixel (NASADEM). Default is
+    `5.0`, of the order of the values found in the literature. For the X-band (TanDEM-X) the
+    penetration is negligible below about 2500 m a.s.l. and about 4 m on average at 4000 m in
+    the Mont-Blanc area (Dehecq et al., 2016), and the bias reached 4 to 8 m in the accumulation
+    area of a large Alpine glacier (Bannwart et al., 2024). For the C-band (SRTM), heights up to
+    10 m too low were found at high elevation (Berthier et al., 2006), see also Gardelle et al.
+    (2012). The penetration is a bias, not noise, and it is about 0 at low elevation, so one
+    value for the whole glacier is a first approximation.
+
+# References
+
+  - Bannwart, J., Piermattei, L., Dussaillant, I., Krieger, L., Floricioiu, D., Berthier, E.,
+    Roeoesli, C., Machguth, H. and Zemp, M. (2024). Elevation bias due to penetration of
+    spaceborne radar signal on Grosser Aletschgletscher, Switzerland. Journal of Glaciology,
+    70, e1. doi:10.1017/jog.2024.37
+  - Berthier, E., Arnaud, Y., Vincent, C. and Rémy, F. (2006). Biases of SRTM in high-mountain
+    areas: Implications for the monitoring of glacier volume changes. Geophysical Research
+    Letters, 33, L08502. doi:10.1029/2006GL025862
+  - Dehecq, A., Millan, R., Berthier, E., Gourmelen, N., Trouvé, E. and Vionnet, V. (2016).
+    Elevation changes inferred from TanDEM-X data over the Mont-Blanc area: Impact of the
+    X-band interferometric bias. IEEE Journal of Selected Topics in Applied Earth Observations
+    and Remote Sensing, 9(8), 3870-3882. doi:10.1109/JSTARS.2016.2581482
+  - Gardelle, J., Berthier, E. and Arnaud, Y. (2012). Impact of resolution and radar penetration
+    on glacier elevation changes computed from DEM differencing. Journal of Glaciology, 58(208),
+    419-422. doi:10.3189/2012JoG11J175
 """
 @kwdef struct LossS{F <: AbstractFloat} <: TimeAggregatedLoss
     σ_sys::F = 5.0
@@ -521,6 +547,13 @@ function warn_empty_thickness_mask(lossType::LossH, simulation)
     end
 end
 function check_loss(lossType::LossHV, simulation)
+    # A time aggregated loss is not evaluated inside a `LossHV`: it would be silently ignored
+    for l in (lossType.hLoss, lossType.vLoss)
+        uses_loss(l, TimeAggregatedLoss) && throw(ArgumentError(
+            "LossHV cannot hold a time aggregated loss (LossS, LossAvgV or LossDhdt), because \
+            it would have no effect. Use a MultiLoss, for example \
+            MultiLoss(losses = (LossHV(), LossS()))."))
+    end
     check_loss(lossType.hLoss, simulation)
     check_loss(lossType.vLoss, simulation)
     return nothing
@@ -546,20 +579,16 @@ function warn_negligible_prior(lossType, name, scale, simulation)
 end
 
 # The regularizations of a gridded parameter need it to be trained
-function check_loss(lossType::SlidingRegularization, simulation)
+function check_loss(lossType::GriddedParameterRegularization, simulation)
     θ = simulation.model.trainable_components.θ
-    (!isnothing(θ) && haskey(θ, :C)) || throw(ArgumentError(
-        "SlidingRegularization needs `C` to be trained."))
-    warn_negligible_prior(lossType, "SlidingRegularization",
-        simulation.parameters.physical.maxC, simulation)
-    return nothing
-end
-function check_loss(lossType::RheologyRegularization, simulation)
-    θ = simulation.model.trainable_components.θ
-    (!isnothing(θ) && haskey(θ, :A)) || throw(ArgumentError(
-        "RheologyRegularization needs `A` to be trained."))
-    warn_negligible_prior(lossType, "RheologyRegularization",
-        simulation.parameters.physical.maxA, simulation)
+    physical = simulation.parameters.physical
+    key,
+    scale = lossType isa SlidingRegularization ? (:C, physical.maxC) :
+            (:A, physical.maxA)
+    name = nameof(typeof(lossType))
+    (!isnothing(θ) && haskey(θ, key)) || throw(ArgumentError(
+        "$(name) needs `$(key)` to be trained."))
+    warn_negligible_prior(lossType, name, scale, simulation)
     return nothing
 end
 function check_loss(lossType::BedRegularization, simulation)
@@ -637,19 +666,6 @@ function check_loss(lossType::InitialThicknessRegularization, simulation)
                 t₀ = $(lossType.t₀), outside the time window $(tspan) of glacier \
                 $(glacier.rgi_id), so it would be ignored. Use \
                 InitialThicknessRegularization() to apply it at the start of each glacier."))
-        end
-        # The correction is measured from glacier.H₀, so θ.IC should start there
-        if lossType.correction
-            θ = simulation.model.trainable_components.θ
-            haskey(θ, :IC) || throw(ArgumentError(
-                "InitialThicknessRegularization needs the initial condition to be trained."))
-            H₀ = initial_thickness(θ, simulation, i)
-            if norm(H₀ .- glacier.H₀) > 0.05 * norm(glacier.H₀)
-                @warn "InitialThicknessRegularization(correction = true) penalizes the change \
-                    from glacier.H₀, but the initial condition of glacier $(glacier.rgi_id) \
-                    starts more than 5% away from it. Use the same product for \
-                    `ice_thickness_source` and for `InitialCondition`."
-            end
         end
     end
 end
