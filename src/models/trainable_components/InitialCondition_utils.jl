@@ -1,15 +1,13 @@
 
 """
-    H₀_scale(glacier) -> Float64
+    H₀_scale(glacier)
 
-Per-glacier scale for θ.IC, in metres: θ.IC is stored as `H₀ / H₀_scale(glacier)`, not raw
-metres, so it sits at O(1) like θ.C rather than O(10-1500) -- otherwise a shared optimiser
-learning rate moves C freely but barely moves IC (Adam's step is scale-free). Per glacier,
-not a fixed constant, so a thin and a thick glacier both get steps proportional to their own
-thickness. Uses `glacier.H₀` since it's already available everywhere `evaluate_H₀`/
-`evaluate_∂H₀` are called; filters (`σ_zang`, `softplus`) still act on physical metres.
+Scale of θ.IC for each glacier, in metres (the maximum of `glacier.H₀`). θ.IC is stored as
+`H₀ / H₀_scale(glacier)`, so its values are of order one like the other parameters, and the
+same learning rate works for all of them. If `glacier.H₀` changes after `InitialCondition`
+is built, θ.IC no longer matches. The filters (`σ_zang`, `softplus`) act on metres.
 """
-H₀_scale(glacier) = max(maximum(glacier.H₀), 1.0)
+H₀_scale(glacier) = max(maximum(glacier.H₀), one(eltype(glacier.H₀)))
 
 """
     evaluate_H₀(
@@ -121,23 +119,9 @@ values following I. Zang, "A smoothing-out technique for min—max optimization"
   - `β::Real`: (optional) Parameter controlling the transition zone width. Default is 2.0.
 """
 function σ_zang(x; β = 2.0)
-    # Every branch must return the same type. The original returned the literal `0.0` below
-    # the threshold and `x` unchanged above it, which agree only when `x` is already a
-    # Float64. Under Zygote's broadcast the elements are `ForwardDiff.Dual`, so the two
-    # branches give `Float64` and `Dual`, `promote_typejoin` widens the result to
-    # `Matrix{Real}`, and that abstract state reaches the solver through `evaluate_H₀` and
-    # `define_iceflow_prob`.
-    #
-    # It needs elements on *both* sides of the threshold at once, so it stays hidden until
-    # the optimizer moves some θ.IC across `-β/2` mid-training. The consequences are bad in
-    # two different ways: with a stabilized solver, OrdinaryDiffEq derives its cache types
-    # from the state's bottom eltype, `one(Real)` is `1::Int64`, and ROCK2 builds its float
-    # tableau as `Int64[...]` -- `InexactError: Int64(0.410...)` hundreds of frames away;
-    # without one, Zygote simply returns *no gradient* for θ.IC and the initial condition
-    # silently stops training.
-    #
-    # `float(x)` up front commits every branch to one float type and keeps the function
-    # usable with Dual and tracked numbers.
+    # All the branches must return the same float type, also for Dual numbers under Zygote.
+    # Otherwise the state becomes a `Matrix{Real}`, ROCK2 fails with an `InexactError` and
+    # Zygote gives no gradient for θ.IC.
     fx = float(x)
     βf = oftype(fx, β)
     if fx < -βf / 2

@@ -207,7 +207,8 @@ function backward_loss(
         ∂L∂H = zero(H₀)
         ∂L∂θ = zero(θ)
         key = Symbol("$(glacier_idx)")
-        # Chain rule through the filter and the θ.IC scale: ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
+        # θ.IC is not H₀ itself: H₀ = positive(θ.IC ⋅ scale), with `positive` the
+        # `initial_condition_filter` (softplus or Zang). So ∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC
         ∂L∂H₀ = backward_loss(lossType.reg, H₀, Δx, Δy, mask, normalization)
         ∂H₀∂θ = evaluate_∂H₀(
             θ, glacier, simulation.parameters.UDE.initial_condition_filter, glacier_idx)
@@ -282,8 +283,21 @@ function backward_loss(
     return ∂Reg∂H * Δt.V, ∂Reg∂θ * Δt.V
 end
 
+# Regularizations of a gridded parameter, `A` or `C`, evaluated in physical units
+const GriddedParameterRegularization = Union{RheologyRegularization, SlidingRegularization}
+
+# Part of θ with the gridded parameter, and the bounds of its tanh map (the same as in
+# `LawA` and `LawC`)
+function gridded_parameter(::RheologyRegularization, θ, physical)
+    (θ.A, physical.minA, physical.maxA)
+end
+# The lower bound of LawC is always 0
+function gridded_parameter(::SlidingRegularization, θ, physical)
+    (θ.C, zero(physical.maxC), physical.maxC)
+end
+
 function loss(
-        regType::RheologyRegularization,
+        regType::GriddedParameterRegularization,
         H::Matrix{F},
         H_ref,
         V_ref, Vx_ref, Vy_ref,
@@ -297,20 +311,19 @@ function loss(
     if t == simulation.parameters.simulation.tspan[1]
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        min_A = simulation.parameters.physical.minA
-        max_A = simulation.parameters.physical.maxA
+        θ_p, lo, hi = gridded_parameter(regType, θ, simulation.parameters.physical)
 
         key = Symbol("$(glacier_idx)")
-        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        field = @. lo+(hi-lo)*(tanh.(θ_p[key])+1)/2
         mask = trues(size(H) .- 1)
 
-        return loss(regType.reg, A, Δx, Δy, mask, normalization)
+        return loss(regType.reg, field, Δx, Δy, mask, normalization)
     else
         return 0.0
     end
 end
 function backward_loss(
-        regType::RheologyRegularization,
+        regType::GriddedParameterRegularization,
         H::Matrix{F},
         H_ref,
         V_ref, Vx_ref, Vy_ref,
@@ -324,72 +337,16 @@ function backward_loss(
     if t == simulation.parameters.simulation.tspan[1]
         glacier = simulation.glaciers[glacier_idx]
         Δx, Δy = glacier.Δx, glacier.Δy
-        min_A = simulation.parameters.physical.minA
-        max_A = simulation.parameters.physical.maxA
+        θ_p, lo, hi = gridded_parameter(regType, θ, simulation.parameters.physical)
 
         key = Symbol("$(glacier_idx)")
-        A = @. min_A+(max_A-min_A)*(tanh.(θ.A[key])+1)/2
+        field = @. lo+(hi-lo)*(tanh.(θ_p[key])+1)/2
         mask = trues(size(H) .- 1)
         ∂L∂θ = zero(θ)
-        ∂L∂θ.A[key] = backward_loss(regType.reg, A, Δx, Δy, mask, normalization) .*
-                      (max_A-min_A) .* (1 .- (tanh.(θ.A[key])) .^ 2) ./ 2
-
-        return zero(H), ∂L∂θ
-    else
-        return zero(H), zero(θ)
-    end
-end
-
-function loss(
-        regType::SlidingRegularization,
-        H::Matrix{F},
-        H_ref,
-        V_ref, Vx_ref, Vy_ref,
-        t::F,
-        glacier_idx::Integer,
-        θ,
-        simulation,
-        normalization::F,
-        Δt
-) where {F <: AbstractFloat}
-    if t == simulation.parameters.simulation.tspan[1]
-        glacier = simulation.glaciers[glacier_idx]
-        Δx, Δy = glacier.Δx, glacier.Δy
-        max_C = simulation.parameters.physical.maxC
-
-        key = Symbol("$(glacier_idx)")
-        # Same tanh mapping as LawC, whose lower bound is always 0
-        C = @. max_C*(tanh.(θ.C[key])+1)/2
-        mask = trues(size(H) .- 1)
-
-        return loss(regType.reg, C, Δx, Δy, mask, normalization)
-    else
-        return 0.0
-    end
-end
-function backward_loss(
-        regType::SlidingRegularization,
-        H::Matrix{F},
-        H_ref,
-        V_ref, Vx_ref, Vy_ref,
-        t::F,
-        glacier_idx::Integer,
-        θ,
-        simulation,
-        normalization::F,
-        Δt
-) where {F <: AbstractFloat}
-    if t == simulation.parameters.simulation.tspan[1]
-        glacier = simulation.glaciers[glacier_idx]
-        Δx, Δy = glacier.Δx, glacier.Δy
-        max_C = simulation.parameters.physical.maxC
-
-        key = Symbol("$(glacier_idx)")
-        C = @. max_C*(tanh.(θ.C[key])+1)/2
-        mask = trues(size(H) .- 1)
-        ∂L∂θ = zero(θ)
-        ∂L∂θ.C[key] = backward_loss(regType.reg, C, Δx, Δy, mask, normalization) .*
-                      max_C .* (1 .- (tanh.(θ.C[key])) .^ 2) ./ 2
+        # `getproperty` gives a view, so this writes into ∂L∂θ
+        ∂L∂θ_p, _, _ = gridded_parameter(regType, ∂L∂θ, simulation.parameters.physical)
+        ∂L∂θ_p[key] = backward_loss(regType.reg, field, Δx, Δy, mask, normalization) .*
+                      (hi-lo) .* (1 .- (tanh.(θ_p[key])) .^ 2) ./ 2
 
         return zero(H), ∂L∂θ
     else
@@ -401,7 +358,12 @@ end
     ∇²(a::Matrix{F}, Δx::F, Δy::F) where {F<:AbstractFloat}
 
 Computes the 2D Laplacian operator of a scalar field `a` on a regular grid
-using finite differences and staggered (dual–primal) averaging.
+with the standard 5-point finite difference stencil.
+
+The previous version differentiated twice with an average across the other direction in
+between (staggered grid). That operator is exactly zero on a checkerboard `(-1)^(i+j)`, so a
+Laplacian regularization could not see cell-to-cell alternating patterns. The 5-point stencil
+has eigenvalue `-4/Δx² - 4/Δy²` there.
 
 # Arguments
 
@@ -418,21 +380,13 @@ function ∇²(
         Δx::F,
         Δy::F
 ) where {F <: AbstractFloat}
-    # First derivative
-    ∂a∂x = Huginn.diff_x(a, Δx)
-    ∂a∂y = Huginn.diff_y(a, Δy)
-    # Evaluate in dual grid
-    ∂a∂x_dual = Huginn.avg_y(∂a∂x)
-    ∂a∂y_dual = Huginn.avg_x(∂a∂y)
-    # Second derivative
-    ∂2a∂x2_dual = Huginn.diff_x(∂a∂x_dual, Δx)
-    ∂2a∂y2_dual = Huginn.diff_y(∂a∂y_dual, Δy)
-    # Evaluate in primal grid
-    ∂2a∂x2 = Huginn.avg_y(∂2a∂x2_dual)
-    ∂2a∂y2 = Huginn.avg_x(∂2a∂y2_dual)
-
     ∇²a = zero(a)
-    ∇²a[2:(end - 1), 2:(end - 1)] = ∂2a∂x2 .+ ∂2a∂y2
+    @views ∇²a[2:(end - 1), 2:(end - 1)] = (a[3:end, 2:(end - 1)] .-
+                                            2 .* a[2:(end - 1), 2:(end - 1)] .+
+                                            a[1:(end - 2), 2:(end - 1)]) ./ Δx^2 .+
+                                           (a[2:(end - 1), 3:end] .-
+                                            2 .* a[2:(end - 1), 2:(end - 1)] .+
+                                            a[2:(end - 1), 1:(end - 2)]) ./ Δy^2
     return ∇²a
 end
 
@@ -461,10 +415,15 @@ function VJP_λ_∂∇²a_∂a(
         Δx::R,
         Δy::R
 ) where {R <: Real}
-    λ_inner = λ[2:(end - 1), 2:(end - 1)]
-    ∂a∂x = diff_x_adjoint(avg_y_adjoint(diff_x_adjoint(avg_y_adjoint(λ_inner), Δx)), Δx)
-    ∂a∂y = diff_y_adjoint(avg_x_adjoint(diff_y_adjoint(avg_x_adjoint(λ_inner), Δy)), Δy)
-    return ∂a∂x + ∂a∂y
+    # The output of `∇²` is zero on the border, so only the interior of λ counts
+    λ_in = zero(λ)
+    λ_in[2:(end - 1), 2:(end - 1)] = λ[2:(end - 1), 2:(end - 1)]
+    ∂a = -2 * (1 / Δx^2 + 1 / Δy^2) .* λ_in
+    ∂a[2:end, :] .+= λ_in[1:(end - 1), :] ./ Δx^2
+    ∂a[1:(end - 1), :] .+= λ_in[2:end, :] ./ Δx^2
+    ∂a[:, 2:end] .+= λ_in[:, 1:(end - 1)] ./ Δy^2
+    ∂a[:, 1:(end - 1)] .+= λ_in[:, 2:end] ./ Δy^2
+    return ∂a
 end
 
 # `∇²` writes into the interior of a zero matrix, so Zygote refuses it and every Tikhonov
@@ -491,5 +450,4 @@ function loss_uses_velocity(lossType::Union{
     false
 end
 discreteLossSteps(lossType::InitialThicknessRegularization, tspan) = [lossType.t₀]
-discreteLossSteps(lossType::RheologyRegularization, tspan) = [tspan[1]]
-discreteLossSteps(lossType::SlidingRegularization, tspan) = [tspan[1]]
+discreteLossSteps(lossType::GriddedParameterRegularization, tspan) = [tspan[1]]

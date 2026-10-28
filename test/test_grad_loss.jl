@@ -103,10 +103,8 @@ function test_grad_finite_diff(
         abstol = 1e-6,
         solver = nothing,
         A_range = nothing,
-        # `PhysicalParameters` defaults `maxC` to a value that only makes sense for a Weertman
-        # law; against the Budd law the glaciers are built with it is some fifteen orders too
-        # small, sliding contributes nothing, and a C gradient sits at round off. Any target
-        # `:C` test has to set this to something the configuration actually activates.
+        # The default only makes sense for a Weertman law: a `:C` test with the Budd law of
+        # these glaciers has to set it, otherwise the C gradient is round off
         maxC = Sleipnir.PhysicalParameters().maxC,
         adaptive = true,
         dt = 1.0/120.0,
@@ -114,15 +112,10 @@ function test_grad_finite_diff(
         thres_fd = 5e-2,
         n_fd_components = 4,
         return_grad = false,
-        # Return the built `(simulation, θ)` instead of running the gradient, so that a
-        # component of the adjoint can be checked in isolation against the very configuration
-        # under test rather than a hand-copied replica of this setup, which drifts.
+        # Return `(simulation, θ)` instead of the gradient, to test a part of the adjoint
+        # with this same setup
         return_setup = false,
-        # Override the sensealg the automatic adjoint uses, to compare VJP backends for the ODE
-        # adjoint. Velocity losses are 14.8x wrong through the automatic path while thickness
-        # losses are exact in the same configuration, and the one structural difference is that
-        # velocity seeds come from an rrule whose pullback runs Enzyme inside the Zygote
-        # pullback SciMLSensitivity is orchestrating.
+        # sensealg of the automatic adjoint, to compare VJP backends
         sensealg = nothing,
         functional_inv = true,
         scalar = true,
@@ -220,11 +213,8 @@ function test_grad_finite_diff(
             grad = adjointFlavor,
             optimization_method = "AD+AD",
             empirical_loss_function = loss,
-            # `UDE.target` is consumed only by the manual adjoints, to dispatch their
-            # target-specific VJPs; the automatic adjoint ignores it entirely. A C inversion is
-            # defined by its regressor and law, and its trainable components still carry
-            # `SIA2D_A_target`, so this has to stay `:A` to satisfy the `Inversion` constructor
-            # assertion. Setting it to `:C` is wrong.
+            # `UDE.target` is only used by the manual adjoints. A C inversion is defined by its
+            # regressor and law, and the `Inversion` constructor needs `:A` here
             target = target == :C ? :A : target,
             initial_condition_filter = :softplus
         ),
@@ -319,8 +309,7 @@ function test_grad_finite_diff(
     law = @match (target, functional_inv) begin
         (:A, true) => LawA(trainable_model, params; scalar = scalar)
         (:A, false) => LawA(params; scalar = scalar)
-        # Classical only: `LawC` defines no `p_VJP!`, so the manual adjoints would silently
-        # return a zero gradient for θ.C and there is nothing to test there.
+        # Classical only: `LawC` has no neural network version yet
         (:C, false) => LawC(params; scalar = scalar)
         (:D_hybrid, true) => LawY(trainable_model, params)
         (:D, true) => LawU(trainable_model, params)
@@ -412,18 +401,14 @@ function test_grad_finite_diff(
         @assert !adaptive "A fixed step finite difference is only meaningful with adaptive = false."
         θ0 = deepcopy(θ)
 
-        # A gradient with no signal passes every relative comparison below, because the finite
-        # difference is zero there too — that is exactly how a dead gradient hides. Require it
-        # to be resolvable against the loss scale rather than merely nonzero: a parameter the
-        # configuration barely activates lands at round off, which is indistinguishable from a
-        # broken adjoint and equally useless as a test. A gridded C with the default `maxC`
-        # against a Budd law is one such case, off by some fifteen orders.
+        # A zero gradient passes the relative comparisons below (the finite difference is zero
+        # too), so require a gradient above round off, relative to the loss
         l0 = f(θ0, simulation)
-        @test maximum(abs, collect(dθ)) > sqrt(eps(Float64)) * max(one(Float64), abs(l0))
+        @test maximum(abs, collect(dθ)) >
+              sqrt(eps(Sleipnir.Float)) * max(one(Sleipnir.Float), abs(l0))
 
-        # Rank by magnitude rather than taking the first components. For a scalar parameter the
-        # two are the same, but for a gridded one the leading components are ice-free corner
-        # cells where both sides are exactly zero and the comparison asserts nothing.
+        # The largest components: for a gridded parameter the first ones are ice-free cells,
+        # where both sides are zero
         fd_idx = sortperm(abs.(vec(collect(dθ))); rev = true)[1:min(
             n_fd_components, length(θ0))]
         for i in fd_idx
@@ -473,23 +458,9 @@ end
 """
     test_initial_condition_filter_type_stability()
 
-Solver-free guard: every `initial_condition_filter` must return a concrete float array,
-including under Zygote.
-
-`σ_zang` returned the literal `0.0` below its threshold and `x` unchanged above it. Those
-agree for a plain `Float64` input, so a direct broadcast looks fine, but inside Zygote the
-elements are `ForwardDiff.Dual` and the two branches disagree: `promote_typejoin` widens the
-result to `Matrix{Real}`. It only triggers when values sit on *both* sides of the threshold
-at once, so it stayed hidden until an optimizer moved some θ.IC across `-β/2` mid-training.
-
-The abstract array then reaches the solver as `u0` via `evaluate_H₀`/`define_iceflow_prob`
-and breaks in two unrelated ways: with a stabilized solver OrdinaryDiffEq takes its cache
-types from the state's bottom eltype, `one(Real)` is `1::Int64`, and ROCK2 builds a float
-tableau as `Int64[...]` (`InexactError`, hundreds of frames away); without one, Zygote
-returns no θ.IC gradient at all and the initial condition silently stops training.
-
-No test covered `:Zang1980` on a gradient path -- every gradient test uses `:softplus` -- so
-this is checked here directly, with no solver involved.
+Every `initial_condition_filter` must return a concrete float array, also under Zygote, with
+values on both sides of the threshold of `σ_zang` (see the comment in `σ_zang`). The gradient
+tests use `:softplus`, so `:Zang1980` is checked here, with no solver.
 """
 function test_initial_condition_filter_type_stability()
     # Straddle the threshold: both branches have to be exercised in one broadcast.
@@ -534,7 +505,7 @@ function test_observation_weights()
     @test ODINN.observation_weights(:time_span, [2015.0], tspan) ≈ [10.0]
     # An observation outside tspan is never simulated, so it gets no weight
     @test ODINN.observation_weights(:time_span, [2005.0, 2015.0], tspan) ≈ [0.0, 10.0]
-    @test isempty(ODINN.observation_weights(:time_span, Float64[], tspan))
+    @test isempty(ODINN.observation_weights(:time_span, Sleipnir.Float[], tspan))
     @test_throws ArgumentError ODINN.observation_weights(:unknown, t_obs, tspan)
 
     # The choice is read from the loss, also inside MultiLoss and LossHV
@@ -620,11 +591,9 @@ end
 Check the manual `backward_loss` of `InitialThicknessRegularization` against Zygote and a
 central finite difference of its own forward `loss`, with no solver in the comparison.
 
-`θ.IC` is stored scaled by `H₀_scale`, so `∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC`. The manual
-backward used to return `∂L/∂H₀` directly. That was only right where the filter derivative
-is 1 (thick ice) and, with the scaling, it is `H₀_scale` times too small everywhere. The joint
-A + IC test in Core8 cannot see it: the regularization is a small part of that gradient and
-the finite difference only samples 60 of its components, so it passes with the bug.
+`θ.IC` is stored scaled by `H₀_scale`, so `∂L/∂θ.IC = ∂L/∂H₀ ⋅ ∂H₀/∂θ.IC`, with the
+derivative of the filter. The joint A + IC test in Core8 cannot check this: the
+regularization is a small part of that gradient.
 """
 function test_initial_thickness_regularization_backward()
     simulation,
@@ -639,7 +608,7 @@ function test_initial_thickness_regularization_backward()
     @test ODINN.H₀_scale(glacier) > 10
 
     reg = InitialThicknessRegularization(2010.0)
-    nrm = Float64(prod(size(glacier.H₀)))
+    nrm = Sleipnir.Float(prod(size(glacier.H₀)))
     Δtj = (; H = 0.0, V = 0.0)
     fwd(p) = ODINN.loss(reg, glacier.H₀, nothing, nothing, nothing, nothing,
         2010.0, 1, p, simulation, nrm, Δtj)

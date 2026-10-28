@@ -48,8 +48,10 @@ Struct that defines the ice thickness loss.
 # Fields
 
   - `loss::L`: Type of loss to use for the ice thickness. Default is `L2Sum()`.
-  - `weighting::Symbol`: How each ice thickness observation is weighted in the loss, see
-    [`observation_weights`](@ref). Default is `:uniform`.
+  - `weighting::Symbol`: How the observation times count in the loss, see
+    [`observation_weights`](@ref). With `:uniform` (default) each observation time counts once,
+    which suits a few surveys. With `:time_span` each one counts as much as the time it covers,
+    which suits dense time series.
 """
 @kwdef struct LossH{L <: AbstractSimpleLoss} <: AbstractLoss
     loss::L = L2Sum()
@@ -68,8 +70,10 @@ Struct that defines the ice velocity loss.
     Options include :xy for both x and y component, and :abs for the norm/magnitude of the velocity.
   - `scale_loss::Bool`: Whether to scale the loss function with the reference ice
     velocity magnitude.
-  - `weighting::Symbol`: How each ice velocity observation is weighted in the loss, see
-    [`observation_weights`](@ref). Default is `:uniform`.
+  - `weighting::Symbol`: How the observation times count in the loss, see
+    [`observation_weights`](@ref). With `:uniform` (default) each observation time counts once,
+    which suits one velocity map or a few. With `:time_span` each one counts as much as the
+    time it covers, so many maps close in time do not dominate.
 """
 @kwdef struct LossV{L <: AbstractSimpleLoss} <: AbstractLoss
     loss::L = L2Sum()
@@ -475,9 +479,9 @@ Weight of each observation in the loss, for observations at times `t_obs`.
 """
 function observation_weights(weighting::Symbol, t_obs, tspan)
     if weighting == :uniform
-        return ones(Float64, length(t_obs))
+        return ones(Sleipnir.Float, length(t_obs))
     elseif weighting == :time_span
-        isempty(t_obs) && return Float64[]
+        isempty(t_obs) && return Sleipnir.Float[]
         midpoints = (t_obs[begin:(end - 1)] .+ t_obs[(begin + 1):end]) ./ 2
         return diff(clamp.(vcat(tspan[1], midpoints, tspan[2]), tspan[1], tspan[2]))
     else

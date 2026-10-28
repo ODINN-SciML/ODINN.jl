@@ -66,14 +66,9 @@ mutable struct GriddedInv{
                      end
                      for i in 1:length(glaciers)]
 
-            # Warn when a glacier starts in the flat tail of the tanh map. C = 0 is the
-            # default, and it is also the worst possible starting point for the optimizer:
-            # the seed is x = -5, where dC/dx = maxC*sech²(5)/2 is ~7e-5 of its maximum, so
-            # the loss is nearly flat in x and the inversion barely moves. That looks like a
-            # converged run rather than a failed one -- the loss decreases by a fraction of a
-            # percent, LBFGS's line search gives up after a few iterations, and the reported C
-            # field is still the seed. Set `glacier.C` to a representative value inside
-            # (0, maxC) before inverting; 0.1 * maxC is a reasonable default.
+            # Warn when a C inversion starts in the flat tails of the tanh map (C = 0 is
+            # the default): dC/dx is ~2e-4 of its maximum there, so the inversion barely
+            # moves, which looks like a converged run
             flat = findall(s -> abs(s) > 4, seeds)
             if !isempty(flat)
                 ids = [glaciers[i].rgi_id for i in flat]

@@ -371,17 +371,9 @@ Compute the gradient with respect to θ for a particular glacier and return the 
 This function defines the iceflow problem and then calls Zygote to differentiate `batch_loss_iceflow_transient` with respect to θ.
 It uses the SciMLSensitivity implementation under the hood to compute the adjoint of the ODE.
 
-The iceflow problem is built *inside* the differentiated region, from the θ being
-differentiated, which is what makes the initial condition trainable. Building it outside
-freezes `u0` at the θ the problem happened to be defined with, and `θ.IC` then picks up no
-derivative through the solution at all. This mirrors what the forward path
-`parallel_loss_iceflow_transient` already does.
-
-Note that `u0` has to come from the θ Zygote is differentiating, not from `container.θ`:
-deriving it by reading the field back out of the binder, while that same binder is also handed
-to the solver as `p`, makes Zygote accumulate into one mutable struct from two directions and
-silently collapses the whole `θ.C` gradient to zero. The route does not matter — `remake` and
-the `solve` keyword form fail identically — only where θ comes from.
+The iceflow problem is built inside the differentiated region, from the θ that is
+differentiated, so that `u0` (the initial condition) gets a gradient. `u0` must come from
+this θ and not from `container.θ`, otherwise the gradient of `θ.C` is zero.
 """
 function grad_parallel_loss_iceflow!(θ, simulation::Inversion, glacier_idx::Integer)
     ret, = Zygote.gradient(
@@ -421,15 +413,9 @@ end
 
 Solve the ODE, retrieve the results and compute the loss.
 
-`θ` must be the parameter vector that is being differentiated, and it is what the loss terms
-receive. Reading it back out of `container` instead silently drops the part of the gradient
-that flows through the ODE: the binder is also handed to the solver as `p`, so Zygote sees a
-single mutable object accumulating from two directions and keeps only the loss's *direct*
-dependence on θ. The forward value is identical either way, which is what makes this failure
-invisible. Measured on `LossV`: 14.8x too large reading `container.θ`, exact from `θ`.
-`LossH` is unaffected only because it does not use θ at all.
-
-This is the same rule `grad_parallel_loss_iceflow!` documents for `u0`.
+`θ` must be the parameter vector that is differentiated, and the loss terms must receive it.
+Reading it from `container` drops the part of the gradient that goes through the ODE, with
+the same loss value (see `sensitivity.md`).
 
 Arguments:
 
@@ -446,14 +432,8 @@ function batch_loss_iceflow_transient(
 )
     result = _batch_iceflow_UDE(container, glacier_idx, iceflow_prob)
 
-    # Take the simulation off the binder once, untracked, and use it for the rest of the
-    # function. Reaching it through `container` inside the differentiated region puts a
-    # tracked path to `solve`'s own `p` on the tape, and the loss terms then mutate the object
-    # they were handed (`averageV` writes θ back into it), so Zygote accumulates into the
-    # binder from a second direction. Neither the read nor the write is a problem alone, which
-    # is why this reproduced as a clean constant: `LossAvgV` came out 1.051726x with
-    # `container.simulation` and exact with the simulation taken this way, same value, same
-    # everything else. See the `InversionBinder` docstring.
+    # Take the simulation off the binder once, untracked: reading it from `container` in the
+    # loss gives a wrong gradient (see the `InversionBinder` docstring)
     simulation = @ignore_derivatives container.simulation
 
     loss_function = simulation.parameters.UDE.empirical_loss_function
@@ -649,6 +629,7 @@ end
 
 """
     define_iceflow_prob(
+        θ,
         simulation::Inversion,
         glacier_idx::Integer,
     )
@@ -656,10 +637,8 @@ end
 Given a `simulation` struct and a `glacier_idx`, build the iceflow problem that has to be solved in the ODE solver.
 In practice, the returned iceflow problem is used inside `simulate_iceflow_UDE!` through `remake`.
 
-This is called from inside the differentiated region, so that `u0 = evaluate_H₀(θ, …)` carries
-a derivative and the initial condition can be trained. An earlier version of this docstring
-said the problem had to be defined outside the gradient; that is not the case, and doing so is
-what left `θ.IC` with no derivative through the solution.
+It is called inside the differentiated region, so that `u0 = evaluate_H₀(θ, …)` has a
+derivative and the initial condition can be trained.
 """
 function define_iceflow_prob(
         θ,
@@ -676,14 +655,7 @@ function define_iceflow_prob(
             glacier_idx
         )
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
-        # `u0` must have a concrete float eltype. An abstract one (typically `Matrix{Real}`,
-        # from a filter whose branches do not agree on a type under Zygote's Dual broadcast)
-        # fails far from here and in two different ways: a stabilized solver derives its cache
-        # types from the state's bottom eltype and `one(Real)` is `1::Int64`, so ROCK2 builds
-        # its float tableau as `Int64[...]` and throws `InexactError` hundreds of frames deep;
-        # without one, Zygote just drops the θ.IC gradient and the initial condition silently
-        # stops training. Checking here, at the single place every inversion's `u0` is built,
-        # turns both into one clear failure.
+        # An abstract eltype of `u0` fails far from here (see `σ_zang`), so check it once
         Zygote.@ignore_derivatives @assert isconcretetype(eltype(H₀))&&
         eltype(H₀)<:AbstractFloat "evaluate_H₀ returned eltype $(eltype(H₀)) for glacier $(glacier_idx); u0 must be a concrete float array. Check `initial_condition_filter = $(simulation.parameters.UDE.initial_condition_filter)` for branches that disagree on their return type."
 
