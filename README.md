@@ -17,6 +17,8 @@ Global glacier evolution model using Universal Differential Equations to model a
 
 `ODINN.jl` uses neural networks and differential equations in order to combine mechanistic models describing glacier physical processes (e.g. ice creep, basal sliding, surface mass balance) with machine learning. Neural networks are used to learn parts of the equations. ODINN uses the Open Global Glacier Model ([OGGM](oggm.org/), Maussion et al., 2019) through [Gungnir](https://github.com/ODINN-SciML/Gungnir) as a basic framework to retrieve all the topographical and climate data for the initial state of the simulations. Then, all the simulations and processing are performed in Julia, benefitting from its high performance and the SciML ecosystem.
 
+`ODINN.jl` is aimed at users working on glacier modelling from a single glacier to whole regions, Earth system modellers, and researchers interested in differentiable programming for geoscientific modelling.
+
 <center><img src="https://github.com/ODINN-SciML/odinn_toy/blob/main/plots/overview_figure.png" width="700"></center>
 
 > **Overview of `ODINN.jl`’s workflow to perform functional inversions of glacier physical processes using Universal Differential Equations**. The parameters ($θ$) of a function determining a given physical process ($D_θ$), expressed by a neural network $NN_θ$, are optimized in order to minimize a loss function. In this example, the physical to be inferred law was constrained only by climate data, but any other proxies of interest can be used to design it. The climate data, and therefore the glacier mass balance, are downscaled (i.e. it depends on $S$), with $S$ being updated by the solver, thus dynamically updating the state of the simulation for a given timestep.
