@@ -4,6 +4,15 @@ export AbstractTarget, AbstractSIA2DTarget
 export Diffusivity, ∂Diffusivity∂H, ∂Diffusivity∂∇H, ∂Diffusivity∂θ
 
 abstract type AbstractTarget end
+
+"""
+    AbstractSIA2DTarget <: AbstractTarget
+
+Abstract type for inversion targets that learn elements of the SIA2D ice flow
+equation (e.g. the creep coefficient `A` or the diffusivity `D`). Concrete subtypes
+must implement `Diffusivity`, `∂Diffusivity∂H`, `∂Diffusivity∂∇H` and
+`∂Diffusivity∂θ`, which are used by the manual adjoint computations.
+"""
 abstract type AbstractSIA2DTarget <: AbstractTarget end
 
 """
