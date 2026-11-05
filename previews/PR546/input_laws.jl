@@ -10,7 +10,7 @@ params = Parameters() # Dummy parameters
 nn_model = NeuralNetwork(params)
 A_law = LawA(nn_model, params)
 
-# The inputs of the laws are represented as objects that derive from `AbstractInput`.
+# The inputs of the laws are represented as objects that derive from [`AbstractInput`](@ref).
 # We have defined a subset of inputs that can be used to parameterize laws.
 
 # ## Implementation

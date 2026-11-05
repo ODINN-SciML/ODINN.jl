@@ -50,7 +50,7 @@ plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["di
 # ## Step-by-step explanation of the tutorial
 
 # Here we will cover in detail each one of the steps that lead us to run the
-# forward models `Prediction` from the previous example. This first tutorial keeps things simple, and since
+# forward models [`Prediction`](@ref) from the previous example. This first tutorial keeps things simple, and since
 # we are not using machine learning models, we will only use `Model` to specify the iceflow and mass balance models. These functionalities
 # are mainly included in [`Huginn.jl`](https://github.com/ODINN-SciML/Huginn.jl).
 
@@ -127,7 +127,7 @@ glaciers = initialize_glaciers(rgi_ids, params)
 
 prediction = Prediction(model, glaciers, params)
 
-# And once we have the `Prediction` object, we can run the simulation using the function `run!`:
+# And once we have the `Prediction` object, we can run the simulation using the function [`run!`](@ref):
 run!(prediction)
 
 # There we go, we have successfully simulated the evolution of 3 glaciers for 5 years in around 1-2 seconds!
