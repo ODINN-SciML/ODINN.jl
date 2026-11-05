@@ -27,14 +27,40 @@ mutable struct Hyperparameters{F <: AbstractFloat, I <: Integer} <: AbstractPara
 end
 
 """
+    default_optimizer()
+
+Default optimizers of an inversion: Adam, then LBFGS.
+
+Adam is robust far from the minimum, since its step does not depend on the size of the
+gradient. LBFGS then converges faster near the minimum. Its memory grows linearly with the
+number of parameters, while BFGS stores an `n × n` matrix, which is too large for gridded
+parameters. For small problems, like a neural network, `BFGS(initial_stepnorm = 0.001)` can
+need fewer iterations.
+
+At its first iteration, LBFGS has no curvature information yet and tries the step `θ - g`.
+When the loss is large, this step is large too and the forward solve can blow up.
+`InitialStatic(scaled = true)` caps the norm of the first trial step of each line search to
+one, and the backtracking can only make it shorter. So no step of LBFGS is longer than one in
+the norm of `θ`, in all the iterations. With a large loss, the default LBFGS can crash at its
+first iteration, while this one converges.
+"""
+function default_optimizer()
+    [
+        Adam(0.01),
+        LBFGS(alphaguess = LineSearches.InitialStatic(alpha = 1.0, scaled = true),
+            linesearch = LineSearches.BackTracking(iterations = 5))
+    ]
+end
+
+"""
     Hyperparameters(;
-        current_epoch::Int64 = 1,
-        current_minibatch::Int64 = 1,
-        loss_history::Vector{Float64} = Vector{Float64}(),
-        optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = BFGS(initial_stepnorm = 0.001),
-        loss_epoch::Float64 = 0.0,
-        epochs::Union{Int64, Vector{Int64}} = 50,
-        batch_size::Int64 = 15
+        current_epoch::Sleipnir.Int = 1,
+        current_minibatch::Sleipnir.Int = 1,
+        loss_history::Vector{Sleipnir.Float} = Vector{Sleipnir.Float}(),
+        optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = default_optimizer(),
+        loss_epoch::Sleipnir.Float = zero(Sleipnir.Float),
+        epochs::Union{Sleipnir.Int, Vector{Sleipnir.Int}} = [25, 25],
+        batch_size::Sleipnir.Int = 15
 
 )
 
@@ -42,27 +68,27 @@ Constructs a `Hyperparameters` object with the specified parameters.
 
 # Arguments
 
-  - `current_epoch::Int64`: The current epoch number. Defaults to 1.
-  - `current_minibatch::Int64`: The current minibatch number. Defaults to 1.
-  - `loss_history::Vector{Float64}`: A vector to store the history of loss values. Defaults to an empty vector.
-  - `optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}}`: The optimizer to be used. Defaults to `BFGS(initial_stepnorm=0.001)`.
-  - `loss_epoch::Float64`: The loss value for the current epoch. Defaults to 0.0.
-  - `epochs::Int64`: The total number of epochs. Defaults to 50.
-  - `batch_size::Int64`: The size of each minibatch. Defaults to 15.
+  - `current_epoch::Sleipnir.Int`: The current epoch number. Defaults to 1.
+  - `current_minibatch::Sleipnir.Int`: The current minibatch number. Defaults to 1.
+  - `loss_history::Vector{Sleipnir.Float}`: A vector to store the history of loss values. Defaults to an empty vector.
+  - `optimizer::Union{Optim.FirstOrderOptimizer, Vector{Optim.FirstOrderOptimizer}, Vector{Any}}`: The optimizer to be used, or a vector of optimizers used one after the other. Defaults to `default_optimizer()`: Adam, then LBFGS.
+  - `loss_epoch::Sleipnir.Float`: The loss value for the current epoch. Defaults to 0.0.
+  - `epochs::Union{Sleipnir.Int, Vector{Sleipnir.Int}}`: The number of epochs, or one number per optimizer when `optimizer` is a vector. Defaults to `[25, 25]`.
+  - `batch_size::Sleipnir.Int`: The size of each minibatch. Defaults to 15.
 
 # Returns
 
   - A `Hyperparameters` object initialized with the provided values.
 """
 function Hyperparameters(;
-        current_epoch::Int64 = 1,
-        current_minibatch::Int64 = 1,
-        loss_history::Vector{Float64} = Vector{Float64}(),
+        current_epoch::Sleipnir.Int = Sleipnir.Int(1),
+        current_minibatch::Sleipnir.Int = Sleipnir.Int(1),
+        loss_history::Vector{Sleipnir.Float} = Vector{Sleipnir.Float}(),
         optimizer::Union{Optim.FirstOrderOptimizer, Optimisers.AbstractRule,
-            Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = BFGS(initial_stepnorm = 0.001),
-        loss_epoch::Float64 = 0.0,
-        epochs::Union{Int64, Vector{Int64}} = 50,
-        batch_size::Int64 = 15
+            Vector{Optim.FirstOrderOptimizer}, Vector{Any}} = default_optimizer(),
+        loss_epoch::Sleipnir.Float = zero(Sleipnir.Float),
+        epochs::Union{Sleipnir.Int, Vector{Sleipnir.Int}} = Sleipnir.Int[25, 25],
+        batch_size::Sleipnir.Int = Sleipnir.Int(15)
 )
     # Build Hyperparameters based on input values
     hyperparameters = Hyperparameters{typeof(loss_epoch), typeof(current_epoch)}(

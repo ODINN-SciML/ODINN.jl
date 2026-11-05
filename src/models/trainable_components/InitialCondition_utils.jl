@@ -1,5 +1,15 @@
 
 """
+    H₀_scale(glacier)
+
+Scale of θ.IC for each glacier, in metres (the maximum of `glacier.H₀`). θ.IC is stored as
+`H₀ / H₀_scale(glacier)`, so its values are of order one like the other parameters, and the
+same learning rate works for all of them. If `glacier.H₀` changes after `InitialCondition`
+is built, θ.IC no longer matches. The filters (`σ_zang`, `softplus`) act on metres.
+"""
+H₀_scale(glacier) = max(maximum(glacier.H₀), one(eltype(glacier.H₀)))
+
+"""
     evaluate_H₀(
         θ::ComponentArray,
         glacier::Glacier2D,
@@ -34,15 +44,17 @@ function evaluate_H₀(
         glacier_id::Integer
 )
     glacier_id_symbol = Symbol("$(glacier_id)")
-    H₀ = deepcopy(θ.IC[glacier_id_symbol])
+    H₀ = deepcopy(θ.IC[glacier_id_symbol]) .* H₀_scale(glacier)
     H₀ = @match filter begin
         :identity => H₀
         :softplus => log.(1 .+ exp.(H₀))
         :Zang1980 => σ_zang.(H₀)
     end
-    # Apply mask
-    H₀[glacier.mask] .= 0.0
-    return H₀
+    # Apply mask. Written as a product rather than a masked write because
+    # `InitialThicknessRegularization` calls this inside the loss, so it has to be
+    # differentiable, and Zygote refuses the `copyto!` that indexing with the mask creates.
+    # `mask` is true on the no-ice cells, so the complement is what survives.
+    return H₀ .* .!glacier.mask
 end
 
 """
@@ -80,12 +92,16 @@ function evaluate_∂H₀(
         glacier_id::Integer
 )
     glacier_id_symbol = Symbol("$(glacier_id)")
-    ∂H₀ = deepcopy(θ.IC[glacier_id_symbol])
+    scale = H₀_scale(glacier)
+    ∂H₀ = deepcopy(θ.IC[glacier_id_symbol]) .* scale
     ∂H₀ = @match filter begin
-        :identity => 1.0
+        # An array, not the scalar 1.0: the mask below indexes into it
+        :identity => one.(∂H₀)
         :softplus => 1 ./ (1 .+ exp.(-∂H₀))
         :Zang1980 => ∂σ_zang.(∂H₀)
     end
+    # d(filter(θ.IC * scale))/dθ.IC needs the extra `scale` factor from the chain rule.
+    ∂H₀ = ∂H₀ .* scale
     # Apply mask
     ∂H₀[glacier.mask] .= 0.0
     return ∂H₀
@@ -103,12 +119,17 @@ values following I. Zang, "A smoothing-out technique for min—max optimization"
   - `β::Real`: (optional) Parameter controlling the transition zone width. Default is 2.0.
 """
 function σ_zang(x; β = 2.0)
-    if x < - β / 2
-        return 0.0
-    elseif x < β / 2
-        return (x + β/2)^2 / (2β)
+    # All the branches must return the same float type, also for Dual numbers under Zygote.
+    # Otherwise the state becomes a `Matrix{Real}`, ROCK2 fails with an `InexactError` and
+    # Zygote gives no gradient for θ.IC.
+    fx = float(x)
+    βf = oftype(fx, β)
+    if fx < -βf / 2
+        return zero(fx)
+    elseif fx < βf / 2
+        return (fx + βf / 2)^2 / (2βf)
     else
-        return x
+        return fx
     end
 end
 

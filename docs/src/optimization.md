@@ -88,6 +88,11 @@ For this setting, the empirical error term can be defined as
 
 with $\hat H(t_j,x_j)$ the predicted ice thickness at time $t_j$ and on the node of the simulation grid $x_j$.
 
+By default every observation time counts once (`weighting = :uniform`), so the loss is a plain sum over the observation times. This suits a few surveys or one velocity map.
+With `LossH(weighting = :time_span)` (same for `LossV`), each observation time counts as much as the time it covers: half of the time to the previous observation plus half of the time to the next one. The first and the last observations also cover the time to the start and to the end of the simulation.
+Use it for dense time series, for example many velocity maps in the same year, so that they do not dominate the loss.
+See `observation_weights` for the details.
+
 #### Time aggregated loss functions
 
 There are cost functions which cannot be written as $\int_{t\in\Tau}\int_{x\in\Omega} \ell(...)$ but which are rather of the form $\ell(\int_{t\in\Tau} ...)$.
@@ -134,6 +139,36 @@ Regularizations rely on simple losses which are agnostic to the nature of the va
 The following simple losses are implemented, and the regularizations described above are built on top of them:
 
   - `TikhonovRegularization`: Very common in geophysical inversion. Given an linear operator $A$, this is given by the value of $\| A(S) \|_2^2$, where $S$ is some state variable (e.g., the ice thickness or ice surface velocity). Default choice in ODINN is the Laplacian operator $\nabla^2$.
+
+## Optimizers
+
+The optimizer is set in `Hyperparameters`. It can be one optimizer, or a vector of optimizers used one after the other, with one number of epochs for each of them.
+By default, ODINN uses Adam and then LBFGS, for 25 epochs each:
+
+```julia
+hyper = Hyperparameters(
+    optimizer = [
+        ODINN.Adam(0.01),
+        ODINN.LBFGS(
+            alphaguess = ODINN.LineSearches.InitialStatic(alpha = 1.0, scaled = true),
+            linesearch = ODINN.LineSearches.BackTracking(iterations = 5))
+    ],
+    epochs = [25, 25])
+```
+
+Adam is robust far from the minimum, since its step does not depend on the size of the gradient.
+LBFGS then converges faster near the minimum.
+LBFGS only keeps the last steps in memory, while BFGS stores a matrix of size `n × n` for `n` parameters, which is too large for gridded parameters.
+For small problems, like a neural network, `BFGS(initial_stepnorm = 0.001)` can need fewer iterations.
+
+!!! warning "First step of LBFGS"
+
+    At its first iteration, LBFGS has no information about the curvature of the loss, so it tries the step $\theta - \nabla_\theta \mathcal{L}$.
+    When the loss is large, this step is large too, and the forward simulation can blow up.
+    `InitialStatic(scaled = true)` limits the norm of this trial step to one.
+
+If the forward simulation fails at a point tried by the line search of BFGS or LBFGS, for example because the step was too large, the loss at this point is infinite and the line search takes a shorter step.
+Adam has no line search, so in this case it stops with the error of the simulation.
 
 ## Logging
 

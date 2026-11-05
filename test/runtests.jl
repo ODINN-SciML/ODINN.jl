@@ -83,6 +83,7 @@ ENV["GKSwstype"] = "nul"
             @testset "Adjoint of diff" test_adjoint_diff()
             @testset "Adjoint of clamp_borders" test_adjoint_clamp_borders()
             @testset "Adjoint of avg" test_adjoint_avg()
+            @testset "5-point Laplacian and its adjoint" test_laplacian()
         end
     end
 
@@ -115,6 +116,11 @@ ENV["GKSwstype"] = "nul"
             @testset "L2Sum" test_grad_L2Sum()
             @testset "TikhonovRegularization" test_grad_TikhonovRegularization()
             @testset "V magnitude chain rule (:abs)" test_grad_V_from_Vxy()
+            @testset "Initial condition filters are type stable" test_initial_condition_filter_type_stability()
+            @testset "LossAvgV time window guard" test_loss_time_window_guard()
+            @testset "Observation weights" test_observation_weights()
+            @testset "The first observation counts" test_first_observation_counts()
+            @testset "Infinite loss when the forward simulation fails" test_loss_or_inf()
         end
     end
 
@@ -193,12 +199,39 @@ ENV["GKSwstype"] = "nul"
             # @testset "Discrete adjoint with continuous VJP vs finite differences" test_grad_finite_diff(DiscreteAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
             @testset "Continuous adjoint with discrete VJP vs finite differences (L2)" test_grad_finite_diff(
                 ContinuousAdjoint(VJP_method = DiscreteVJP());
-                thres = [1e-2, 1e-5, 1e-2], loss = LossV())
+                thres = [1e-4, 1e-5, 1e-4], loss = LossV())
             @testset "Continuous adjoint with discrete VJP vs finite differences (Log)" test_grad_finite_diff(
-                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-2, 1e-5, 1e-2],
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); thres = [1e-4, 1e-5, 1e-4],
                 loss = LossV(loss = LogSum(), component = :abs))
             # @testset "Continuous adjoint with continuous VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ContinuousVJP()); thres = [2e-2, 1e-5, 2e-2], loss=LossV())
             # @testset "Continuous adjoint with Enzyme VJP vs finite differences" test_grad_finite_diff(ContinuousAdjoint(VJP_method = ODINN.EnzymeVJP()); thres = [2e-4, 1e-8, 1e-3], loss=LossV())
+
+            # Velocity losses use θ, so they catch a loss that reads θ off the `InversionBinder`
+            # (`LossH` does not). Fixed steps and one solver: adaptive steps make the loss
+            # discontinuous in θ and the finite differences wrong.
+            sciml_v = (; adaptive = false, dt = 1.0/240.0, solver = Huginn.ROCK2(),
+                functional_inv = false, scalar = true)
+            @testset "SciMLSensitivity adjoint with velocity loss vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); loss = LossV(),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            @testset "SciMLSensitivity adjoint with time-aggregated velocity loss vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); loss = LossAvgV(),
+                aggregated_loss = :avgV, thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            # H and V together: a binder bug only showed up with two loss terms combined.
+            # `:time_span` and not the default `:uniform`: with `:uniform` all the weights are
+            # one, so a wrong index into the weights would not show
+            @testset "SciMLSensitivity adjoint with H and V losses and time_span weights vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint();
+                loss = MultiLoss(
+                    losses = (LossH(weighting = :time_span), LossV(weighting = :time_span)),
+                    λs = (1.0, 1.0)),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            @testset "SciMLSensitivity adjoint with LossHV vs finite differences" test_grad_finite_diff(
+                ODINN.SciMLSensitivityAdjoint(); loss = LossHV(),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
+            @testset "Continuous adjoint with LossHV vs finite differences" test_grad_finite_diff(
+                ContinuousAdjoint(VJP_method = DiscreteVJP()); loss = LossHV(),
+                thres = [1e-4, 1e-10, 1e-4], sciml_v...)
         end
     end
 
@@ -284,6 +317,7 @@ ENV["GKSwstype"] = "nul"
                     losses = (LossH(), InitialThicknessRegularization(2010.0)), λs = (
                         1.0, 1.0)),
                 train_initial_conditions = true)
+            @testset "IC regularization backward vs Zygote and FD" test_initial_thickness_regularization_backward()
         end
     end
 
@@ -336,6 +370,34 @@ ENV["GKSwstype"] = "nul"
                 ContinuousAdjoint(VJP_method = DiscreteVJP()); fixed...)
             @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
                 SciMLSensitivityAdjoint(); fixed...)
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Core13"
+        # Gridded C, as in the sliding inversions. Only the automatic adjoint is tested: `LawC`
+        # has no `p_VJP!`, so the manual adjoints give a zero gradient for θ.C. The test uses
+        # ROCK4: with `RDPK3Sp35` the automatic adjoint gives a gradient with the wrong sign.
+        fixed = (use_MB = true, A_range = (2e-18, 8e-18),
+            adaptive = false, dt = 1.0/240.0, fd_delta = 1e-9, thres_fd = 5e-3)
+        # `maxC` must be set: the default is for a Weertman law, about 15 orders of magnitude
+        # too small for the Budd law used here, and the C gradient would be round off.
+        # `LawC` starts at `C = maxC/2`, so `maxC = 0.1` gives as much sliding as deformation.
+        @testset "Gridded C with the automatic adjoint" begin
+            @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
+                SciMLSensitivityAdjoint();
+                target = :C, functional_inv = false, scalar = false, maxC = 0.1, fixed...)
+        end
+
+        # Issue #409: initial condition with the automatic adjoint. Both θ.IC and θ.C are
+        # checked, because a wrong fix can give the right θ.IC and a zero θ.C.
+        @testset "Initial condition with the automatic adjoint" begin
+            @testset "SciMLSensitivity adjoint vs finite differences" test_grad_finite_diff(
+                SciMLSensitivityAdjoint();
+                functional_inv = false, scalar = false, train_initial_conditions = true,
+                loss = MultiLoss(
+                    losses = (LossH(), InitialThicknessRegularization(2010.0)),
+                    λs = (1.0, 1.0)),
+                fixed...)
         end
     end
 

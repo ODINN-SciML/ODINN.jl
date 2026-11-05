@@ -203,3 +203,54 @@ end
 function VJP_λ_∂MB∂H(VJPMode::NoVJP, λ, H, simulation::Simulation, glacier, t)
     return zero(λ)
 end
+
+# Automatic (SciMLSensitivityAdjoint) differentiation of H → V. `V_from_H` mutates the law
+# cache, so Zygote cannot differentiate it: its rrule computes the VJP with Enzyme, as
+# `VJP_λ_∂SIA∂H(::EnzymeVJP, …)` does. This is used by all the velocity losses.
+
+# Enzyme VJP of H → (Vx, Vy) through `Huginn.surface_V_inplace!`: returns (∂H, ∂θ) for the
+# seeds (dVx, dVy), which already include the part of V = ‖(Vx, Vy)‖.
+function ∂V_from_H_vjp!(dVx, dVy, H, θ, simulation, t)
+    _Vx = zero(H)
+    _Vy = zero(H)
+    dH = Enzyme.make_zero(H)
+    dθ = Enzyme.make_zero(θ)
+    _sim = Enzyme.make_zero(simulation)
+    # Runtime activity needed for deterministic compilation (matches SciML's EnzymeVJP).
+    Enzyme.autodiff(
+        EnzymeCore.set_runtime_activity(EnzymeCore.Reverse), Huginn.surface_V_inplace!, Const,
+        Duplicated(_Vx, dVx),
+        Duplicated(_Vy, dVy),
+        Duplicated(H, dH),
+        Duplicated(simulation, _sim),
+        Const(t),
+        Duplicated(θ, dθ)
+    )
+    return dH, dθ
+end
+
+# Lets Zygote (SciMLSensitivityAdjoint path) differentiate velocity-based losses.
+function ChainRules.rrule(::typeof(Huginn.V_from_H), simulation::Inversion, H, t, θ)
+    Vx, Vy, V = Huginn.V_from_H(simulation, H, t, θ)
+    function V_from_H_pullback(Δ)
+        if Δ isa ChainRules.AbstractZero
+            return (ChainRules.NoTangent(), ChainRules.NoTangent(),
+                ChainRules.ZeroTangent(), ChainRules.NoTangent(), ChainRules.ZeroTangent())
+        end
+        # Fold all three output cotangents into (dVx, dVy) seeds for Enzyme.
+        # ΔV through V=‖(Vx,Vy)‖ is handled analytically here to avoid 0/0 NaN
+        # at ice-free cells where Vx=Vy=V=0.
+        dVx = Δ[1] isa ChainRules.AbstractZero ? zero(Vx) : copy(ChainRules.unthunk(Δ[1]))
+        dVy = Δ[2] isa ChainRules.AbstractZero ? zero(Vy) : copy(ChainRules.unthunk(Δ[2]))
+        if !(Δ[3] isa ChainRules.AbstractZero)
+            dV = ChainRules.unthunk(Δ[3])
+            # ∂V/∂Vx = Vx/V; zero where V=0 (Vx=0 there, so cotangent is 0)
+            @. dVx += ifelse(V > 0, dV * Vx / V, zero(eltype(Vx)))
+            @. dVy += ifelse(V > 0, dV * Vy / V, zero(eltype(Vy)))
+        end
+        ∂H, ∂θ = ∂V_from_H_vjp!(dVx, dVy, H, θ, simulation, t)
+        return (ChainRules.NoTangent(), ChainRules.NoTangent(), ∂H,
+            ChainRules.NoTangent(), ∂θ)
+    end
+    return (Vx, Vy, V), V_from_H_pullback
+end

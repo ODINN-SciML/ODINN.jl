@@ -136,7 +136,9 @@ function train_UDE!(
     end
 
     # Simplify API for optimization problem and include data loaded in argument for minibatch
-    loss_function(_θ, _simulation) = loss_iceflow_transient(_θ, only(_simulation.data), pmap)
+    # The line search of BFGS and LBFGS can try a point where the forward simulation fails
+    loss_function(_θ, _simulation) = loss_or_inf(
+        loss_iceflow_transient, _θ, only(_simulation.data), pmap)
 
     if isa(simulation.parameters.UDE.grad, SciMLSensitivityAdjoint)
         @assert simulation.parameters.UDE.optim_autoAD == Optimization.AutoZygote() "For the moment only Zygote is supported for the differentiation of the loss function but params.UDE.optim_autoAD = $(simulation.parameters.UDE.optim_autoAD)."
@@ -303,6 +305,33 @@ function loss_iceflow_transient(θ, simulation::Inversion, mappingFct)
     return sum(losses)
 end
 
+# `pmap` wraps the error of a task or of a worker
+root_exception(e) = e
+root_exception(e::RemoteException) = root_exception(e.captured)
+root_exception(e::CapturedException) = root_exception(e.ex)
+
+"""
+    loss_or_inf(loss, args...)
+
+Call `loss(args...)` and return `Inf` if the forward simulation fails.
+
+A trial point that is too far can make the solver fail: `DomainError` from the mass balance
+lookup, or the return code of the solver. With an infinite loss, the line search of BFGS and
+LBFGS takes a shorter step instead of stopping the inversion. Other errors are not caught.
+"""
+function loss_or_inf(loss, args...)
+    try
+        return loss(args...)
+    catch err
+        ex = root_exception(err)
+        failed = ex isa DomainError ||
+                 (ex isa AssertionError && occursin("iceflow solver", ex.msg))
+        failed || rethrow()
+        @warn "The forward simulation failed, using an infinite loss: $(sprint(showerror, ex))" maxlog=5
+        return Inf
+    end
+end
+
 """
     grad_loss_iceflow!(dθ, θ, simulation::Inversion, mappingFct)
 
@@ -341,14 +370,18 @@ end
 Compute the gradient with respect to θ for a particular glacier and return the computed gradient.
 This function defines the iceflow problem and then calls Zygote to differentiate `batch_loss_iceflow_transient` with respect to θ.
 It uses the SciMLSensitivity implementation under the hood to compute the adjoint of the ODE.
+
+The iceflow problem is built inside the differentiated region, from the θ that is
+differentiated, so that `u0` (the initial condition) gets a gradient. `u0` must come from
+this θ and not from `container.θ`, otherwise the gradient of `θ.C` is zero.
 """
 function grad_parallel_loss_iceflow!(θ, simulation::Inversion, glacier_idx::Integer)
-    iceflow_prob = define_iceflow_prob(θ, simulation, glacier_idx)
     ret, = Zygote.gradient(
         _θ -> batch_loss_iceflow_transient(
+            _θ,
             InversionBinder(simulation, _θ),
             glacier_idx,
-            iceflow_prob
+            define_iceflow_prob(_θ, simulation, glacier_idx)
         )[1], θ)
     return ret
 end
@@ -362,6 +395,7 @@ This function calls `batch_loss_iceflow_transient` which returns both the loss a
 """
 function parallel_loss_iceflow_transient(θ, simulation::Inversion)
     return [batch_loss_iceflow_transient(
+                θ,
                 InversionBinder(simulation, θ),
                 glacier_idx,
                 define_iceflow_prob(θ, simulation, glacier_idx)
@@ -371,6 +405,7 @@ end
 
 """
     batch_loss_iceflow_transient(
+        θ,
         container::InversionBinder,
         glacier_idx::Integer,
         iceflow_prob::ODEProblem,
@@ -378,22 +413,32 @@ end
 
 Solve the ODE, retrieve the results and compute the loss.
 
+`θ` must be the parameter vector that is differentiated, and the loss terms must receive it.
+Reading it from `container` drops the part of the gradient that goes through the ODE, with
+the same loss value (see `sensitivity.md`).
+
 Arguments:
 
-  - `container::InversionBinder`: SciMLStruct that contains the simulation structure and the vector of parameters to optimize.
+  - `θ`: Parameter vector being differentiated. This is what the loss terms must receive.
+  - `container::InversionBinder`: SciMLStruct that contains the simulation structure and the vector of parameters to optimize. Solver-facing: never read `θ` back out of it.
   - `glacier_idx::Integer`: Index of the glacier.
   - `iceflow_prob::ODEProblem`: Iceflow problem defined as an ODE with respect to time.
 """
 function batch_loss_iceflow_transient(
+        θ,
         container::InversionBinder,
         glacier_idx::Integer,
         iceflow_prob::ODEProblem
 )
     result = _batch_iceflow_UDE(container, glacier_idx, iceflow_prob)
 
-    loss_function = container.simulation.parameters.UDE.empirical_loss_function
+    # Take the simulation off the binder once, untracked: reading it from `container` in the
+    # loss gives a wrong gradient (see the `InversionBinder` docstring)
+    simulation = @ignore_derivatives container.simulation
 
-    glacier = container.simulation.glaciers[glacier_idx]
+    loss_function = simulation.parameters.UDE.empirical_loss_function
+
+    glacier = simulation.glaciers[glacier_idx]
     t = result.t
     H = result.H
 
@@ -404,20 +449,19 @@ function batch_loss_iceflow_transient(
 
     # Discretization for the ice thickness loss term
     tH_ref = tdata(glacier.thicknessData) # If thicknessData is nothing, then tH_ref is an empty vector
-    ΔtH = diff(tH_ref)
     useThickness = length(tH_ref)>0
     H_ref = useThickness ? glacier.thicknessData.H : nothing
 
     # Discretization for the surface velocity loss term
-    tV_ref = tdata(glacier.velocityData, container.simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
-    ΔtV = diff(tV_ref)
+    tV_ref = tdata(glacier.velocityData, simulation.parameters.simulation.mapping) # If velocityData is nothing, then tV_ref is an empty vector
     useVelocity = length(tV_ref)>0
     Vabs_ref = useVelocity ? glacier.velocityData.vabs : nothing
     Vx_ref = useVelocity ? glacier.velocityData.vx : nothing
     Vy_ref = useVelocity ? glacier.velocityData.vy : nothing
 
-    # Discretization provided to the loss as a named tuple with the discretization for each term
-    Δt_HV = (; H = ΔtH, V = ΔtV)
+    # Weight of each observation, provided to the loss as a named tuple with one vector per term
+    Δt_HV = observation_weights(
+        loss_function, tH_ref, tV_ref, simulation.parameters.simulation.tspan)
 
     if useThickness
         @assert size(H[begin]) == size(H_ref[begin]) "Size of reference and prediction datasets do not match."
@@ -441,8 +485,8 @@ function batch_loss_iceflow_transient(
         Vxr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vx_ref[indVelocity])
         Vyr = @ignore_derivatives(isnothing(indVelocity) ? nothing : Vy_ref[indVelocity])
         Δtj = @ignore_derivatives((;
-            H = isnothing(indThickness) ? 0.0 : safe_slice(Δt_HV.H, indThickness-1),
-            V = isnothing(indVelocity) ? 0.0 : safe_slice(Δt_HV.V, indVelocity-1)
+            H = isnothing(indThickness) ? 0.0 : Δt_HV.H[indThickness],
+            V = isnothing(indVelocity) ? 0.0 : Δt_HV.V[indVelocity]
         ))
 
         loss(
@@ -452,15 +496,15 @@ function batch_loss_iceflow_transient(
             Vr, Vxr, Vyr,
             t[τ],
             glacier_idx,
-            container.θ,
-            container.simulation,
+            θ,
+            simulation,
             prod(size(H[τ]))*normalization,
             Δtj
         )
     end
     time_aggregated_losses = time_aggregated_loss(
         loss_function, H, nothing, nothing, nothing, nothing, t,
-        glacier_idx, container.θ, container.simulation, prod(size(H[begin]))*1.0, (;))
+        glacier_idx, θ, simulation, prod(size(H[begin]))*1.0, (;))
     return sum(losses) + time_aggregated_losses, result
 end
 
@@ -499,6 +543,11 @@ function _batch_iceflow_UDE(
         params.UDE.empirical_loss_function, container.simulation, glacier_idx))
     tstops = sort(unique(vcat(tstops, tstopsIceThickness, tstopsVelocity,
         tstopsDiscreteLoss, tstopsAggregatedLoss)))
+    # Observation times can fall outside the simulated window, and the solver never reaches
+    # them. `create_results` looks every tstop up in `solution.t` and indexes with the
+    # result, so keeping an unreachable one makes it index with `nothing`.
+    tstops = filter(
+        t -> params.simulation.tspan[1] <= t <= params.simulation.tspan[2], tstops)
 
     # Create iceflow law callback
     cb_iceflow = Huginn.build_callback(
@@ -551,6 +600,9 @@ function simulate_iceflow_UDE!(
     # `dt` only when stepping is fixed: in adaptive mode supplying one overrides the solver's
     # own initial step, and supplying zero aborts the solve.
     step_kw = params.solver.adaptive ? NamedTuple() : (; dt = params.solver.dt)
+    # `u0` already carries a derivative: the problem is built from the differentiated θ by the
+    # caller, so only `p` is swapped here. Do not rebuild `u0` from `container.θ` — see
+    # `grad_parallel_loss_iceflow!`.
     iceflow_prob_remake = remake(iceflow_prob; p = container)
     iceflow_sol = solve(
         iceflow_prob_remake,
@@ -577,13 +629,16 @@ end
 
 """
     define_iceflow_prob(
+        θ,
         simulation::Inversion,
         glacier_idx::Integer,
     )
 
 Given a `simulation` struct and a `glacier_idx`, build the iceflow problem that has to be solved in the ODE solver.
 In practice, the returned iceflow problem is used inside `simulate_iceflow_UDE!` through `remake`.
-The definition of the iceflow problem has to be done outside of the gradient computation, otherwise Zygote fails at differentiating it.
+
+It is called inside the differentiated region, so that `u0 = evaluate_H₀(θ, …)` has a
+derivative and the initial condition can be trained.
 """
 function define_iceflow_prob(
         θ,
@@ -600,6 +655,10 @@ function define_iceflow_prob(
             glacier_idx
         )
         @assert size(H₀) == size(simulation.glaciers[glacier_idx].H₀)
+        # An abstract eltype of `u0` fails far from here (see `σ_zang`), so check it once
+        Zygote.@ignore_derivatives @assert isconcretetype(eltype(H₀))&&
+        eltype(H₀)<:AbstractFloat "evaluate_H₀ returned eltype $(eltype(H₀)) for glacier $(glacier_idx); u0 must be a concrete float array. Check `initial_condition_filter = $(simulation.parameters.UDE.initial_condition_filter)` for branches that disagree on their return type."
+
     else
         H₀ = simulation.glaciers[glacier_idx].H₀
     end
