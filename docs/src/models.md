@@ -27,7 +27,7 @@ Huginn.SIA2D!
 
 ## Mass balance models
 
-(Surface) Mass balance models are used to simulate the simplified thermodynamics of the forcing of the atmosphere on glaciers. As per ice flow models, all specific mass balance models needs to be a subtype of the abstract type `MBmodel`. Mass balance models are managed by [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl). For now, we have simple temperature-index models, with either one or two degree-day factors (DDFs) *(Hock, 2003)*:
+(Surface) Mass balance models are used to simulate the simplified thermodynamics of the forcing of the atmosphere on glaciers. As per ice flow models, all specific mass balance models needs to be a subtype of the abstract type `MBmodel`. Mass balance models are managed by [`Muninn.jl`](https://github.com/ODINN-SciML/Muninn.jl). For now, we have a simple temperature-index model with a single degree-day factor (DDF) *(Hock, 2003)*:
 
 ```@docs
 Muninn.TImodel1
@@ -37,7 +37,7 @@ Muninn.TImodel1(params::Sleipnir.Parameters)
 Surface mass balance models are run in `DiscreteCallback`s from `OrdinaryDiffEq.jl`, which enable the safe execution during the solving of a PDE in specifically prescribed time steps determined in the `steps` field in [`Sleipnir.SimulationParameters`](@ref).
 
 Neural network-based surface mass balance models trained with [MassBalanceMachine](https://github.com/ODINN-SciML/MassBalanceMachine) are also supported.
-They can be loaded via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) package and used directly as drop-in `MBmodel`s.
+They can be loaded via the [`MassBalanceMachine.jl`](https://github.com/ODINN-SciML/MassBalanceMachine.jl) package and evaluated on climate data, but they are not yet coupled to the ice flow simulation (ongoing work).
 Pre-trained models are exported from Python as a pair of JSON files (`params.json` and `model.json`) and loaded as follows:
 
 ```julia
@@ -51,7 +51,7 @@ model = Model(
 )
 ```
 
-`CustomMLP` is a subtype of `MBmodel` and wraps a `Lux.jl` feedforward network whose architecture, input feature normalisation bounds, and pre-trained weights are all read directly from the JSON export. The network takes monthly ERA5 climate features as inputs (e.g. `t2m`, `tp`, `ssrd`, …) and outputs a surface mass balance rate in m w.e. per time step. For now, only monthly time steps are supported. It is the *de facto* data-driven surface mass balance model in the ODINN ecosystem.
+`CustomMLP` is a subtype of `MBmodel` and wraps a `Lux.jl` feedforward network whose architecture, input feature normalisation bounds, and pre-trained weights are all read directly from the JSON export. The network takes monthly ERA5 climate features as inputs (e.g. `t2m`, `tp`, `ssrd`, …) and outputs a surface mass balance rate in m w.e. per time step. For now, only monthly time steps are supported. Coupling it to the ice flow simulation is ongoing work.
 
 Once loaded, models can be saved to a local registry to avoid re-parsing JSON on subsequent runs:
 
