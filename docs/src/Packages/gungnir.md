@@ -28,12 +28,12 @@ You can also use the `Makefile` to create the environment and register the Jupyt
 make env
 ```
 
-Alternatively, if you just want to install the `gungnir` module, you can clone this repository and do:
+Alternatively, if you just want to install the `gungnir` module, you can install it from PyPI, or from a clone of the repository in developer mode:
 
 ```bash
-pip install gungnir
-# or in developer mode:
-# pip install -e gungnir
+pip install odinn-gungnir
+# or in developer mode, from the root of the repository:
+# pip install -e .
 ```
 
 ERA5 high-resolution downloads for `MassBalanceMachine.jl` additionally require a CDS API key. See the [CDS API setup guide](https://cds.climate.copernicus.eu/how-to-api) for registration and configuration of `~/.cdsapirc`.
@@ -63,13 +63,13 @@ Then run:
 
 ```bash
 conda activate oggm_env_gungnir
-python gungnir/gungnir/preprocessing.py glaciers.txt
+python gungnir/preprocessing.py glaciers.txt
 ```
 
-By default, data is written to `~/.ODINN/ODINN_prepro`. You can provide an explicit output directory as a second argument:
+By default, data is written to `~/.ODINN/ODINN_prepro`. You can provide an explicit output directory with `--working_dir`:
 
 ```bash
-python gungnir/gungnir/preprocessing.py glaciers.txt /path/to/output
+python gungnir/preprocessing.py glaciers.txt --working_dir /path/to/output
 ```
 
 After running, `Sleipnir.initialize_glaciers(rgi_ids, params)` will detect and load the generated files automatically.
@@ -94,7 +94,7 @@ On the Julia side, `Sleipnir.initialize_glaciers()` reads `rgi_paths.json` to lo
 
 ## How to add a new climate source or atmospheric variable
 
-Climate retrieval is wired directly into the preprocessing loop in `gungnir/gungnir/preprocessing.py` — there is no plugin registry. The existing sources are the template: W5E5 via `process_w5e5_data` (from MBsandbox), and ERA5 via `ensure_era5_file_for_gdir` in `gungnir/gungnir/era5_climate.py`.
+Climate retrieval is wired directly into the preprocessing loop in `gungnir/preprocessing.py` — there is no plugin registry. The existing sources are the template: W5E5 via `process_w5e5_data` (from MBsandbox), and ERA5 via `ensure_era5_file_for_gdir` in `gungnir/era5_climate.py`.
 
  1. To add a new climate source, create a downloader/processor that writes a per-glacier NetCDF file, following the ERA5 pattern in `era5_climate.py`.
  2. Call it for each glacier inside `preprocessing_glaciers` in `preprocessing.py`, next to the existing W5E5/ERA5 calls.
