@@ -30,8 +30,14 @@ prediction = Prediction(model, glaciers, params)
 run!(prediction)
 
 # This code will run a forward simulation for the glaciers defined in `rgi_ids` from 2010 to 2015,
-# using the specified ice flow and mass balance models. The results will be stored in the `working_dir` directory.
+# using the specified ice flow and mass balance models. The results file is saved in the `data/results/predictions` folder inside `working_dir`.
 
 # Then, we can easily visualize the results of the simulation, e.g. the difference in ice thickness between 2010 to 2015 for Argentière glacier:
 
-plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"])
+fig = plot_glacier(prediction.results[1], "evolution difference", [:H]; metrics = ["difference"]);
+
+# To keep the figure, save it to a file with `save_figure` and open the file with any program:
+
+save_figure(fig, joinpath(working_dir, "plots", "evolution_difference.png"))
+
+fig

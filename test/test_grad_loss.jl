@@ -1,6 +1,26 @@
 using Distributed: map
 
 """
+    jet_opt_clean(f, tt, modules) -> Bool
+
+Whether JET's optimization analysis of `f` on argument types `tt` reports nothing.
+
+Returns `false` when JET itself raises. JET 0.9 is the newest release usable on Julia 1.11
+and, on entry points as deeply nested as the gradient ones, it can throw from its own
+constant propagation rather than reporting. That is not information about `f`, and it is why
+these checks call JET directly instead of through `@test_opt`: the macro records the throw as
+an error, which a `broken` marker cannot absorb.
+"""
+function jet_opt_clean(f, tt, modules)
+    try
+        return isempty(JET.get_reports(JET.report_opt(f, tt; target_modules = modules)))
+    catch err
+        err isa TypeError || rethrow()
+        return false
+    end
+end
+
+"""
     test_grad_finite_diff(
         adjointFlavor::ADJ;
         thres = [0., 0., 0.],
@@ -12,10 +32,21 @@ using Distributed: map
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
+        abstol = 1e-6,
+        solver = nothing,
+        A_range = nothing,
+        adaptive = true,
+        dt = 1.0/120.0,
+        fd_delta = nothing,
+        thres_fd = 5e-2,
+        n_fd_components = 4,
+        return_grad = false,
         functional_inv = true,
+        scalar = true,
         custom_NN = false,
         max_params = 60,
         mask_parameter_vector = false,
+        aggregated_loss = nothing,
     ) where {ADJ<:AbstractAdjointMethod}
 
 Test and validate gradient consistency between adjoint-based automatic differentiation
@@ -31,7 +62,6 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `thres::Vector{<:Real}`: Three-element vector of numerical thresholds for
     `(ratio, angle, relative error)` comparison between adjoint-based and finite-difference gradients.
   - `target::Symbol`: Model target for training/testing (`:A`, `:D`, or `:D_hybrid`), determining which physical law is parameterized by the neural network.
-    either `:FiniteDifferences` (default, using `FiniteDifferences.jl`) or `:Manual`.
   - `finite_difference_order::Int`: Order of accuracy for central finite differences.
   - `loss`: Loss function to evaluate, such as `LossH()` (height-based) or `LossV()` (velocity-based).
   - `train_initial_conditions::Bool`: Whether to include glacier initial conditions as trainable parameters.
@@ -42,11 +72,22 @@ method and finite-difference schemes, and compares them using diagnostic metrics
   - `calibrate_MB::Bool`: Whether to calibrate the mass balance model against the geodetic
     observations. Off by default so the `TImodel1` built below is the one actually tested;
     turn it on to check the adjoint against a per-glacier calibrated vector of MB models.
+  - `abstol`: Absolute tolerance of the ODE solver, in metres of ice. It only matters with `adaptive = true`, and it is tightened for runs longer than 5 years (see `Huginn.effective_abstol`).
+  - `solver`: ODE solver. By default `ROCK4()` with `SciMLSensitivityAdjoint`, because the backward solve of `InterpolatingAdjoint` is not stable with `RDPK3Sp35` on our ODE, and `RDPK3Sp35()` otherwise. The spectral radius is supplied to `ROCK2` and `ROCK4` (`supply_eigen_est = true`), since their own estimate breaks finite differences.
+  - `A_range`: `(minA, maxA)`, the range of the rheology `A`. If `nothing`, it depends on the case: `(2e-18, 8e-18)` by default and for the `:dhdt` and `:avgV` losses, and `(1e-21, 2e-21)` with `use_MB`, so that the gradient is dominated by the mass balance.
+  - `adaptive::Bool`: Whether the solver picks its own steps. Fixed-step finite differences (`fd_delta`) need `false`, because with adaptive steps the loss is discontinuous in `θ`.
+  - `dt`: Fixed step in years, used when `adaptive = false`.
+  - `fd_delta`: If not `nothing`, the adjoint is compared with a central finite difference at this fixed step, instead of using `FiniteDifferences.jl` with its step-size search. It is computed for the first `n_fd_components` components of `θ`, and it requires `adaptive = false`. `thres` is not used in this case.
+  - `thres_fd`: Threshold on the relative error `|fd - adjoint| / |fd|` of each component in the fixed-step comparison.
+  - `n_fd_components`: Number of components of `θ` checked in the fixed-step comparison.
+  - `return_grad::Bool`: Return the gradient computed by the adjoint and skip the finite-difference comparison.
   - `functional_inv::Bool`: Whether to test functional inversions or classical inversions.
+  - `scalar::Bool`: Whether the rheology `A` is a single scalar per glacier (`true`) or a gridded field (`false`).
   - `custom_NN::Bool`: Whether to use a custom-defined neural network architecture for testing or a simple default small network. If the custom neural network is used, the glacier grid and the number of points in the VJP interpolation are reduced to spare computation time and memory.
   - `max_params::Int`: Maximum number of parameters for finite-difference testing; if exceeded, a random subset is tested to reduce computational cost.
   - `mask_parameter_vector::Bool`: Whether to apply a mask to the parameter vector `θ` before evaluating finite-difference gradients. If `false`, the
     mask based on `max_params` is just applied to the initial conditions, not to parameters of the regressor.
+  - `aggregated_loss`: `nothing` (default), `:dhdt` or `:avgV`. With `:dhdt` or `:avgV` the loss compares the elevation change or the average velocity over the whole period, instead of the state at each time step. It needs `LossDhdt()` or `LossAvgV()` respectively. The `:dhdt` case also uses the period 2010–2015 instead of the 1980–2019 of `use_MB`, because over the longer one the melt empties the mask and the gradient vanishes, and a stronger melt, so that `dhdt` is negative without melting the glacier out.
 """
 function test_grad_finite_diff(
         adjointFlavor::ADJ;
@@ -59,6 +100,15 @@ function test_grad_finite_diff(
         use_MB = false,
         temp_bias = 0.0,
         calibrate_MB = false,
+        abstol = 1e-6,
+        solver = nothing,
+        A_range = nothing,
+        adaptive = true,
+        dt = 1.0/120.0,
+        fd_delta = nothing,
+        thres_fd = 5e-2,
+        n_fd_components = 4,
+        return_grad = false,
         functional_inv = true,
         scalar = true,
         custom_NN = false,
@@ -111,7 +161,9 @@ function test_grad_finite_diff(
         sensealg = SciMLSensitivity.ZygoteAdjoint()
     end
 
-    minA, maxA = if aggregated_loss == :dhdt || aggregated_loss == :avgV
+    minA, maxA = if !isnothing(A_range)
+        A_range
+    elseif aggregated_loss == :dhdt || aggregated_loss == :avgV
         (2e-18, 8e-18)
     else
         # When MB is being tested, reduce the impact of creeping so that the gradient is dominated by the MB contribution
@@ -153,8 +205,17 @@ function test_grad_finite_diff(
         ),
         solver = Huginn.SolverParameters(
             step = δt,
+            abstol = abstol,
+            adaptive = adaptive,
+            dt = dt,
             progress = true,
-            solver = useSciMLSenseAlg ? ROCK4() : RDPK3Sp35() # Use another solver when using SciMLSensitivity because `InterpolatingAdjoint` is not stable with our ODE in backward mode
+            # ROCK's own estimate shifts the scheme between neighbouring θ, breaking FD
+            supply_eigen_est = true,
+            solver = if !isnothing(solver)
+                solver
+            else
+                useSciMLSenseAlg ? ROCK4() : RDPK3Sp35() # Use another solver when using SciMLSensitivity because `InterpolatingAdjoint` is not stable with our ODE in backward mode
+            end
         )
     )
 
@@ -297,21 +358,61 @@ function test_grad_finite_diff(
     else
         loss_iceflow_grad!(dθ, θ, simulation)
     end
-    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) loss_iceflow_grad!(
-        dθ, θ, simulation)
-    JET.@test_opt broken=true target_modules=(Sleipnir, Muninn, Huginn, ODINN) ODINN.loss_iceflow_transient(
-        θ, simulation, map)
+    jet_modules = (Sleipnir, Muninn, Huginn, ODINN)
+    @test_broken jet_opt_clean(
+        loss_iceflow_grad!, Tuple{typeof(dθ), typeof(θ), typeof(simulation)}, jet_modules)
+    @test_broken jet_opt_clean(ODINN.loss_iceflow_transient,
+        Tuple{typeof(θ), typeof(simulation), typeof(map)}, jet_modules)
+
+    return_grad && return dθ
+
+    if !isnothing(fd_delta)
+        # Central difference at a fixed step, against the adjoint computed under the same
+        # solver. FiniteDifferences' adaptive step is unusable here: with an adaptive
+        # integrator the loss is discontinuous in θ, so the step it settles on measures
+        # step-acceptance jitter rather than a derivative. This path therefore requires
+        # `adaptive = false`, where the trajectory depends smoothly on θ.
+        @assert !adaptive "A fixed step finite difference is only meaningful with adaptive = false."
+        θ0 = deepcopy(θ)
+        for i in 1:min(n_fd_components, length(θ0))
+            θp = deepcopy(θ0)
+            θp[i] = θ0[i] + fd_delta
+            simulation.model.trainable_components.θ = θp
+            lp = ODINN.loss_iceflow_transient(θp, simulation, map)
+            θm = deepcopy(θ0)
+            θm[i] = θ0[i] - fd_delta
+            simulation.model.trainable_components.θ = θm
+            lm = ODINN.loss_iceflow_transient(θm, simulation, map)
+            fd = (lp - lm) / (2 * fd_delta)
+            relerr = abs(fd - dθ[i]) / max(abs(fd), eps())
+            printDebug && @printf("    i=%d  FD=%+.8e  adjoint=%+.8e  relerr=%.2e\n",
+                i, fd, dθ[i], relerr)
+            @test relerr < thres_fd
+        end
+        simulation.model.trainable_components.θ = θ0
+        return nothing
+    end
 
     ### Computes derivatives with FiniteDifferences.jl (stepsize algorithm included)
 
     ratio_FD, angle_FD,
     relerr_FD,
-    _ = grad_finite_diff(
+    grads_FD = grad_finite_diff(
         simulation; θ = θ, finite_difference_order = finite_difference_order,
         max_params = max_params, mask_parameter_vector = mask_parameter_vector)
     printVecScientific("ratio  = ", [ratio_FD], thres_ratio)
     printVecScientific("angle  = ", [angle_FD], thres_angle)
     printVecScientific("relerr = ", [relerr_FD], thres_relerr)
+    if printDebug
+        # The three summary statistics cannot distinguish a wrong adjoint from a finite
+        # difference that measured noise, so show the magnitudes behind them.
+        dθ_adj, dθ_FD = grads_FD
+        a, f = collect(dθ_adj), collect(dθ_FD)
+        println("  |adjoint| = ", norm(a), "   |FD| = ", norm(f))
+        n = min(4, length(a))
+        println("  adjoint[1:$n] = ", a[1:n])
+        println("  FD[1:$n]      = ", f[1:n])
+    end
     @test abs(ratio_FD) < thres_ratio
     @test abs(angle_FD) < thres_angle
     @test abs(relerr_FD) < thres_relerr
@@ -670,7 +771,8 @@ function test_grad_sciml_vs_manual(; thres = [1e-3, 1e-13, 1e-3])
             empirical_loss_function = LossH(),
             target = :A
         ),
-        solver = Huginn.SolverParameters(step = δt, solver = ROCK4())
+        solver = Huginn.SolverParameters(
+            step = δt, solver = ROCK4(), supply_eigen_est = true)
     )
 
     # Identical params except for the adjoint method
