@@ -13,6 +13,13 @@ targetType(::SIA2D_A_target) = :A
 
 ### Target functions
 
+"""
+    Diffusivity(target::AbstractSIA2DTarget; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params)
+
+Compute the diffusivity `D` of the SIA2D equation for the given `target`, as a
+function of the ice thickness `H̄`, the surface gradient `∇S` and the parameters
+`θ`. Used by the manual adjoint computations.
+"""
 function Diffusivity(
         target::SIA2D_A_target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
@@ -29,6 +36,12 @@ function Diffusivity(
     )
 end
 
+"""
+    ∂Diffusivity∂H(target::AbstractSIA2DTarget; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params)
+
+Partial derivative of the diffusivity `D` with respect to the ice thickness `H̄`,
+for the given `target`. Used by the manual adjoint computations.
+"""
 function ∂Diffusivity∂H(
         target::SIA2D_A_target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
@@ -45,6 +58,12 @@ function ∂Diffusivity∂H(
     )
 end
 
+"""
+    ∂Diffusivity∂∇H(target::AbstractSIA2DTarget; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params)
+
+Partial derivative of the diffusivity `D` with respect to the surface gradient `∇S`,
+for the given `target`. Used by the manual adjoint computations.
+"""
 function ∂Diffusivity∂∇H(
         target::SIA2D_A_target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
@@ -61,6 +80,12 @@ function ∂Diffusivity∂∇H(
     )
 end
 
+"""
+    ∂Diffusivity∂θ(target::AbstractSIA2DTarget; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params)
+
+Vector-Jacobian product of the diffusivity `D` with respect to the trainable
+parameters `θ`, for the given `target`. Used by the manual adjoint computations.
+"""
 function ∂Diffusivity∂θ(
         target::SIA2D_A_target;
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params

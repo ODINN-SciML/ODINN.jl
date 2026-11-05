@@ -1,5 +1,15 @@
 export grad_finite_diff, stats_err_arrays, printVecScientific
 
+"""
+    grad_finite_diff(simulation::Inversion; θ = nothing, gradient = nothing, finite_difference_order = 3, max_params = 60, mask_parameter_vector = false)
+
+Compare the adjoint gradient of the ice flow loss with a central finite-difference
+gradient, and return `(ratio, angle, relerr, (dθ, dθ_FD))`, where the first three
+values are the comparison statistics from `stats_err_arrays` and the last one holds
+the two gradients. Recommended sanity check of the adjoint gradients. Requires
+loading `FiniteDifferences` alongside `ODINN` (the actual method is provided by an
+extension).
+"""
 function grad_finite_diff(::Simulation)
     throw("Function not implemented. Load `FiniteDifferences` alongside `ODINN` to use it.")
 end
