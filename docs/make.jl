@@ -97,6 +97,7 @@ makedocs(
             "Parameters" => "parameters.md",
             "Glaciers" => "glaciers.md",
             "Models" => "models.md",
+            "Simulations" => "simulations.md",
             "Results and plotting" => "results_plotting.md"
         ],
         "Inversions" => [
