@@ -30,7 +30,7 @@ nn_model = NeuralNetwork(params)
 # To support efficient reverse-mode execution, ODINN will:
 #   - compile and precompute adjoint-related helper functions and
 #   - store preparation objects that are used later during the in adjoint PDE.
-# This mechanism is triggered by [`prepare_vjp_law`](@ref).
+# This mechanism is triggered by `prepare_vjp_law`.
 
 # ### Internal function roles
 # - `prepare_vjp_law` (internal)
