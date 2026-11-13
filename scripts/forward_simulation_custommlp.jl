@@ -1,3 +1,9 @@
+# DOES NOT RUN YET. Mass balance is evaluated as a source term of the ice flow RHS, and only
+# models whose `mb_S_dependence` is `:elevation_only` have that form — in practice `TImodel1`.
+# `CustomMLP` reads several fields, so it falls to the `:general` branch, which is a stub:
+# building the simulation below raises an error naming the functions to implement.
+# Tracked in https://github.com/ODINN-SciML/Muninn.jl/issues/72.
+
 using Pkg
 
 Pkg.activate(normpath(joinpath(@__DIR__, "..")))

@@ -48,7 +48,7 @@ glaciers = initialize_glaciers([RGI_ID], params)
 A_law = CuffeyPaterson(scalar = false)
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0)
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2)
 )
 
 tstops = collect(TSPAN[1]:δt:TSPAN[2])
@@ -71,7 +71,7 @@ trainable_model = GriddedInv(params, glaciers, :A)
 A_law = LawA(params; scalar = false)
 model = Model(
     iceflow = SIA2Dmodel(params; A = A_law),
-    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, acc_factor = 1.2 / 1000.0),
+    mass_balance = TImodel1(params; DDF = 6.0 / 1000.0, prcp_fac = 1.2),
     regressors = (; A = trainable_model)
 )
 

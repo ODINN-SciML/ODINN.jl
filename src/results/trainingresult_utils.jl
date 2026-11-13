@@ -1,5 +1,5 @@
 """
-This function saves the results of an inversion to a file in JLD2 format. If the `path` argument is not provided, the function will create a default path based on the current project directory. The results are saved in a file named `prediction_<nglaciers>glaciers_<tspan>.jld2`, where `<nglaciers>` is the number of glaciers in the simulation and `<tspan>` is the simulation time span.
+This function saves the results of an inversion to a file in JLD2 format. If the `path` argument is not provided, the function will save the file in `data/results/inversions` inside the `working_dir` of the simulation parameters.
 """
 function save_inversion_file!(
         sol,
@@ -10,7 +10,8 @@ function save_inversion_file!(
 
     # Create path for simulation results
     if isnothing(path)
-        simulation_path = joinpath(dirname(Base.current_project()), "data/results/inversions")
+        simulation_path = joinpath(
+            simulation.parameters.simulation.working_dir, "data/results/inversions")
     else
         simulation_path = path
     end

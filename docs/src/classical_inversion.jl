@@ -52,7 +52,7 @@ params = Parameters(
 # ## Step 2: Generate synthetic ground truth data with a forward simulation
 
 # We define a synthetic law to generate the synthetic dataset. For this, we use some tabular data from Cuffey and Paterson (2010) [cuffey_physics_2010](@cite) in a law relating
-# ice temperature with the coefficient A. This law is already available in `ODINN.jl`, which we specify to be in a gridded format which means that it varies spatially (i.e. non-scalar).
+# ice temperature with the coefficient A. This law is already available in `ODINN.jl` as [`CuffeyPaterson`](@ref), which we specify to be in a gridded format which means that it varies spatially (i.e. non-scalar).
 
 A_law = CuffeyPaterson(scalar = false)
 
