@@ -1,7 +1,7 @@
 name = "ODINN"
 uuid = "c36d5296-eba1-40be-a153-0a8fa632a659"
-authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>", "Mathieu Le Séac'h", "Lisa Girod <girodli@univ-grenoble-alpes.fr>"]
 version = "1.2.0"
+authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>", "Facundo Sapienza <sapienza@stanford.edu>", "Alban Gossard <alban.paul.gossard@gmail.com>", "Mathieu Le Séac'h", "Lisa Girod <girodli@univ-grenoble-alpes.fr>"]
 
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
@@ -106,7 +106,7 @@ SciMLStructures = "1"
 Sleipnir = "0.17"
 StaticArrays = "1.9"
 Statistics = "1"
-TensorBoardLogger = "0.1"
+TensorBoardLogger = "0.1, 1"
 Test = "1.11"
 Tullio = "0.3"
 Zygote = "0.7"
