@@ -1,0 +1,8 @@
+# Replaces the former CompatHelper workflow: opens PRs that bump [compat] entries in Project.toml.
+version: 2
+updates:
+  - package-ecosystem: "julia"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 30
