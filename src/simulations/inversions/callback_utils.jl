@@ -8,8 +8,11 @@ function callback_plots_A(θ, l, simulation)
             inputs(simulation.model.iceflow.A)==_inputs_A_law_gridded "In order to use `callback_plots_A`, A law must be used and its inputs must be $(_inputs_A_law_scalar) or $(_inputs_A_law_gridded)"
 
     @ignore_derivatives begin
-        t = simulation.parameters.simulation.tspan[1] # We need to provide t but it isn't important here
-        res = map(glacier_idx -> T_A_Alaw(simulation, glacier_idx, θ, t), 1:length(simulation.glaciers))
+        # We need to provide t but it isn't important here
+        res = map(
+            glacier_idx -> T_A_Alaw(
+                simulation, glacier_idx, θ, glacier_tspan(simulation, glacier_idx)[1]),
+            1:length(simulation.glaciers))
         avg_temps, avg_temps = collect.(zip(res...))
 
         Tvec = collect(-23.0:1.0:0.0)

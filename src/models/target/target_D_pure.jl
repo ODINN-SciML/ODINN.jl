@@ -144,7 +144,7 @@ end
 
 function ∂U∂θ(
         target::SIA2D_D_target;
-        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
+        H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params, only_ice = true
 )
     iceflow_model = simulation.model.iceflow
     iceflow_cache = simulation.cache.iceflow
@@ -156,7 +156,9 @@ function ∂U∂θ(
     # Extract relevant parameters specific from the target
     interpolation = target.interpolation
 
-    ∂spatial = map(h -> h > 0.0 ? 1.0 : 0.0, H̄)
+    # Cells without ice are skipped for D = H̄ U, but not for the velocity U/f, which is not
+    # zero there
+    ∂spatial = map(h -> (h > 0.0 || !only_ice) ? 1.0 : 0.0, H̄)
 
     ∂D∂θ = zeros(size(H̄)..., only(size(θ)))
     @assert size(H̄) == size(∇S)
@@ -169,7 +171,7 @@ function ∂U∂θ(
         """
         for i in axes(H̄, 1), j in axes(H̄, 2)
 
-            if H̄[i, j] == 0.0
+            if only_ice && H̄[i, j] == 0.0
                 continue
             end
             ∂law∂θ!(iceflow_model.U, iceflow_cache.U,
@@ -248,7 +250,9 @@ function ∂Velocityꜛ∂θ(
         H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params
 )
     f = simulation.parameters.simulation.f_surface_velocity_factor
-    ∂D∂θꜛ = ∂U∂θ(target; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params) / f
+    ∂D∂θꜛ = ∂U∂θ(
+        target; H̄, ∇S, θ, simulation, glacier_idx, t, glacier, params, only_ice = false) /
+            f
     return ∂D∂θꜛ
 end
 

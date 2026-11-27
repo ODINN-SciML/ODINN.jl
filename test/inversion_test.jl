@@ -127,7 +127,8 @@ function inversion_test(;
         workers = 1
         rgi_ids = ["RGI60-11.03638"]
         epochs = [20, 20]
-        optimizer = [ODINN.Adam(0.005), ODINN.LBFGS()]
+        # LBFGS as in `default_optimizer()`: the plain first step `θ - g` saturates A at maxA
+        optimizer = [ODINN.Adam(0.005), ODINN.default_optimizer()[2]]
     elseif scalar # Scalar classical inversion
         workers = 1
         rgi_ids = ["RGI60-11.03638", "RGI60-11.01450"]

@@ -113,8 +113,8 @@ function test_adjoint_SIA2D(
     apply_all_callback_laws!(model.iceflow, cache.iceflow, simulation, glacier_idx, t, θ)
     dH = zero(H)
     Huginn.SIA2D!(dH, H, simulation, t, θ)
-    broken = !functional_inv # There is a runtime dispatch with classical inversions because at compilation time Julia has no way to know the type of θ.A[Symbol("$(cache.glacier_id)")]
-    JET.@test_opt broken=broken target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(
+    # `glacier_params` takes the key from the type of θ, so there is no runtime dispatch (also for classical inversions)
+    JET.@test_opt target_modules=(Sleipnir, Muninn, Huginn, ODINN) Huginn.SIA2D!(
         dH, H, simulation, t, θ)
 
     Huginn.precompute_all_VJPs_laws!(
@@ -210,7 +210,8 @@ end
 function test_adjoint_surface_V(
         adjointFlavor::ADJ;
         thres = [2e-4, 2e-4, 2e-2],
-        target = :A
+        target = :A,
+        sliding = false
 ) where {ADJ <: AbstractAdjointMethod}
     Random.seed!(1234)
 
@@ -223,7 +224,9 @@ function test_adjoint_surface_V(
         apply_all_callback_laws!(simulation.model.iceflow, simulation.cache.iceflow,
             simulation, glacier_idx, t, θ)
         Vx, Vy = Huginn.surface_V(H, simulation, t, θ)
-        return sum(Vx .* inn1(vecBackwardSIA2D[1])+Vy .* inn1(vecBackwardSIA2D[2]))
+        # Same H-grid placement as `V_from_H`, inn(V) = avg(V_stag)
+        return sum(Huginn.avg(Vx) .* Huginn.inn(vecBackwardSIA2D[1]) +
+                   Huginn.avg(Vy) .* Huginn.inn(vecBackwardSIA2D[2]))
     end
 
     rgi_ids = ["RGI60-11.03638"]
@@ -274,6 +277,11 @@ function test_adjoint_surface_V(
     glaciers = initialize_glaciers(rgi_ids, params)
 
     glacier_idx = 1
+    if sliding
+        # Sliding of the same size as the deformation, so that the sliding term is tested
+        glacier = glaciers[glacier_idx]
+        glacier.C = Huginn.sliding_scale(1e-18, 100.0; p = glacier.p, q = glacier.q)
+    end
 
     H = glaciers[glacier_idx].H₀
     simulation = Inversion(model, glaciers, params)

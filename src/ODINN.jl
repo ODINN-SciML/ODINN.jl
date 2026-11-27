@@ -40,7 +40,7 @@ using Optimization, Optim, Optimisers, OptimizationOptimisers, OptimizationOptim
       LineSearches
 using Optimisers: Adam # Import manually because this conflicts with Optim.Adam
 using ComponentArrays
-using ChainRules: @ignore_derivatives
+using ChainRules: ChainRules, @ignore_derivatives
 using SciMLBase: NoAD, CallbackSet
 using DiffEqCallbacks: PeriodicCallback
 using MLUtils: DataLoader
@@ -108,6 +108,7 @@ include(joinpath(root_dir, "src/inverse/SIA2D/Inversion.jl"))
 
 # Results
 include(joinpath(root_dir, "src/results/TrainingResults.jl"))
+include(joinpath(root_dir, "src/results/inversion_plots.jl"))
 
 # Gradient checks
 include(joinpath(root_dir, "src/gradient/check.jl"))

@@ -129,11 +129,12 @@ mutable struct TrainableComponents{
         n = haskey(regressors, :n) ? regressors.n : emptyTrainableModel()
         Y = haskey(regressors, :Y) ? regressors.Y : emptyTrainableModel()
         U = haskey(regressors, :U) ? regressors.U : emptyTrainableModel()
-        # Dedicated regressor for initial condition
+        # Dedicated regressor for the initial condition
         IC = haskey(regressors, :IC) ? regressors.IC : emptyIC()
 
         new{typeof(A), typeof(C), typeof(n), typeof(Y),
-            typeof(U), typeof(IC), typeof(target), typeof(θ)}(A, C, n, Y, U, IC, target, θ)
+            typeof(U), typeof(IC), typeof(target), typeof(θ)}(
+            A, C, n, Y, U, IC, target, θ)
     end
     function TrainableComponents(
             submodels::TrainableComponents,
@@ -162,6 +163,28 @@ function splitθ(θ, glacier_idx::Integer, optimizableComponent::TrainableModel)
         return θ
     end
 end
+"""
+    glacier_key(p, glacier_id)
+
+Key of a glacier in a per-glacier component of θ (`θ.A`, `θ.C`, `θ.IC`, with one key per
+glacier). With one glacier, as in every batch, it comes from the type of `p`, so the result is
+type stable. The ice flow reads the parameters inside the functions that Enzyme differentiates,
+and Enzyme does not cope with a key built at run time there (the result is `Any`, and it
+compiles at run time).
+"""
+function glacier_key(p, glacier_id)
+    p isa ComponentVector && length(keys(p)) == 1 && return Val(first(keys(p)))
+    return Symbol("$(glacier_id)")
+end
+
+"""
+    glacier_params(p, glacier_id)
+
+Parameters of a glacier in a per-glacier component of θ, `p[glacier_id]` (a copy), with a key
+that is type stable, see [`glacier_key`](@ref).
+"""
+glacier_params(p, glacier_id) = p[glacier_key(p, glacier_id)]
+
 function splitθ(θ::ComponentArray, glacier_idx::Integer, submodels::TrainableComponents)
     return ComponentVector(;
         map(k -> (k=>splitθ(θ[k], glacier_idx, getfield(submodels, k))), keys(θ))...)
@@ -174,8 +197,9 @@ The argument `∇θ` is the vector of all the gradients computed for each glacie
 This function aggregates them based on the optimizable components of `submodels`.
 """
 function aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, submodels::TrainableComponents)
-    ∇θfull = Dict()
-    for k in keys(θ)
+    # The components stay in the order of θ, so that the result has the layout of θ
+    ks = Tuple(keys(θ))
+    ∇θfull = map(ks) do k
         optimizableComponent = getfield(submodels, k)
         tmp_k = zero(θ[k])
         for i in 1:length(∇θ)
@@ -186,9 +210,9 @@ function aggregate∇θ(∇θ::Vector{<: ComponentArray}, θ, submodels::Trainab
                 tmp_k .+= ∇θ[i][k]
             end
         end
-        ∇θfull[k] = tmp_k
+        tmp_k
     end
-    return ComponentVector(; ∇θfull...)
+    return ComponentVector(NamedTuple{ks}(∇θfull))
 end
 
 function Base.show(io::IO, submodels::TrainableComponents)

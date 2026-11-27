@@ -17,6 +17,15 @@ It is defined as a SciMLStructure and it contains the inversion structure and th
 
   - `simulation::FI`: Inversion instance.
   - `θ::CA`: ComponentArray that contains the parameters used to differentiate the iceflow.
+
+!!! warning "This binder is solver-facing only"
+
+    The binder is given to `solve` as `p`, and the laws read `container.θ` inside the RHS.
+    Anywhere after the solve, take θ (and the simulation) as explicit arguments instead.
+
+    If code that Zygote differentiates reads `container.θ`, the part of the gradient that
+    goes through the ODE is lost, with no error and the same loss value. Only a gradient
+    check with a loss that uses θ (for example a velocity loss) finds it: `LossH` does not.
 """
 mutable struct InversionBinder{FI <: Inversion, CA <: ComponentArray} <: Container
     simulation::FI
@@ -54,8 +63,9 @@ end
 function SS.replace(::SS.Tunable, p::InversionBinder, newbuffer)
     N = length(p.θ)
     @assert length(newbuffer) == N
+    # Copy the simulation and keep its values: with a shared one Enzyme writes derivatives
+    # into it, and with a zeroed one the adjoint runs on an empty glacier
     sim = deepcopy(p.simulation)
-    Enzyme.make_zero!(sim)
     θ = Vector2ComponentVector(newbuffer, p.θ)
     return InversionBinder{typeof(sim), typeof(θ)}(sim, θ)
 end
@@ -78,7 +88,9 @@ It is used in SciMLSensitivity to differentiate the callbacks.
 function Base.zero(
         p::InversionBinder{FI, CA},
 ) where {FI <: Inversion, CA <: ComponentArray}
-    return InversionBinder(p.simulation, zero(p.θ))
+    # The Enzyme shadow must not share the simulation of the primal, otherwise the gradient
+    # of the laws (written in the simulation cache) is zero
+    return InversionBinder(Enzyme.make_zero(p.simulation), zero(p.θ))
 end
 
 """

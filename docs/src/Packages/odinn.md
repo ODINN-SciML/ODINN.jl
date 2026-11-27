@@ -7,7 +7,7 @@
   - **Classical inversion** — fit scalar or spatially distributed parameters (e.g. the Glen flow rate factor `A` or sliding coefficient `C`) to observed ice thickness or surface velocity, without neural networks.
   - **Functional inversion (UDE training)** — replace or augment a physical law with a neural network, train it with automatic differentiation through the PDE solver.
   - A **law system** (`LawA`, `LawY`, `LawU`) that wraps neural networks or custom functions into the SIA2D solver in a composable, AD-compatible way.
-  - A **loss system** (`LossH`, `LossV`, `LossHV`, `MultiLoss`) for fitting to thickness and/or velocity observations.
+  - A **loss system** (`LossH`, `LossV`, `LossHV`, `LossS`, `MultiLoss`) for fitting to thickness, velocity and surface elevation (DEM) observations, each divided by its uncertainty, plus **regularizations** of the initial thickness, the bed and the gridded parameters.
   - **Sensitivity configuration** (`UDEparameters`, `sensealg`) exposing the full differentiable programming ecosystem: continuous/discrete adjoints within SciMLSensitivity, automatic differentiation (e.g., Enzyme VJP, Mooncake), and manual adjoints.
 
 These ingredients can be mixed together, for example `ODINN` can perform a functional inversion and a classical inversion at the same time by fitting initial conditions and a parameterization of the iceflow equations.
@@ -18,7 +18,7 @@ Use `ODINN.jl` (i.e. `using ODINN`) when you need:
 
   - End-to-end UDE training or classical inversion.
   - Gradient-based optimization through the glacier PDE.
-  - Inversion of glacier-wide or spatially distributed parameters (`GlacierWideInv`, `GriddedInv`) and of initial conditions (`InitialCondition`), batched over many glaciers within a single `Inversion`.
+  - Inversion of glacier-wide or spatially distributed parameters (`GlacierWideInv`, `GriddedInv`) and of initial conditions (`InitialCondition`, which also inverts the bed), batched over many glaciers within a single `Inversion`.
 
 Use `Huginn` alone when you only need **forward modelling**, which does not need any form of automatic differentiation. Use `Muninn` alone for mass balance computation. Use `Sleipnir` alone for data structure manipulation. This modular structure means each downstream use case only pays the compilation cost of what it needs.
 

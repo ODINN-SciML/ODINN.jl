@@ -20,6 +20,7 @@ docs/build/
 docs/src/forward_simulation.md
 docs/src/functional_inversion.md
 docs/src/classical_inversion.md
+docs/src/transient_inversion.md
 docs/src/quick_start.md
 docs/src/results_plotting_tutorial.md
 docs/src/laws.md

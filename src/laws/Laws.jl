@@ -420,9 +420,8 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
     if scalar
         f! = let min_A = min_A, max_A = max_A
             function (cache, inp, θ)
-                val = @. min_A +
-                         (max_A - min_A) * (tanh.(θ.A[Symbol("$(cache.glacier_id)")]) + 1) /
-                         2
+                a = glacier_params(θ.A, cache.glacier_id)
+                val = @. min_A + (max_A - min_A) * (tanh(a) + 1) / 2
                 Zygote.@ignore_derivatives cache.value .= val
                 return val
             end
@@ -446,9 +445,8 @@ function LawA(params::Sleipnir.Parameters; scalar::Bool = true)
     else
         f! = let min_A = min_A, max_A = max_A
             function (cache, inp, θ)
-                val = @. min_A +
-                         (max_A - min_A) * (tanh.(θ.A[Symbol("$(cache.glacier_id)")]) + 1) /
-                         2
+                a = glacier_params(θ.A, cache.glacier_id)
+                val = @. min_A + (max_A - min_A) * (tanh(a) + 1) / 2
                 Zygote.@ignore_derivatives cache.value .= val
                 return val
             end
@@ -512,7 +510,8 @@ function LawC(params::Sleipnir.Parameters; scalar::Bool = true)
     # for C inversion; using them will yield a zero gradient for θ.C.
     f! = let max_C = max_C
         function (cache, inp, θ)
-            val = @. max_C * (tanh.(θ.C[Symbol("$(cache.glacier_id)")]) + 1) / 2
+            c = glacier_params(θ.C, cache.glacier_id)
+            val = @. max_C * (tanh(c) + 1) / 2
             Zygote.@ignore_derivatives cache.value .= val
             return val
         end

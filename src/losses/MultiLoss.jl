@@ -1,7 +1,7 @@
 export MultiLoss
 
 """
-    MultiLoss(; losses = (L2Sum(),), λs = (1.0,))
+    MultiLoss(; losses = (L2Sum(),), λs = nothing)
 
 Combines multiple loss functions into a single weighted objective.
 
@@ -9,10 +9,18 @@ Combines multiple loss functions into a single weighted objective.
 a different physical constraint, data fidelity term, or regularization penalty—into
 a single differentiable loss function.
 
+Each data term is a mean of `(misfit / σ)²` and each prior a mean of `(|D a| / σ)²`, so all
+the terms are about 1 when the model is as far from the data or the prior as their
+uncertainty. The weights `λs` of the terms are then only a relative importance, and are 1 by default. Use
+[`loss_terms`](@ref) to see the value of each term.
+
+It is the general way to combine losses. For only a thickness and a velocity term,
+[`LossHV`](@ref) is a shorter way to write the same loss.
+
 # Keyword Arguments (Constructor)
 
   - `losses::Tuple = (L2Sum(),)`: A tuple of loss objects (each subtype of `AbstractLoss`) to be combined.
-  - `λs::Tuple = (1.0,)`:  A tuple of scalar weights or hyperparameters corresponding to each loss term.
+  - `λs = nothing`: A tuple with the weight of each loss term. With `nothing`, every weight is 1.
 
 # Fields (Struct)
 
@@ -24,8 +32,9 @@ struct MultiLoss{TL <: Tuple, TS <: Tuple} <: AbstractLoss
     λs::TS
     function MultiLoss(;
             losses = (L2Sum(),),
-            λs = (1.0,)
+            λs = nothing
     )
+        λs = something(λs, ntuple(_ -> 1.0, length(losses)))
         @assert length(losses) == length(λs) "You need to provide an hyperparameter for each loss term defined."
         return new{typeof(losses), typeof(λs)}(losses, λs)
     end
@@ -61,10 +70,10 @@ weight in `lossType.λs`. The final loss is the sum of these weighted contributi
   - `θ`: Model parameters used in the simulation.
   - `simulation`: Simulation object providing necessary context for loss evaluation.
   - `normalization::F`: Normalization factor applied within each individual loss.
-  - `Δt`: Named tuple containing the time step to use for the approximation of continuous in time loss terms.
-    For example if `LossH` is used, there must be a term `Δt.H` containing the time step since the last
-    computation of the ice thickness loss term. If the current time `t` where the loss is evaluated does not
-    correspond to a time step of the `LossH` term, then the value of `Δt.H` has no impact.
+  - `Δt`: Named tuple with the weight of the observation at time `t` for each loss term, see
+    [`observation_weights`](@ref). For example if `LossH` is used, there must be a term `Δt.H`
+    with the weight of the ice thickness observation at `t`. If there is no such observation at
+    `t`, then the value of `Δt.H` has no impact.
 
 # Returns
 
@@ -131,10 +140,10 @@ and summed to form the total gradient.
   - `θ`: Model parameters used in the simulation.
   - `simulation`: Simulation object providing necessary context for gradient computation.
   - `normalization::F`: Normalization factor applied within each individual loss.
-  - `Δt`: Named tuple containing the time step to use for the approximation of continuous in time loss terms.
-    For example if `LossH` is used, there must be a term `Δt.H` containing the time step since the last
-    computation of the ice thickness loss term. If the current time `t` where the loss is evaluated does not
-    correspond to a time step of the `LossH` term, then the value of `Δt.H` has no impact.
+  - `Δt`: Named tuple with the weight of the observation at time `t` for each loss term, see
+    [`observation_weights`](@ref). For example if `LossH` is used, there must be a term `Δt.H`
+    with the weight of the ice thickness observation at `t`. If there is no such observation at
+    `t`, then the value of `Δt.H` has no impact.
 
 # Returns
 
@@ -178,12 +187,23 @@ function backward_loss(
     return ∂L∂H, ∂L∂θ
 end
 
+# Whether the loss has a term of type `T`
+uses_loss(lossType::AbstractLoss, T) = lossType isa T
+uses_loss(lossType::MultiLoss, T) = any(l -> uses_loss(l, T), lossType.losses)
+
 function loss_uses_velocity(lossType::MultiLoss)
     return any(
         map(lossType.losses) do l
         loss_uses_velocity(l)
     end
     )
+end
+function observation_weighting(lossType::MultiLoss, var::Symbol)
+    # The weights of the observations are shared by all the terms of the loss
+    ws = unique(filter(!isnothing, [observation_weighting(l, var) for l in lossType.losses]))
+    length(ws) > 1 && throw(ArgumentError("The terms of the MultiLoss use different \
+        weightings for the observations of $(var): $(ws). Use the same one."))
+    return isempty(ws) ? nothing : only(ws)
 end
 function discreteLossSteps(lossType::MultiLoss, tspan)
     ts = map(lossType.losses) do l
