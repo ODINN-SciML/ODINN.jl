@@ -3,6 +3,8 @@
 # This tutorial provides a simple example on how to perform a classical gridded inversion in `ODINN.jl`.
 # For this, we generate a synthetic dataset using a forward simulation, and then we use this dataset to perform the classical inversion.
 # The goal of this classical inversion is to retrieve the matrix of `A` values associated to the Glen coefficient/rigidity in Glen's Law that was used to generate the results of a forward simulation.
+# The data is synthetic, so the tutorial stays small and always runs.
+# To see the same inversion machinery used with real observations over time (ice thickness surveys, DEMs and surface velocities), see the [transient inversion tutorial](./transient_inversion.md).
 
 # ## Step 1: Parameter and glacier initialization
 
@@ -75,6 +77,15 @@ prediction = generate_ground_truth_prediction(glaciers, params, model, tstops)
 
 glaciers = prediction.glaciers
 
+# The synthetic data is now attached to the glacier as observations: one ice thickness map and one velocity map per time in `tstops`.
+# The function `observations` lists them, sorted in time:
+
+observations(glaciers[1])
+
+# Each row is one observation. The field `kind` says what it is: `:H` for an ice thickness map, `:V` for a surface velocity map, `:S` for a DEM and `:dhdt` for the glacier-wide surface elevation change. The field `t` is its date, in decimal years.
+# With real observations, this table is what defines the inversion period: the simulation can start on the first observation of a glacier with `align_start!(params, glaciers)`, and a glacier can have its own time window with `glacier_tspans` (see [Inversion types](./inversions.md)).
+# Here the data is synthetic and covers the whole `tspan`, so we keep the window as it is.
+
 # Now we compute the spatially varying `A` to have a ground truth for the comparison at the end of this tutorial.
 
 A_ground_truth = zeros(size(prediction.glaciers[1].H₀))
@@ -127,3 +138,4 @@ plot_gridded_data(A_ground_truth, inversion.results.simulation[1]; colormap = :Y
 
 # Unsurprisingly the inverted `A` is noisy in comparison to the ground truth. This is because the inversion requires regularization. The fact that we are using only the ice thickness might also not help. Adding a second target observation in the loss function, i.e. the ice surface velocities, would help. 
 # For more information on how to define regularizations, see the [Optimization](./optimization.md) section.
+# The initial state of the glacier (the initial ice thickness and the bed) can be inverted too, together with any other parameter: see the [Inversion types](./inversions.md) page and the [transient inversion tutorial](./transient_inversion.md) for a full example with real observations.

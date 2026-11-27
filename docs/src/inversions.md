@@ -13,7 +13,7 @@ The optimized variable is not $A$ but the parameters $\theta$ and the mapping $(
 
 Both kinds of inversions use the same `Inversion`, the same observations, losses and regularizations, and the same sensitivity methods. The only difference is what $\theta$ contains: the quantities to invert themselves (classical), or the parameters of a regressor that computes them (functional). Both can also be used in the same inversion.
 
-We explain both hereafter. We also explain the inversion of the initial conditions (i.e. the glacier state and its bed), which is a sub-case of classical inversions.
+We explain both hereafter. We also explain the inversion of the initial conditions (i.e. the glacier state and its bed), which is a sub-case of classical inversions. The transient inversions come at the end of this section: they are not a third kind of inversion, but any inversion whose loss fits dated observations along the trajectory of the glacier instead of one state. Both classical and functional inversions can be transient.
 
 ## Classical inversions
 
@@ -152,6 +152,8 @@ The products do not give the whole uncertainty. A radar signal goes some metres 
       - Each glacier needs at least one DEM inside its time window (an error otherwise), and a DEM at the start of the window pins $S_0$ (a warning otherwise). To use a DEM at its date, the simulation must cover it: for example, start the simulation at the date of the first DEM.
       - The filter must keep $H_0 \geq 0$: `initial_condition_filter = :Zang1980` (the default) or `:softplus`. The `Inversion` warns with `:identity`, which is only for debugging gradients.
       - The code that reads `glacier.B` directly still uses the bed that the glacier started from, and not the inverted one. This is the case for the laws whose input is the bed (`iTopoRough` with `position = :bed`) and for the interpolation nodes of the `U` law.
+
+The [transient inversion tutorial](./transient_inversion.md) puts all of this together on a real glacier.
 
 ## Functional inversions
 
@@ -293,3 +295,16 @@ The [functional inversion tutorial](./functional_inversion.md) gives an example 
 ### Laws and Law inputs tutorials
 
 For more details on how to actually implement new laws and law inputs, and for a list of all the ones that are already available within `ODINN.jl`, you can check the [Laws tutorial](./laws.md) and the [Laws inputs tutorial](./input_laws.md) respectively.
+
+## Transient inversions
+
+A transient inversion fits the trajectory of the glacier, not only one state. The losses compare the simulation with the dated observations of the glacier — thickness surveys, DEMs, velocity maps — each one at its own date, inside the time window of the simulation. The `Inversion` is the same as for any other inversion: what changes is the data and the time window, not the method.
+
+The ingredients of a transient inversion are:
+
+  - **Dated observations.** `observations(glacier)` lists what is available for each glacier, and when (see [Observations and time windows](@ref)). With `use_glathida_data = true`, the dated GlaThiDa thickness surveys are part of it.
+  - **Losses that use the dates.** `LossH` compares the simulated thickness with each thickness survey at its date, and `LossS` compares the simulated surface with each DEM at its date. `LossAvgV` compares a time average of the simulated velocities with a velocity map that is itself a time average, such as Millan22. With such data, always use `LossAvgV` instead of `LossV`: `LossV` would compare the simulation at one date with an average. A `MultiLoss` with several of them constrains the trajectory at several dates.
+  - **A time window that covers the observations.** Each glacier can have its own window with `glacier_tspans`, and `align_start!` moves the start of each glacier to its first observation (see [Observations and time windows](@ref)).
+  - **A well-constrained start.** The trajectory is strongly conditioned by its initial state: invert the initial condition, and let the bed be free so that the surface observations constrain it (see [Inversion with respect to initial state of the glacier](@ref) and [Inversion of the bed](@ref)).
+
+A transient inversion can be classical or functional: everything above about what $\theta$ contains applies unchanged. The [transient inversion tutorial](./transient_inversion.md) shows a complete example on the Aletsch glacier, with dated DEMs, GlaThiDa thickness surveys and Millan22 velocities inverted together with a free bed.

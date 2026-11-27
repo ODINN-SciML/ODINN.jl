@@ -13,6 +13,7 @@ using Test
 @testset "Run all tutorials" begin
     @testset "Forward simulation" include(pkgdir(ODINN)*"/docs/src/forward_simulation.jl")
     @testset "Classical inversion" include(pkgdir(ODINN)*"/docs/src/classical_inversion.jl")
+    @testset "Transient inversion" include(pkgdir(ODINN)*"/docs/src/transient_inversion.jl")
     @testset "Functional inversion" include(pkgdir(ODINN)*"/docs/src/functional_inversion.jl")
     @testset "Laws" include(pkgdir(ODINN)*"/docs/src/laws.jl")
     @testset "Laws VJPs" include(pkgdir(ODINN)*"/docs/src/vjp_laws.jl")
